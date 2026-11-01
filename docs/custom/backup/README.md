@@ -89,7 +89,7 @@ version == ourVersion：
 
 只在 `stageRestore` 成功之后归档：失败的恢复没有改动任何数据，不需要为它留底，留着只会堆积。
 
-`ImportedBackupArchive.store` 先写临时文件再原子改名，进程中途被杀不会留下截断的归档；文件名带毫秒并且不覆盖已有文件，同一秒内多次导入不会互相盖掉。它不依赖 Android，可直接用 JVM 测试覆盖。
+`ImportedBackupArchive.store` 先写临时文件再原子改名，进程中途被杀不会留下截断的归档；文件名带毫秒并且不覆盖已有文件，同一秒内多次导入不会互相盖掉，同毫秒撞名时追加序号。它不依赖 Android，可直接用 JVM 测试覆盖。
 
 放 `noBackupFilesDir` 而不是 `filesDir`：后者的整个目录被 `app` 模块的 web 路由 `GET /api/files/path/{...}` 暴露出去。
 
