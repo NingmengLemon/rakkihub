@@ -42,6 +42,7 @@
 | C32 | 附件按内容去重，删除改为摘引用 | 新增 |
 | C33 | 附件拷贝挪出主线程 | 改造 |
 | C34 | 备份与工作区文件的拷贝挪出主线程 | 改造 |
+| C35 | 模型选择支持多关键词搜索 | 改造 |
 
 ## 明细
 
@@ -253,3 +254,10 @@
 - 落点：`ImportExportTab` 的导出复制（临时 zip 到用户选择的位置）与导入暂存（用户选择的位置到 cache 临时包，连同 `vm.restoreFromLocalFile`）包进 `withContext(Dispatchers.IO)`；`vm.exportToFile` 在主线程调用，打包主体在 `BackupManager` 里自带 IO 派发，只有复制在 IO。`ImportExportTab` 的开流失败（`openOutputStream`/`openInputStream` 返回 null）按失败处理，不会静默报成功或拿空包去恢复；失败分支会删掉目标文档，若用户选择覆盖已有文档，null 开流时那份文档也会被删，这是失败清理策略的残余风险。复制被取消时重抛 `CancellationException`、不弹失败；导出取消会静默删掉没写完的目标文档；`exportingTarget` 与 `isRestoring` 的复位在 `finally`；导出临时文件在 `finally` 里删。`WorkspaceDetailPage` 的文件选择器把名字查询、`openInputStream` 与交给 VM 都放进同一个 IO 块，避免交接前被取消留下没关闭的流。
 - 理由：备份 zip 可能有几百 MB，整包复制放在主线程会卡界面甚至 ANR；SAF 的查询与打开是 binder 调用，也放到 IO 更稳。
 - 合并注意：改了上游的 `ImportExportTab` 与 `WorkspaceDetailPage`，合并时按本行复核。`restoreFromLocalFile` 从 IO 块里调用，其链路自带 IO 派发；`exportToFile` 仍在主线程调用，内部只碰 StateFlow、设置读写与 IO，不能假设自己必须在 Main。导出与导入之间不互斥，复制期间仍可启动另一条，没有数据竞争。取消时清理与状态复位都在 `finally` / `catch` 里，不要让 `CancellationException` 走进失败提示。恢复在 `stageRestore` 里发布 pending 之后才归档原始包；如果取消发生在发布之后，pending 仍会在下次启动生效，界面可能没弹成功提示。
+
+### C35 模型选择支持多关键词搜索
+
+- 来源：上游 `5ad19405`（`feat(model): 模型选择面板支持多关键词搜索`），代码与该提交一致，只补了对应用例。
+- 落点：`ai/src/main/java/me/rerere/ai/provider/Model.kt` 加 `List<Model>.filterByKeywords`（按空格拆关键词、忽略大小写、每个关键词命中 `modelId` 或 `displayName` 的一部分、不要求顺序，空查询返回原列表）；`ModelList.kt` 的聊天模型面板与 `SettingProviderDetailPage.kt` 的可用模型面板共用这一条规则；新增 `ModelFilterTest` 六条 JVM 用例。
+- 理由：聊天面板原来整串匹配且只看 `displayName`，多词或按模型 ID 搜不到；提供商详情的面板已经按空格拆词并同时匹配 `modelId` 与 `displayName`。这次抽成共用函数，两边用同一条规则，聊天面板也因此能按模型 ID 搜。
+- 移植注意：`filterByKeywords` 在 `ai/`，该模块仍尽量跟随上游；以后跟随上游对 `Model.kt` 的改动时保留这个函数，两个 UI 调用点在 `app/`，合并成本让步已不适用。上游后续如果再改这块，按本行核对。
