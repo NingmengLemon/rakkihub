@@ -67,6 +67,14 @@ class AttachmentUrlStorageTest {
         val json = """{"text":"see \"file:upload/a.png\" here"}"""
 
         assertEquals(json, AttachmentUrlStorage.toMemoryJson(json, filesDirUri))
+        assertEquals(json, AttachmentUrlStorage.toStoredJson(json, filesDirUri))
+    }
+
+    @Test
+    fun `escaped quotes around an absolute url in text are untouched`() {
+        val json = """{"text":"see \"$filesDirUri/upload/a.png\" here"}"""
+
+        assertEquals(json, AttachmentUrlStorage.toStoredJson(json, filesDirUri))
     }
 
     @Test

@@ -331,7 +331,8 @@ class BackupManager(
      * 官方兼容出口的 settings.json：把绝对 files 路径换成官方安装的位置。
      *
      * 这里用的是「任何安装的绝对 files 路径」那条正则，因为 settings 里可能残留官方或别的
-     * 安装的头像路径；库那边只改本应用的前缀（含两种形态），见 [OfficialExportPaths]。
+     * 安装的头像路径；库那边改本应用前缀（两种绝对形态）与消息库里的相对形态，见
+     * [OfficialExportPaths]。
      */
     private fun rewriteForOfficial(settingsJson: String): String {
         val official = officialFilesUriPrefix()

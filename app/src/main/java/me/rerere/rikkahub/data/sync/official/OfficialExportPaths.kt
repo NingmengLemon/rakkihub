@@ -3,10 +3,11 @@ package me.rerere.rikkahub.data.sync.official
 /**
  * 官方兼容导出要换掉的附件前缀。
  *
- * 库与 settings 里的附件引用是绝对 `file://` 路径，包名段指向本安装；官方客户端恢复时只把
- * 附件搬进它自己的 files 目录，不会改路径，所以导出时要换成官方安装的位置。
+ * 库与 settings 里的附件引用多数是绝对 `file://` 路径，包名段指向本安装；官方客户端恢复时
+ * 只把附件搬进它自己的 files 目录，不会改路径，所以导出时要换成官方安装的位置。消息库里
+ * 还可能有 C36 的相对形态（`"url":"file:upload/...`），同样要换成官方绝对位置。
  *
- * 两种形态都要覆盖：`/data/user/<用户号>/<包名>/files/` 与 `/data/data/<包名>/files/`。
+ * 绝对路径要覆盖两种形态：`/data/user/<用户号>/<包名>/files/` 与 `/data/data/<包名>/files/`。
  * 后者是更早的写法，导入侧的重写器也认它，库里可能留着。
  */
 internal object OfficialExportPaths {
@@ -45,7 +46,8 @@ internal object OfficialExportPaths {
         officialPackage: String,
     ): List<Pair<String, String>> {
         val officialFilesDirUri = officialFilesPrefix(filesDirUri, packageName, officialPackage)
-        val relative = "\"url\":\"file:upload/" to "\"url\":\"${officialFilesDirUri}upload/"
+        val relative = "\"url\":\"file:upload/" to
+            "\"url\":\"${officialFilesDirUri.trimEnd('/')}/upload/"
         if (packageName == officialPackage) return listOf(relative)
         val userNumber = userNumber(filesDirUri)
         val sources = buildList {

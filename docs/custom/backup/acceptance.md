@@ -70,7 +70,7 @@ v31 的样本推成 `rikkahub-sample-v31.db` 与 `backup-expectations-v31.json`�
 | 官方客户端导出 | v32（官方 3.1.1，带附件引用） | 表数据与转换产物全量；附件逐个比；settings 的条数、id 集合、当前助手与模型 |
 | 构造样本 | `BackupManagerTest` 里改 identity 的用例 | 覆盖接线，无独立样本 |
 | 本 fork 旧构建 | v31（产出自 3.1.0 (193)，包名还是 `me.rerere.rikkahub`） | 表数据与内容摘要；settings 只手工核对过条数（经 migrate 与 decode 后不变），没有脚本或测试复现；附件未逐个比 |
-| 本应用自己导出 | `BackupManagerTest` 的常规恢复用例 | 覆盖原路径（不经转换器）；消息引用是相对形态，按当前安装解析；迁移链升级无样本或用例 |
+| 本应用自己导出 | `BackupManagerTest` 的常规恢复用例 | 覆盖原路径（不经转换器）；新写或重存过的消息引用是相对形态，按当前安装解析；没重存过的老会话仍是绝对路径；迁移链升级无样本或用例 |
 | 高版本库 | `BackupManagerTest` 的拒绝用例 | 验过 |
 | 官方兼容出口 | `BackupManagerTest` 的两条路径改写用例，外加一条「官方出口归档再恢复回本应用」 | 绝对路径改写验过；相对形态改写有 `OfficialExportPathsTest` 用例、实际导出包未验；官方客户端恢复仍是人工闸门；schema 裁剪未实现 |
 
