@@ -6,7 +6,7 @@ import org.junit.Assert.assertTrue
 import org.junit.Test
 
 /**
- * 官方兼容导出的前缀推导。
+ * 官方兼容导出的路径推导与转义。
  *
  * 这条逻辑决定「导出的备份装到官方那边之后附件还在不在」，但它依赖的只是路径字符串，所以放在
  * JVM 上跑，不用等设备。

@@ -83,7 +83,7 @@ internal object OfficialDatabaseAdapter {
                 database.endTransaction()
             }
         }
-        // 归档只拷 .db：确认 target 自己没有残留副文件（写入与事务都已在关闭前落定）
+        // 归档只拷 .db：连接已关、事务已提交，副文件应当已经没了；这里确认一遍
         DatabaseBackup.removeSidecars(target)
         return target
     }

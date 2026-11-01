@@ -296,7 +296,7 @@ class BackupManagerTest {
                 check(it.moveToFirst())
                 it.getString(0)
             }
-            val ours = context.filesDir.toUri().toString().trimEnd('/') + "/upload/abc.png"
+            val ours = localFileUrl("upload/abc.png")
             assertTrue("应当重写成本机路径，实际是 $messages", messages.contains(ours))
             assertFalse("不应残留官方包的路径，实际是 $messages", messages.contains("me.rerere.rikkahub/files/"))
         }
@@ -558,15 +558,14 @@ class BackupManagerTest {
             backupTarget = BackupTarget.OFFICIAL,
         )
         // 先证明导出侧确实把路径换成了官方安装，再证明回灌时被换回来；否则这条用例只覆盖了后半段
-        assertTrue(
-            "导出时应当换成官方安装的路径，实际是 ${archivedMessages(archive)}",
-            archivedMessages(archive).contains("/$OFFICIAL_APPLICATION_ID/"),
-        )
+        val exported = archivedMessages(archive)
+        val officialUrl = "file:///data/user/0/$OFFICIAL_APPLICATION_ID/files/upload/x.png"
+        assertTrue("导出时应当换成官方安装的路径，实际是 $exported", exported.contains(officialUrl))
 
         manager.stageRestore(archive, includeDatabase = true, includeFiles = false)
 
         val staged = stagedMessages()
-        val ours = context.filesDir.toUri().toString().trimEnd('/') + "/upload/x.png"
+        val ours = localFileUrl("upload/x.png")
         assertTrue("应当换回本机路径，实际是 $staged", staged.contains(ours))
         assertFalse("不应残留官方安装的路径，实际是 $staged", staged.contains("/$OFFICIAL_APPLICATION_ID/"))
     }
@@ -612,6 +611,10 @@ class BackupManagerTest {
     /** 真机上的附件路径形态；测试的 filesDir 挂在 cache 下，导出逻辑会补上规范形态。 */
     private fun canonicalFileUrl(path: String): String =
         "file:///data/user/0/${context.packageName}/files/$path"
+
+    /** 本安装实际的 files 目录下的路径。 */
+    private fun localFileUrl(path: String): String =
+        context.filesDir.toUri().toString().trimEnd('/') + "/$path"
 
     /** 暂存库里 `message_node.messages` 拼起来的内容。 */
     private fun stagedMessages(): String {

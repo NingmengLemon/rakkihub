@@ -29,8 +29,10 @@ internal object OfficialForeignAttachmentPaths {
                 val hit = runCatching {
                     database.rawQuery(
                         "SELECT 1 FROM `$table` WHERE `$column` LIKE '%file:///data/%' " +
-                            "AND `$column` NOT LIKE ? LIMIT 1",
-                        arrayOf("%${ourPrefix.removePrefix("file://")}%"),
+                            "AND `$column` NOT LIKE ? ESCAPE '\\' LIMIT 1",
+                        arrayOf(
+                            "%${OfficialExportPaths.escapeLikePattern(ourPrefix.removePrefix("file://"))}%",
+                        ),
                     ).use { it.moveToFirst() }
                 }.getOrDefault(false)
                 if (hit) return true
