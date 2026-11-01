@@ -27,6 +27,7 @@ import me.rerere.rikkahub.data.ai.MemoryConsolidationScheduler
 import me.rerere.rikkahub.data.datastore.ConversationSortOrder
 import me.rerere.rikkahub.data.datastore.SettingsStore
 import me.rerere.rikkahub.data.datastore.getCurrentAssistant
+import me.rerere.rikkahub.data.files.ChatDraftStore
 import me.rerere.rikkahub.data.model.Conversation
 import me.rerere.rikkahub.data.model.Folder
 import me.rerere.rikkahub.data.repository.ConversationRepository
@@ -45,6 +46,7 @@ class ChatDrawerVM(
     private val folderRepo: FolderRepository,
     private val chatService: ChatService,
     private val memoryConsolidationScheduler: MemoryConsolidationScheduler,
+    private val draftStore: ChatDraftStore,
     private val savedStateHandle: SavedStateHandle,
 ) : ViewModel() {
 
@@ -59,6 +61,16 @@ class ChatDrawerVM(
     // 当前选中的文件夹筛选，null 表示「未归类」视图
     private val _selectedFolderId = MutableStateFlow<Uuid?>(null)
     val selectedFolderId: StateFlow<Uuid?> = _selectedFolderId.asStateFlow()
+
+    // 有草稿的会话，抽屉里据此标记；打开抽屉与切换会话时刷新一次，不做实时订阅
+    private val _draftConversationIds = MutableStateFlow<Set<Uuid>>(emptySet())
+    val draftConversationIds: StateFlow<Set<Uuid>> = _draftConversationIds.asStateFlow()
+
+    fun refreshDraftConversationIds() {
+        viewModelScope.launch {
+            _draftConversationIds.value = draftStore.conversationIds()
+        }
+    }
 
     // 当前助手的文件夹列表（Room Flow，增删改自动刷新）
     val folders: StateFlow<List<Folder>> = assistantIdFlow

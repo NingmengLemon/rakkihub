@@ -102,6 +102,7 @@ fun ChatDrawerContent(
     vm: ChatVM,
     settings: Settings,
     current: Conversation,
+    drawerOpen: Boolean,
 ) {
     val scope = rememberCoroutineScope()
     val context = LocalContext.current
@@ -115,6 +116,12 @@ fun ChatDrawerContent(
     val folders by drawerVm.folders.collectAsStateWithLifecycle()
     val selectedFolderId by drawerVm.selectedFolderId.collectAsStateWithLifecycle()
     val memoryDreaming by drawerVm.memoryDreaming.collectAsStateWithLifecycle()
+    val draftConversationIds by drawerVm.draftConversationIds.collectAsStateWithLifecycle()
+
+    // 草稿写盘有防抖，打开抽屉与切换会话时各刷新一次就够，不做实时订阅
+    LaunchedEffect(drawerOpen, current.id) {
+        if (drawerOpen) drawerVm.refreshDraftConversationIds()
+    }
     val conversationListState = rememberLazyListState(
         initialFirstVisibleItemIndex = drawerVm.scrollIndex,
         initialFirstVisibleItemScrollOffset = drawerVm.scrollOffset,
@@ -283,6 +290,7 @@ fun ChatDrawerContent(
                 current = current,
                 conversations = conversations,
                 conversationJobs = conversationJobs.keys,
+                draftConversationIds = draftConversationIds,
                 listState = conversationListState,
                 header = if (scrollableHeader) drawerHeader else null,
                 modifier = Modifier

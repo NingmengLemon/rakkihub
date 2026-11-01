@@ -7,6 +7,7 @@ import me.rerere.hugeicons.stroke.Pin
 import me.rerere.hugeicons.stroke.PinOff
 import me.rerere.hugeicons.stroke.Refresh01
 import me.rerere.hugeicons.stroke.Delete01
+import me.rerere.hugeicons.stroke.Edit01
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.foundation.LocalIndication
 import androidx.compose.foundation.background
@@ -81,6 +82,7 @@ fun ColumnScope.ConversationList(
     conversations: LazyPagingItems<ConversationListItem>,
     conversationJobs: Collection<Uuid>,
     listState: LazyListState,
+    draftConversationIds: Set<Uuid> = emptySet(),
     modifier: Modifier = Modifier,
     header: (@Composable () -> Unit)? = null,
     onClick: (Conversation) -> Unit = {},
@@ -169,6 +171,7 @@ fun ColumnScope.ConversationList(
                         conversation = item.conversation,
                         selected = item.conversation.id == current.id,
                         loading = item.conversation.id in conversationJobs,
+                        hasDraft = item.conversation.id in draftConversationIds,
                         onClick = onClick,
                         onDelete = onDelete,
                         onRegenerateTitle = onRegenerateTitle,
@@ -240,6 +243,7 @@ private fun ConversationItem(
     conversation: Conversation,
     selected: Boolean,
     loading: Boolean,
+    hasDraft: Boolean = false,
     modifier: Modifier = Modifier,
     onDelete: (Conversation) -> Unit = {},
     onRegenerateTitle: (Conversation) -> Unit = {},
@@ -281,11 +285,20 @@ private fun ConversationItem(
         ) {
             Text(
                 text = conversation.title.ifBlank { stringResource(id = R.string.chat_page_new_message) },
+                modifier = Modifier.weight(1f),
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis
             )
-            Spacer(Modifier.weight(1f))
 
+            // 有没发出去的草稿
+            AnimatedVisibility(hasDraft) {
+                Icon(
+                    imageVector = HugeIcons.Edit01,
+                    contentDescription = stringResource(R.string.chat_page_has_draft),
+                    modifier = Modifier.size(12.dp),
+                    tint = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
             // 置顶图标
             AnimatedVisibility(conversation.isPinned) {
                 Icon(

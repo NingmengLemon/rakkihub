@@ -75,6 +75,15 @@ class ChatDraftStore(
     }
 
     /**
+     * 现有草稿对应的会话 id，抽屉里据此标出哪些会话还有没发出去的内容。
+     *
+     * 只看文件名，不解析内容：坏掉的草稿也会列出来，打开会话时读不出内容，下一次刷新标记就没了。
+     */
+    suspend fun conversationIds(): Set<Uuid> = withContext(Dispatchers.IO) {
+        directory.listFiles().orEmpty().filter { it.isFile }.mapNotNullTo(mutableSetOf()) { it.draftConversationId() }
+    }
+
+    /**
      * 草稿里引用到的本地文件地址，附件清理用。
      *
      * 直接扫原始文本、不解析 JSON：坏掉的草稿也要算数，宁可多留一个文件。

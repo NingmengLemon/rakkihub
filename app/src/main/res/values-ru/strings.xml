@@ -270,6 +270,7 @@
   <string name="chat_page_export_markdown_desc">Экспортировать разговор как файл Markdown</string>
   <string name="chat_page_export_share_via">Поделиться через</string>
   <string name="chat_page_export_success">Экспортировано в %1$s</string>
+  <string name="chat_page_has_draft">Черновик</string>
   <string name="chat_page_history">История чата</string>
   <string name="chat_page_menu_ai_translator">AI-переводчик</string>
   <string name="chat_page_message_count">%d сообщений</string>

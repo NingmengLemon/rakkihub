@@ -253,6 +253,7 @@
   <string name="chat_page_export_markdown_desc">Unterhaltung als Markdown-Datei exportieren</string>
   <string name="chat_page_export_share_via">Teilen über</string>
   <string name="chat_page_export_success">Exportiert nach %1$s</string>
+  <string name="chat_page_has_draft">Entwurf</string>
   <string name="chat_page_history">Chat-Verlauf</string>
   <string name="chat_page_menu_ai_translator">KI-Übersetzer</string>
   <string name="chat_page_message_count">%d Nachrichten</string>

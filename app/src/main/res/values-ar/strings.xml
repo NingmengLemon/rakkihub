@@ -312,6 +312,7 @@
   <string name="chat_page_folder_add">جديد</string>
   <string name="chat_page_folder_default">محادثة</string>
   <string name="chat_page_folder_name">اسم المجلد</string>
+  <string name="chat_page_has_draft">مسودة</string>
   <string name="chat_page_history">سجل المحادثات</string>
   <string name="chat_page_menu_ai_translator">مترجم الذكاء الاصطناعي</string>
   <string name="chat_page_message_count">%d رسالة</string>

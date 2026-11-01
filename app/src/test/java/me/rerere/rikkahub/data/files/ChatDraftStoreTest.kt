@@ -125,6 +125,16 @@ class ChatDraftStoreTest {
     }
 
     @Test
+    fun `draft conversation ids are listed for the drawer`() = runTest {
+        val other = Uuid.random()
+        store.save(conversationId, ChatDraftStore.Draft(text = "a"))
+        store.save(other, ChatDraftStore.Draft(text = "b"))
+        directory.resolve("not-a-draft.tmp").writeText("x")
+
+        assertEquals(setOf(conversationId, other), store.conversationIds())
+    }
+
+    @Test
     fun `orphan drafts are removed and kept ones survive`() = runTest {
         val kept = Uuid.random()
         store.save(kept, ChatDraftStore.Draft(text = "留着"))
