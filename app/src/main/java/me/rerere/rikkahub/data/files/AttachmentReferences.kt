@@ -21,8 +21,15 @@ internal fun extractFileUrls(text: String): Set<String> =
  *
  * 宁可少收垃圾也不能删错：返回 null 的地址由调用方保守处理，不要当成「没有引用」。
  * 只认带绝对路径的地址：`file://abc.png` 这种只有主机、没有路径的写法会得到空路径，不能拿来比较。
+ *
+ * 消息库里新写的是 `file:upload/...` 这种相对形态，按 [filesDir] 还原成本安装的路径；
+ * 旧数据里的绝对地址照旧走 URI 解析。
  */
-internal fun fileUrlToCanonicalPath(url: String): String? {
+internal fun fileUrlToCanonicalPath(url: String, filesDir: File? = null): String? {
+    // file:upload/... 是消息库里保存的相对形态；file:/... 与 file://... 仍是绝对地址
+    if (filesDir != null && url.startsWith("file:") && !url.startsWith("file://") && !url.startsWith("file:/")) {
+        return runCatching { File(filesDir, url.removePrefix("file:")).canonicalPath }.getOrNull()
+    }
     // Paths.get(URI) 能正确处理 Windows 的盘符；Android 上退回按 URI 路径取
     runCatching { Paths.get(URI(url)).toFile().canonicalPath }.getOrNull()?.let { return it }
     return runCatching {

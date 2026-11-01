@@ -22,6 +22,7 @@ import me.rerere.rikkahub.data.db.entity.MessageNodeEntity
 import me.rerere.rikkahub.data.db.fts.MessageFtsManager
 import me.rerere.rikkahub.data.db.fts.MessageSearchSort
 import me.rerere.rikkahub.data.db.fts.SearchIndexHealth
+import me.rerere.rikkahub.data.files.AttachmentUrlStorage
 import me.rerere.rikkahub.data.model.Conversation
 import me.rerere.rikkahub.data.model.MessageNode
 import me.rerere.rikkahub.utils.JsonInstant
@@ -34,6 +35,8 @@ class ConversationRepository(
     private val favoriteDAO: FavoriteDAO,
     private val database: AppDatabase,
     private val messageFtsManager: MessageFtsManager,
+    /** 本安装 files 目录的 URI，消息里的附件地址在库里以相对形态存，读取时用它还原 */
+    private val attachmentFilesDirUri: String,
 ) {
     companion object {
         private const val PAGE_SIZE = 20
@@ -534,7 +537,9 @@ class ConversationRepository(
                 }
                 if (page.isEmpty()) break
                 page.forEach { entity ->
-                    val messages = JsonInstant.decodeFromString<List<UIMessage>>(entity.messages)
+                    val messages = JsonInstant.decodeFromString<List<UIMessage>>(
+                        AttachmentUrlStorage.toMemory(entity.messages, attachmentFilesDirUri)
+                    )
                     val nodeId = Uuid.parse(entity.id)
                     nodes.add(
                         MessageNode(
@@ -557,7 +562,10 @@ class ConversationRepository(
                 id = node.id.toString(),
                 conversationId = conversationId,
                 nodeIndex = index,
-                messages = JsonInstant.encodeToString(node.messages),
+                messages = AttachmentUrlStorage.toStored(
+                    JsonInstant.encodeToString(node.messages),
+                    attachmentFilesDirUri,
+                ),
                 selectIndex = node.selectIndex
             )
         }

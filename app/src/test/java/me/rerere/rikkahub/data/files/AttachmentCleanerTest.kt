@@ -83,6 +83,17 @@ class AttachmentCleanerTest {
     }
 
     @Test
+    fun `stored relative upload refs resolve against the files dir`() {
+        val (referenced, unresolved) = collectReferencedPaths(
+            listOf("file:upload/hash.jpg"),
+            filesDir = directory,
+        )
+
+        assertEquals(setOf(File(directory, "upload/hash.jpg").canonicalPath), referenced)
+        assertTrue(unresolved.isEmpty())
+    }
+
+    @Test
     fun `an empty reference list makes every file unreferenced`() {
         val file = File(directory, "hash.jpg").apply { writeText("x") }
         val (referenced, unresolved) = collectReferencedPaths(emptyList())

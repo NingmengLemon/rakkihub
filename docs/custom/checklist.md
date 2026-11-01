@@ -43,6 +43,7 @@
 | C33 | 附件拷贝挪出主线程 | 改造 |
 | C34 | 备份与工作区文件的拷贝挪出主线程 | 改造 |
 | C35 | 模型选择支持多关键词搜索 | 改造 |
+| C36 | 消息附件引用按相对路径存储 | 改造 |
 
 ## 明细
 
@@ -229,7 +230,7 @@
 
 - 落点：新增 `data/sync/official/OfficialExportPaths.kt`（纯函数，推导要替换的前缀对：本安装实际的 files 目录，加上 `/data/user/<用户号>/<包名>/files/` 与 `/data/data/<包名>/files/` 两种规范形态，用户号从路径里取；另带 `LIKE` 模式的字面量转义）与 `OfficialExportPathsTest` 十条 JVM 用例；`OfficialDatabaseAdapter.adaptForOfficial` 增加 `attachmentPrefixRewrites`，一致性校验之后逐表逐列对 TEXT 列做前缀 `REPLACE`（一个事务、`LIKE` 模式转义、写完确认没有残留副文件），产出改写过的库副本（没有要改的就返回原快照）；`BackupManager.createBackup` 用这份前缀对改写库，settings 走 `OfficialUrlRewriter.rewriteEmbedded`；`OFFICIAL_APPLICATION_ID` 常量放在 official 包里；`OfficialUrlRewriter` 的 KDoc 改成方向中立（导入与导出共用）；`BackupManagerTest` 补三条用例（消息里的附件、settings 里的头像、官方归档回灌本应用），每条都同时断言自家出口不改或回灌后换回本机路径
 - 理由：官方客户端恢复只把附件搬进自己的 files 目录，不会改库与设置里的路径。我们导出的库里存的是本应用的绝对 `file://`，装过去之后图片、文档、头像全断
-- 合并注意：改写只在 OFFICIAL 目标发生，自家出口一行不动。官方包名写死在 `OFFICIAL_APPLICATION_ID`，官方换 applicationId 时要跟着改。这条只解决路径，schema 分叉后的裁表裁列仍待实现；官方客户端实际恢复一遍仍是人工闸门
+- 合并注意：改写只在 OFFICIAL 目标发生，自家出口一行不动。官方包名写死在 `OFFICIAL_APPLICATION_ID`，官方换 applicationId 时要跟着改。消息库里新写的相对形态（C36）也会在导出时换成官方安装的绝对位置。这条只解决路径，schema 分叉后的裁表裁列仍待实现；官方客户端实际恢复一遍仍是人工闸门
 
 ### C31 聊天草稿落盘
 
@@ -241,7 +242,7 @@
 
 - 落点：新增 `data/files/ContentAddressedFiles.kt`（边写边算 SHA-256，写进同目录的 `.pending-<uuid>` 临时文件，落盘后按指纹改名，目标已存在就复用）与 `FileUtils.buildContentFileName`（扩展名优先按 MIME，其次来源文件名）；`FilesManager` 的 upload 写入全部走它（`saveManagedFrom*`、`createChatFilesByContents/ByByteArrays`、`createChatTextFile`），`createManagedFileEntity` 遇到同一路径复用已有登记，`syncFolder` 不登记 `.pending-*`；新增 `data/files/AttachmentReferences.kt`（从 JSON 与草稿文本里摘 `file:` 地址、归一成规范路径）、`LiveAttachmentReferences.kt`（进程内登记输入框附件，编辑历史消息期间草稿不写输入框，靠它兜住）与 `AttachmentCleaner.kt`（扫引用点、删无引用文件与 `managed_files` 行，`collectReferencedPaths` 与 `shouldDeleteUploadFile` 单独成纯函数）；删掉所有立即删文件的入口：`ChatService` 的落库差异删除与队列附件清理、删会话时的文件删除、`ConversationRepository.deleteConversation`、输入框移除附件（`AttachmentChips`、`ChatInputState.shouldDeleteFileOnRemove`）、助手头像与背景、用户头像，`FilesManager.deleteChatFiles`、`MessageQueue.unreferencedQueuedAttachmentUrls` 与上游的 `QueuedAttachmentCleanupTest.kt` 一并删除；`MessageNodeDAO.getContentsWithFileReferences` 只取含 `file:` 的消息行，`ChatDraftStore.referencedFileUrls`、`ChatService.unsavedAttachmentUrls` 与 `ChatService.isGenerating` 补上库外与内存引用；设置的文件管理页加「清理无引用的文件」入口，按天清理也走同一套引用判断（`AttachmentCleaner.cleanOlderThan`，`FilesManager.deleteOlderThan` 删除），新增 7 条文案 × 8 个 locale；新增 `ContentAddressedFilesTest` 四条、`AttachmentReferencesTest` 五条、`AttachmentCleanerTest` 十二条、`LiveAttachmentReferencesTest` 五条 JVM 用例，`ChatDraftStoreTest` 补一条草稿引用扫描
 - 理由：文件名原来是随机 UUID，写之前无从判断内容是否已经存在，同一张图在多个会话、多条消息里各存一份，备份体积里有很大一块是重复内容。改成内容寻址之后同内容只留一份，删除也就不能再按「删消息就删文件」做
-- 合并注意：引用形式没变，还是绝对 `file://`，所以序列化格式、Room schema、官方兼容导出与备份格式都不受影响；`managed_files` 只是旁路索引，消息读取不经过它，去重之后同一路径只有一条登记。清理是「宁可少收垃圾也不能删错」：解析不了的地址按文件名保守保留，生成开始前与删除前各查一次 `isGenerating`，工具结果里的新文件可能还没落库；输入框里的附件由草稿（C31）与 `LiveAttachmentReferences`（C32）保活，编辑历史消息期间不写草稿的那部分也在后者里；Web 客户端上传后还停在浏览器输入框里的附件不在扫描范围，清理前别让浏览器里留着没发出去的附件；工作区把 `filesDir/upload` bind mount 到 `/upload`，从终端写进去的文件没有任何引用，也会被清掉。消息扫描一次把所有含本地地址的行读进内存，历史很大时是手动清理的时间与内存上限；删除前还会再取一次只存在于内存的输入框登记与内存会话、队列引用，缩小扫描窗口内新加附件被误删的可能。文件页的按天清理也走同一套引用判断，只删没有引用、且登记时间（没有登记时按文件修改时间）早于截止时间的 upload 文件；登记时间在去重复用时不刷新，所以年龄是「首次写进来的时间」，不是「最后一次被用」；「全部文件」、单个删除与 Web 的 `DELETE /api/files/{id}` 仍然直接删文件，这是显式的破坏性操作。存量文件的随机名不会自动归并，去重只作用于新写入。`FilesManager`、`ChatService`、`ConversationRepository`、`AttachmentChips`、`AssistantVM`、`AssistantDetailVM`、`ChatVM`、`SettingFilesPage`、`ViewModelModule`、`RepositoryModule` 都动了，合并时按本行复核
+- 合并注意：C32 时引用形式没变（还是绝对 `file://`），序列化格式、Room schema、官方兼容导出与备份格式都不受影响；C36 之后消息库里新写的 upload 地址按相对形态落盘，清理按两种形态解析，官方导出的改写也覆盖相对形态。`managed_files` 只是旁路索引，消息读取不经过它，去重之后同一路径只有一条登记。清理是「宁可少收垃圾也不能删错」：解析不了的地址按文件名保守保留，生成开始前与删除前各查一次 `isGenerating`，工具结果里的新文件可能还没落库；输入框里的附件由草稿（C31）与 `LiveAttachmentReferences`（C32）保活，编辑历史消息期间不写草稿的那部分也在后者里；Web 客户端上传后还停在浏览器输入框里的附件不在扫描范围，清理前别让浏览器里留着没发出去的附件；工作区把 `filesDir/upload` bind mount 到 `/upload`，从终端写进去的文件没有任何引用，也会被清掉。消息扫描一次把所有含本地地址的行读进内存，历史很大时是手动清理的时间与内存上限；删除前还会再取一次只存在于内存的输入框登记与内存会话、队列引用，缩小扫描窗口内新加附件被误删的可能。文件页的按天清理也走同一套引用判断，只删没有引用、且登记时间（没有登记时按文件修改时间）早于截止时间的 upload 文件；登记时间在去重复用时不刷新，所以年龄是「首次写进来的时间」，不是「最后一次被用」；「全部文件」、单个删除与 Web 的 `DELETE /api/files/{id}` 仍然直接删文件，这是显式的破坏性操作。存量文件的随机名不会自动归并，去重只作用于新写入。`FilesManager`、`ChatService`、`ConversationRepository`、`AttachmentChips`、`AssistantVM`、`AssistantDetailVM`、`ChatVM`、`SettingFilesPage`、`ViewModelModule`、`RepositoryModule` 都动了，合并时按本行复核
 
 ### C33 附件拷贝挪出主线程
 
@@ -261,3 +262,9 @@
 - 落点：`ai/src/main/java/me/rerere/ai/provider/Model.kt` 加 `List<Model>.filterByKeywords`（按空格拆关键词、忽略大小写、每个关键词命中 `modelId` 或 `displayName` 的一部分、不要求顺序，空查询返回原列表）；`ModelList.kt` 的聊天模型面板与 `SettingProviderDetailPage.kt` 的可用模型面板共用这一条规则；新增 `ModelFilterTest` 六条 JVM 用例。
 - 理由：聊天面板原来整串匹配且只看 `displayName`，多词或按模型 ID 搜不到；提供商详情的面板已经按空格拆词并同时匹配 `modelId` 与 `displayName`。这次抽成共用函数，两边用同一条规则，聊天面板也因此能按模型 ID 搜。
 - 移植注意：`filterByKeywords` 在 `ai/`，该模块仍尽量跟随上游；以后跟随上游对 `Model.kt` 的改动时保留这个函数，两个 UI 调用点在 `app/`，合并成本让步已不适用。上游后续如果再改这块，按本行核对。
+
+### C36 消息附件引用按相对路径存储
+
+- 落点：新增 `data/files/AttachmentUrlStorage.kt`（两个纯函数：落盘前把本安装 files 目录下的 upload 绝对地址换成 `file:upload/...`，读取后还原；替换带 JSON 值开头的引号，只动 upload 文件夹）与五条 JVM 用例；`ConversationRepository` 构造多一个 `attachmentFilesDirUri`（Koin 里从 `context.filesDir` 生成），`saveMessageNodes` 落库前转换，读取消息时还原；`AttachmentReferences.fileUrlToCanonicalPath` 与 `collectReferencedPaths` 接受 `filesDir`，把相对形态还原成规范路径，`AttachmentCleaner` 扫描时传入当前 filesDir；`BackupManager.attachmentPrefixRewritesForOfficial` 增加 `"file:upload/` 到官方安装前缀的替换，官方兼容导出的库仍是官方能读的绝对地址。`AttachmentCleanerTest` 补一条相对形态解析用例。
+- 理由：消息库与随它导出的备份原来把安装路径写死在每条附件地址里，包名或用户号一变就整体失效；导入侧的路径重写是事后补救，落盘形态本身应该可移植。改完之后相对地址在任意安装下都能解析，旧库里的绝对地址继续有效并在下一次保存时转换。
+- 合并注意：消息 JSON 的读写都经过 `ConversationRepository` 的转换，别的入口直接读写 `MessageNodeEntity.messages` 会绕过它；设置里的头像仍存绝对地址（靠导入侧重写），草稿不随备份走，两者都没改。清理与官方导出都按绝对、相对两种形态处理；官方导出的替换带引号，避免碰到正文。旧数据不做一次性迁移，读到什么算什么，下一次保存自然转成相对。

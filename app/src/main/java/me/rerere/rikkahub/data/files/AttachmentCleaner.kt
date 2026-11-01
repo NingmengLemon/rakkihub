@@ -128,7 +128,8 @@ class AttachmentCleaner(
                 conversationRepository.messageContentsWithFileReferences().forEach { addAll(extractFileUrls(it)) }
                 addAll(extractFileUrls(JsonInstant.encodeToString(settings)))
                 addAll(draftStore.referencedFileUrls())
-            }
+            },
+            filesDir = context.filesDir,
         )
         val (memoryReferenced, memoryUnresolved) = inMemoryReferences()
         return (referenced + memoryReferenced) to (unresolved + memoryUnresolved)
@@ -136,19 +137,26 @@ class AttachmentCleaner(
 
     /** 只存在于内存里的引用：输入框登记与已加载会话、队列、提交中的消息 */
     private suspend fun inMemoryReferences(): Pair<Set<String>, List<String>> =
-        collectReferencedPaths(liveReferences.snapshot() + chatService.unsavedAttachmentUrls())
+        collectReferencedPaths(
+            liveReferences.snapshot() + chatService.unsavedAttachmentUrls(),
+            filesDir = context.filesDir,
+        )
 }
 
 /**
  * 把各个来源的地址合成「还被引用」的规范路径集合。
  *
  * 解析不了的地址单独留下，由 [shouldDeleteUploadFile] 按文件名保守保留。
+ * 消息库里新写的 `file:upload/...` 相对形态按 [filesDir] 还原；旧数据里的绝对地址照旧。
  */
-internal fun collectReferencedPaths(urls: Iterable<String>): Pair<Set<String>, List<String>> {
+internal fun collectReferencedPaths(
+    urls: Iterable<String>,
+    filesDir: File? = null,
+): Pair<Set<String>, List<String>> {
     val referenced = mutableSetOf<String>()
     val unresolved = mutableListOf<String>()
     urls.forEach { url ->
-        val path = fileUrlToCanonicalPath(url)
+        val path = fileUrlToCanonicalPath(url, filesDir)
         if (path != null) referenced += path else unresolved += url
     }
     return referenced to unresolved

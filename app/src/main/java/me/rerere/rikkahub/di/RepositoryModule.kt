@@ -1,6 +1,7 @@
 package me.rerere.rikkahub.di
 
 import android.content.Context
+import androidx.core.net.toUri
 import me.rerere.rikkahub.data.files.AttachmentCleaner
 import me.rerere.rikkahub.data.files.ChatDraftStore
 import me.rerere.rikkahub.data.files.FileFolders
@@ -27,7 +28,15 @@ import java.io.File
 
 val repositoryModule = module {
     single {
-        ConversationRepository(get(), get(), get(), get(), get())
+        val context: Context = get()
+        ConversationRepository(
+            get(),
+            get(),
+            get(),
+            get(),
+            get(),
+            attachmentFilesDirUri = context.filesDir.toUri().toString().trimEnd('/'),
+        )
     }
 
     single {
