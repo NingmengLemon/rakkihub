@@ -20,13 +20,19 @@ internal object ImportedBackupArchive {
      * 复制 [source] 到 [directory]，返回落盘位置；失败时返回带原因的 [Result]，由调用方记日志。
      *
      * 先写临时文件再原子改名，进程中途被杀不会留下截断的归档；文件名带毫秒，同一秒内多次
-     * 导入不会互相覆盖。不覆盖已有文件：宁可多出一份，也不要悄悄替换掉上一份。
-     * 失败时会尝试删掉临时文件，不在目录里留残渣（删除本身可能失败，是 best-effort）。
+     * 导入不会互相覆盖。同毫秒撞名时追加序号（Linux 上连续两次调用会撞上），不覆盖已有文件：
+     * 宁可多出一份，也不要悄悄替换掉上一份。失败时会尝试删掉临时文件，不在目录里留残渣
+     * （删除本身可能失败，是 best-effort）。
      */
     fun store(source: File, directory: File): Result<File> = runCatching {
         check(directory.isDirectory || directory.mkdirs()) { "Cannot create archive directory" }
-        val target = File(directory, "imported_${stamp.format(LocalDateTime.now())}.zip")
-        check(!target.exists()) { "Imported backup archive already exists: ${target.name}" }
+        val stampText = stamp.format(LocalDateTime.now())
+        var target = File(directory, "imported_$stampText.zip")
+        var suffix = 1
+        while (target.exists()) {
+            suffix += 1
+            target = File(directory, "imported_${stampText}_$suffix.zip")
+        }
         val temporary = File(directory, target.name + ".tmp")
         try {
             Files.copy(source.toPath(), temporary.toPath(), REPLACE_EXISTING)
