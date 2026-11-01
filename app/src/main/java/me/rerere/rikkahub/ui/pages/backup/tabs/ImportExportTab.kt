@@ -86,9 +86,11 @@ fun ImportExportTab(
                     // 复制到用户选择的位置，这一段按字节走，没有逐项进度；包可能几百 MB，放 IO 上
                     try {
                         withContext(Dispatchers.IO) {
-                            context.contentResolver.openOutputStream(targetUri)?.use { outputStream ->
+                            val outputStream = context.contentResolver.openOutputStream(targetUri)
+                                ?: error("Cannot open the target document")
+                            outputStream.use { stream ->
                                 FileInputStream(exportFile).use { inputStream ->
-                                    inputStream.copyTo(outputStream)
+                                    inputStream.copyTo(stream)
                                 }
                             }
                         }
@@ -136,9 +138,11 @@ fun ImportExportTab(
                         File(context.cacheDir, "temp_restore_${System.currentTimeMillis()}.zip")
                     try {
                         withContext(Dispatchers.IO) {
-                            context.contentResolver.openInputStream(sourceUri)?.use { inputStream ->
+                            val inputStream = context.contentResolver.openInputStream(sourceUri)
+                                ?: error("Cannot read the selected backup")
+                            inputStream.use { stream ->
                                 FileOutputStream(tempFile).use { outputStream ->
-                                    inputStream.copyTo(outputStream)
+                                    stream.copyTo(outputStream)
                                 }
                             }
                             vm.restoreFromLocalFile(tempFile)

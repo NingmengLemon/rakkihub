@@ -96,6 +96,10 @@ class AttachmentCleaner(
         val (referenced, unresolved) = collectReferences()
         // 扫描要花时间，这期间开始的生成会写出还没落库的文件，删除前再确认一次
         if (chatService.isGenerating()) return Result(busy = true)
+        // 同一段时间里用户也可能切回聊天页加附件，这些只在内存里，删除前再取一次
+        val (lateReferenced, lateUnresolved) = inMemoryReferences()
+        val allReferenced = referenced + lateReferenced
+        val allUnresolved = unresolved + lateUnresolved
 
         val uploadDir = File(context.filesDir, FileFolders.UPLOAD)
         var removed = 0
@@ -103,7 +107,7 @@ class AttachmentCleaner(
         var freed = 0L
         uploadDir.listFiles().orEmpty().filter { it.isFile }.forEach { file ->
             val relativePath = FileUtils.buildRelativePath(FileFolders.UPLOAD, file)
-            if (!predicate(file, relativePath, referenced, unresolved)) return@forEach
+            if (!predicate(file, relativePath, allReferenced, allUnresolved)) return@forEach
             val size = file.length()
             if (!file.delete()) {
                 failed += 1
@@ -119,16 +123,20 @@ class AttachmentCleaner(
 
     private suspend fun collectReferences(): Pair<Set<String>, List<String>> {
         val settings = settingsStore.awaitLoaded()
-        return collectReferencedPaths(
+        val (referenced, unresolved) = collectReferencedPaths(
             buildList {
                 conversationRepository.messageContentsWithFileReferences().forEach { addAll(extractFileUrls(it)) }
                 addAll(extractFileUrls(JsonInstant.encodeToString(settings)))
                 addAll(draftStore.referencedFileUrls())
-                addAll(chatService.unsavedAttachmentUrls())
-                addAll(liveReferences.snapshot())
             }
         )
+        val (memoryReferenced, memoryUnresolved) = inMemoryReferences()
+        return (referenced + memoryReferenced) to (unresolved + memoryUnresolved)
     }
+
+    /** 只存在于内存里的引用：输入框登记与已加载会话、队列、提交中的消息 */
+    private suspend fun inMemoryReferences(): Pair<Set<String>, List<String>> =
+        collectReferencedPaths(liveReferences.snapshot() + chatService.unsavedAttachmentUrls())
 }
 
 /**
