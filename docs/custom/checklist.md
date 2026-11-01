@@ -37,6 +37,7 @@
 | C27 | 全文索引自检与重建完整性标记 | 改造 |
 | C28 | settings 形状校验 | 新增 |
 | C29 | 备份可选包含工作区文件 | 新增 |
+| C30 | 官方兼容导出改写附件路径 | 改造 |
 
 ## 明细
 
@@ -218,3 +219,9 @@
 - 落点：`WebDavConfig.BackupItem` 增加 `WORKSPACES`（默认不在 `items` 里，`DEFAULT_SELECTION` 由设置默认与本地导出页共用，所以默认关）、两个备份页的多选标签与 8 个 locale 的 `backup_page_workspaces`；`BackupManager.createBackup` 增加 `includeWorkspaceFiles`，新增 `collectWorkspaceFiles`（按 `workspaceDao()` 的工作区逐个走 `<root>/files`，跳过 `linux/` 与 `tmp/`，root 不合法时记 warning 并跳过）；`stageRestore` 增加同名参数与 `isWorkspaceFile` 校验（形状无条件校验，不看勾选）；官方兼容出口编码 settings 前把 `WORKSPACES` 从 `webDavConfig.items` 里滤掉；目录名改用 `WorkspaceManager.BASE_DIR_NAME` 与 `FILES_DIR`；归档条目名与 `filesDir` 下的布局一致（`workspaces/<root>/files/<relative>`），恢复侧因此复用已有的 `files/` 映射
 - 理由：工作区文件是用户产物，但工作区里还可能有整个 PRoot 根文件系统，体积与必要性都不适合默认进备份
 - 合并注意：只打包文件区，归档里出现 `workspaces/<root>/linux/...` 一律拒绝，避免写坏或被改过的归档覆盖根文件系统。恢复是叠加语义，不删 live 里多出来的工作区文件；附件那套替换语义没有套过来，这条有专门用例钉住。恢复要求导入时勾上工作区，条目在归档里但当前选择不含工作区时会被跳过，启动自检随后可能把这些工作区标成 BROKEN。`WORKSPACES` 是本仓库新增的枚举值，官方不认识，未知枚举值不像未知字段那样能被 `ignoreUnknownKeys` 忽略，所以官方出口必须把它从 settings 里去掉
+
+### C30 官方兼容导出改写附件路径
+
+- 落点：`OfficialDatabaseAdapter.adaptForOfficial` 增加 `attachmentPrefixRewrites`，一致性校验之后逐表逐列对 TEXT 列做前缀 `REPLACE`，产出改写过的库副本（无改写时直接返回原快照）；`BackupManager.createBackup` 计算本机 files 前缀与官方前缀（只有包名段不同，用户号沿用本机的），OFFICIAL 目标把库与 `settings.json` 两处都换过去（settings 走 `OfficialUrlRewriter.rewriteEmbedded`）；`OFFICIAL_APPLICATION_ID` 常量放在 official 包里；`BackupManagerTest` 补两条用例（消息里的附件、settings 里的头像），同时断言自家出口不改
+- 理由：官方客户端恢复只把附件搬进自己的 files 目录，不会改库与设置里的路径。我们导出的库里存的是本应用的绝对 `file://`，装过去之后图片、文档、头像全断
+- 合并注意：改写只在 OFFICIAL 目标发生，自家出口一行不动。官方包名写死在 `OFFICIAL_APPLICATION_ID`，官方换 applicationId 时要跟着改。这条只解决路径，schema 分叉后的裁表裁列仍待实现；官方客户端实际恢复一遍仍是人工闸门

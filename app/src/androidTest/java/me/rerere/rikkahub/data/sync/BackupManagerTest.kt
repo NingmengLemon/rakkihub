@@ -17,6 +17,8 @@ import me.rerere.rikkahub.data.datastore.WebDavConfig
 import me.rerere.rikkahub.data.db.AppDatabase
 import me.rerere.rikkahub.data.db.AppDatabaseFactory
 import me.rerere.rikkahub.data.db.entity.WorkspaceEntity
+import me.rerere.rikkahub.data.model.Avatar
+import me.rerere.rikkahub.data.sync.official.OFFICIAL_APPLICATION_ID
 import me.rerere.rikkahub.data.sync.official.OfficialDatabaseHeaders
 import me.rerere.rikkahub.data.sync.official.OfficialDatabaseSchema
 import me.rerere.rikkahub.utils.JsonInstant
@@ -493,6 +495,89 @@ class BackupManagerTest {
         )
     }
 
+    /**
+     * 官方兼容出口把附件引用改写成官方安装的路径。
+     *
+     * 官方客户端恢复时只把附件搬进自己的 files 目录，不会改库里的路径，所以路径必须由我们在
+     * 导出时换掉，否则装过去之后图片与文档全断。自家的出口不能改。
+     */
+    @Test fun officialExportPointsAttachmentsAtTheOfficialInstall() = runBlocking {
+        val ours = context.filesDir.toUri().toString().trimEnd('/') + "/upload/x.png"
+        liveDatabase.openHelper.writableDatabase.execSQL(
+            "INSERT INTO ConversationEntity (id, title, nodes, create_at, update_at) " +
+                "VALUES ('c1', 'demo', '[]', 1, 2)",
+        )
+        liveDatabase.openHelper.writableDatabase.execSQL(
+            "INSERT INTO message_node (id, conversation_id, node_index, messages, select_index) " +
+                "VALUES ('n1', 'c1', 0, ?, 0)",
+            arrayOf("""[{"type":"image","url":"$ours"}]"""),
+        )
+
+        val official = manager.createBackup(
+            includeDatabase = true,
+            includeFiles = false,
+            backupTarget = BackupTarget.OFFICIAL,
+        )
+        val officialMessages = archivedMessages(official)
+        assertTrue(
+            "应当改写成官方包名，实际是 $officialMessages",
+            officialMessages.contains("/$OFFICIAL_APPLICATION_ID/"),
+        )
+        assertFalse(
+            "不应残留本应用的路径，实际是 $officialMessages",
+            officialMessages.contains("/${context.packageName}/"),
+        )
+
+        val self = manager.createBackup(includeDatabase = true, includeFiles = false)
+        val selfMessages = archivedMessages(self)
+        assertTrue(
+            "自家出口要保留本应用的路径，实际是 $selfMessages",
+            selfMessages.contains("/${context.packageName}/"),
+        )
+    }
+
+    /** settings 里的头像同样是绝对路径，官方出口也要换成官方安装的位置。 */
+    @Test fun officialExportPointsAvatarsAtTheOfficialInstall() = runBlocking {
+        val store = GlobalContext.get().get<SettingsStore>()
+        val original = store.settingsFlow.value.displaySetting.userAvatar
+        // settings 那条改写走的是「任何安装的绝对 files 路径」正则，所以这里按真机布局构造
+        val ours = "file:///data/user/0/${context.packageName}/files/upload/avatar.png"
+        try {
+            store.update { settings ->
+                settings.copy(displaySetting = settings.displaySetting.copy(userAvatar = Avatar.Image(ours)))
+            }
+
+            val official = manager.createBackup(
+                includeDatabase = false,
+                includeFiles = false,
+                backupTarget = BackupTarget.OFFICIAL,
+            )
+            val officialSettings = archiveText(official, "settings.json")
+            // 设备上存的设置里别的字段可能本来就有路径，所以只看这张头像的那一条
+            val officialAvatars = avatarRefs(officialSettings)
+            assertTrue("应当能找到头像引用，实际是 $officialAvatars", officialAvatars.isNotEmpty())
+            assertTrue(
+                "官方出口的头像路径要指向官方安装，实际是 $officialAvatars",
+                officialAvatars.all { it.contains("/$OFFICIAL_APPLICATION_ID/") },
+            )
+
+            val self = manager.createBackup(includeDatabase = false, includeFiles = false)
+            val selfAvatars = avatarRefs(archiveText(self, "settings.json"))
+            assertTrue(
+                "自家出口要保留本应用的路径，实际是 $selfAvatars",
+                selfAvatars.isNotEmpty() && selfAvatars.all { it.contains("/${context.packageName}/") },
+            )
+        } finally {
+            store.update { settings ->
+                settings.copy(displaySetting = settings.displaySetting.copy(userAvatar = original))
+            }
+        }
+    }
+
+    /** settings.json 里这张头像的路径引用。 */
+    private fun avatarRefs(settingsJson: String): List<String> =
+        Regex("""file://[^"]*upload/avatar\.png""").findAll(settingsJson).map { it.value }.toList()
+
     private fun seedWorkspace(root: String, vararg files: Pair<String, String>) = runBlocking {
         liveDatabase.workspaceDao().upsert(
             WorkspaceEntity(
@@ -513,6 +598,28 @@ class BackupManagerTest {
 
     private fun workspaceDir(root: String): File =
         File(context.filesDir, "${WorkspaceManager.BASE_DIR_NAME}/$root")
+
+    /** 归档里某个条目的文本内容。 */
+    private fun archiveText(archive: File, entry: String): String = ZipFile(archive).use { zip ->
+        zip.getInputStream(zip.getEntry(entry)).readBytes().decodeToString()
+    }
+
+    /** 归档里的数据库里 `message_node.messages` 拼起来的内容，用来断言附件路径被改写成什么样。 */
+    private fun archivedMessages(archive: File): String {
+        val database = File(directory, "archived-${archive.nameWithoutExtension}.db")
+        ZipFile(archive).use { zip ->
+            zip.getInputStream(zip.getEntry(DatabaseBackup.ARCHIVE_DATABASE)).use { input ->
+                database.outputStream().use { output -> input.copyTo(output) }
+            }
+        }
+        return SQLiteDatabase.openDatabase(database.absolutePath, null, SQLiteDatabase.OPEN_READONLY).use { db ->
+            db.rawQuery("SELECT messages FROM message_node", null).use { cursor ->
+                buildString {
+                    while (cursor.moveToNext()) append(cursor.getString(0))
+                }
+            }
+        }
+    }
 
     private fun workspaceLocalDir(root: String): File = File(workspaceDir(root), WorkspaceManager.FILES_DIR)
 

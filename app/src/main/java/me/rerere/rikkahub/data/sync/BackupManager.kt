@@ -26,6 +26,7 @@ import me.rerere.rikkahub.data.db.AppDatabaseFactory
 import me.rerere.rikkahub.data.db.SQLiteConfiguration
 import me.rerere.rikkahub.data.files.FileFolders
 import me.rerere.rikkahub.data.files.MediaCreationFiles
+import me.rerere.rikkahub.data.sync.official.OFFICIAL_APPLICATION_ID
 import me.rerere.rikkahub.data.sync.official.OfficialDatabaseAdapter
 import me.rerere.rikkahub.data.sync.official.OfficialDatabaseConverter
 import me.rerere.rikkahub.data.sync.official.OfficialDatabaseHeaders
@@ -105,6 +106,9 @@ class BackupManager(
             ZipOutputStream(FileOutputStream(archive)).use { zip ->
                 zip.putNextEntry(ZipEntry(SETTINGS_ENTRY))
                 val settingsJson = json.encodeSettings(encodedSettings, settingsStore.launchCountFlow.first())
+                    // 官方安装里附件与头像的路径带着官方包名；官方恢复只搬文件、不改库与设置里的
+                    // 路径，所以导出时得先把它们换过去，否则装过去之后全断。
+                    .let { if (backupTarget == BackupTarget.OFFICIAL) rewriteForOfficial(it) else it }
                 zip.write(settingsJson.toByteArray(Charsets.UTF_8))
                 zip.closeEntry()
                 advance()
@@ -113,7 +117,10 @@ class BackupManager(
                     DatabaseBackup.createSnapshot(database.openHelper.writableDatabase, snapshot)
                     val databaseEntry = when (backupTarget) {
                         BackupTarget.SELF -> snapshot
-                        BackupTarget.OFFICIAL -> OfficialDatabaseAdapter.adaptForOfficial(snapshot)
+                        BackupTarget.OFFICIAL -> OfficialDatabaseAdapter.adaptForOfficial(
+                            snapshot,
+                            attachmentPrefixRewrites = attachmentPrefixRewritesForOfficial(),
+                        )
                     }
                     addFile(zip, databaseEntry, DatabaseBackup.ARCHIVE_DATABASE)
                     advance()
@@ -309,6 +316,35 @@ class BackupManager(
                 }
             }
         }
+
+    /**
+     * 当前安装的 files 目录 URI 前缀，以 `/` 结尾。
+     */
+    private fun currentFilesUriPrefix(): String =
+        context.filesDir.toUri().toString().trimEnd('/') + "/"
+
+    /**
+     * 官方安装里对应的前缀：只有包名段不同。用户号取自本机当前安装的路径，所以工作资料里
+     * 导出也能对上。
+     */
+    private fun officialFilesUriPrefix(): String =
+        currentFilesUriPrefix().replace("/${context.packageName}/", "/$OFFICIAL_APPLICATION_ID/")
+
+    /** 官方兼容出口的 settings.json：把附件与头像的绝对路径换成官方安装的位置。 */
+    private fun rewriteForOfficial(settingsJson: String): String {
+        val official = officialFilesUriPrefix()
+        return if (official == currentFilesUriPrefix()) {
+            settingsJson
+        } else {
+            OfficialUrlRewriter.rewriteEmbedded(settingsJson, official)
+        }
+    }
+
+    private fun attachmentPrefixRewritesForOfficial(): List<Pair<String, String>> {
+        val ours = currentFilesUriPrefix()
+        val official = officialFilesUriPrefix()
+        return if (official == ours) emptyList() else listOf(ours to official)
+    }
 
     /**
      * 把暂存库转成当前版本并替换掉它。
