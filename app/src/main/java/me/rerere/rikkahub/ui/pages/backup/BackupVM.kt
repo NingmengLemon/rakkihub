@@ -28,7 +28,9 @@ class BackupVM(
     )
 
     val webDavBackupItems = MutableStateFlow<UiState<List<WebDavBackupItem>>>(UiState.Idle)
-    val localBackupItems = MutableStateFlow(WebDavConfig.BackupItem.entries.toList())
+
+    /** 本地导出/导入的选择项。默认与设置里的持久化默认一致：不含工作区。 */
+    val localBackupItems = MutableStateFlow(WebDavConfig.BackupItem.DEFAULT_SELECTION)
 
     private val _exportProgress = MutableStateFlow<BackupProgress?>(null)
 

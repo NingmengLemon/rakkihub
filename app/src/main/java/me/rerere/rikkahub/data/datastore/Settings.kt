@@ -200,10 +200,7 @@ data class WebDavConfig(
     val username: String = "",
     val password: String = "",
     val path: String = "rikkahub_backups",
-    val items: List<BackupItem> = listOf(
-        BackupItem.DATABASE,
-        BackupItem.FILES
-    ),
+    val items: List<BackupItem> = BackupItem.DEFAULT_SELECTION,
 ) {
     @Serializable
     enum class BackupItem {
@@ -212,6 +209,12 @@ data class WebDavConfig(
 
         /** 工作区文件区（`workspaces/<root>/files`），不含 PRoot 根文件系统。默认不选。 */
         WORKSPACES,
+        ;
+
+        companion object {
+            /** 默认选择：工作区需要用户明确勾选，体积与必要性都不适合默认打包。 */
+            val DEFAULT_SELECTION = listOf(DATABASE, FILES)
+        }
     }
 }
 
