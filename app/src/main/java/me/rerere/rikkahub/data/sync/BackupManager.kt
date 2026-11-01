@@ -214,7 +214,9 @@ class BackupManager(
                             if (entry.isDirectory) continue
                             // 工作区条目的形状无条件校验：即使这次没勾选工作区，也不接受指向
                             // 根文件系统的条目，免得它被静默放过。
-                            if (entry.name.startsWith("$WORKSPACE_FOLDER/")) isWorkspaceFile(entry.name)
+                            if (entry.name.startsWith("$WORKSPACE_FOLDER/")) {
+                                require(isWorkspaceFile(entry.name))
+                            }
                             val target = when (entry.name) {
                                 SETTINGS_ENTRY -> File(staging, SETTINGS_ENTRY)
                                 DatabaseBackup.ARCHIVE_DATABASE -> if (includeDatabase) stagedDatabase else null

@@ -9,6 +9,7 @@ import androidx.test.platform.app.InstrumentationRegistry
 import kotlinx.coroutines.runBlocking
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.int
+import kotlinx.serialization.json.jsonArray
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
 import me.rerere.rikkahub.data.datastore.SettingsStore
@@ -19,6 +20,7 @@ import me.rerere.rikkahub.data.db.entity.WorkspaceEntity
 import me.rerere.rikkahub.data.sync.official.OfficialDatabaseHeaders
 import me.rerere.rikkahub.data.sync.official.OfficialDatabaseSchema
 import me.rerere.rikkahub.utils.JsonInstant
+import me.rerere.workspace.WorkspaceManager
 import org.junit.After
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
@@ -319,35 +321,37 @@ class BackupManagerTest {
     /** 勾选之后只打包文件区；根文件系统与临时目录再大也不进归档。 */
     @Test fun workspaceBackupTakesOnlyTheFilesArea() = runBlocking {
         seedWorkspace("ws1", "notes/a.txt" to "hello", "empty/.keep" to "")
-        // 根文件系统与临时目录都是工作区目录下的兄弟目录，不能被打包
-        File(context.filesDir, "workspaces/ws1/linux/bin").apply { mkdirs() }.resolve("sh").writeText("rootfs")
-        File(context.filesDir, "workspaces/ws1/tmp").apply { mkdirs() }.resolve("scratch").writeText("tmp")
+        // 根文件系统与临时目录是文件区的兄弟目录，不能被打包
+        File(workspaceDir("ws1"), "linux/bin").apply { mkdirs() }.resolve("sh").writeText("rootfs")
+        File(workspaceDir("ws1"), "tmp").apply { mkdirs() }.resolve("scratch").writeText("tmp")
 
         val archive = manager.createBackup(includeDatabase = false, includeFiles = false, includeWorkspaceFiles = true)
-        ZipFile(archive).use { zip ->
-            assertTrue(zip.getEntry("workspaces/ws1/files/notes/a.txt") != null)
-            assertTrue(zip.getEntry("workspaces/ws1/files/empty/.keep") != null)
-            assertFalse(
-                "根文件系统不该进归档",
-                zip.entries().asSequence().any { it.name.contains("/linux/") },
-            )
-            assertFalse(
-                "临时目录不该进归档",
-                zip.entries().asSequence().any { it.name.contains("/tmp/") },
-            )
-        }
+        val entries = ZipFile(archive).use { zip -> zip.entries().asSequence().map { it.name }.toSet() }
+        // 精确断言：多出任何条目（根文件系统、临时目录、目录条目）都会被抓到
+        assertEquals(
+            "归档里只应有 settings 与工作区文件区的文件",
+            setOf(
+                "settings.json",
+                workspaceArchivePath("ws1", "notes/a.txt"),
+                workspaceArchivePath("ws1", "empty/.keep"),
+            ),
+            entries,
+        )
     }
 
-    /** 库里有工作区行、磁盘上没有目录时跳过，不该让整次导出失败。 */
+    /** 库里有工作区行但磁盘上没有目录（或 root 不合法）时跳过，不该让整次导出失败。 */
     @Test fun workspaceWithoutADirectoryIsSkipped() = runBlocking {
         liveDatabase.workspaceDao().upsert(
             WorkspaceEntity(id = "ws9", name = "ws9", root = "ws9", createdAt = 1, updatedAt = 1),
         )
+        // root 不合法：正常由 uuid 生成，这里模拟库被改过的情况
+        liveDatabase.workspaceDao().upsert(
+            WorkspaceEntity(id = "ws-bad", name = "bad", root = "..", createdAt = 1, updatedAt = 1),
+        )
 
         val archive = manager.createBackup(includeDatabase = false, includeFiles = false, includeWorkspaceFiles = true)
-        ZipFile(archive).use { zip ->
-            assertFalse(zip.entries().asSequence().any { it.name.startsWith("workspaces/") })
-        }
+        val entries = ZipFile(archive).use { zip -> zip.entries().asSequence().map { it.name }.toSet() }
+        assertEquals("没有可打包的文件时只应剩 settings", setOf("settings.json"), entries)
     }
 
     /**
@@ -359,6 +363,8 @@ class BackupManagerTest {
      */
     @Test fun officialTargetSettingsStayDecodableByTheOfficialApp() = runBlocking {
         val store = GlobalContext.get().get<SettingsStore>()
+        // 这里改的是进程内共享的 SettingsStore，finally 会还原；跑 test 的构建被打断时，
+        // 设备上可能留在「全选」状态，只影响这台测试机。
         val original = store.settingsFlow.value.webDavConfig.items
         try {
             store.update { settings ->
@@ -374,17 +380,14 @@ class BackupManagerTest {
                 includeFiles = false,
                 backupTarget = BackupTarget.OFFICIAL,
             )
-            val officialJson = ZipFile(official).use { zip ->
-                zip.getInputStream(zip.getEntry("settings.json")).readBytes().decodeToString()
-            }
-            assertFalse("官方出口不能带官方不认识的工作区选项", officialJson.contains("WORKSPACES"))
-            assertTrue("其它选项要保留", officialJson.contains("\"DATABASE\""))
+            assertEquals(
+                "官方出口只应保留官方认识的选项",
+                listOf("DATABASE", "FILES"),
+                backupItems(official),
+            )
 
             val self = manager.createBackup(includeDatabase = false, includeFiles = false)
-            val selfJson = ZipFile(self).use { zip ->
-                zip.getInputStream(zip.getEntry("settings.json")).readBytes().decodeToString()
-            }
-            assertTrue("自家的出口应保留用户勾选", selfJson.contains("WORKSPACES"))
+            assertTrue("自家的出口应保留用户勾选", backupItems(self).contains("WORKSPACES"))
         } finally {
             store.update { settings ->
                 settings.copy(webDavConfig = settings.webDavConfig.copy(items = original))
@@ -397,7 +400,7 @@ class BackupManagerTest {
         seedWorkspace("ws1", "notes/a.txt" to "hello")
         val archive = manager.createBackup(includeDatabase = false, includeFiles = false, includeWorkspaceFiles = true)
 
-        File(context.filesDir, "workspaces/ws1/files").deleteRecursively()
+        workspaceLocalDir("ws1").deleteRecursively()
         manager.stageRestore(
             archive,
             includeDatabase = false,
@@ -408,7 +411,7 @@ class BackupManagerTest {
         BackupManager.applyPendingRestore(context, JsonInstant)
         liveDatabase = AppDatabaseFactory.create(context)
 
-        val restored = File(context.filesDir, "workspaces/ws1/files/notes/a.txt")
+        val restored = workspaceLocalFile("ws1", "notes/a.txt")
         assertTrue("工作区文件应当被恢复", restored.isFile)
         assertEquals("hello", restored.readText())
     }
@@ -417,17 +420,23 @@ class BackupManagerTest {
      * 恢复整份备份（带数据库与附件）时，工作区文件不参与附件那套替换语义。
      *
      * 这条是承重墙：替换目录清单只认四个附件目录，工作区不在其中。如果哪天有人把工作区也塞进
-     * 那份清单，用户恢复一份旧备份时就会丢掉归档之后新建的工作区文件。
+     * 那份清单，用户恢复一份旧备份时就会丢掉归档之后新建的工作区文件。为了证明替换真的跑了，
+     * 归档里带一个附件，恢复之后再多出来的附件文件必须被删掉。
      */
     @Test fun restoringADatabaseBackupLeavesExtraWorkspaceFilesAlone() = runBlocking {
         seedWorkspace("ws1", "notes/a.txt" to "hello")
+        File(context.filesDir, "upload/keep.bin").apply {
+            parentFile!!.mkdirs()
+            writeText("keep")
+        }
         val archive = manager.createBackup(
             includeDatabase = true,
             includeFiles = true,
             includeWorkspaceFiles = true,
         )
-        // 归档之后新建的文件，不在归档里
-        val extra = File(context.filesDir, "workspaces/ws1/files/notes/extra.txt").apply { writeText("keep me") }
+        // 归档之后新建的文件，都不在归档里
+        val staleAttachment = File(context.filesDir, "upload/stale.bin").apply { writeText("stale") }
+        val extraWorkspace = workspaceLocalFile("ws1", "notes/extra.txt").apply { writeText("keep me") }
 
         manager.stageRestore(
             archive,
@@ -439,9 +448,10 @@ class BackupManagerTest {
         BackupManager.applyPendingRestore(context, JsonInstant)
         liveDatabase = AppDatabaseFactory.create(context)
 
-        assertTrue("归档里的文件应当恢复", File(context.filesDir, "workspaces/ws1/files/notes/a.txt").isFile)
-        assertTrue("不在归档里的工作区文件不能被删", extra.isFile)
-        assertEquals("keep me", extra.readText())
+        assertTrue("归档里的工作区文件应当恢复", workspaceLocalFile("ws1", "notes/a.txt").isFile)
+        assertFalse("附件替换要照常删掉归档之外的文件", staleAttachment.exists())
+        assertTrue("不在归档里的工作区文件不能被删", extraWorkspace.isFile)
+        assertEquals("keep me", extraWorkspace.readText())
     }
 
     /** 不勾选时既不打包也不恢复，恢复出来的目录保持原样。 */
@@ -449,13 +459,10 @@ class BackupManagerTest {
         seedWorkspace("ws1", "notes/a.txt" to "hello")
         val archive = manager.createBackup(includeDatabase = false, includeFiles = false, includeWorkspaceFiles = true)
 
-        File(context.filesDir, "workspaces/ws1/files").deleteRecursively()
+        workspaceLocalDir("ws1").deleteRecursively()
         manager.stageRestore(archive, includeDatabase = false, includeFiles = false)
 
-        assertFalse(
-            "没勾选就不该恢复工作区文件",
-            File(context.filesDir, "workspaces/ws1/files/notes/a.txt").exists(),
-        )
+        assertFalse("没勾选就不该恢复工作区文件", workspaceLocalFile("ws1", "notes/a.txt").exists())
     }
 
     /** 归档里指向根文件系统的条目一律拒绝，写坏或被改过的归档不能覆盖 PRoot 根文件系统。 */
@@ -496,12 +503,30 @@ class BackupManagerTest {
                 updatedAt = 1,
             ),
         )
-        val filesDir = File(context.filesDir, "workspaces/$root/files").apply { mkdirs() }
         for ((path, content) in files) {
-            val target = File(filesDir, path)
-            target.parentFile!!.mkdirs()
-            target.writeText(content)
+            workspaceLocalFile(root, path).apply {
+                parentFile!!.mkdirs()
+                writeText(content)
+            }
         }
+    }
+
+    private fun workspaceDir(root: String): File =
+        File(context.filesDir, "${WorkspaceManager.BASE_DIR_NAME}/$root")
+
+    private fun workspaceLocalDir(root: String): File = File(workspaceDir(root), WorkspaceManager.FILES_DIR)
+
+    private fun workspaceLocalFile(root: String, relative: String): File =
+        File(workspaceLocalDir(root), relative)
+
+    private fun workspaceArchivePath(root: String, relative: String): String =
+        "${WorkspaceManager.BASE_DIR_NAME}/$root/${WorkspaceManager.FILES_DIR}/$relative"
+
+    /** 归档里 settings.json 的 `webDavConfig.items`，用来断言官方出口到底写了什么。 */
+    private fun backupItems(archive: File): List<String> = ZipFile(archive).use { zip ->
+        val settings = zip.getInputStream(zip.getEntry("settings.json")).readBytes().decodeToString()
+        JsonInstant.parseToJsonElement(settings).jsonObject["webDavConfig"]!!.jsonObject["items"]!!
+            .jsonArray.map { it.jsonPrimitive.content }
     }
 
     private fun probe(database: AppDatabase): String = database.openHelper.readableDatabase
