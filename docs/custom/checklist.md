@@ -209,12 +209,12 @@
 
 ### C28 settings 形状校验
 
-- 落点：新增 `data/sync/BackupSettingsShape.kt`（纯 JVM，不依赖 Android）与 `BackupSettingsShapeTest` 十条；`BackupManager.stageRestore` 在 `SettingsJsonMigrator.migrate` 之后、`decodeFromString` 之前调用一次，不合格直接失败
+- 落点：新增 `data/sync/BackupSettingsShape.kt`（纯 JVM，不依赖 Android）与 `BackupSettingsShapeTest` 十四条；`BackupManager.stageRestore` 在 `SettingsJsonMigrator.migrate` 之后、`decodeFromString` 之前调用一次，不合格直接失败
 - 理由：解码器开着 `ignoreUnknownKeys`，每个字段又都有默认值，空对象或别家的 JSON 也能解码成功，得到一份全默认值的 Settings 然后覆盖用户配置
-- 合并注意：只校验关键项（`assistants`、`providers`、`displaySetting` 必在各为数组/对象且元素带字符串 `id`，`init` 若在必须是布尔值，几个 id 字段若是存在必须是字符串），不校验完整 schema，因为旧备份缺新字段是正常的。上游给 `Settings` 加字段不需要动这里；改这几个关键字段的名字或形状时要同步
+- 合并注意：只校验关键项（`assistants`、`providers` 必在各为数组、元素带字符串 `id`，`displaySetting` 必在且是非空对象，`init` 与几个 id 字段若存在则类型必须对），不校验完整 schema，因为旧备份缺新字段是正常的。报错信息用英文，与 `BackupManager` 里其它异常一致。上游给 `Settings` 加字段不需要动这里；改这几个关键字段的名字或形状时要同步
 
 ### C29 备份可选包含工作区文件
 
-- 落点：`WebDavConfig.BackupItem` 增加 `WORKSPACES`（默认不在 `items` 里，所以默认关）、两个备份页的多选标签与 8 个 locale 的 `backup_page_workspaces`；`BackupManager.createBackup` 增加 `includeWorkspaceFiles`，新增 `collectWorkspaceFiles`（按 `workspaceDao()` 的工作区逐个走 `<root>/files`，跳过 `linux/` 与 `temp/`）；`stageRestore` 增加同名参数与 `isWorkspaceFile` 校验；归档条目名与 `filesDir` 下的布局一致（`workspaces/<root>/files/<relative>`），恢复侧因此复用已有的 `files/` 映射
+- 落点：`WebDavConfig.BackupItem` 增加 `WORKSPACES`（默认不在 `items` 里，`DEFAULT_SELECTION` 由设置默认与本地导出页共用，所以默认关）、两个备份页的多选标签与 8 个 locale 的 `backup_page_workspaces`；`BackupManager.createBackup` 增加 `includeWorkspaceFiles`，新增 `collectWorkspaceFiles`（按 `workspaceDao()` 的工作区逐个走 `<root>/files`，跳过 `linux/` 与 `tmp/`，root 不合法时记 warning 并跳过）；`stageRestore` 增加同名参数与 `isWorkspaceFile` 校验（形状无条件校验，不看勾选）；官方兼容出口编码 settings 前把 `WORKSPACES` 从 `webDavConfig.items` 里滤掉；目录名改用 `WorkspaceManager.BASE_DIR_NAME` 与 `FILES_DIR`；归档条目名与 `filesDir` 下的布局一致（`workspaces/<root>/files/<relative>`），恢复侧因此复用已有的 `files/` 映射
 - 理由：工作区文件是用户产物，但工作区里还可能有整个 PRoot 根文件系统，体积与必要性都不适合默认进备份
-- 合并注意：只打包文件区，归档里出现 `workspaces/<root>/linux/...` 一律拒绝，避免写坏或被改过的归档覆盖根文件系统。恢复是叠加语义，不删 live 里多出来的工作区文件；附件那套替换语义没有套过来。官方兼容出口（`BackupTarget.OFFICIAL`）不带工作区文件，官方那套格式里没有这个条目
+- 合并注意：只打包文件区，归档里出现 `workspaces/<root>/linux/...` 一律拒绝，避免写坏或被改过的归档覆盖根文件系统。恢复是叠加语义，不删 live 里多出来的工作区文件；附件那套替换语义没有套过来，这条有专门用例钉住。恢复要求导入时勾上工作区，条目在归档里但当前选择不含工作区时会被跳过，启动自检随后可能把这些工作区标成 BROKEN。`WORKSPACES` 是本仓库新增的枚举值，官方不认识，未知枚举值不像未知字段那样能被 `ignoreUnknownKeys` 忽略，所以官方出口必须把它从 settings 里去掉

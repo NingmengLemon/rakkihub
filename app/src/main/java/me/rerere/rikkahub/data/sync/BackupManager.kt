@@ -1,6 +1,7 @@
 package me.rerere.rikkahub.data.sync
 
 import android.content.Context
+import android.util.Log
 import androidx.core.net.toUri
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.currentCoroutineContext
@@ -18,6 +19,7 @@ import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
 import me.rerere.rikkahub.data.datastore.Settings
 import me.rerere.rikkahub.data.datastore.SettingsStore
+import me.rerere.rikkahub.data.datastore.WebDavConfig
 import me.rerere.rikkahub.data.datastore.migration.SettingsJsonMigrator
 import me.rerere.rikkahub.data.db.AppDatabase
 import me.rerere.rikkahub.data.db.AppDatabaseFactory
@@ -33,6 +35,7 @@ import me.rerere.rikkahub.data.sync.official.OfficialRestorePlan
 import me.rerere.rikkahub.data.sync.official.OfficialRestorePlanner
 import me.rerere.rikkahub.data.sync.official.OfficialSnapshots
 import me.rerere.rikkahub.data.sync.official.OfficialUrlRewriter
+import me.rerere.workspace.WorkspaceManager
 import java.io.File
 import java.io.FileOutputStream
 import java.nio.file.Files
@@ -47,6 +50,8 @@ data class BackupProgress(val done: Int, val total: Int) {
     val fraction: Float
         get() = if (total <= 0) 0f else (done.toFloat() / total).coerceIn(0f, 1f)
 }
+
+private const val TAG = "BackupManager"
 
 /** Shared archive format and restore lifecycle for local and WebDAV backups. */
 class BackupManager(
@@ -69,6 +74,19 @@ class BackupManager(
         val staging = Files.createTempDirectory(context.cacheDir.toPath(), "backup-").toFile()
         try {
             val settings = settingsStore.awaitLoaded()
+            // 官方兼容出口要能被官方客户端恢复。官方那个版本的 BackupItem 只有 DATABASE
+            // 与 FILES，未知枚举值不像未知字段那样能被 ignoreUnknownKeys 吞掉，会让整份设置
+            // 解码失败，所以这一项必须从 settings.json 里去掉，光不打包条目不够。
+            val encodedSettings = if (backupTarget == BackupTarget.OFFICIAL) {
+                settings.copy(
+                    webDavConfig = settings.webDavConfig.copy(
+                        items = settings.webDavConfig.items
+                            .filter { it != WebDavConfig.BackupItem.WORKSPACES },
+                    ),
+                )
+            } else {
+                settings
+            }
             // 先把附件列出来，才能给出确定的总条目数；列表里只是路径，不占多少内存
             val attachments = if (includeFiles) collectAttachments() else emptyList()
             // 官方兼容出口按官方那套归档格式产出，官方格式里没有工作区文件，带过去只会是死重量。
@@ -86,7 +104,7 @@ class BackupManager(
 
             ZipOutputStream(FileOutputStream(archive)).use { zip ->
                 zip.putNextEntry(ZipEntry(SETTINGS_ENTRY))
-                val settingsJson = json.encodeSettings(settings, settingsStore.launchCountFlow.first())
+                val settingsJson = json.encodeSettings(encodedSettings, settingsStore.launchCountFlow.first())
                 zip.write(settingsJson.toByteArray(Charsets.UTF_8))
                 zip.closeEntry()
                 advance()
@@ -157,6 +175,7 @@ class BackupManager(
         for (workspace in database.workspaceDao().getAll()) {
             currentCoroutineContext().ensureActive()
             val workspaceDir = runCatching { PendingRestore.resolveInside(base, workspace.root) }
+                .onFailure { Log.w(TAG, "Skipping workspace with an unusable root: ${workspace.id}", it) }
                 .getOrNull() ?: continue
             val files = File(workspaceDir, WORKSPACE_FILES_DIR)
             if (!files.isDirectory) continue
@@ -193,6 +212,9 @@ class BackupManager(
                         for (entry in zip.entries()) {
                             currentCoroutineContext().ensureActive()
                             if (entry.isDirectory) continue
+                            // 工作区条目的形状无条件校验：即使这次没勾选工作区，也不接受指向
+                            // 根文件系统的条目，免得它被静默放过。
+                            if (entry.name.startsWith("$WORKSPACE_FOLDER/")) isWorkspaceFile(entry.name)
                             val target = when (entry.name) {
                                 SETTINGS_ENTRY -> File(staging, SETTINGS_ENTRY)
                                 DatabaseBackup.ARCHIVE_DATABASE -> if (includeDatabase) stagedDatabase else null
@@ -346,8 +368,8 @@ class BackupManager(
 
         // 工作区文件放 filesDir 下的这个目录，每个工作区一个子目录，文件区再下一层。
         // 归档里的名字与它一致，恢复侧复用同一条 files/ 映射。
-        internal const val WORKSPACE_FOLDER = "workspaces"
-        internal const val WORKSPACE_FILES_DIR = "files"
+        internal const val WORKSPACE_FOLDER = WorkspaceManager.BASE_DIR_NAME
+        internal const val WORKSPACE_FILES_DIR = WorkspaceManager.FILES_DIR
 
         private fun Json.encodeSettings(settings: Settings, launchCount: Int): String {
             val fields = encodeToJsonElement(settings).jsonObject + (LAUNCH_COUNT_KEY to JsonPrimitive(launchCount))

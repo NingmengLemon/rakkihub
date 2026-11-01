@@ -69,7 +69,7 @@ payload 的布局沿用现有约定：`payload/database/rikka_hub`、`payload/fi
 
 ## settings
 
-官方 `settings.json` 的处理与 `stageRestore` 一致：`SettingsJsonMigrator.migrate` → `JsonInstant.decodeFromString<Settings>`，然后按现有方式重新编码写回 pending。
+官方 `settings.json` 的处理与 `stageRestore` 一致：`SettingsJsonMigrator.migrate` → `BackupSettingsShape` 形状校验 → `JsonInstant.decodeFromString<Settings>`，然后按现有方式重新编码写回 pending。
 
 解码之前有一层直接作用在原始 JSON 上的检查（`BackupSettingsShape`，C28）：把原文解析成 `JsonObject`，看关键项在不在、类型对不对，不合格就在 publish 之前失败。它要求 `assistants` 与 `providers` 必在、必为数组、元素必须带字符串 `id`，`displaySetting` 必在必为对象，`init` 若存在必须是布尔值，几个 id 字段若存在必须是字符串。
 

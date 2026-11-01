@@ -12,8 +12,10 @@ import kotlinx.serialization.json.int
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
 import me.rerere.rikkahub.data.datastore.SettingsStore
+import me.rerere.rikkahub.data.datastore.WebDavConfig
 import me.rerere.rikkahub.data.db.AppDatabase
 import me.rerere.rikkahub.data.db.AppDatabaseFactory
+import me.rerere.rikkahub.data.db.entity.WorkspaceEntity
 import me.rerere.rikkahub.data.sync.official.OfficialDatabaseHeaders
 import me.rerere.rikkahub.data.sync.official.OfficialDatabaseSchema
 import me.rerere.rikkahub.utils.JsonInstant
@@ -319,7 +321,7 @@ class BackupManagerTest {
         seedWorkspace("ws1", "notes/a.txt" to "hello", "empty/.keep" to "")
         // 根文件系统与临时目录都是工作区目录下的兄弟目录，不能被打包
         File(context.filesDir, "workspaces/ws1/linux/bin").apply { mkdirs() }.resolve("sh").writeText("rootfs")
-        File(context.filesDir, "workspaces/ws1/temp").apply { mkdirs() }.resolve("scratch").writeText("tmp")
+        File(context.filesDir, "workspaces/ws1/tmp").apply { mkdirs() }.resolve("scratch").writeText("tmp")
 
         val archive = manager.createBackup(includeDatabase = false, includeFiles = false, includeWorkspaceFiles = true)
         ZipFile(archive).use { zip ->
@@ -331,8 +333,62 @@ class BackupManagerTest {
             )
             assertFalse(
                 "临时目录不该进归档",
-                zip.entries().asSequence().any { it.name.contains("/temp/") },
+                zip.entries().asSequence().any { it.name.contains("/tmp/") },
             )
+        }
+    }
+
+    /** 库里有工作区行、磁盘上没有目录时跳过，不该让整次导出失败。 */
+    @Test fun workspaceWithoutADirectoryIsSkipped() = runBlocking {
+        liveDatabase.workspaceDao().upsert(
+            WorkspaceEntity(id = "ws9", name = "ws9", root = "ws9", createdAt = 1, updatedAt = 1),
+        )
+
+        val archive = manager.createBackup(includeDatabase = false, includeFiles = false, includeWorkspaceFiles = true)
+        ZipFile(archive).use { zip ->
+            assertFalse(zip.entries().asSequence().any { it.name.startsWith("workspaces/") })
+        }
+    }
+
+    /**
+     * 官方出口的 settings.json 必须能被官方那个版本解码。
+     *
+     * `BackupItem` 里有本仓库新增的枚举值，官方没有；未知枚举值不像未知字段那样能被
+     * `ignoreUnknownKeys` 吞掉，会让整份设置解码失败。所以用户勾了工作区之后，官方出口的
+     * settings.json 里也不能出现它。
+     */
+    @Test fun officialTargetSettingsStayDecodableByTheOfficialApp() = runBlocking {
+        val store = GlobalContext.get().get<SettingsStore>()
+        val original = store.settingsFlow.value.webDavConfig.items
+        try {
+            store.update { settings ->
+                settings.copy(
+                    webDavConfig = settings.webDavConfig.copy(
+                        items = WebDavConfig.BackupItem.entries.toList(),
+                    ),
+                )
+            }
+
+            val official = manager.createBackup(
+                includeDatabase = false,
+                includeFiles = false,
+                backupTarget = BackupTarget.OFFICIAL,
+            )
+            val officialJson = ZipFile(official).use { zip ->
+                zip.getInputStream(zip.getEntry("settings.json")).readBytes().decodeToString()
+            }
+            assertFalse("官方出口不能带官方不认识的工作区选项", officialJson.contains("WORKSPACES"))
+            assertTrue("其它选项要保留", officialJson.contains("\"DATABASE\""))
+
+            val self = manager.createBackup(includeDatabase = false, includeFiles = false)
+            val selfJson = ZipFile(self).use { zip ->
+                zip.getInputStream(zip.getEntry("settings.json")).readBytes().decodeToString()
+            }
+            assertTrue("自家的出口应保留用户勾选", selfJson.contains("WORKSPACES"))
+        } finally {
+            store.update { settings ->
+                settings.copy(webDavConfig = settings.webDavConfig.copy(items = original))
+            }
         }
     }
 
@@ -355,6 +411,37 @@ class BackupManagerTest {
         val restored = File(context.filesDir, "workspaces/ws1/files/notes/a.txt")
         assertTrue("工作区文件应当被恢复", restored.isFile)
         assertEquals("hello", restored.readText())
+    }
+
+    /**
+     * 恢复整份备份（带数据库与附件）时，工作区文件不参与附件那套替换语义。
+     *
+     * 这条是承重墙：替换目录清单只认四个附件目录，工作区不在其中。如果哪天有人把工作区也塞进
+     * 那份清单，用户恢复一份旧备份时就会丢掉归档之后新建的工作区文件。
+     */
+    @Test fun restoringADatabaseBackupLeavesExtraWorkspaceFilesAlone() = runBlocking {
+        seedWorkspace("ws1", "notes/a.txt" to "hello")
+        val archive = manager.createBackup(
+            includeDatabase = true,
+            includeFiles = true,
+            includeWorkspaceFiles = true,
+        )
+        // 归档之后新建的文件，不在归档里
+        val extra = File(context.filesDir, "workspaces/ws1/files/notes/extra.txt").apply { writeText("keep me") }
+
+        manager.stageRestore(
+            archive,
+            includeDatabase = true,
+            includeFiles = true,
+            includeWorkspaceFiles = true,
+        )
+        liveDatabase.close()
+        BackupManager.applyPendingRestore(context, JsonInstant)
+        liveDatabase = AppDatabaseFactory.create(context)
+
+        assertTrue("归档里的文件应当恢复", File(context.filesDir, "workspaces/ws1/files/notes/a.txt").isFile)
+        assertTrue("不在归档里的工作区文件不能被删", extra.isFile)
+        assertEquals("keep me", extra.readText())
     }
 
     /** 不勾选时既不打包也不恢复，恢复出来的目录保持原样。 */
@@ -380,22 +467,28 @@ class BackupManagerTest {
             zip.closeEntry()
         }
 
-        val error = runCatching {
-            manager.stageRestore(
-                archive,
-                includeDatabase = false,
-                includeFiles = false,
-                includeWorkspaceFiles = true,
-            )
-        }.exceptionOrNull()
-
-        assertTrue("必须拒绝，实际是 $error", error is IllegalArgumentException)
+        // 没勾选工作区也要拒绝：形状校验不看选择
+        for (includeWorkspaceFiles in listOf(true, false)) {
+            val error = runCatching {
+                manager.stageRestore(
+                    archive,
+                    includeDatabase = false,
+                    includeFiles = false,
+                    includeWorkspaceFiles = includeWorkspaceFiles,
+                )
+            }.exceptionOrNull()
+            assertTrue("必须拒绝（勾选=$includeWorkspaceFiles），实际是 $error", error is IllegalArgumentException)
+        }
         assertFalse(File(context.filesDir, "workspaces/ws1/linux/bin/sh").exists())
+        assertFalse(
+            "被拒绝的归档不该留下 pending",
+            File(context.noBackupFilesDir, "backup-restore/pending").exists(),
+        )
     }
 
     private fun seedWorkspace(root: String, vararg files: Pair<String, String>) = runBlocking {
         liveDatabase.workspaceDao().upsert(
-            me.rerere.rikkahub.data.db.entity.WorkspaceEntity(
+            WorkspaceEntity(
                 id = root,
                 name = root,
                 root = root,

@@ -274,7 +274,9 @@ class WorkspaceManager(
     }
 
     companion object {
-        private const val FILES_DIR = "files"
+        /** 工作区根目录的目录名，备份归档里的顶层条目也用它，两处必须是同一个值。 */
+        const val BASE_DIR_NAME = "workspaces"
+        const val FILES_DIR = "files"
         private const val LINUX_DIR = "linux"
         private const val TEMP_DIR = "tmp"
         const val DEFAULT_COMMAND_TIMEOUT_MS = 30_000L

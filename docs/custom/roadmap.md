@@ -58,7 +58,7 @@
 
    数据库是 SQLite，schema 好冻结。`settings.json` 是整个 `Settings` 数据类的序列化，这一个类横跨 provider 配置、assistant 模板、UI 主题、联网配置、备份配置和各种开关，`SettingsFields.kt` 把它拆成 DataStore key 的映射就有一百多行，上游自己也在用 `SettingsJsonMigrator` 在这个类上演进。这里同样需要一个「官方 Settings JSON 到我们的模型」的独立解析器，不能复用我们自己的反序列化。
 
-   形状校验已经落地（C28）：直接检查原始 JSON 的 key 与类型，包括嵌套对象的形状，转换仍复用现有反序列化。完整的冻结解析器与字段映射跟第一次改 `Settings` 结构一起做。
+   形状校验已经落地（C28）：检查原始 JSON 的关键项与已出现字段的类型（`assistants` 与 `providers` 的元素须带字符串 `id`，`displaySetting` 须为非空对象），转换仍复用现有反序列化。完整的冻结解析器与字段映射跟第一次改 `Settings` 结构一起做。
 
 6. 自家 schema 的演进仍要守住 migration 链。
 
