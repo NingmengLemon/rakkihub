@@ -1,0 +1,71 @@
+name: Checks
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+# 同一分支的旧跑批直接取消，队列里只留最新一次
+concurrency:
+  group: checks-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  checks:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          # spotless 以 origin/main 为 ratchet 基点；PR 上也要有这个引用
+          fetch-depth: 0
+          submodules: recursive # 拉取子模块
+
+      - name: Fetch main for the spotless ratchet
+        run: git fetch --no-tags origin main:refs/remotes/origin/main
+
+      # 与每日构建保持一致
+      - name: Set up JDK
+        uses: actions/setup-java@v4
+        with:
+          distribution: 'jetbrains'
+          java-version: '21'
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Set up pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 11
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+          cache-dependency-path: web-ui/pnpm-lock.yaml
+
+      # gradle 的 buildWebUi 任务只跑 build 不跑 install，需在此提前安装依赖
+      - name: Install web-ui dependencies
+        working-directory: web-ui
+        run: pnpm install --frozen-lockfile
+
+      - name: Gradle cache
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.gradle/caches
+            ~/.gradle/wrapper
+          key: ${{ runner.os }}-gradle-${{ hashFiles('**/*.gradle*', '**/gradle-wrapper.properties') }}
+
+      - name: Spotless
+        run: |
+          chmod +x gradlew
+          ./gradlew spotlessCheck
+
+      - name: JVM tests
+        run: ./gradlew :app:testGithubDebugUnitTest :ai:testDebugUnitTest --continue

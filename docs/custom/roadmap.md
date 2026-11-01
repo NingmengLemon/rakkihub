@@ -120,6 +120,8 @@
 
 本仓库沿用上游的 nightly prerelease：固定 tag `nightly`，每天覆盖同一个 Release，附带分 ABI 的 APK 与 `mapping.txt`。不做正式版本发布。
 
+`checks.yml` 在 push 到 `main` 与 PR 时跑 `spotlessCheck`（以 `origin/main` 为 ratchet 基点）与 `:app:testGithubDebugUnitTest`、`:ai:testDebugUnitTest`。Linux 上不存在 Windows 那批文件占用导致的固定失败，测试判据仍是「没有新增失败」；红了先看是不是平台差异，再改闸门，不要把失败用例静默进 ignore。
+
 ### 2.3 对数据层动手
 
 前提是阶段 1 完成，现在已具备。原本的候选是拆掉 `Settings` 这个巨型类，评估后不做：`Settings` 的序列化形状是外部契约，旧备份的 `settings.json` 与官方兼容导出都按扁平字段读，嵌成子对象会让官方客户端静默回默认；本应用旧备份如果移动了 `displaySetting`、`assistants`、`providers` 这几个被形状校验盯着的键会直接报错，其余键静默回默认。要保住形状就得写一份根级自定义序列化器维护几十个字段的映射，收益只是代码组织，不值得。序列化形状保持扁平；以后要整理只动文件组织与 DataStore 字段表，不动 JSON 形状。
