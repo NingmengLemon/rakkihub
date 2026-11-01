@@ -11,7 +11,7 @@
 | [`build.md`](build.md) | 构建、测试、格式检查、设备上的 androidTest |
 | [`locale.md`](locale.md) | 8 份 locale 的增删文案与品牌改写 |
 | [`backup/`](backup/README.md) | 官方备份的导入与导出：恢复链路、导入器、验收 |
-| [`roadmap.md`](roadmap.md) | 定位、阶段划分、追更策略、分发与合规 |
+| [`roadmap.md`](roadmap.md) | 定位、阶段划分、独立更新、分发与合规 |
 
 大的上游同步可以另建一份作业单放在 `upstream/`，合并落地后删除；当前没有作业单，所以那个目录不存在。
 
@@ -57,7 +57,7 @@ $env:JAVA_HOME='E:\WorkBench\Java\jdk-23.0.2'; $env:PATH="$env:JAVA_HOME\bin;$en
 
 测试之外还有两步：按 [`checklist.md`](checklist.md) 逐项复核定制没有被静默丢掉，按 [`locale.md`](locale.md) 处理新增或删除的文案。
 
-以上是当前的合并流程。按模块边界分层的追更方式尚未落地，方向见 [`roadmap.md`](roadmap.md)。
+以上是当前的合并流程。方向是切到独立更新（不再合并上游，只参考它的提交），切换之后本节流程作废，见 [`roadmap.md`](roadmap.md) 的「独立更新」一节。
 
 ### 当前待处理的同步
 

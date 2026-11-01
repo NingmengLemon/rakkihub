@@ -116,11 +116,11 @@ This repository carries personal customizations on top of upstream `rikkahub/rik
 - Work on `custom`. `master` only follows upstream and must stay fast-forwardable; never commit to it.
 - Read `docs/custom/README.md` before adding or removing a feature. It holds the branch model, the upstream sync
   procedure, and the customization principles. `docs/custom/checklist.md` is the per-customization register,
-  `docs/custom/roadmap.md` the long-term plan (stage split, easy-migration target, upstream follow-up strategy,
+  `docs/custom/roadmap.md` the long-term plan (stage split, easy-migration target, independent-update direction,
   distribution/compliance), `docs/custom/backup/` the backup import/export chain with its acceptance procedure, and
   `docs/custom/build.md` / `docs/custom/locale.md` the build and string-resource operations.
 - Tag customization commits with the `custom` scope, e.g. `feat(custom): ...`, and add the item to
-  `docs/custom/checklist.md` (an index row plus a detail section) so a later upstream merge can be checked against it.
+  `docs/custom/checklist.md` (an index row plus a detail section) so a later upstream port can be checked against it.
 - The persisted-data freeze is lifted: the official-backup importer exists, and the criteria verified on the real samples
   are v32/v31 tables and converted output plus v32 attachments and settings. The freeze was about official backups
   coming in, and that path works. The criteria that are untested or only partially tested are listed class by class in
@@ -132,12 +132,13 @@ This repository carries personal customizations on top of upstream `rikkahub/rik
 - A Room schema change also makes the official-compatible export fail until its trimming logic exists (see C18). That
   failure is deliberate, not a bug.
 - Prefer disabling an entry point over deleting an implementation, so upstream merges stay cheap. This is a
-  merge-cost concession rather than a permanent rule; the `app/` scope in which it lifts is described in the
-  customization-principles section of `docs/custom/roadmap.md`.
-- Upstream is followed by whole-branch merge today. Following it by module boundary instead is a plan, not the
-  current rule: the follow-up strategy section of `docs/custom/roadmap.md` holds the module split and the staged
-  approach. Until that plan lands, replay the C3 deletion in `ai/util/Request.kt` on every merge, since it is the
-  only customization under `ai/`.
+  merge-cost concession rather than a permanent rule; it lifts once the branch switches to independent updates, as
+  described in the customization-principles section of `docs/custom/roadmap.md`.
+- The plan is to switch to independent updates: stop merging upstream, read its commits, and port feature or bugfix
+  ideas by hand instead of tracking it. Until the switch, whole-branch merge is the current rule and the C3 deletion in
+  `ai/util/Request.kt` is replayed on every merge, since it is the only customization under `ai/`; after the switch,
+  keep that deletion whenever upstream changes to the file are ported. The module reference table and the porting
+  procedure live in the independent-update section of `docs/custom/roadmap.md`.
 - Before pushing a batch of customizations, run an independent review: dispatch a fresh-context `subagent` (not
   `subagent_fork`) and have it load the `code-review` skill, reviewing `master..custom`. Fix what it finds and re-run
   until it passes; only then `git push origin custom`.
