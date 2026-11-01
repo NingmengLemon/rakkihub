@@ -17,6 +17,14 @@ internal object OfficialExportPaths {
     fun userNumber(filesDirUri: String): String? =
         USER_NUMBER.find(filesDirUri)?.groupValues?.get(1)
 
+    /**
+     * `LIKE` 模式里的字面量转义。
+     *
+     * 前缀会被拼进 `LIKE ? ESCAPE '\'` 的模式里，包名里的 `_` 与 `%` 不转义会多匹配别的行。
+     */
+    fun escapeLikePattern(value: String): String =
+        value.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
+
     /** 官方安装的 files 目录前缀：只有包名段不同，用户号沿用导出侧。 */
     fun officialFilesPrefix(
         filesDirUri: String,

@@ -90,4 +90,24 @@ class OfficialExportPathsTest {
             OfficialExportPaths.attachmentRewrites("file:///data/user/0/$official/files/", official, official).isEmpty()
         )
     }
+
+    @Test fun `a data shaped files dir still yields one rewrite`() {
+        // filesDir 本身是 /data/data/ 形态时取不到用户号，只剩实际形态；正式安装不会这样
+        val rewrites = OfficialExportPaths.attachmentRewrites(
+            "file:///data/data/$packageName/files/",
+            packageName,
+            official,
+        )
+        assertEquals(
+            listOf("file:///data/data/$packageName/files/" to "file:///data/data/$official/files/"),
+            rewrites,
+        )
+    }
+
+    @Test fun `like patterns escape the characters that change their meaning`() {
+        assertEquals("a\\_b", OfficialExportPaths.escapeLikePattern("a_b"))
+        assertEquals("a\\%b", OfficialExportPaths.escapeLikePattern("a%b"))
+        assertEquals("a\\\\b", OfficialExportPaths.escapeLikePattern("a\\b"))
+        assertEquals("top.lemoneko.rakkihub", OfficialExportPaths.escapeLikePattern("top.lemoneko.rakkihub"))
+    }
 }

@@ -112,7 +112,7 @@ class BackupManagerTest {
     }
 
     /**
-     * 官方兼容出口的核心安全属性：双方 schema 一致时原样产出，分叉时直接失败。
+     * 官方兼容出口的核心安全属性：双方 schema 一致时改写附件路径后交出，分叉时直接失败。
      *
      * 现在本仓库的 schema 与官方 v32 一致，所以这里只能验证「一致时能产出归档，且该归档能被
      * 恢复流程接受」。分叉分支由 `OfficialDatabaseCompatibilityTest` 覆盖。
@@ -557,11 +557,17 @@ class BackupManagerTest {
             includeFiles = false,
             backupTarget = BackupTarget.OFFICIAL,
         )
+        // 先证明导出侧确实把路径换成了官方安装，再证明回灌时被换回来；否则这条用例只覆盖了后半段
+        assertTrue(
+            "导出时应当换成官方安装的路径，实际是 ${archivedMessages(archive)}",
+            archivedMessages(archive).contains("/$OFFICIAL_APPLICATION_ID/"),
+        )
 
         manager.stageRestore(archive, includeDatabase = true, includeFiles = false)
 
         val staged = stagedMessages()
-        assertTrue("应当换回本机路径，实际是 $staged", staged.contains("/${context.packageName}/"))
+        val ours = context.filesDir.toUri().toString().trimEnd('/') + "/upload/x.png"
+        assertTrue("应当换回本机路径，实际是 $staged", staged.contains(ours))
         assertFalse("不应残留官方安装的路径，实际是 $staged", staged.contains("/$OFFICIAL_APPLICATION_ID/"))
     }
 

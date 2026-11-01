@@ -222,6 +222,6 @@
 
 ### C30 官方兼容导出改写附件路径
 
-- 落点：`OfficialDatabaseAdapter.adaptForOfficial` 增加 `attachmentPrefixRewrites`，一致性校验之后逐表逐列对 TEXT 列做前缀 `REPLACE`，产出改写过的库副本（无改写时直接返回原快照）；`BackupManager.createBackup` 计算本机 files 前缀与官方前缀（只有包名段不同，用户号沿用本机的），OFFICIAL 目标把库与 `settings.json` 两处都换过去（settings 走 `OfficialUrlRewriter.rewriteEmbedded`）；`OFFICIAL_APPLICATION_ID` 常量放在 official 包里；`BackupManagerTest` 补两条用例（消息里的附件、settings 里的头像），同时断言自家出口不改
+- 落点：新增 `data/sync/official/OfficialExportPaths.kt`（纯函数，推导要替换的前缀对：本安装实际的 files 目录，加上 `/data/user/<用户号>/<包名>/files/` 与 `/data/data/<包名>/files/` 两种规范形态，用户号从路径里取）与 `OfficialExportPathsTest` 八条 JVM 用例；`OfficialDatabaseAdapter.adaptForOfficial` 增加 `attachmentPrefixRewrites`，一致性校验之后逐表逐列对 TEXT 列做前缀 `REPLACE`（一个事务、`LIKE` 模式转义、写完确认没有残留副文件），产出改写过的库副本（没有要改的就返回原快照）；`BackupManager.createBackup` 用这份前缀对改写库，settings 走 `OfficialUrlRewriter.rewriteEmbedded`；`OFFICIAL_APPLICATION_ID` 常量放在 official 包里；`OfficialUrlRewriter` 的 KDoc 改成方向中立（导入与导出共用）；`BackupManagerTest` 补三条用例（消息里的附件、settings 里的头像、官方归档回灌本应用），每条都同时断言自家出口不改或回灌后换回本机路径
 - 理由：官方客户端恢复只把附件搬进自己的 files 目录，不会改库与设置里的路径。我们导出的库里存的是本应用的绝对 `file://`，装过去之后图片、文档、头像全断
 - 合并注意：改写只在 OFFICIAL 目标发生，自家出口一行不动。官方包名写死在 `OFFICIAL_APPLICATION_ID`，官方换 applicationId 时要跟着改。这条只解决路径，schema 分叉后的裁表裁列仍待实现；官方客户端实际恢复一遍仍是人工闸门

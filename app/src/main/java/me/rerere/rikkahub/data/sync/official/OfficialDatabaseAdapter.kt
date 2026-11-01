@@ -69,7 +69,11 @@ internal object OfficialDatabaseAdapter {
                             database.execSQL(
                                 "UPDATE `$table` SET `$column` = REPLACE(`$column`, ?, ?) " +
                                     "WHERE `$column` LIKE ? ESCAPE '\\'",
-                                arrayOf(from, to, "%${escapeLike(from.removePrefix("file://"))}%"),
+                                arrayOf(
+                                    from,
+                                    to,
+                                    "%${OfficialExportPaths.escapeLikePattern(from.removePrefix("file://"))}%"
+                                ),
                             )
                         }
                     }
@@ -79,13 +83,10 @@ internal object OfficialDatabaseAdapter {
                 database.endTransaction()
             }
         }
-        // 归档只拷 .db：确认写入都落在主文件、没有留在副文件里（快照来源改成 WAL 库时会在这里失败）
+        // 归档只拷 .db：确认 target 自己没有残留副文件（写入与事务都已在关闭前落定）
         DatabaseBackup.removeSidecars(target)
         return target
     }
-
-    private fun escapeLike(value: String): String =
-        value.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
 
     private fun readHeader(snapshot: File): Pair<Int, String?> {
         val database = SQLiteDatabase.openDatabase(snapshot.absolutePath, null, SQLiteDatabase.OPEN_READONLY)
