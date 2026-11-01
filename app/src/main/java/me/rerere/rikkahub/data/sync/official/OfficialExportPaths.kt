@@ -35,15 +35,18 @@ internal object OfficialExportPaths {
     /**
      * 库里要替换的前缀对：第一个是现状，第二个是官方安装里对应的位置。
      *
-     * 除了本安装实际的 files 目录，还补两种规范形态，同一个源只出现一次。两个包名相同时
-     * 返回空列表（没有要改的）。
+     * 除了本安装实际的 files 目录，还补两种规范形态，同一个源只出现一次。消息库里新写的
+     * `"url":"file:upload/...` 相对形态也要换成官方安装的绝对位置，这一对无论包名是否相同
+     * 都带上：官方客户端只认绝对路径。两个包名相同时只返回这一对。
      */
     fun attachmentRewrites(
         filesDirUri: String,
         packageName: String,
         officialPackage: String,
     ): List<Pair<String, String>> {
-        if (packageName == officialPackage) return emptyList()
+        val officialFilesDirUri = officialFilesPrefix(filesDirUri, packageName, officialPackage)
+        val relative = "\"url\":\"file:upload/" to "\"url\":\"${officialFilesDirUri}upload/"
+        if (packageName == officialPackage) return listOf(relative)
         val userNumber = userNumber(filesDirUri)
         val sources = buildList {
             add(filesDirUri)
@@ -54,6 +57,6 @@ internal object OfficialExportPaths {
         }.distinct()
         return sources.map { source ->
             source to source.replace("/$packageName/", "/$officialPackage/")
-        }
+        } + relative
     }
 }

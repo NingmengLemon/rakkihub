@@ -342,16 +342,12 @@ class BackupManager(
         }
     }
 
-    private fun attachmentPrefixRewritesForOfficial(): List<Pair<String, String>> {
-        val rewrites = OfficialExportPaths.attachmentRewrites(
+    private fun attachmentPrefixRewritesForOfficial(): List<Pair<String, String>> =
+        OfficialExportPaths.attachmentRewrites(
             filesDirUri = currentFilesUriPrefix(),
             packageName = context.packageName,
             officialPackage = OFFICIAL_APPLICATION_ID,
         )
-        if (rewrites.isEmpty()) return rewrites
-        // 消息库里新写的是相对形态，库那边也要换成官方安装的绝对位置；带引号避免碰到正文
-        return rewrites + ("\"file:upload/" to "\"${officialFilesUriPrefix()}upload/")
-    }
 
     /**
      * 把暂存库转成当前版本并替换掉它。

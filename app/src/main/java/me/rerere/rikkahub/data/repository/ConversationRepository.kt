@@ -538,7 +538,7 @@ class ConversationRepository(
                 if (page.isEmpty()) break
                 page.forEach { entity ->
                     val messages = JsonInstant.decodeFromString<List<UIMessage>>(
-                        AttachmentUrlStorage.toMemory(entity.messages, attachmentFilesDirUri)
+                        AttachmentUrlStorage.toMemoryJson(entity.messages, attachmentFilesDirUri)
                     )
                     val nodeId = Uuid.parse(entity.id)
                     nodes.add(
@@ -562,7 +562,7 @@ class ConversationRepository(
                 id = node.id.toString(),
                 conversationId = conversationId,
                 nodeIndex = index,
-                messages = AttachmentUrlStorage.toStored(
+                messages = AttachmentUrlStorage.toStoredJson(
                     JsonInstant.encodeToString(node.messages),
                     attachmentFilesDirUri,
                 ),

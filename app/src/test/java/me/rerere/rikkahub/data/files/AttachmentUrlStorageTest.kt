@@ -14,7 +14,7 @@ class AttachmentUrlStorageTest {
 
         assertEquals(
             """{"type":"image","url":"file:upload/abc.png"}""",
-            AttachmentUrlStorage.toStored(json, filesDirUri),
+            AttachmentUrlStorage.toStoredJson(json, filesDirUri),
         )
     }
 
@@ -24,7 +24,17 @@ class AttachmentUrlStorageTest {
 
         assertEquals(
             """{"type":"image","url":"$filesDirUri/upload/abc.png"}""",
-            AttachmentUrlStorage.toMemory(json, filesDirUri),
+            AttachmentUrlStorage.toMemoryJson(json, filesDirUri),
+        )
+    }
+
+    @Test
+    fun `the legacy data data form is stored relative too`() {
+        val json = """{"url":"file:///data/data/top.lemoneko.rakkihub.debug/files/upload/abc.png"}"""
+
+        assertEquals(
+            """{"url":"file:upload/abc.png"}""",
+            AttachmentUrlStorage.toStoredJson(json, filesDirUri),
         )
     }
 
@@ -32,22 +42,50 @@ class AttachmentUrlStorageTest {
     fun `absolute urls outside the files dir are untouched`() {
         val json = """{"url":"file:///sdcard/Download/x.png"}"""
 
-        assertEquals(json, AttachmentUrlStorage.toStored(json, filesDirUri))
-        assertEquals(json, AttachmentUrlStorage.toMemory(json, filesDirUri))
+        assertEquals(json, AttachmentUrlStorage.toStoredJson(json, filesDirUri))
+        assertEquals(json, AttachmentUrlStorage.toMemoryJson(json, filesDirUri))
     }
 
     @Test
-    fun `only the upload folder is converted`() {
+    fun `only upload urls are converted`() {
         val json = """{"url":"$filesDirUri/workspaces/abc"}"""
 
-        assertEquals(json, AttachmentUrlStorage.toStored(json, filesDirUri))
-        assertEquals(json, AttachmentUrlStorage.toMemory(json, filesDirUri))
+        assertEquals(json, AttachmentUrlStorage.toStoredJson(json, filesDirUri))
+        assertEquals(json, AttachmentUrlStorage.toMemoryJson(json, filesDirUri))
     }
 
     @Test
-    fun `round trip keeps the url`() {
-        val json = """{"url":"$filesDirUri/upload/abc.png"}"""
+    fun `text values starting with the stored prefix are untouched`() {
+        val json = """{"text":"file:upload/a.png"}"""
 
-        assertEquals(json, AttachmentUrlStorage.toMemory(AttachmentUrlStorage.toStored(json, filesDirUri), filesDirUri))
+        assertEquals(json, AttachmentUrlStorage.toStoredJson(json, filesDirUri))
+        assertEquals(json, AttachmentUrlStorage.toMemoryJson(json, filesDirUri))
+    }
+
+    @Test
+    fun `escaped quotes in text are untouched`() {
+        val json = """{"text":"see \"file:upload/a.png\" here"}"""
+
+        assertEquals(json, AttachmentUrlStorage.toMemoryJson(json, filesDirUri))
+    }
+
+    @Test
+    fun `several urls are converted together`() {
+        val json = """{"parts":[{"url":"$filesDirUri/upload/a.png"},{"url":"$filesDirUri/upload/b.png"}]}"""
+
+        assertEquals(
+            """{"parts":[{"url":"file:upload/a.png"},{"url":"file:upload/b.png"}]}""",
+            AttachmentUrlStorage.toStoredJson(json, filesDirUri),
+        )
+    }
+
+    @Test
+    fun `round trip keeps the url and is idempotent`() {
+        val json = """{"url":"$filesDirUri/upload/abc.png"}"""
+        val stored = AttachmentUrlStorage.toStoredJson(json, filesDirUri)
+
+        assertEquals(stored, AttachmentUrlStorage.toStoredJson(stored, filesDirUri))
+        assertEquals(json, AttachmentUrlStorage.toMemoryJson(stored, filesDirUri))
+        assertEquals(json, AttachmentUrlStorage.toMemoryJson(json, filesDirUri))
     }
 }

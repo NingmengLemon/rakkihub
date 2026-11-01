@@ -151,7 +151,7 @@ class AttachmentCleaner(
  */
 internal fun collectReferencedPaths(
     urls: Iterable<String>,
-    filesDir: File? = null,
+    filesDir: File?,
 ): Pair<Set<String>, List<String>> {
     val referenced = mutableSetOf<String>()
     val unresolved = mutableListOf<String>()

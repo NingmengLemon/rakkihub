@@ -4,7 +4,6 @@ import androidx.room.Dao
 import androidx.room.Insert
 import androidx.room.OnConflictStrategy
 import androidx.room.Query
-import androidx.room.Update
 import me.rerere.rikkahub.data.db.entity.MessageNodeEntity
 
 @Dao
@@ -12,9 +11,6 @@ interface MessageNodeDAO {
     // 只取含本地文件地址的行，附件清理用；整张表读进内存没必要
     @Query("SELECT messages FROM message_node WHERE instr(messages, 'file:') > 0")
     suspend fun getContentsWithFileReferences(): List<String>
-
-    @Query("SELECT * FROM message_node WHERE conversation_id = :conversationId ORDER BY node_index ASC")
-    suspend fun getNodesOfConversation(conversationId: String): List<MessageNodeEntity>
 
     @Query(
         "SELECT * FROM message_node WHERE conversation_id = :conversationId " +
@@ -28,12 +24,6 @@ interface MessageNodeDAO {
 
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insertAll(nodes: List<MessageNodeEntity>)
-
-    @Insert(onConflict = OnConflictStrategy.REPLACE)
-    suspend fun insert(node: MessageNodeEntity)
-
-    @Update
-    suspend fun update(node: MessageNodeEntity)
 
     @Query("DELETE FROM message_node WHERE conversation_id = :conversationId")
     suspend fun deleteByConversation(conversationId: String)

@@ -48,7 +48,8 @@ internal object OfficialDatabaseAdapter {
      * 逐表逐列做前缀替换，只碰快照里的 TEXT 列。
      *
      * 用 SQL 的 `REPLACE` 而不是解析 JSON：这些列里有 JSON，也有普通字符串，统一按文本替换
-     * 最简单；要替换的前缀是绝对路径，不会出现在别的内容里。
+     * 最简单；前缀大部分是绝对路径，也有消息库里 `"url":"file:upload/` 这种带字段边界的
+     * 相对形态，带引号是为了避免命中正文。
      */
     private fun rewriteAttachmentPaths(snapshot: File, rewrites: List<Pair<String, String>>): File {
         if (rewrites.isEmpty() || rewrites.all { it.first == it.second }) return snapshot

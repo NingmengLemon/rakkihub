@@ -53,6 +53,11 @@ class OfficialExportPathsTest {
         assertTrue(
             rewrites.contains("file:///data/user/0/$packageName/files/" to "file:///data/user/0/$official/files/")
         )
+        assertTrue(
+            rewrites.contains(
+                "\"url\":\"file:upload/" to "\"url\":\"file:///data/user/0/$official/files/upload/"
+            )
+        )
     }
 
     @Test fun `legacy data path is covered too`() {
@@ -81,27 +86,34 @@ class OfficialExportPathsTest {
             packageName,
             official,
         )
-        assertEquals(3, rewrites.size)
+        assertEquals(4, rewrites.size)
         assertTrue(rewrites.any { it.first == "file:///data/user/0/$packageName/files/" })
     }
 
-    @Test fun `the same package needs no rewrite`() {
-        assertTrue(
-            OfficialExportPaths.attachmentRewrites("file:///data/user/0/$official/files/", official, official).isEmpty()
+    @Test fun `the relative form is rewritten even when the package matches`() {
+        val rewrites = OfficialExportPaths.attachmentRewrites(
+            "file:///data/user/0/$official/files/",
+            official,
+            official,
+        )
+        assertEquals(
+            listOf("\"url\":\"file:upload/" to "\"url\":\"file:///data/user/0/$official/files/upload/"),
+            rewrites,
         )
     }
 
-    @Test fun `a data shaped files dir still yields one rewrite`() {
-        // filesDir 本身是 /data/data/ 形态时取不到用户号，只剩实际形态；正式安装不会这样
+    @Test fun `a data shaped files dir still yields the canonical rewrites`() {
+        // filesDir 本身是 /data/data/ 形态时取不到用户号，只剩实际形态与相对形态；正式安装不会这样
         val rewrites = OfficialExportPaths.attachmentRewrites(
             "file:///data/data/$packageName/files/",
             packageName,
             official,
         )
-        assertEquals(
-            listOf("file:///data/data/$packageName/files/" to "file:///data/data/$official/files/"),
-            rewrites,
+        assertEquals(2, rewrites.size)
+        assertTrue(
+            rewrites.contains("file:///data/data/$packageName/files/" to "file:///data/data/$official/files/")
         )
+        assertTrue(rewrites.any { it.first == "\"url\":\"file:upload/" })
     }
 
     @Test fun `like patterns escape the characters that change their meaning`() {

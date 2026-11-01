@@ -35,7 +35,21 @@ class AttachmentReferencesTest {
         try {
             val file = File(directory, "a.png").apply { writeText("x") }
 
-            assertEquals(file.canonicalPath, fileUrlToCanonicalPath(file.toURI().toString()))
+            assertEquals(file.canonicalPath, fileUrlToCanonicalPath(file.toURI().toString(), filesDir = null))
+        } finally {
+            directory.deleteRecursively()
+        }
+    }
+
+    @Test
+    fun `a stored relative url maps under the files dir`() {
+        val directory = Files.createTempDirectory("attachment-references-").toFile()
+        try {
+            assertEquals(
+                File(directory, "upload/a.png").canonicalPath,
+                fileUrlToCanonicalPath("file:upload/a.png", filesDir = directory),
+            )
+            assertNull(fileUrlToCanonicalPath("file:upload/a.png", filesDir = null))
         } finally {
             directory.deleteRecursively()
         }
@@ -43,6 +57,6 @@ class AttachmentReferencesTest {
 
     @Test
     fun `an unparsable url yields no path`() {
-        assertNull(fileUrlToCanonicalPath("file:///%zz"))
+        assertNull(fileUrlToCanonicalPath("file:///%zz", filesDir = null))
     }
 }
