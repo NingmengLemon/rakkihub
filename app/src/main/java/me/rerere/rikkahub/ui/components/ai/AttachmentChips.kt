@@ -67,11 +67,9 @@ internal fun MediaFileInputRow(
         managedFiles.associate { it.relativePath.substringAfterLast('/') to it.displayName }
     }
 
-    fun removePart(part: UIMessagePart, url: String) {
+    fun removePart(part: UIMessagePart) {
+        // 文件不随移除删除：同一份内容可能还被别处引用，回收统一交给设置页的附件清理
         state.messageContent = state.messageContent.filterNot { it == part }
-        if (state.shouldDeleteFileOnRemove(part)) {
-            filesManager.deleteChatFiles(listOf(url.toUri()))
-        }
     }
 
     // 正在哪张图片上画，非空时显示画板
@@ -87,14 +85,10 @@ internal fun MediaFileInputRow(
                     val uri = filesManager.createChatFileBySketch(result) ?: return@launch
                     // 画好的图换掉原来那张，位置不变；等保存的这会儿原图已经被移走的话就不加了
                     if (part !in state.messageContent) {
-                        filesManager.deleteChatFiles(listOf(uri))
                         return@launch
                     }
                     state.messageContent = state.messageContent.map {
                         if (it == part) UIMessagePart.Image(uri.toString()) else it
-                    }
-                    if (state.shouldDeleteFileOnRemove(part)) {
-                        filesManager.deleteChatFiles(listOf(part.url.toUri()))
                     }
                 }
             },
@@ -157,7 +151,7 @@ internal fun MediaFileInputRow(
                                 )
                             }
                         },
-                        onRemove = { removePart(part, part.url) },
+                        onRemove = { removePart(part) },
                         onClick = { previewing = part },
                     )
                 }
@@ -171,7 +165,7 @@ internal fun MediaFileInputRow(
                             displayNameByFileName = displayNameByFileName
                         ),
                         leading = { AttachmentLeadingIcon(icon = HugeIcons.Video01) },
-                        onRemove = { removePart(part, part.url) }
+                        onRemove = { removePart(part) }
                     )
                 }
 
@@ -184,7 +178,7 @@ internal fun MediaFileInputRow(
                             displayNameByFileName = displayNameByFileName
                         ),
                         leading = { AttachmentLeadingIcon(icon = HugeIcons.MusicNote03) },
-                        onRemove = { removePart(part, part.url) }
+                        onRemove = { removePart(part) }
                     )
                 }
 
@@ -197,7 +191,7 @@ internal fun MediaFileInputRow(
                             displayNameByFileName = displayNameByFileName
                         ),
                         leading = { AttachmentLeadingIcon(icon = HugeIcons.Files02) },
-                        onRemove = { removePart(part, part.url) }
+                        onRemove = { removePart(part) }
                     )
                 }
 

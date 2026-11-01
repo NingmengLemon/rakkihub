@@ -615,6 +615,12 @@
   <string name="setting_files_page_clean_content_description">파일 정리</string>
   <string name="setting_files_page_clean_failed_toast">일부 파일을 정리하지 못했습니다</string>
   <string name="setting_files_page_clean_title">파일을 정리할까요?</string>
+  <string name="setting_files_page_clean_unused_busy">응답을 생성하는 중입니다. 잠시 후 다시 시도하세요.</string>
+  <string name="setting_files_page_clean_unused_description">어떤 메시지, 초안, 아바타에서도 참조하지 않는 업로드 파일을 삭제합니다. 사용 중인 파일은 유지됩니다.</string>
+  <string name="setting_files_page_clean_unused_done">파일 %1$d개 삭제, %2$s 확보</string>
+  <string name="setting_files_page_clean_unused_empty">정리할 파일이 없습니다</string>
+  <string name="setting_files_page_clean_unused_failed">사용하지 않는 파일을 정리하지 못했습니다</string>
+  <string name="setting_files_page_clean_unused_title">사용하지 않는 파일 정리</string>
   <string name="setting_files_page_cleaned_toast">파일을 정리했습니다</string>
   <string name="setting_files_page_delete_action">삭제</string>
   <string name="setting_files_page_delete_content_description">삭제</string>

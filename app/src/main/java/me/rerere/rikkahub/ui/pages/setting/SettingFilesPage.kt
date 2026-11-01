@@ -1,5 +1,6 @@
 package me.rerere.rikkahub.ui.pages.setting
 
+import android.util.Log
 import androidx.compose.foundation.background
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
@@ -59,6 +60,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.Role
@@ -68,6 +70,7 @@ import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import coil3.compose.AsyncImage
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.launch
 import me.rerere.hugeicons.HugeIcons
 import me.rerere.hugeicons.stroke.Clean
@@ -78,6 +81,7 @@ import me.rerere.hugeicons.stroke.FileVideo
 import me.rerere.hugeicons.stroke.FolderOpen
 import me.rerere.rikkahub.R
 import me.rerere.rikkahub.data.db.entity.ManagedFileEntity
+import me.rerere.rikkahub.data.files.AttachmentCleaner
 import me.rerere.rikkahub.data.files.FileFolders
 import me.rerere.rikkahub.data.files.FilesManager
 import me.rerere.rikkahub.ui.components.ai.ExtensionEmptyState
@@ -94,11 +98,13 @@ import java.util.concurrent.TimeUnit
 @Composable
 fun SettingFilesPage(
     filesManager: FilesManager = koinInject(),
+    attachmentCleaner: AttachmentCleaner = koinInject(),
 ) {
     val scrollBehavior = TopAppBarDefaults.exitUntilCollapsedScrollBehavior()
     val gridState = rememberLazyStaggeredGridState()
     val scope = rememberCoroutineScope()
     val toaster = LocalToaster.current
+    val context = LocalContext.current
     val folders = remember { listOf(FileFolders.UPLOAD) }
 
     // 预先获取字符串资源
@@ -106,10 +112,16 @@ fun SettingFilesPage(
     val deleteFailedToast = stringResource(R.string.setting_files_page_delete_failed_toast)
     val cleanedToast = stringResource(R.string.setting_files_page_cleaned_toast)
     val cleanFailedToast = stringResource(R.string.setting_files_page_clean_failed_toast)
+    val cleanUnusedTitle = stringResource(R.string.setting_files_page_clean_unused_title)
+    val cleanUnusedDescription = stringResource(R.string.setting_files_page_clean_unused_description)
+    val cleanUnusedBusyToast = stringResource(R.string.setting_files_page_clean_unused_busy)
+    val cleanUnusedEmptyToast = stringResource(R.string.setting_files_page_clean_unused_empty)
+    val cleanUnusedFailedToast = stringResource(R.string.setting_files_page_clean_unused_failed)
 
     var selectedFolder by remember { mutableStateOf(FileFolders.UPLOAD) }
     var pendingDelete by remember { mutableStateOf<ManagedFileEntity?>(null) }
     var showCleanSheet by remember { mutableStateOf(false) }
+    var showCleanUnused by remember { mutableStateOf(false) }
     var selectedCleanRange by remember { mutableStateOf(CleanRange.DAYS_7) }
     val files by filesManager.observe(selectedFolder).collectAsState(initial = emptyList())
 
@@ -138,6 +150,50 @@ fun SettingFilesPage(
             },
             dismissButton = {
                 TextButton(onClick = { pendingDelete = null }) {
+                    Text(stringResource(R.string.setting_files_page_cancel_action))
+                }
+            }
+        )
+    }
+
+    if (showCleanUnused) {
+        AlertDialog(
+            onDismissRequest = { showCleanUnused = false },
+            title = { Text(cleanUnusedTitle) },
+            text = { Text(cleanUnusedDescription) },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        showCleanUnused = false
+                        scope.launch {
+                            val result = try {
+                                attachmentCleaner.clean()
+                            } catch (e: CancellationException) {
+                                throw e
+                            } catch (e: Exception) {
+                                Log.w("SettingFilesPage", "Failed to clean unused attachments", e)
+                                null
+                            }
+                            when {
+                                result == null -> toaster.show(cleanUnusedFailedToast)
+                                result.busy -> toaster.show(cleanUnusedBusyToast)
+                                result.removedFiles == 0 -> toaster.show(cleanUnusedEmptyToast)
+                                else -> toaster.show(
+                                    context.getString(
+                                        R.string.setting_files_page_clean_unused_done,
+                                        result.removedFiles,
+                                        result.freedBytes.fileSizeToString(),
+                                    )
+                                )
+                            }
+                        }
+                    },
+                ) {
+                    Text(stringResource(R.string.setting_files_page_clean_action))
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { showCleanUnused = false }) {
                     Text(stringResource(R.string.setting_files_page_cancel_action))
                 }
             }
@@ -210,6 +266,14 @@ fun SettingFilesPage(
                 selectedFolder = selectedFolder,
                 onFolderSelected = { selectedFolder = it }
             )
+
+            CardGroup(modifier = Modifier.padding(horizontal = 16.dp)) {
+                item(
+                    onClick = { showCleanUnused = true },
+                    headlineContent = { Text(cleanUnusedTitle) },
+                    supportingContent = { Text(cleanUnusedDescription) },
+                )
+            }
 
             if (files.isEmpty()) {
                 ExtensionEmptyState(

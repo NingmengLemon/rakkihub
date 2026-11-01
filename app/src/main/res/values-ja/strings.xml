@@ -615,6 +615,12 @@
   <string name="setting_files_page_clean_content_description">ファイルをクリーンアップ</string>
   <string name="setting_files_page_clean_failed_toast">一部のファイルを削除できませんでした</string>
   <string name="setting_files_page_clean_title">ファイルをクリーンアップしますか？</string>
+  <string name="setting_files_page_clean_unused_busy">返信を生成中です。しばらくしてからもう一度お試しください</string>
+  <string name="setting_files_page_clean_unused_description">どのメッセージ・下書き・アバターからも参照されていないアップロードファイルを削除します。使用中のファイルは残ります。</string>
+  <string name="setting_files_page_clean_unused_done">%1$d 個のファイルを削除し、%2$s を解放しました</string>
+  <string name="setting_files_page_clean_unused_empty">整理できるファイルはありません</string>
+  <string name="setting_files_page_clean_unused_failed">未使用のファイルを整理できませんでした</string>
+  <string name="setting_files_page_clean_unused_title">未使用のファイルを整理</string>
   <string name="setting_files_page_cleaned_toast">ファイルをクリーンアップしました</string>
   <string name="setting_files_page_delete_action">削除</string>
   <string name="setting_files_page_delete_content_description">削除</string>

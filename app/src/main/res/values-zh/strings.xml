@@ -634,6 +634,12 @@
   <string name="setting_files_page_clean_older_than_days">%1$d 天前</string>
   <string name="setting_files_page_clean_range_description">选择要永久删除的文件。此操作无法撤销。</string>
   <string name="setting_files_page_clean_title">清理文件？</string>
+  <string name="setting_files_page_clean_unused_busy">正在生成回复，请稍后再试</string>
+  <string name="setting_files_page_clean_unused_description">删除没有任何消息、草稿或头像引用的上传文件。仍在使用中的文件会保留。</string>
+  <string name="setting_files_page_clean_unused_done">已删除 %1$d 个文件，释放 %2$s</string>
+  <string name="setting_files_page_clean_unused_empty">没有可清理的文件</string>
+  <string name="setting_files_page_clean_unused_failed">清理失败</string>
+  <string name="setting_files_page_clean_unused_title">清理无引用的文件</string>
   <string name="setting_files_page_cleaned_toast">文件已清理</string>
   <string name="setting_files_page_delete_action">删除</string>
   <string name="setting_files_page_delete_content_description">删除</string>

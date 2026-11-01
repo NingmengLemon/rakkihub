@@ -10,7 +10,6 @@ import androidx.compose.runtime.setValue
 import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.tooling.preview.Preview
-import androidx.core.net.toUri
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import kotlinx.coroutines.CancellationException
@@ -32,14 +31,14 @@ import me.rerere.rikkahub.R
 import me.rerere.rikkahub.data.datastore.Settings
 import me.rerere.rikkahub.data.datastore.SettingsStore
 import me.rerere.rikkahub.data.files.ChatDraftStore
-import me.rerere.rikkahub.data.files.FilesManager
+import me.rerere.rikkahub.data.files.LiveAttachmentReferences
 import me.rerere.rikkahub.data.model.Assistant
-import me.rerere.rikkahub.data.model.Avatar
 import me.rerere.rikkahub.data.model.Conversation
 import me.rerere.rikkahub.data.model.MessageNode
 import me.rerere.rikkahub.data.model.NodeFavoriteTarget
 import me.rerere.rikkahub.data.model.getAssistantOf
 import me.rerere.rikkahub.data.model.getChatModelOf
+import me.rerere.rikkahub.data.model.localFileUrls
 import me.rerere.rikkahub.data.repository.FavoriteRepository
 import me.rerere.rikkahub.service.ChatError
 import me.rerere.rikkahub.service.ChatService
@@ -59,9 +58,9 @@ class ChatVM(
     private val context: Application,
     private val settingsStore: SettingsStore,
     private val chatService: ChatService,
-    private val filesManager: FilesManager,
     private val favoriteRepository: FavoriteRepository,
     private val draftStore: ChatDraftStore,
+    private val liveReferences: LiveAttachmentReferences,
 ) : ViewModel() {
     private val _conversationId: Uuid = Uuid.parse(id)
     val conversation: StateFlow<Conversation> = chatService.getConversationFlow(_conversationId)
@@ -108,6 +107,12 @@ class ChatVM(
         // 记住对话ID, 方便下次启动恢复
         context.writeLastConversationId(_conversationId)
 
+        // 输入框里的附件要让附件清理看得见：编辑历史消息期间草稿不写输入框，这段只在内存里
+        viewModelScope.launch {
+            snapshotFlow { inputState.messageContent.localFileUrls() }
+                .collect { urls -> liveReferences.put(this@ChatVM, urls) }
+        }
+
         // 草稿：先把上次的恢复出来，再开始观察，否则恢复本身会被当成一次「清空」写回去。
         // 编辑历史消息期间观察到的值是 null（不写盘），编辑结束由下面那段观察把编辑前的内容放回输入框
         viewModelScope.launch {
@@ -150,7 +155,8 @@ class ChatVM(
                     .onFailure { error -> Log.w(TAG, "Failed to persist the chat draft", error) }
             }
         }
-        // 移除对话引用
+        // 移除对话引用与输入框的附件登记
+        liveReferences.remove(this)
         chatService.removeConversationReference(_conversationId)
     }
 
@@ -237,26 +243,7 @@ class ChatVM(
     // 更新设置
     fun updateSettings(fn: (Settings) -> Settings): Job {
         return viewModelScope.launch {
-            var oldSettings: Settings? = null
-            var newSettings: Settings? = null
-            settingsStore.update { old ->
-                fn(old).also { new ->
-                    oldSettings = old
-                    newSettings = new
-                }
-            }
-            // 检查用户头像是否有变化，如果有则删除旧头像
-            checkUserAvatarDelete(oldSettings ?: return@launch, newSettings ?: return@launch)
-        }
-    }
-
-    // 检查用户头像删除
-    private fun checkUserAvatarDelete(oldSettings: Settings, newSettings: Settings) {
-        val oldAvatar = oldSettings.displaySetting.userAvatar
-        val newAvatar = newSettings.displaySetting.userAvatar
-
-        if (oldAvatar is Avatar.Image && oldAvatar != newAvatar) {
-            filesManager.deleteChatFiles(listOf(oldAvatar.url.toUri()))
+            settingsStore.update(fn)
         }
     }
 

@@ -132,9 +132,6 @@ class ChatService(
             } else {
                 conversationRepo.updateConversation(current)
             }
-            if (previous != null && previous.messageNodes !== current.messageNodes) {
-                withContext(Dispatchers.IO) { deleteUnreferencedFiles(previous, current) }
-            }
         }
     }
 
@@ -188,6 +185,22 @@ class ChatService(
     fun removeConversationReference(conversationId: Uuid) {
         sessionManager.release(conversationId)
     }
+
+    /**
+     * 只在内存里的附件引用：已加载的会话、待发送队列、提交中的消息。
+     *
+     * 附件清理扫数据库、设置与草稿，这些还没落库的引用扫不到，单独交给它。
+     */
+    fun unsavedAttachmentUrls(): Set<String> = buildSet {
+        sessionManager.snapshot().forEach { session ->
+            session.state.value.files.forEach { add(it.toString()) }
+            session.messageQueue.state.value.messages.forEach { addAll(it.parts.localFileUrls()) }
+            session.submittingMessage?.let { addAll(it.parts.localFileUrls()) }
+        }
+    }
+
+    /** 有回复正在生成：生成中的工具结果可能带着刚写出来的文件，这时不做附件清理 */
+    fun isGenerating(): Boolean = sessionManager.snapshot().any { it.isGenerating }
 
     fun getConversationFlow(conversationId: Uuid): StateFlow<Conversation> =
         sessionManager.getConversationFlow(conversationId)
@@ -295,27 +308,13 @@ class ChatService(
             session.flush().also { dispatchNextQueuedMessage(conversationId) }
         }
 
-    // 只删上次落库时引用、这次落库不再引用的文件；只在内存里出现过的文件宁可漏删也不误删
-    private fun deleteUnreferencedFiles(previous: Conversation, current: Conversation) {
-        val session = sessionManager.get(current.id)
-        val queuedFiles = (session?.messageQueue?.state?.value?.messages.orEmpty() +
-            listOfNotNull(session?.submittingMessage))
-            .flatMap { it.parts }.localFileUrls().map { it.toUri() }
-        val retainedFiles = (current.files + queuedFiles).toSet()
-        val deletedFiles = previous.files.filter { it !in retainedFiles }
-        if (deletedFiles.isNotEmpty()) {
-            filesManager.deleteChatFiles(deletedFiles)
-            Log.w(TAG, "deleteUnreferencedFiles: $deletedFiles")
-        }
-    }
-
     // ---- 发送消息 ----
 
     fun getMessageQueueFlow(conversationId: Uuid): StateFlow<MessageQueueState> =
         sessionManager.getMessageQueueFlow(conversationId)
 
     fun removeQueuedMessage(conversationId: Uuid, messageId: Uuid) {
-        sessionManager.get(conversationId)?.messageQueue?.remove(messageId)?.let(::cleanupQueuedAttachments)
+        sessionManager.get(conversationId)?.messageQueue?.remove(messageId)
         dispatchNextQueuedMessage(conversationId)
     }
 
@@ -328,36 +327,7 @@ class ChatService(
         parts: List<UIMessagePart>? = null
     ) {
         sessionManager.get(conversationId)?.messageQueue?.finishEdit(messageId, parts)
-            ?.let(::cleanupQueuedAttachments)
         dispatchNextQueuedMessage(conversationId)
-    }
-
-    private fun cleanupQueuedAttachments(previous: QueuedMessage) {
-        val candidates = previous.parts.localFileUrls()
-        if (candidates.isEmpty()) return
-        appScope.launch {
-            try {
-                // 未打开的会话及未选中的分支也可能引用同一附件。
-                val persistedReferences =
-                    candidates.filter { conversationRepo.hasFileReference(it) }.toSet()
-                // 数据库查询挂起期间队列可能已推进，删除前重新读取内存引用。
-                val currentSessions = sessionManager.snapshot()
-                val unusedFiles = unreferencedQueuedAttachmentUrls(
-                    previous = previous,
-                    conversations = currentSessions.map { it.state.value },
-                    pendingMessages = currentSessions.flatMap {
-                        it.messageQueue.state.value.messages + listOfNotNull(it.submittingMessage)
-                    },
-                ) - persistedReferences
-                if (unusedFiles.isNotEmpty()) {
-                    filesManager.deleteChatFiles(unusedFiles.map { it.toUri() })
-                }
-            } catch (e: Exception) {
-                if (e is CancellationException) throw e
-                // 无法确认引用时保留文件，避免误删。
-                Log.w(TAG, "Failed to clean queued attachments", e)
-            }
-        }
     }
 
     fun resumeMessageQueue(conversationId: Uuid) {
@@ -1010,10 +980,8 @@ class ChatService(
     suspend fun deleteConversation(conversationId: Uuid) {
         val session = sessionManager.getOrCreate(conversationId)
         discardQueuedMessages(session)
-        session.replace(newConversation(conversationId), existsInDatabase = false) { previous ->
+        session.replace(newConversation(conversationId), existsInDatabase = false) { _ ->
             conversationRepo.getConversationById(conversationId)?.let { conversationRepo.deleteConversation(it) }
-            // 数据库那份不知道只在内存里出现过的附件
-            previous?.let { filesManager.deleteChatFiles(it.files) }
         }
         // 会话的输入框内容也属于它。没落过库的新会话在仓库里查不到，所以删在这里
         chatDraftStore.delete(conversationId)
@@ -1040,7 +1008,7 @@ class ChatService(
     private fun discardQueuedMessages(session: ConversationSession) {
         session.messageQueue.pause()
         session.messageQueue.state.value.messages.forEach { queued ->
-            session.messageQueue.remove(queued.id)?.let(::cleanupQueuedAttachments)
+            session.messageQueue.remove(queued.id)
         }
     }
 

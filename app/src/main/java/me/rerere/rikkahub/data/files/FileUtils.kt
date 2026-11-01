@@ -15,18 +15,27 @@ import kotlin.uuid.Uuid
 object FileUtils {
     private const val TAG = "FileUtils"
 
-    fun buildUuidFileName(displayName: String?, mimeType: String?): String {
-        val extFromName = displayName
-            ?.substringAfterLast('.', "")
-            ?.takeIf { it.isNotBlank() && it != displayName }
-            ?.lowercase()
-        val extFromMime = mimeType
-            ?.let { MimeTypeMap.getSingleton().getExtensionFromMimeType(it.lowercase()) }
-            ?.takeIf { it.isNotBlank() }
-            ?.lowercase()
-        val ext = extFromName ?: extFromMime ?: "bin"
-        return "${Uuid.random()}.$ext"
-    }
+    fun buildUuidFileName(displayName: String?, mimeType: String?): String =
+        "${Uuid.random()}.${extensionFromName(displayName) ?: extensionFromMime(mimeType) ?: "bin"}"
+
+    /**
+     * 内容寻址的文件名：哈希就是内容指纹。
+     *
+     * 扩展名优先按 MIME 定，MIME 一致时同一份内容不论来源文件名是什么都会落到同一个文件上；
+     * MIME 拿不到时才退回来源文件名的后缀，这时同一份内容可能因为后缀不同落成两份。
+     */
+    fun buildContentFileName(contentHash: String, displayName: String?, mimeType: String?): String =
+        "$contentHash.${extensionFromMime(mimeType) ?: extensionFromName(displayName) ?: "bin"}"
+
+    private fun extensionFromName(displayName: String?): String? = displayName
+        ?.substringAfterLast('.', "")
+        ?.takeIf { it.isNotBlank() && it != displayName }
+        ?.lowercase()
+
+    private fun extensionFromMime(mimeType: String?): String? = mimeType
+        ?.let { MimeTypeMap.getSingleton().getExtensionFromMimeType(it.lowercase()) }
+        ?.takeIf { it.isNotBlank() }
+        ?.lowercase()
 
     fun buildRelativePath(folder: String, file: File): String =
         "$folder/${file.name}"
@@ -122,7 +131,7 @@ object FileUtils {
                 "heic", "heix", "heim", "heis",
                 "hevc", "hevx", "hevm", "hevs",
                 "mif1", "msf1", "heif",
-                    -> return "image/heic"
+                -> return "image/heic"
 
                 "avif", "avis" -> return "image/avif"
             }

@@ -641,6 +641,12 @@
   <string name="setting_files_page_clean_older_than_days">Older than %1$d days</string>
   <string name="setting_files_page_clean_range_description">Select files to permanently delete. This action cannot be undone.</string>
   <string name="setting_files_page_clean_title">Clean files?</string>
+  <string name="setting_files_page_clean_unused_busy">A reply is still generating. Try again later.</string>
+  <string name="setting_files_page_clean_unused_description">Delete uploaded files that no message, draft or avatar refers to. Files still in use are kept.</string>
+  <string name="setting_files_page_clean_unused_done">Removed %1$d files, freed %2$s</string>
+  <string name="setting_files_page_clean_unused_empty">No unused files</string>
+  <string name="setting_files_page_clean_unused_failed">Could not clean unused files</string>
+  <string name="setting_files_page_clean_unused_title">Clean unused files</string>
   <string name="setting_files_page_cleaned_toast">Files cleaned</string>
   <string name="setting_files_page_delete_action">Delete</string>
   <string name="setting_files_page_delete_content_description">Delete</string>

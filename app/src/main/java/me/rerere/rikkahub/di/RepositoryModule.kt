@@ -1,9 +1,11 @@
 package me.rerere.rikkahub.di
 
 import android.content.Context
+import me.rerere.rikkahub.data.files.AttachmentCleaner
 import me.rerere.rikkahub.data.files.ChatDraftStore
 import me.rerere.rikkahub.data.files.FileFolders
 import me.rerere.rikkahub.data.files.FilesManager
+import me.rerere.rikkahub.data.files.LiveAttachmentReferences
 import me.rerere.rikkahub.data.repository.ConversationRepository
 import me.rerere.rikkahub.data.repository.FavoriteRepository
 import me.rerere.rikkahub.data.repository.FilesRepository
@@ -25,7 +27,7 @@ import java.io.File
 
 val repositoryModule = module {
     single {
-        ConversationRepository(get(), get(), get(), get(), get(), get())
+        ConversationRepository(get(), get(), get(), get(), get())
     }
 
     single {
@@ -57,6 +59,22 @@ val repositoryModule = module {
         ChatDraftStore(
             directory = File(context.noBackupFilesDir, "chat-drafts"),
             json = get(),
+        )
+    }
+
+    single {
+        LiveAttachmentReferences()
+    }
+
+    single {
+        AttachmentCleaner(
+            context = get(),
+            filesRepository = get(),
+            conversationRepository = get(),
+            settingsStore = get(),
+            draftStore = get(),
+            chatService = get(),
+            liveReferences = get(),
         )
     }
 

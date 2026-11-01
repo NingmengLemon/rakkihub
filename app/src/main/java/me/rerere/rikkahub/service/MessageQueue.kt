@@ -4,8 +4,6 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import me.rerere.ai.ui.UIMessagePart
 import me.rerere.ai.ui.isEmptyInputMessage
-import me.rerere.rikkahub.data.model.Conversation
-import me.rerere.rikkahub.data.model.localFileUrls
 import kotlin.uuid.Uuid
 
 data class QueuedMessage(
@@ -19,17 +17,6 @@ data class MessageQueueState(
     val messages: List<QueuedMessage> = emptyList(),
     val paused: Boolean = false,
 )
-
-internal fun unreferencedQueuedAttachmentUrls(
-    previous: QueuedMessage,
-    conversations: List<Conversation>,
-    pendingMessages: List<QueuedMessage>,
-): Set<String> {
-    val retainedParts = conversations.flatMap { conversation ->
-        conversation.messageNodes.flatMap { node -> node.messages.flatMap { it.parts } }
-    } + pendingMessages.flatMap { it.parts }
-    return previous.parts.localFileUrls() - retainedParts.localFileUrls()
-}
 
 /** Pending input is kept outside conversation history until dispatched. */
 class MessageQueue {

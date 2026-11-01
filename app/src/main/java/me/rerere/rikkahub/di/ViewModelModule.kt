@@ -32,9 +32,9 @@ val viewModelModule = module {
             context = get(),
             settingsStore = get(),
             chatService = get(),
-            filesManager = get(),
             favoriteRepository = get(),
             draftStore = get(),
+            liveReferences = get(),
         )
     }
     viewModelOf(::ChatDrawerVM)
@@ -48,7 +48,6 @@ val viewModelModule = module {
             settingsStore = get(),
             memoryRepository = get(),
             memoryConsolidationScheduler = get(),
-            filesManager = get(),
             skillManager = get(),
             workspaceRepository = get(),
         )

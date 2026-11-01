@@ -194,5 +194,27 @@ class ChatDraftStoreTest {
         assertEquals(listOf("$conversationId.json"), directory.listFiles().orEmpty().map { it.name })
     }
 
+    @Test
+    fun `draft file urls are collected for the attachment cleanup`() = runTest {
+        store.save(
+            conversationId,
+            ChatDraftStore.Draft(
+                text = "看看这张",
+                parts = listOf(UIMessagePart.Image("file:///data/user/0/pkg/files/upload/a.png")),
+            ),
+        )
+        // 坏掉的草稿也要算数：清理靠它保住文件
+        directory.resolve("broken.json")
+            .writeText("""{"parts":[{"url":"file:///data/user/0/pkg/files/upload/b.png"}""")
+
+        assertEquals(
+            setOf(
+                "file:///data/user/0/pkg/files/upload/a.png",
+                "file:///data/user/0/pkg/files/upload/b.png",
+            ),
+            store.referencedFileUrls(),
+        )
+    }
+
     private fun fileOf(conversationId: Uuid) = File(directory, "$conversationId.json")
 }

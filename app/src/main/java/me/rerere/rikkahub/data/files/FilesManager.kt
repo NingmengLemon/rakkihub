@@ -6,9 +6,6 @@ import android.net.Uri
 import android.util.Log
 import androidx.core.net.toFile
 import androidx.core.net.toUri
-import java.io.File
-import java.net.HttpURLConnection
-import java.net.URL
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.first
@@ -23,6 +20,10 @@ import me.rerere.rikkahub.data.repository.FilesRepository
 import me.rerere.rikkahub.utils.exportImage
 import me.rerere.rikkahub.utils.exportImageFile
 import me.rerere.rikkahub.utils.getActivity
+import java.io.File
+import java.io.OutputStream
+import java.net.HttpURLConnection
+import java.net.URL
 import kotlin.io.encoding.Base64
 import kotlin.io.encoding.ExperimentalEncodingApi
 
@@ -43,11 +44,8 @@ class FilesManager(
     ): ManagedFileEntity = withContext(Dispatchers.IO) {
         val resolvedName = displayName ?: getFileNameFromUri(uri) ?: "file"
         val resolvedMime = mimeType ?: getFileMimeType(uri) ?: "application/octet-stream"
-        val target = createTargetFile(folder, resolvedName, resolvedMime)
-        context.contentResolver.openInputStream(uri)?.use { input ->
-            target.outputStream().use { output ->
-                input.copyTo(output)
-            }
+        val target = writeManagedContent(folder, resolvedName, resolvedMime) { output ->
+            context.contentResolver.openInputStream(uri)?.use { input -> input.copyTo(output) }
         }
         createManagedFileEntity(
             folder = folder,
@@ -63,8 +61,7 @@ class FilesManager(
         displayName: String,
         mimeType: String = "application/octet-stream",
     ): ManagedFileEntity = withContext(Dispatchers.IO) {
-        val target = createTargetFile(folder, displayName, mimeType)
-        target.writeBytes(bytes)
+        val target = writeManagedContent(folder, displayName, mimeType) { output -> output.write(bytes) }
         createManagedFileEntity(
             folder = folder,
             file = target,
@@ -79,8 +76,9 @@ class FilesManager(
         displayName: String = "pasted_text.txt",
         mimeType: String = "text/plain",
     ): ManagedFileEntity = withContext(Dispatchers.IO) {
-        val target = createTargetFile(folder, displayName, mimeType)
-        target.writeText(text)
+        val target = writeManagedContent(folder, displayName, mimeType) { output ->
+            output.write(text.toByteArray(Charsets.UTF_8))
+        }
         createManagedFileEntity(
             folder = folder,
             file = target,
@@ -104,26 +102,15 @@ class FilesManager(
 
     fun createChatFilesByContents(uris: List<Uri>): List<Uri> {
         val newUris = mutableListOf<Uri>()
-        val dir = context.filesDir.resolve(FileFolders.UPLOAD)
-        if (!dir.exists()) {
-            dir.mkdirs()
-        }
         uris.forEach { uri ->
             runCatching {
                 val sourceName = getFileNameFromUri(uri) ?: uri.lastPathSegment ?: "file"
                 val sourceMime = getFileMimeType(uri)
-                val fileName = buildUuidFileName(displayName = sourceName, mimeType = sourceMime)
-                val file = dir.resolve(fileName)
-                if (!file.exists()) {
-                    file.createNewFile()
-                }
-                val inputStream = context.contentResolver.openInputStream(uri)
-                    ?: error("Failed to open input stream for $uri")
-                inputStream.use { input ->
-                    file.outputStream().use { output ->
-                        input.copyTo(output)
+                val file = context.contentResolver.openInputStream(uri)
+                    ?.use { input ->
+                        writeUploadContent(sourceName, sourceMime) { output -> input.copyTo(output) }
                     }
-                }
+                    ?: error("Failed to open input stream for $uri")
                 val guessedMime = sourceMime ?: guessMimeType(file, sourceName)
                 trackManagedFile(
                     folder = FileFolders.UPLOAD,
@@ -150,27 +137,15 @@ class FilesManager(
         mimeType: String = "image/png",
     ): List<Uri> {
         val newUris = mutableListOf<Uri>()
-        val dir = context.filesDir.resolve(FileFolders.UPLOAD)
-        if (!dir.exists()) {
-            dir.mkdirs()
-        }
         byteArrays.forEach { byteArray ->
-            val fileName = buildUuidFileName(displayName = displayName, mimeType = mimeType)
-            val file = dir.resolve(fileName)
-            if (!file.exists()) {
-                file.createNewFile()
-            }
-            val newUri = file.toUri()
-            file.outputStream().use { outputStream ->
-                outputStream.write(byteArray)
-            }
+            val file = writeUploadContent(displayName, mimeType) { output -> output.write(byteArray) }
             trackManagedFile(
                 folder = FileFolders.UPLOAD,
                 file = file,
                 displayName = displayName,
                 mimeType = mimeType
             )
-            newUris.add(newUri)
+            newUris.add(file.toUri())
         }
         return newUris
     }
@@ -189,7 +164,9 @@ class FilesManager(
                                 val urls = createChatFilesByByteArrays(listOf(byteArray))
                                 Log.i(
                                     TAG,
-                                    "convertBase64ImagePartToLocalFile: convert base64 img to ${urls.joinToString(", ")}"
+                                    "convertBase64ImagePartToLocalFile: convert base64 img to ${urls.joinToString(
+                                        ", "
+                                    )}"
                                 )
                                 part.copy(
                                     url = urls.first().toString(),
@@ -205,24 +182,6 @@ class FilesManager(
             )
         }
 
-    fun deleteChatFiles(uris: List<Uri>) {
-        val relativePaths = mutableSetOf<String>()
-        uris.filter { it.toString().startsWith("file:") }.forEach { uri ->
-            val file = uri.toFile()
-            getRelativePathInFilesDir(file)?.let { relativePaths.add(it) }
-            if (file.exists()) {
-                file.delete()
-            }
-        }
-        if (relativePaths.isNotEmpty()) {
-            appScope.launch(Dispatchers.IO) {
-                relativePaths.forEach { path ->
-                    repository.deleteByPath(path)
-                }
-            }
-        }
-    }
-
     suspend fun countChatFiles(): Pair<Int, Long> = withContext(Dispatchers.IO) {
         val dir = context.filesDir.resolve(FileFolders.UPLOAD)
         if (!dir.exists()) {
@@ -235,13 +194,9 @@ class FilesManager(
     }
 
     fun createChatTextFile(text: String): UIMessagePart.Document {
-        val dir = context.filesDir.resolve(FileFolders.UPLOAD)
-        if (!dir.exists()) {
-            dir.mkdirs()
+        val file = writeUploadContent("pasted_text.txt", "text/plain") { output ->
+            output.write(text.toByteArray(Charsets.UTF_8))
         }
-        val fileName = buildUuidFileName(displayName = "pasted_text.txt", mimeType = "text/plain")
-        val file = dir.resolve(fileName)
-        file.writeText(text)
         trackManagedFile(
             folder = FileFolders.UPLOAD,
             file = file,
@@ -330,7 +285,8 @@ class FilesManager(
     suspend fun syncFolder(folder: String = FileFolders.UPLOAD): SyncResult = withContext(Dispatchers.IO) {
         val dir = File(context.filesDir, folder)
         val diskFiles = if (dir.exists()) {
-            dir.listFiles()?.filter { it.isFile }
+            // 内容寻址写到一半留下的临时文件不算用户的文件，不计入登记
+            dir.listFiles()?.filter { it.isFile && !it.name.startsWith(ContentAddressedFiles.PENDING_PREFIX) }
                 ?: return@withContext SyncResult(inserted = 0, removed = 0)
         } else {
             emptyList()
@@ -340,7 +296,7 @@ class FilesManager(
         var inserted = 0
         val diskRelativePaths = HashSet<String>()
         diskFiles.forEach { file ->
-            val relativePath = "${folder}/${file.name}"
+            val relativePath = "$folder/${file.name}"
             diskRelativePaths.add(relativePath)
             val existing = repository.getByPath(relativePath)
             if (existing == null) {
@@ -432,6 +388,30 @@ class FilesManager(
         allDeleted
     }
 
+    /** 上传目录的写入走内容寻址：同一份内容复用同一个文件 */
+    private fun writeUploadContent(
+        displayName: String,
+        mimeType: String?,
+        content: (OutputStream) -> Unit,
+    ): File = ContentAddressedFiles.write(
+        directory = File(context.filesDir, FileFolders.UPLOAD),
+        displayName = displayName,
+        mimeType = mimeType,
+        content = content,
+    )
+
+    /** upload 走内容寻址，其余目录仍用随机文件名 */
+    private fun writeManagedContent(
+        folder: String,
+        displayName: String,
+        mimeType: String?,
+        content: (OutputStream) -> Unit,
+    ): File = if (folder == FileFolders.UPLOAD) {
+        writeUploadContent(displayName, mimeType, content)
+    } else {
+        createTargetFile(folder, displayName, mimeType).also { file -> file.outputStream().use(content) }
+    }
+
     private fun createTargetFile(folder: String, displayName: String, mimeType: String?): File {
         val dir = File(context.filesDir, folder)
         if (!dir.exists()) {
@@ -440,20 +420,20 @@ class FilesManager(
         return File(dir, FileUtils.buildUuidFileName(displayName = displayName, mimeType = mimeType))
     }
 
-    private fun buildUuidFileName(displayName: String?, mimeType: String?): String =
-        FileUtils.buildUuidFileName(displayName, mimeType)
-
     private suspend fun createManagedFileEntity(
         folder: String,
         file: File,
         displayName: String,
         mimeType: String,
     ): ManagedFileEntity {
+        // 内容寻址之后同一份内容只有一个文件，登记也只留一条
+        val relativePath = buildRelativePath(folder, file)
+        repository.getByPath(relativePath)?.let { return it }
         val now = System.currentTimeMillis()
         return repository.insert(
             ManagedFileEntity(
                 folder = folder,
-                relativePath = buildRelativePath(folder, file),
+                relativePath = relativePath,
                 displayName = displayName,
                 mimeType = mimeType,
                 sizeBytes = file.length(),
@@ -495,9 +475,6 @@ class FilesManager(
 
     private fun buildRelativePath(folder: String, file: File): String =
         FileUtils.buildRelativePath(folder, file)
-
-    private fun getRelativePathInFilesDir(file: File): String? =
-        FileUtils.getRelativePathInFilesDir(context.filesDir, file)
 
     fun getFileNameFromUri(uri: Uri): String? =
         FileUtils.getFileNameFromUri(context, uri)

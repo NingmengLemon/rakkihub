@@ -631,6 +631,12 @@
   <string name="setting_display_page_notification_message_generated_desc">Eine Benachrichtigung anzeigen, wenn eine Nachricht generiert wurde und die App nicht im Vordergrund ist</string>
   <string name="setting_files_page_clean_range_description">Wähle Dateien aus, die dauerhaft gelöscht werden sollen. Diese Aktion kann nicht rückgängig gemacht werden.</string>
   <string name="setting_files_page_clean_title">Dateien bereinigen?</string>
+  <string name="setting_files_page_clean_unused_busy">Eine Antwort wird noch generiert. Versuche es später erneut.</string>
+  <string name="setting_files_page_clean_unused_description">Löscht hochgeladene Dateien, auf die keine Nachricht, kein Entwurf und kein Avatar verweist. Noch verwendete Dateien bleiben erhalten.</string>
+  <string name="setting_files_page_clean_unused_done">%1$d Dateien entfernt, %2$s freigegeben</string>
+  <string name="setting_files_page_clean_unused_empty">Keine ungenutzten Dateien</string>
+  <string name="setting_files_page_clean_unused_failed">Ungenutzte Dateien konnten nicht bereinigt werden</string>
+  <string name="setting_files_page_clean_unused_title">Ungenutzte Dateien bereinigen</string>
   <string name="setting_files_page_cleaned_toast">Dateien bereinigt</string>
   <string name="setting_files_page_delete_action">Löschen</string>
   <string name="setting_files_page_delete_content_description">Löschen</string>

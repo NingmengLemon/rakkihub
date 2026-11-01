@@ -18,7 +18,6 @@ class ChatInputState {
     var editingReasoning by mutableStateOf<TextFieldState?>(null)
         private set
     private var editingParts: List<UIMessagePart>? = null
-    private var editingAttachmentUrls: Set<String> = emptySet()
 
     fun clearInput() {
         textContent.setTextAndPlaceCursorAtEnd("")
@@ -26,7 +25,6 @@ class ChatInputState {
         editingMessage = null
         editingReasoning = null
         editingParts = null
-        editingAttachmentUrls = emptySet()
     }
 
     fun isEditing() = editingMessage != null
@@ -49,9 +47,9 @@ class ChatInputState {
         textContent.setTextAndPlaceCursorAtEnd(text)
         val reasoning = contents.editableReasoningOrNull()
         editingReasoning = reasoning?.let { TextFieldState(it.reasoning) }
-        messageContent = contents.filter { it !is UIMessagePart.Text && (reasoning == null || it !is UIMessagePart.Reasoning) }
+        messageContent =
+            contents.filter { it !is UIMessagePart.Text && (reasoning == null || it !is UIMessagePart.Reasoning) }
         editingParts = contents
-        editingAttachmentUrls = contents.mapNotNull { it.attachmentUrlOrNull() }.toSet()
     }
 
     fun getContents(): List<UIMessagePart> {
@@ -141,16 +139,6 @@ class ChatInputState {
     }
 
     /**
-     * 仅删除当前输入组件临时新增的本地文件。
-     * 编辑历史消息时，原有附件不在这里删除，由会话层统一做差异清理。
-     */
-    fun shouldDeleteFileOnRemove(part: UIMessagePart): Boolean {
-        val url = part.attachmentUrlOrNull() ?: return false
-        if (!url.startsWith("file:")) return false
-        return !isEditing() || url !in editingAttachmentUrls
-    }
-
-    /**
      * 只有一段思考加正文的消息才允许改思考内容。
      * 带 metadata 的思考（Claude/Gemini 签名、OpenAI 加密内容等）回传时要和原文对得上，改了会失效或被拒，不允许编辑。
      */
@@ -158,15 +146,5 @@ class ChatInputState {
         if (!all { it is UIMessagePart.Text || it is UIMessagePart.Reasoning }) return null
         val reasoning = filterIsInstance<UIMessagePart.Reasoning>().singleOrNull() ?: return null
         return reasoning.takeIf { it.metadata.isNullOrEmpty() }
-    }
-
-    private fun UIMessagePart.attachmentUrlOrNull(): String? {
-        return when (this) {
-            is UIMessagePart.Image -> this.url
-            is UIMessagePart.Video -> this.url
-            is UIMessagePart.Audio -> this.url
-            is UIMessagePart.Document -> this.url
-            else -> null
-        }
     }
 }

@@ -615,6 +615,12 @@
   <string name="setting_files_page_clean_content_description">清理檔案</string>
   <string name="setting_files_page_clean_failed_toast">部分檔案清理失敗</string>
   <string name="setting_files_page_clean_title">清理檔案？</string>
+  <string name="setting_files_page_clean_unused_busy">正在產生回覆，請稍後再試</string>
+  <string name="setting_files_page_clean_unused_description">刪除沒有任何訊息、草稿或頭像引用的上傳檔案。仍在使用中的檔案會保留。</string>
+  <string name="setting_files_page_clean_unused_done">已刪除 %1$d 個檔案，釋放 %2$s</string>
+  <string name="setting_files_page_clean_unused_empty">沒有可清理的檔案</string>
+  <string name="setting_files_page_clean_unused_failed">清理失敗</string>
+  <string name="setting_files_page_clean_unused_title">清理沒有引用的檔案</string>
   <string name="setting_files_page_cleaned_toast">檔案已清理</string>
   <string name="setting_files_page_delete_action">刪除</string>
   <string name="setting_files_page_delete_content_description">刪除</string>

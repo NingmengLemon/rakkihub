@@ -75,6 +75,19 @@ class ChatDraftStore(
     }
 
     /**
+     * 草稿里引用到的本地文件地址，附件清理用。
+     *
+     * 直接扫原始文本、不解析 JSON：坏掉的草稿也要算数，宁可多留一个文件。
+     */
+    suspend fun referencedFileUrls(): Set<String> = withContext(Dispatchers.IO) {
+        directory.listFiles().orEmpty()
+            .filter { it.isFile && it.name.endsWith(".json") }
+            .flatMapTo(mutableSetOf()) { file ->
+                runCatching { file.readText() }.getOrNull()?.let(::extractFileUrls).orEmpty()
+            }
+    }
+
+    /**
      * 删掉不该再留的草稿：对应会话已经不在库里的、写到一半留下的临时文件，以及名字根本不是草稿的文件。
      *
      * 「不在库里」不等于「回不去」：新建会话的 id 只在内存里，用户没发消息就退进程，库里查不到它，

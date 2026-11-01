@@ -1,7 +1,6 @@
 package me.rerere.rikkahub.ui.pages.assistant.detail
 
 import android.util.Log
-import androidx.core.net.toUri
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import kotlinx.coroutines.Dispatchers
@@ -18,15 +17,13 @@ import me.rerere.rikkahub.data.ai.MemoryConsolidationStatus
 import me.rerere.rikkahub.data.datastore.Settings
 import me.rerere.rikkahub.data.datastore.SettingsStore
 import me.rerere.rikkahub.data.db.entity.WorkspaceEntity
-import me.rerere.rikkahub.data.files.FilesManager
-import me.rerere.rikkahub.data.skills.SkillManager
-import me.rerere.rikkahub.data.skills.SkillMetadata
 import me.rerere.rikkahub.data.model.Assistant
 import me.rerere.rikkahub.data.model.MemoryFile
-import me.rerere.rikkahub.data.model.Avatar
 import me.rerere.rikkahub.data.model.Tag
 import me.rerere.rikkahub.data.repository.MemoryRepository
 import me.rerere.rikkahub.data.repository.WorkspaceRepository
+import me.rerere.rikkahub.data.skills.SkillManager
+import me.rerere.rikkahub.data.skills.SkillMetadata
 import kotlin.uuid.Uuid
 
 private const val TAG = "AssistantDetailVM"
@@ -36,7 +33,6 @@ class AssistantDetailVM(
     private val settingsStore: SettingsStore,
     private val memoryRepository: MemoryRepository,
     private val memoryConsolidationScheduler: MemoryConsolidationScheduler,
-    private val filesManager: FilesManager,
     private val skillManager: SkillManager,
     private val workspaceRepository: WorkspaceRepository,
 ) : ViewModel() {
@@ -58,7 +54,9 @@ class AssistantDetailVM(
         .settingsFlow.map { settings ->
             settings.mcpServers
         }.stateIn(
-            scope = viewModelScope, started = SharingStarted.Eagerly, initialValue = emptyList()
+            scope = viewModelScope,
+            started = SharingStarted.Eagerly,
+            initialValue = emptyList()
         )
 
     val assistant: StateFlow<Assistant> = settingsStore
@@ -66,7 +64,9 @@ class AssistantDetailVM(
         .map { settings ->
             settings.assistants.find { it.id == assistantId } ?: Assistant()
         }.stateIn(
-            scope = viewModelScope, started = SharingStarted.Eagerly, initialValue = Assistant()
+            scope = viewModelScope,
+            started = SharingStarted.Eagerly,
+            initialValue = Assistant()
         )
 
     val memories = assistant
@@ -74,7 +74,9 @@ class AssistantDetailVM(
             memoryRepository.getFilesFlow(memoryIdOf(currentAssistant))
         }
         .stateIn(
-            scope = viewModelScope, started = SharingStarted.Eagerly, initialValue = emptyList()
+            scope = viewModelScope,
+            started = SharingStarted.Eagerly,
+            initialValue = emptyList()
         )
 
     val memoryConsolidation: StateFlow<MemoryConsolidationStatus> = assistant
@@ -82,7 +84,9 @@ class AssistantDetailVM(
             memoryConsolidationScheduler.statusOf(memoryIdOf(currentAssistant))
         }
         .stateIn(
-            scope = viewModelScope, started = SharingStarted.Eagerly, initialValue = MemoryConsolidationStatus()
+            scope = viewModelScope,
+            started = SharingStarted.Eagerly,
+            initialValue = MemoryConsolidationStatus()
         )
 
     val providers = settingsStore
@@ -90,7 +94,9 @@ class AssistantDetailVM(
         .map { settings ->
             settings.providers
         }.stateIn(
-            scope = viewModelScope, started = SharingStarted.Eagerly, initialValue = emptyList()
+            scope = viewModelScope,
+            started = SharingStarted.Eagerly,
+            initialValue = emptyList()
         )
 
     val tags = settingsStore
@@ -98,7 +104,9 @@ class AssistantDetailVM(
         .map { settings ->
             settings.assistantTags
         }.stateIn(
-            scope = viewModelScope, started = SharingStarted.Eagerly, initialValue = emptyList()
+            scope = viewModelScope,
+            started = SharingStarted.Eagerly,
+            initialValue = emptyList()
         )
 
     val workspaces: StateFlow<List<WorkspaceEntity>> = workspaceRepository
@@ -165,21 +173,10 @@ class AssistantDetailVM(
 
     fun update(assistant: Assistant) {
         viewModelScope.launch {
-            var replaced: Assistant? = null
             settingsStore.update { settings ->
-                settings.copy(
-                    assistants = settings.assistants.map {
-                        if (it.id == assistant.id) {
-                            replaced = it
-                            assistant
-                        } else {
-                            it
-                        }
-                    })
-            }
-            replaced?.let { old ->
-                checkAvatarDelete(old = old, new = assistant) // 删除旧头像
-                checkBackgroundDelete(old = old, new = assistant) // 删除旧背景
+                settings.copy(assistants = settings.assistants.map {
+                    if (it.id == assistant.id) assistant else it
+                })
             }
         }
     }
@@ -202,28 +199,6 @@ class AssistantDetailVM(
     fun deleteMemory(memory: MemoryFile) {
         viewModelScope.launch {
             memoryRepository.deleteFile(memoryIdOf(assistant.value), memory.path)
-        }
-    }
-
-    fun checkAvatarDelete(old: Assistant, new: Assistant) {
-        if (old.avatar is Avatar.Image && old.avatar != new.avatar) {
-            filesManager.deleteChatFiles(listOf(old.avatar.url.toUri()))
-        }
-    }
-
-    fun checkBackgroundDelete(old: Assistant, new: Assistant) {
-        val oldBackground = old.background
-        val newBackground = new.background
-
-        if (oldBackground != null && oldBackground != newBackground) {
-            try {
-                val oldUri = oldBackground.toUri()
-                if (oldUri.scheme == "content" || oldUri.scheme == "file") {
-                    filesManager.deleteChatFiles(listOf(oldUri))
-                }
-            } catch (e: Exception) {
-                Log.w(TAG, "Failed to delete background file: $oldBackground", e)
-            }
         }
     }
 }

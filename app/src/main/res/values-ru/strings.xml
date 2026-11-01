@@ -615,6 +615,12 @@
   <string name="setting_files_page_clean_content_description">Очистить файлы</string>
   <string name="setting_files_page_clean_failed_toast">Не удалось удалить некоторые файлы</string>
   <string name="setting_files_page_clean_title">Очистить файлы?</string>
+  <string name="setting_files_page_clean_unused_busy">Ответ ещё генерируется. Повторите попытку позже.</string>
+  <string name="setting_files_page_clean_unused_description">Удаляет загруженные файлы, на которые не ссылается ни одно сообщение, черновик или аватар. Используемые файлы сохраняются.</string>
+  <string name="setting_files_page_clean_unused_done">Удалено файлов: %1$d, освобождено %2$s</string>
+  <string name="setting_files_page_clean_unused_empty">Нет неиспользуемых файлов</string>
+  <string name="setting_files_page_clean_unused_failed">Не удалось очистить неиспользуемые файлы</string>
+  <string name="setting_files_page_clean_unused_title">Очистить неиспользуемые файлы</string>
   <string name="setting_files_page_cleaned_toast">Файлы удалены</string>
   <string name="setting_files_page_delete_action">Удалить</string>
   <string name="setting_files_page_delete_content_description">Удалить</string>

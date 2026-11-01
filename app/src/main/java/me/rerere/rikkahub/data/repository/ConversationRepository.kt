@@ -22,7 +22,6 @@ import me.rerere.rikkahub.data.db.entity.MessageNodeEntity
 import me.rerere.rikkahub.data.db.fts.MessageFtsManager
 import me.rerere.rikkahub.data.db.fts.MessageSearchSort
 import me.rerere.rikkahub.data.db.fts.SearchIndexHealth
-import me.rerere.rikkahub.data.files.FilesManager
 import me.rerere.rikkahub.data.model.Conversation
 import me.rerere.rikkahub.data.model.MessageNode
 import me.rerere.rikkahub.utils.JsonInstant
@@ -34,16 +33,12 @@ class ConversationRepository(
     private val messageNodeDAO: MessageNodeDAO,
     private val favoriteDAO: FavoriteDAO,
     private val database: AppDatabase,
-    private val filesManager: FilesManager,
     private val messageFtsManager: MessageFtsManager,
 ) {
     companion object {
         private const val PAGE_SIZE = 20
         private const val INITIAL_LOAD_SIZE = 40
     }
-
-    suspend fun hasFileReference(fileUrl: String): Boolean =
-        messageNodeDAO.hasFileReference(JsonInstant.encodeToString(fileUrl))
 
     suspend fun getRecentConversations(assistantId: Uuid, limit: Int = 10): List<Conversation> {
         return conversationDAO.getRecentConversationsOfAssistant(
@@ -310,6 +305,13 @@ class ConversationRepository(
     suspend fun getConversationIds(): Set<Uuid> =
         conversationDAO.getAllIds().mapNotNull { runCatching { Uuid.parse(it) }.getOrNull() }.toSet()
 
+    /**
+     * 消息里出现过本地文件地址的那些 JSON，附件清理用。
+     * 只取含有 `file:` 的行，不把整张消息表读进内存。
+     */
+    suspend fun messageContentsWithFileReferences(): List<String> =
+        messageNodeDAO.getContentsWithFileReferences()
+
     suspend fun countConversations(): Int {
         return conversationDAO.countAll()
     }
@@ -355,12 +357,6 @@ class ConversationRepository(
     }
 
     suspend fun deleteConversation(conversation: Conversation) {
-        // 获取完整的 Conversation（包含 messageNodes）以正确清理文件
-        val fullConversation = if (conversation.messageNodes.isEmpty()) {
-            getConversationById(conversation.id) ?: conversation
-        } else {
-            conversation
-        }
         messageFtsManager.deleteConversation(conversation.id.toString())
         database.withTransaction {
             // message_node 会通过 CASCADE 自动删除
@@ -368,7 +364,7 @@ class ConversationRepository(
                 conversationToConversationEntity(conversation)
             )
         }
-        filesManager.deleteChatFiles(fullConversation.files)
+        // 附件不在这里删：同一份内容可能还被别处引用，文件回收交给附件清理
     }
 
     suspend fun searchMessages(
