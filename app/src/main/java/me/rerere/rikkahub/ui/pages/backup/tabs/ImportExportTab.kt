@@ -25,7 +25,11 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import me.rerere.hugeicons.HugeIcons
 import me.rerere.hugeicons.stroke.FileExport
 import me.rerere.hugeicons.stroke.FileImport
@@ -75,25 +79,34 @@ fun ImportExportTab(
                 // 在进入协程时固定下来，之后即使用户再点另一个入口也不会串
                 val target = pendingExportTarget
                 exportingTarget = target
-                runCatching {
+                try {
                     // 打包成临时文件，期间 exportProgress 给出打包进度
                     val exportFile = vm.exportToFile(target)
 
-                    // 复制到用户选择的位置，这一段按字节走，没有逐项进度
-                    context.contentResolver.openOutputStream(targetUri)?.use { outputStream ->
-                        FileInputStream(exportFile).use { inputStream ->
-                            inputStream.copyTo(outputStream)
+                    // 复制到用户选择的位置，这一段按字节走，没有逐项进度；包可能几百 MB，放 IO 上
+                    try {
+                        withContext(Dispatchers.IO) {
+                            context.contentResolver.openOutputStream(targetUri)?.use { outputStream ->
+                                FileInputStream(exportFile).use { inputStream ->
+                                    inputStream.copyTo(outputStream)
+                                }
+                            }
                         }
+                    } finally {
+                        exportFile.delete()
                     }
-
-                    // 清理临时文件
-                    exportFile.delete()
 
                     toaster.show(
                         context.getString(R.string.backup_page_backup_success),
                         type = ToastType.Success
                     )
-                }.onFailure { e ->
+                } catch (e: CancellationException) {
+                    // 复制没走完，目标文档留着也是半个包；静默删掉，不弹失败
+                    withContext(NonCancellable) {
+                        runCatching { context.contentResolver.delete(targetUri, null, null) }
+                    }
+                    throw e
+                } catch (e: Exception) {
                     e.printStackTrace()
                     // 目标文档在选择位置时就已经建出来了，失败时删掉，别留一个 0 字节的 zip
                     runCatching { context.contentResolver.delete(targetUri, null, null) }
@@ -103,8 +116,9 @@ fun ImportExportTab(
                         context.getString(R.string.backup_page_export_failed)
                     }
                     toaster.show(message, type = ToastType.Error)
+                } finally {
+                    exportingTarget = null
                 }
-                exportingTarget = null
             }
         }
     }
@@ -116,17 +130,19 @@ fun ImportExportTab(
         uri?.let { sourceUri ->
             scope.launch {
                 isRestoring = true
-                runCatching {
+                try {
                     // 本应用备份与官方 RikkaHub 备份是同一个归档格式，恢复流程一致
                     val tempFile =
                         File(context.cacheDir, "temp_restore_${System.currentTimeMillis()}.zip")
                     try {
-                        context.contentResolver.openInputStream(sourceUri)?.use { inputStream ->
-                            FileOutputStream(tempFile).use { outputStream ->
-                                inputStream.copyTo(outputStream)
+                        withContext(Dispatchers.IO) {
+                            context.contentResolver.openInputStream(sourceUri)?.use { inputStream ->
+                                FileOutputStream(tempFile).use { outputStream ->
+                                    inputStream.copyTo(outputStream)
+                                }
                             }
+                            vm.restoreFromLocalFile(tempFile)
                         }
-                        vm.restoreFromLocalFile(tempFile)
                     } finally {
                         tempFile.delete()
                     }
@@ -136,14 +152,17 @@ fun ImportExportTab(
                         type = ToastType.Success
                     )
                     onShowRestartDialog()
-                }.onFailure { e ->
+                } catch (e: CancellationException) {
+                    throw e
+                } catch (e: Exception) {
                     e.printStackTrace()
                     toaster.show(
                         context.getString(R.string.backup_page_restore_failed, e.message ?: ""),
                         type = ToastType.Error
                     )
+                } finally {
+                    isRestoring = false
                 }
-                isRestoring = false
             }
         }
     }

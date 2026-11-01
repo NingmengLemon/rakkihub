@@ -41,6 +41,7 @@
 | C31 | 聊天草稿落盘 | 新增 |
 | C32 | 附件按内容去重，删除改为摘引用 | 新增 |
 | C33 | 附件拷贝挪出主线程 | 改造 |
+| C34 | 备份与工作区文件的拷贝挪出主线程 | 改造 |
 
 ## 明细
 
@@ -246,3 +247,9 @@
 - 落点：附件进入 upload 的 UI 调用点把拷贝与 MIME 查询包进 `withContext(Dispatchers.IO)`：`ChatPage` 的分享入口、`ChatAttachmentPicker` 的选图、拍照（裁剪与不裁剪）、视频、音频、文档，`UIAvatar.saveAvatarImage`，`BackgroundPicker`。`CropLauncher.useCropLauncher` 的 `onCroppedImageReady` 改成 `suspend`，调用方在回调里等拷贝完成再返回，`CropLauncher` 等回调返回后才删裁剪用的临时文件；取消时重抛 `CancellationException`，不弹「裁剪失败」。相机不裁剪时输出文件在拷贝完成后的 `finally` 里删。`ChatService.forkConversationAtMessage` 把 `source.fork(...)` 包在 `withContext(IO)` 里，`copyFile` 仍是同步 lambda。`ChatInput` 的粘贴图片保持同步，`consume` 出来的内容离开回调可能失效。
 - 理由：主线程上拷贝大文件会卡界面甚至 ANR，C32 给内容寻址写入加了 `fsync` 之后更明显。
 - 合并注意：`CropLauncher` 的回调现在是 suspend 契约，调用方必须在回调里完成拷贝再返回，否则临时文件会在拷贝前被删；`ChatPage`、`ChatAttachmentPicker`、`ChatInput`、`CropLauncher`、`UIAvatar`、`BackgroundPicker`、`ChatService` 都动过，合并时按本行复核。异步化带来一个已知交错：拷贝期间用户可以发送或关闭选择器，附件会在拷贝完成后追加到输入框，分享路径还会整体覆盖输入框内容；没有加「导入中」状态。粘贴路径必须保持同步；fork 的 `copyFile` 参数仍是同步类型，只是在调用点包了 IO。
+
+### C34 备份与工作区文件的拷贝挪出主线程
+
+- 落点：`ImportExportTab` 的导出复制（临时 zip 到用户选择的位置）与导入暂存（用户选择的位置到 cache 临时包，连同 `vm.restoreFromLocalFile`）包进 `withContext(Dispatchers.IO)`；`vm.exportToFile` 在主线程调用，打包主体在 `BackupManager` 里自带 IO 派发，只有复制在 IO。复制被取消时重抛 `CancellationException`、不弹失败；导出取消会静默删掉没写完的目标文档；`exportingTarget` 与 `isRestoring` 的复位在 `finally`；导出临时文件在 `finally` 里删。`WorkspaceDetailPage` 的文件选择器把名字查询、`openInputStream` 与交给 VM 都放进同一个 IO 块，避免交接前被取消留下没关闭的流。
+- 理由：备份 zip 可能有几百 MB，整包复制放在主线程会卡界面甚至 ANR；SAF 的查询与打开是 binder 调用，也放到 IO 更稳。
+- 合并注意：改了上游的 `ImportExportTab` 与 `WorkspaceDetailPage`，合并时按本行复核。`restoreFromLocalFile` 从 IO 块里调用，其链路自带 IO 派发；`exportToFile` 仍在主线程调用，内部只碰 StateFlow、设置读写与 IO，不能假设自己必须在 Main。导出与导入之间不互斥，复制期间仍可启动另一条，没有数据竞争。取消时清理与状态复位都在 `finally` / `catch` 里，不要让 `CancellationException` 走进失败提示。
