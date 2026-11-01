@@ -15,18 +15,16 @@ concurrency:
 jobs:
   checks:
     runs-on: ubuntu-latest
+    timeout-minutes: 60
     permissions:
       contents: read
 
     steps:
       - uses: actions/checkout@v4
         with:
-          # spotless 以 origin/main 为 ratchet 基点；PR 上也要有这个引用
+          # 取全历史，spotless 的 ratchet 基点要在提交之间比较
           fetch-depth: 0
           submodules: recursive # 拉取子模块
-
-      - name: Fetch main for the spotless ratchet
-        run: git fetch --no-tags origin main:refs/remotes/origin/main
 
       # 与每日构建保持一致
       - name: Set up JDK
@@ -63,9 +61,34 @@ jobs:
           key: ${{ runner.os }}-gradle-${{ hashFiles('**/*.gradle*', '**/gradle-wrapper.properties') }}
 
       - name: Spotless
+        env:
+          EVENT: ${{ github.event_name }}
+          BEFORE: ${{ github.event.before }}
         run: |
-          chmod +x gradlew
+          if [ "$EVENT" = "workflow_dispatch" ]; then
+            echo "::notice::手动触发没有可靠的格式基点，跳过 spotlessCheck"
+            exit 0
+          fi
+          if [ "$EVENT" = "push" ]; then
+            if [ -z "$BEFORE" ] || [ "$BEFORE" = "0000000000000000000000000000000000000000" ] || ! git cat-file -e "${BEFORE}^{commit}" 2>/dev/null; then
+              echo "::notice::没有可用的 before 提交（首次推送或强推），跳过 spotlessCheck"
+              exit 0
+            fi
+            # 默认的 ratchet 基点是 origin/main，push 时它已经等于 HEAD；改指到本次推送之前的
+            # 提交，检查的才是刚推上去的改动，而不是空集。PR 的 origin/main 本来就是基线。
+            git update-ref refs/remotes/origin/main "$BEFORE"
+          fi
           ./gradlew spotlessCheck
 
       - name: JVM tests
-        run: ./gradlew :app:testGithubDebugUnitTest :ai:testDebugUnitTest --continue
+        run: ./gradlew :app:testGithubDebugUnitTest :ai:testDebugUnitTest :workspace:testDebugUnitTest --continue --stacktrace
+
+      - name: Upload test reports
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: test-reports
+          path: |
+            **/build/test-results/**
+            **/build/reports/tests/**
+          retention-days: 7

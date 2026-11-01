@@ -120,7 +120,7 @@
 
 本仓库沿用上游的 nightly prerelease：固定 tag `nightly`，每天覆盖同一个 Release，附带分 ABI 的 APK 与 `mapping.txt`。不做正式版本发布。
 
-`checks.yml` 在 push 到 `main` 与 PR 时跑 `spotlessCheck`（以 `origin/main` 为 ratchet 基点）与 `:app:testGithubDebugUnitTest`、`:ai:testDebugUnitTest`。Linux 上不存在 Windows 那批文件占用导致的固定失败，测试判据仍是「没有新增失败」；红了先看是不是平台差异，再改闸门，不要把失败用例静默进 ignore。
+`checks.yml` 在 push 到 `main`、PR 与手动触发时跑 `spotlessCheck` 与 app、ai、workspace 的 JVM 测试。push 时先把 ratchet 基点指到本次推送之前的提交，检查的是刚推上去的改动；PR 用基线的 `origin/main`；手动触发没有可靠基点，跳过格式检查，测试照跑。测试是全绿判据，Windows 本机那 7 条文件占用失败预期在 Linux 上不再出现，首次跑批确认；红了先看是不是平台差异，再改闸门，不要把失败用例静默进 ignore。
 
 ### 2.3 对数据层动手
 

@@ -37,9 +37,13 @@ $env:JAVA_HOME='E:\WorkBench\Java\jdk-23.0.2'; $env:PATH="$env:JAVA_HOME\bin;$en
 
 workspace 模块另有 `workspace.ExampleUnitTest`（4/10，硬编码执行 `/bin/sh`，Windows 上 `CreateProcess error=2`）与 `workspace.RootfsInstallerTest`（1/3，软链断言期望 `/bin/busybox`）失败。
 
+CI 的 checks workflow 在 Linux 上跑 app、ai、workspace 的 JVM 测试，判据是全绿；上面这张表是本机 Windows 的判据。Linux 上那批文件占用失败预期不再出现，首次跑批确认。
+
 ## 格式检查
 
 `spotlessApply` 与 `spotlessCheck` 用 ktlint，`ratchetFrom("origin/main")` 写死，只检查相对该引用改动过的文件，也就是本批还没推出去的改动。`origin/main` 必须存在：它指向最近一次推上去的状态，也就是本批的基点。
+
+CI 的 checks workflow 在 push 时先把 `origin/main` 指到本次推送之前的提交（`github.event.before`）再跑，所以检查的是刚推上去的改动；PR 用基线的 `origin/main`；手动触发没有可靠的基点，跳过格式检查，只跑测试。首次推送、强推之后基点不可达时同样跳过并打 notice。
 
 基点只管本批，历史文件里与定制无关的格式违规不会因为跑一次 `spotlessCheck` 全部冒出来，改到哪个文件才检查哪个。已知的四处（`SettingsNormalization.kt`、`MessageQueue.kt`、`PermissionTypes.kt`、`SettingVM.kt`）仍在，某次改动碰到其中一个时，整个文件会被检查，顺手把它修干净就好，不必为它们单独跑一轮。
 

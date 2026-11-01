@@ -44,6 +44,7 @@
 | C34 | 备份与工作区文件的拷贝挪出主线程 | 改造 |
 | C35 | 模型选择支持多关键词搜索 | 改造 |
 | C36 | 消息附件引用按相对路径存储 | 改造 |
+| C37 | CI 跑格式检查与 JVM 测试 | 改造 |
 
 ## 明细
 
@@ -268,3 +269,9 @@
 - 落点：新增 `data/files/AttachmentUrlStorage.kt`（两个纯函数：落盘前把本安装 files 目录下的 upload 绝对地址换成 `file:upload/...`，读取后还原；替换带 JSON 值开头的引号，只动 upload 文件夹）与五条 JVM 用例；`ConversationRepository` 构造多一个 `attachmentFilesDirUri`（Koin 里从 `context.filesDir` 生成），`saveMessageNodes` 落库前转换，读取消息时还原；`AttachmentReferences.fileUrlToCanonicalPath` 与 `collectReferencedPaths` 接受 `filesDir`，把相对形态还原成规范路径，`AttachmentCleaner` 扫描时传入当前 filesDir；`BackupManager.attachmentPrefixRewritesForOfficial` 增加 `"file:upload/` 到官方安装前缀的替换，官方兼容导出的库仍是官方能读的绝对地址。`AttachmentCleanerTest` 补一条相对形态解析用例。
 - 理由：消息库与随它导出的备份原来把安装路径写死在每条附件地址里，包名或用户号一变就整体失效；导入侧的路径重写是事后补救，落盘形态本身应该可移植。改完之后相对地址在任意安装下都能解析，旧库里的绝对地址继续有效并在下一次保存时转换。
 - 合并注意：消息 JSON 的读写都经过 `ConversationRepository` 的转换，别的入口直接读写 `MessageNodeEntity.messages` 会绕过它；设置里的头像仍存绝对地址（靠导入侧重写），草稿不随备份走，两者都没改。清理与官方导出都按绝对、相对两种形态处理；官方导出的替换带引号，避免碰到正文。旧数据不做一次性迁移，读到什么算什么，下一次保存自然转成相对。
+
+### C37 CI 跑格式检查与 JVM 测试
+
+- 落点：新增 `.github/workflows/checks.yml`（push 到 `main`、PR、手动触发）：环境与每日构建一致（JDK 21、pnpm 11、Node 22、web-ui 依赖、submodules），跑 `spotlessCheck` 与 `:app:testGithubDebugUnitTest`、`:ai:testDebugUnitTest`、`:workspace:testDebugUnitTest`，失败时上传测试报告。push 时把 `origin/main` 指到 `github.event.before` 再跑格式检查（首次推送、强推后基点不可达时跳过并打 notice），PR 用基线的 `origin/main`，手动触发没有可靠基点也跳过；测试是全绿判据。`docs/custom/roadmap.md` 的 2.2 与 `docs/custom/build.md` 同步。
+- 理由：仓库原来只有每日构建，格式与测试靠人工；这两类检查反复出现（Windows 固定失败、spotless 的 ratchet 基点），把它们做成自动闸门。app、ai 与 workspace 是定制最集中的三个模块，其余模块的测试本轮不跑，边际收益低。
+- 合并注意：环境版本（JDK/pnpm/Node）与 `daily-build.yml` 两处维护，上游改其中之一时两边一起更新；`spotlessCheck` 的基点在 push 时由 workflow 改写，本地仍按 `origin/main`，build.md 有说明。CI 在 Linux 上跑，Windows 本机那批文件占用失败预期不再出现，首次跑批确认；若红了先看平台差异。`checks.yml` 是相对上游新增的文件，上游若加同名 workflow 时按本行核对（不会自动合并）。
