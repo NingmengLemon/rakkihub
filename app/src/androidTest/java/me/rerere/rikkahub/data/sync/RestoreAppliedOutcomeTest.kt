@@ -90,5 +90,4 @@ class RestoreAppliedOutcomeTest {
         assertEquals("live 的附件应当正好是归档那一份", archivePaths, livePaths)
         assertTrue("上一次装的残留文件应当被清掉", !stale.exists())
     }
-
 }

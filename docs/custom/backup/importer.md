@@ -71,11 +71,11 @@ payload 的布局沿用现有约定：`payload/database/rikka_hub`、`payload/fi
 
 官方 `settings.json` 的处理与 `stageRestore` 一致：`SettingsJsonMigrator.migrate` → `JsonInstant.decodeFromString<Settings>`，然后按现有方式重新编码写回 pending。
 
-计划在解码之前加一层直接作用在原始 JSON 上的检查：把原文解析成 `JsonObject`，按官方 v32 的 key/type 形状校验（包含 `providers`、`assistants`、`displaySetting` 这些嵌套对象的形状），关键项缺失或类型不符时失败。这一层还没实现。
+解码之前有一层直接作用在原始 JSON 上的检查（`BackupSettingsShape`，C28）：把原文解析成 `JsonObject`，看关键项在不在、类型对不对，不合格就在 publish 之前失败。它要求 `assistants` 与 `providers` 必在、必为数组、元素必须带字符串 `id`，`displaySetting` 必在必为对象，`init` 若存在必须是布尔值，几个 id 字段若存在必须是字符串。
 
-这一层不是完整方案：它只校验形状，转换仍然复用现有的 `Settings` 反序列化。完整的独立解析器（冻结的 `OfficialSettingsV32` 加字段映射）与写入侧的字段映射是同一件事，在 `Settings` 开始与官方分叉时一起做。`Settings` 顶层约 50 个字段，加上嵌套对象的形状，成本可控。
+这层只挡「根本不是设置文件」的情况，不校验完整 schema：旧备份缺新字段是正常的，缺省由解码器的默认值补齐。完整的独立解析器（冻结的 `OfficialSettingsV32` 加字段映射）与写入侧的字段映射是同一件事，在 `Settings` 开始与官方分叉时一起做。
 
-这层检查的钩子要放在共用的恢复入口上，否则官方 v32 走 `stageRestore` 时它不会跑。
+钩子放在共用的恢复入口（`stageRestore`）上，所以官方 v32 走那条路时也会跑。
 
 `launchCount` 不属于 `Settings`，由 `PendingRestore.apply` 在启动前与 settings 一起写入，不在运行时单独设。
 

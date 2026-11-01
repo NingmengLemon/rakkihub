@@ -296,6 +296,121 @@ class BackupManagerTest {
         }
     }
 
+    /**
+     * 工作区文件默认不进备份。
+     *
+     * 工作区里可能有一个完整的 PRoot 根文件系统，多数情况下不需要跟着备份走，所以它是一项
+     * 独立的选择项，默认关。
+     */
+    @Test fun workspaceFilesStayOutOfTheArchiveUnlessAsked() = runBlocking {
+        seedWorkspace("ws1", "notes/a.txt" to "hello")
+
+        val archive = manager.createBackup(includeDatabase = false, includeFiles = false)
+        ZipFile(archive).use { zip ->
+            assertFalse(
+                "默认不应打包工作区文件",
+                zip.entries().asSequence().any { it.name.startsWith("${BackupManager.WORKSPACE_FOLDER}/") },
+            )
+        }
+    }
+
+    /** 勾选之后只打包文件区；根文件系统与临时目录再大也不进归档。 */
+    @Test fun workspaceBackupTakesOnlyTheFilesArea() = runBlocking {
+        seedWorkspace("ws1", "notes/a.txt" to "hello", "empty/.keep" to "")
+        // 根文件系统与临时目录都是工作区目录下的兄弟目录，不能被打包
+        File(context.filesDir, "workspaces/ws1/linux/bin").apply { mkdirs() }.resolve("sh").writeText("rootfs")
+        File(context.filesDir, "workspaces/ws1/temp").apply { mkdirs() }.resolve("scratch").writeText("tmp")
+
+        val archive = manager.createBackup(includeDatabase = false, includeFiles = false, includeWorkspaceFiles = true)
+        ZipFile(archive).use { zip ->
+            assertTrue(zip.getEntry("workspaces/ws1/files/notes/a.txt") != null)
+            assertTrue(zip.getEntry("workspaces/ws1/files/empty/.keep") != null)
+            assertFalse(
+                "根文件系统不该进归档",
+                zip.entries().asSequence().any { it.name.contains("/linux/") },
+            )
+            assertFalse(
+                "临时目录不该进归档",
+                zip.entries().asSequence().any { it.name.contains("/temp/") },
+            )
+        }
+    }
+
+    /** 恢复时把文件搬进 live 的工作区文件区，和导出时的位置一致。 */
+    @Test fun workspaceFilesLandInTheLiveWorkspace() = runBlocking {
+        seedWorkspace("ws1", "notes/a.txt" to "hello")
+        val archive = manager.createBackup(includeDatabase = false, includeFiles = false, includeWorkspaceFiles = true)
+
+        File(context.filesDir, "workspaces/ws1/files").deleteRecursively()
+        manager.stageRestore(
+            archive,
+            includeDatabase = false,
+            includeFiles = false,
+            includeWorkspaceFiles = true,
+        )
+        liveDatabase.close()
+        BackupManager.applyPendingRestore(context, JsonInstant)
+        liveDatabase = AppDatabaseFactory.create(context)
+
+        val restored = File(context.filesDir, "workspaces/ws1/files/notes/a.txt")
+        assertTrue("工作区文件应当被恢复", restored.isFile)
+        assertEquals("hello", restored.readText())
+    }
+
+    /** 不勾选时既不打包也不恢复，恢复出来的目录保持原样。 */
+    @Test fun workspaceFilesAreIgnoredWhenNotSelected() = runBlocking {
+        seedWorkspace("ws1", "notes/a.txt" to "hello")
+        val archive = manager.createBackup(includeDatabase = false, includeFiles = false, includeWorkspaceFiles = true)
+
+        File(context.filesDir, "workspaces/ws1/files").deleteRecursively()
+        manager.stageRestore(archive, includeDatabase = false, includeFiles = false)
+
+        assertFalse(
+            "没勾选就不该恢复工作区文件",
+            File(context.filesDir, "workspaces/ws1/files/notes/a.txt").exists(),
+        )
+    }
+
+    /** 归档里指向根文件系统的条目一律拒绝，写坏或被改过的归档不能覆盖 PRoot 根文件系统。 */
+    @Test fun workspaceEntriesOutsideTheFilesAreaAreRejected() = runBlocking {
+        val archive = File(directory, "workspace-rootfs.zip")
+        ZipOutputStream(archive.outputStream()).use { zip ->
+            zip.putNextEntry(ZipEntry("workspaces/ws1/linux/bin/sh"))
+            zip.write("evil".toByteArray())
+            zip.closeEntry()
+        }
+
+        val error = runCatching {
+            manager.stageRestore(
+                archive,
+                includeDatabase = false,
+                includeFiles = false,
+                includeWorkspaceFiles = true,
+            )
+        }.exceptionOrNull()
+
+        assertTrue("必须拒绝，实际是 $error", error is IllegalArgumentException)
+        assertFalse(File(context.filesDir, "workspaces/ws1/linux/bin/sh").exists())
+    }
+
+    private fun seedWorkspace(root: String, vararg files: Pair<String, String>) = runBlocking {
+        liveDatabase.workspaceDao().upsert(
+            me.rerere.rikkahub.data.db.entity.WorkspaceEntity(
+                id = root,
+                name = root,
+                root = root,
+                createdAt = 1,
+                updatedAt = 1,
+            ),
+        )
+        val filesDir = File(context.filesDir, "workspaces/$root/files").apply { mkdirs() }
+        for ((path, content) in files) {
+            val target = File(filesDir, path)
+            target.parentFile!!.mkdirs()
+            target.writeText(content)
+        }
+    }
+
     private fun probe(database: AppDatabase): String = database.openHelper.readableDatabase
         .query("SELECT text FROM backup_probe").use {
             check(it.moveToFirst())

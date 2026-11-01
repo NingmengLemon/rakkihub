@@ -108,6 +108,7 @@
   <string name="backup_page_export_failed">Export fehlgeschlagen</string>
   <string name="backup_page_export_schema_diverged">Ein RikkaHub-kompatibles Backup ist nicht möglich: Der Datenaufbau dieser App hat sich geändert. Nutze stattdessen den normalen Export</string>
   <string name="backup_page_files">Dateien</string>
+  <string name="backup_page_workspaces">Arbeitsbereiche</string>
   <string name="backup_page_export_packing">Packe %1$d / %2$d</string>
   <string name="backup_page_saving">Wird gespeichert...</string>
   <string name="backup_page_import_from_official">Aus RikkaHub importieren</string>

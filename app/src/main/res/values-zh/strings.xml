@@ -170,6 +170,7 @@
   <string name="backup_page_export_packing">正在打包 %1$d / %2$d</string>
   <string name="backup_page_saving">正在保存...</string>
   <string name="backup_page_files">文件</string>
+  <string name="backup_page_workspaces">工作区</string>
   <string name="backup_page_import_desc">导入本地备份文件</string>
   <string name="backup_page_import_from_official">从 RikkaHub 导入</string>
   <string name="backup_page_import_official_desc">先在官方 RikkaHub 中导出备份，再在此选择该文件</string>

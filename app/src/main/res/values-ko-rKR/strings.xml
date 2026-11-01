@@ -170,6 +170,7 @@
   <string name="backup_page_export_packing">%1$d / %2$d 압축 중</string>
   <string name="backup_page_saving">저장 중...</string>
   <string name="backup_page_files">파일</string>
+  <string name="backup_page_workspaces">워크스페이스</string>
   <string name="backup_page_import_desc">로컬 백업 파일 가져오기</string>
   <string name="backup_page_import_from_official">RikkaHub에서 가져오기</string>
   <string name="backup_page_import_official_desc">먼저 공식 RikkaHub에서 백업을 내보낸 다음, 해당 파일을 여기에서 선택하세요</string>

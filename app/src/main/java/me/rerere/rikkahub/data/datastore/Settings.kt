@@ -209,6 +209,9 @@ data class WebDavConfig(
     enum class BackupItem {
         DATABASE,
         FILES,
+
+        /** 工作区文件区（`workspaces/<root>/files`），不含 PRoot 根文件系统。默认不选。 */
+        WORKSPACES,
     }
 }
 

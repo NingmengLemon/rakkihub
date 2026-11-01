@@ -192,6 +192,7 @@
   <string name="backup_page_export_packing">جارٍ التجميع %1$d / %2$d</string>
   <string name="backup_page_saving">جارٍ الحفظ...</string>
   <string name="backup_page_files">الملفات</string>
+  <string name="backup_page_workspaces">مساحات العمل</string>
   <string name="backup_page_import_desc">استيراد ملف نسخ احتياطي محلي</string>
   <string name="backup_page_import_from_official">استيراد من RikkaHub</string>
   <string name="backup_page_import_official_desc">صدّر نسخة احتياطية من تطبيق RikkaHub الرسمي أولاً، ثم اختر هذا الملف هنا</string>

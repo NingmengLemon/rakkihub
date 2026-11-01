@@ -113,6 +113,7 @@ class WebDavSync(
     ): File = backupManager.createBackup(
         includeDatabase = WebDavConfig.BackupItem.DATABASE in config.items,
         includeFiles = WebDavConfig.BackupItem.FILES in config.items,
+        includeWorkspaceFiles = WebDavConfig.BackupItem.WORKSPACES in config.items,
         backupTarget = target,
         onProgress = onProgress,
     )
@@ -122,6 +123,7 @@ class WebDavSync(
             archive = backupFile,
             includeDatabase = WebDavConfig.BackupItem.DATABASE in config.items,
             includeFiles = WebDavConfig.BackupItem.FILES in config.items,
+            includeWorkspaceFiles = WebDavConfig.BackupItem.WORKSPACES in config.items,
         )
         // 本地导入与 WebDAV 导入都从这里进来。只在恢复成功之后留底：失败的恢复没有改动任何
         // 数据，不需要为它备份，留着只会堆积。放 noBackupFilesDir，filesDir 整个目录被 web

@@ -35,6 +35,8 @@
 | C25 | 同版本备份也重写附件路径 | 改造 |
 | C26 | 整份备份的附件验收 | 新增 |
 | C27 | 全文索引自检与重建完整性标记 | 改造 |
+| C28 | settings 形状校验 | 新增 |
+| C29 | 备份可选包含工作区文件 | 新增 |
 
 ## 明细
 
@@ -204,3 +206,15 @@
 - 落点：`MessageFtsManager`（`isEmpty` 判断索引里有没有内容；`message_fts_state` 表记 `rebuild_complete`，重建开始置 0、成功收尾置 1）、`SearchIndexHealth.needsRebuild`（纯函数，新增 `rebuildComplete` 参数：有会话且（索引空或上次重建没跑完），六条 JVM 测试）、`ConversationRepository.needsSearchIndexRebuild`；`RikkaHubApp` 在恢复成功那次与常规启动都跑自检
 - 理由：重建是「先清空再逐会话写」，只靠「索引非空」发现不了残缺：重建中途被杀时索引非空但缺内容，自检会跳过，搜索永久缺一部分，用户也不知道该重建。恢复被中断同样会留下残缺索引
 - 合并注意：标记表与 `message_fts*` 同属 `onOpen` 里手写 SQL 建的表，不进 Room schema、不动 DataStore 键、不影响 identity 校验；恢复换库后若缺该行会触发一次重建，符合预期。判据仍有一处理论缺口：如果重建没跑过、但索引里恰好有内容，会多重建一次
+
+### C28 settings 形状校验
+
+- 落点：新增 `data/sync/BackupSettingsShape.kt`（纯 JVM，不依赖 Android）与 `BackupSettingsShapeTest` 十条；`BackupManager.stageRestore` 在 `SettingsJsonMigrator.migrate` 之后、`decodeFromString` 之前调用一次，不合格直接失败
+- 理由：解码器开着 `ignoreUnknownKeys`，每个字段又都有默认值，空对象或别家的 JSON 也能解码成功，得到一份全默认值的 Settings 然后覆盖用户配置
+- 合并注意：只校验关键项（`assistants`、`providers`、`displaySetting` 必在各为数组/对象且元素带字符串 `id`，`init` 若在必须是布尔值，几个 id 字段若是存在必须是字符串），不校验完整 schema，因为旧备份缺新字段是正常的。上游给 `Settings` 加字段不需要动这里；改这几个关键字段的名字或形状时要同步
+
+### C29 备份可选包含工作区文件
+
+- 落点：`WebDavConfig.BackupItem` 增加 `WORKSPACES`（默认不在 `items` 里，所以默认关）、两个备份页的多选标签与 8 个 locale 的 `backup_page_workspaces`；`BackupManager.createBackup` 增加 `includeWorkspaceFiles`，新增 `collectWorkspaceFiles`（按 `workspaceDao()` 的工作区逐个走 `<root>/files`，跳过 `linux/` 与 `temp/`）；`stageRestore` 增加同名参数与 `isWorkspaceFile` 校验；归档条目名与 `filesDir` 下的布局一致（`workspaces/<root>/files/<relative>`），恢复侧因此复用已有的 `files/` 映射
+- 理由：工作区文件是用户产物，但工作区里还可能有整个 PRoot 根文件系统，体积与必要性都不适合默认进备份
+- 合并注意：只打包文件区，归档里出现 `workspaces/<root>/linux/...` 一律拒绝，避免写坏或被改过的归档覆盖根文件系统。恢复是叠加语义，不删 live 里多出来的工作区文件；附件那套替换语义没有套过来。官方兼容出口（`BackupTarget.OFFICIAL`）不带工作区文件，官方那套格式里没有这个条目

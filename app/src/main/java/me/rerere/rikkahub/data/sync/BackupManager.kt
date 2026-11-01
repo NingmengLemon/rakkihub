@@ -60,6 +60,7 @@ class BackupManager(
     suspend fun createBackup(
         includeDatabase: Boolean,
         includeFiles: Boolean,
+        includeWorkspaceFiles: Boolean = false,
         backupTarget: BackupTarget = BackupTarget.SELF,
         onProgress: ((BackupProgress) -> Unit)? = null,
     ): File = withContext(Dispatchers.IO) {
@@ -70,7 +71,13 @@ class BackupManager(
             val settings = settingsStore.awaitLoaded()
             // 先把附件列出来，才能给出确定的总条目数；列表里只是路径，不占多少内存
             val attachments = if (includeFiles) collectAttachments() else emptyList()
-            val total = 1 + (if (includeDatabase) 1 else 0) + attachments.size
+            // 官方兼容出口按官方那套归档格式产出，官方格式里没有工作区文件，带过去只会是死重量。
+            val workspaceFiles = if (includeWorkspaceFiles && backupTarget == BackupTarget.SELF) {
+                collectWorkspaceFiles()
+            } else {
+                emptyList()
+            }
+            val total = 1 + (if (includeDatabase) 1 else 0) + attachments.size + workspaceFiles.size
             var done = 0
             fun advance() {
                 done++
@@ -96,6 +103,11 @@ class BackupManager(
                 for (attachment in attachments) {
                     currentCoroutineContext().ensureActive()
                     addFile(zip, attachment.file, attachment.archiveName)
+                    advance()
+                }
+                for (file in workspaceFiles) {
+                    currentCoroutineContext().ensureActive()
+                    addFile(zip, file.file, file.archiveName)
                     advance()
                 }
             }
@@ -133,7 +145,40 @@ class BackupManager(
         return result
     }
 
-    suspend fun stageRestore(archive: File, includeDatabase: Boolean, includeFiles: Boolean) =
+    /**
+     * 工作区文件：每个工作区的文件区（`<root>/files`），不含 PRoot 根文件系统与临时目录。
+     *
+     * 归档里的名字与 `filesDir` 下的实际布局一致（`workspaces/<root>/files/<relative>`），
+     * 恢复侧因此可以沿用同一条 `files/` 映射，不需要另开一套落盘规则。
+     */
+    private suspend fun collectWorkspaceFiles(): List<AttachmentEntry> {
+        val result = ArrayList<AttachmentEntry>()
+        val base = File(context.filesDir, WORKSPACE_FOLDER)
+        for (workspace in database.workspaceDao().getAll()) {
+            currentCoroutineContext().ensureActive()
+            val workspaceDir = runCatching { PendingRestore.resolveInside(base, workspace.root) }
+                .getOrNull() ?: continue
+            val files = File(workspaceDir, WORKSPACE_FILES_DIR)
+            if (!files.isDirectory) continue
+            for (file in files.walkTopDown().asSequence().filter { it.isFile }) {
+                currentCoroutineContext().ensureActive()
+                val relative = file.relativeTo(files).invariantSeparatorsPath
+                PendingRestore.resolveInside(files, relative)
+                result += AttachmentEntry(
+                    file = file,
+                    archiveName = "$WORKSPACE_FOLDER/${workspace.root}/$WORKSPACE_FILES_DIR/$relative",
+                )
+            }
+        }
+        return result
+    }
+
+    suspend fun stageRestore(
+        archive: File,
+        includeDatabase: Boolean,
+        includeFiles: Boolean,
+        includeWorkspaceFiles: Boolean = false,
+    ) =
         withContext(Dispatchers.IO) {
             restoreMutex.withLock {
                 val restore = pendingRestore(context)
@@ -154,6 +199,8 @@ class BackupManager(
                                 DatabaseBackup.WAL -> if (includeDatabase) stagedWal else null
                                 DatabaseBackup.SHM -> null // Rebuilt by SQLite; never restore shared-memory state.
                                 else -> if (includeFiles && isAttachment(entry.name)) {
+                                    PendingRestore.resolveInside(File(payload, "files"), entry.name)
+                                } else if (includeWorkspaceFiles && isWorkspaceFile(entry.name)) {
                                     PendingRestore.resolveInside(File(payload, "files"), entry.name)
                                 } else {
                                     null
@@ -218,6 +265,11 @@ class BackupManager(
                         val migrated = SettingsJsonMigrator.migrate(
                             OfficialUrlRewriter.rewriteEmbedded(settingsFile.readText(), filesUriPrefix)
                         )
+                        // 解码器会吞掉形状问题：空对象或别家的 JSON 也能解成一份全默认值的 Settings，
+                        // 然后静默覆盖用户的配置。所以解码之前先看关键项在不在、类型对不对。
+                        BackupSettingsShape.findProblem(migrated)?.let { problem ->
+                            error("Backup settings.json is not a settings file: $problem")
+                        }
                         val settings = json.decodeFromString<Settings>(migrated)
                         require(!settings.init) { "Backup contains uninitialized settings" }
                         // Persist the migrated value once, including generated IDs, for restart/retry consistency.
@@ -255,6 +307,21 @@ class BackupManager(
         return true
     }
 
+    /**
+     * 工作区文件：`workspaces/<root>/files/<relative>`。
+     *
+     * 只认文件区。`workspaces/<root>/linux` 那类根文件系统路径一律拒绝：归档写坏或被改过时
+     * 不能让它覆盖到 PRoot 根文件系统。
+     */
+    private fun isWorkspaceFile(name: String): Boolean {
+        if (!name.startsWith("$WORKSPACE_FOLDER/")) return false
+        val parts = name.split('/')
+        require(parts.size >= 4 && parts[1].isNotBlank() && parts[2] == WORKSPACE_FILES_DIR) {
+            "Invalid backup workspace entry: $name"
+        }
+        return true
+    }
+
     private fun addFile(zip: ZipOutputStream, file: File, name: String) {
         zip.putNextEntry(ZipEntry(name))
         file.inputStream().use { it.copyTo(zip) }
@@ -276,6 +343,11 @@ class BackupManager(
 
         // 启动次数不在 Settings 里，备份文件里仍放在 settings.json 的这个字段，和旧备份保持一致
         internal const val LAUNCH_COUNT_KEY = "launchCount"
+
+        // 工作区文件放 filesDir 下的这个目录，每个工作区一个子目录，文件区再下一层。
+        // 归档里的名字与它一致，恢复侧复用同一条 files/ 映射。
+        internal const val WORKSPACE_FOLDER = "workspaces"
+        internal const val WORKSPACE_FILES_DIR = "files"
 
         private fun Json.encodeSettings(settings: Settings, launchCount: Int): String {
             val fields = encodeToJsonElement(settings).jsonObject + (LAUNCH_COUNT_KEY to JsonPrimitive(launchCount))

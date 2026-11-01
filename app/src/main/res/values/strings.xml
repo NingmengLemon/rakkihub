@@ -170,6 +170,7 @@
   <string name="backup_page_export_packing">Packing %1$d / %2$d</string>
   <string name="backup_page_saving">Saving...</string>
   <string name="backup_page_files">Files</string>
+  <string name="backup_page_workspaces">Workspaces</string>
   <string name="backup_page_import_desc">Import local backup file</string>
   <string name="backup_page_import_from_official">Import from RikkaHub</string>
   <string name="backup_page_import_official_desc">Export a backup from the official RikkaHub first, then pick that file here</string>
