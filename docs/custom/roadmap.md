@@ -146,7 +146,7 @@
 
 ### 切换之后
 
-- `master` 只作上游镜像：`git fetch upstream`、`git merge --ff-only`，不再合进 `custom`。
+- `ref` 只作上游镜像：`git fetch upstream`、`git merge --ff-only`，不再合进 `main`。
 - 保命层（provider 适配、上游 API 破坏性变更、崩溃与安全修复）读 diff 自己移植，不 cherry-pick。
 - 能力层（上游新功能）按需自己实现；借了哪次提交的思路，在 [`checklist.md`](checklist.md) 里注明来源。
 - 地基层（架构重构、UI 大改）不看，也不移植。

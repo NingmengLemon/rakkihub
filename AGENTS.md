@@ -26,7 +26,7 @@ Material 3 look (cards with dividers, plain forms).
 ./gradlew bundlePlayRelease      # 构建上架 Google Play 的 AAB
 ./gradlew test                   # 运行所有模块的 JVM 单元测试
 ./gradlew lint                   # 运行 Android Lint
-./gradlew spotlessApply          # 用 ktlint 格式化相对 origin/master 改动过的 Kotlin 文件
+./gradlew spotlessApply          # 用 ktlint 格式化相对 origin/ref 改动过的 Kotlin 文件
 ./gradlew spotlessCheck          # 只检查格式不改文件
 ```
 
@@ -113,7 +113,7 @@ App 有一个 `distribution` 维度的 product flavor：`github`（默认）和 
 
 This repository carries personal customizations on top of upstream `rikkahub/rikkahub`.
 
-- Work on `custom`. `master` only follows upstream and must stay fast-forwardable; never commit to it.
+- Work on `main`. `ref` only follows upstream and must stay fast-forwardable; never commit to it.
 - Read `docs/custom/README.md` before adding or removing a feature. It holds the branch model, the upstream sync
   procedure, and the customization principles. `docs/custom/checklist.md` is the per-customization register,
   `docs/custom/roadmap.md` the long-term plan (stage split, easy-migration target, independent-update direction,
@@ -140,5 +140,5 @@ This repository carries personal customizations on top of upstream `rikkahub/rik
   keep that deletion whenever upstream changes to the file are ported. The module reference table and the porting
   procedure live in the independent-update section of `docs/custom/roadmap.md`.
 - Before pushing a batch of customizations, run an independent review: dispatch a fresh-context `subagent` (not
-  `subagent_fork`) and have it load the `code-review` skill, reviewing `master..custom`. Fix what it finds and re-run
-  until it passes; only then `git push origin custom`.
+  `subagent_fork`) and have it load the `code-review` skill, reviewing `ref..main`. Fix what it finds and re-run
+  until it passes; only then `git push origin main`.

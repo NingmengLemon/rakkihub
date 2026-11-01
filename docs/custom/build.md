@@ -39,7 +39,7 @@ workspace 模块另有 `workspace.ExampleUnitTest`（4/10，硬编码执行 `/bi
 
 ## 格式检查
 
-`spotlessApply` 与 `spotlessCheck` 用 ktlint，`ratchetFrom("origin/master")` 写死，只检查相对该引用改动过的文件。因此 `origin/master` 必须存在且跟随上游，不要清理这个引用：本地 `master` 快进后若尚未推送，`origin/master` 仍停在旧基点，`spotlessCheck` 会把上游那一整批文件当作改动过的来检查，报出与本地定制无关的格式违规。
+`spotlessApply` 与 `spotlessCheck` 用 ktlint，`ratchetFrom("origin/ref")` 写死，只检查相对该引用改动过的文件。因此 `origin/ref` 必须存在且跟随上游，不要清理这个引用：本地 `ref` 快进后若尚未推送，`origin/ref` 仍停在旧基点，`spotlessCheck` 会把上游那一整批文件当作改动过的来检查，报出与本地定制无关的格式违规。
 
 `spotlessCheck` 有 4 处历史违规，与定制无关：`SettingsNormalization.kt`、`MessageQueue.kt`、`PermissionTypes.kt`、`SettingVM.kt`。跑过 `spotlessApply` 之后把这四个文件 `git checkout` 回来，不要顺手提交格式化改动；如果其中一个文件本来就要改，只回退它被格式化掉的那部分，功能改动保留。
 

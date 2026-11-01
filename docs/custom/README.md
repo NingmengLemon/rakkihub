@@ -19,34 +19,34 @@
 
 | 分支 | 用途 |
 | --- | --- |
-| `master` | 只跟随上游，不承载任何本地提交，任何时刻都应可 fast-forward |
-| `custom` | 唯一工作分支，全部定制提交集中在这里 |
+| `ref` | 上游镜像，只跟随上游，不承载任何本地提交，任何时刻都应可 fast-forward |
+| `main` | 唯一工作分支，全部定制提交集中在这里 |
 
 远端配置：
 
 | 远端 | 仓库 | 用途 |
 | --- | --- | --- |
-| `origin` | NingmengLemon/rikkahub | 本仓库 fork，可推送 |
+| `origin` | NingmengLemon/rikkahub | 本仓库，可推送；已从 GitHub 的 fork network 脱离 |
 | `upstream` | rikkahub/rikkahub | 官方仓库，只读；push 地址是 `DISABLED_no_push_to_upstream`，误推会直接失败 |
 
-远端默认分支是 `custom`。本地 `origin/HEAD` 的缓存仍指向 `origin/master`，可用 `git remote set-head origin -a` 刷新。
+远端默认分支是 `main`，`origin/HEAD` 指向它；缓存过期时用 `git remote set-head origin -a` 刷新。
 
-`origin/master` 要保留并跟随上游：`spotlessCheck` 拿它当比较基点，原因见 [`build.md`](build.md) 的格式检查一节。
+`origin/ref` 要保留并跟随上游：`spotlessCheck` 拿它当比较基点，原因见 [`build.md`](build.md) 的格式检查一节。
 
 ## 上游同步流程
 
 ```powershell
 git fetch upstream --no-tags
-git checkout master
+git checkout ref
 git merge --ff-only upstream/master
-git push origin master
-git checkout custom
-git merge master
+git push origin ref
+git checkout main
+git merge ref
 ```
 
-`master` 上用 `--ff-only`，一旦出现非快进说明有东西误提交到了 `master`，先查清楚再继续，不要用普通 merge 掩盖。
+`ref` 上用 `--ff-only`，一旦出现非快进说明有东西误提交到了 `ref`，先查清楚再继续，不要用普通 merge 掩盖。
 
-合并到 `custom` 后跑一遍测试：
+合并到 `main` 后跑一遍测试：
 
 ```powershell
 $env:JAVA_HOME='E:\WorkBench\Java\jdk-23.0.2'; $env:PATH="$env:JAVA_HOME\bin;$env:PATH"
@@ -98,7 +98,7 @@ C8 与 C9 删的是完整实现而不是入口。这两项功能各自独立成�
 审计全部定制：
 
 ```powershell
-git log --oneline master..custom
+git log --oneline ref..main
 ```
 
 ### Review 门禁
@@ -107,9 +107,9 @@ git log --oneline master..custom
 
 - 用 `subagent` 派发，不要用 `subagent_fork`。fork 会继承实现这批改动的对话上下文，失去独立视角的意义。
 - 在派发的 prompt 里要求子代理先加载 `code-review` 技能，再按其流程执行。
-- review 基线取 `master..custom`，即本批定制相对上游的全部改动。
+- review 基线取 `ref..main`，即本批定制相对上游的全部改动。
 - 关注三件事：是否引入回归、是否触碰已存储数据的结构、是否符合本文件的定制原则。C8 与 C9 按「改动尽量小，优先断入口」一节的补充说明直接删了实现，不按「优先断入口」判；这条评审标准本身随该原则一并失效。
-- 未通过就修复后重跑，不得带病推送。通过后才允许 `git push origin custom`。
+- 未通过就修复后重跑，不得带病推送。通过后才允许 `git push origin main`。
 
 ### 文档与实现
 
