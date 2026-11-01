@@ -150,9 +150,9 @@
 
 ### C18 新增官方兼容的导出出口
 
-- 落点：新增 `BackupTarget`（`SELF` / `OFFICIAL`）、`OfficialDatabaseCompatibility`（判定我们的库还在不在官方形状上，比较版本与 identity hash，配 `OfficialDatabaseCompatibilityTest`）、`OfficialDatabaseAdapter`（一致时原样返回数据库文件，分叉时抛 `OfficialExportUnsupportedException`）；`BackupManager.createBackup` 与 `WebDavSync.prepareBackupFile` 加目标参数，`BackupVM.exportToFile` 透传，只有 `SELF` 会更新备份提醒的时间戳；`ImportExportTab` 的导出分组加第二个入口，与自家导出的区别只在数据库，目标用 `rememberSaveable` 存，避免选择文件期间被回收后退回自家格式；8 个 locale 新增 `backup_page_export_official`、`backup_page_export_official_desc`、`backup_page_export_failed`、`backup_page_export_schema_diverged`；`BackupManagerTest` 补一条官方目标的 androidTest
+- 落点：新增 `BackupTarget`（`SELF` / `OFFICIAL`）、`OfficialDatabaseCompatibility`（判定我们的库还在不在官方形状上，比较版本与 identity hash，配 `OfficialDatabaseCompatibilityTest`）、`OfficialDatabaseAdapter`（一致时把附件路径改写成官方安装的位置再交出，分叉时抛 `OfficialExportUnsupportedException`）；`BackupManager.createBackup` 与 `WebDavSync.prepareBackupFile` 加目标参数，`BackupVM.exportToFile` 透传，只有 `SELF` 会更新备份提醒的时间戳；`ImportExportTab` 的导出分组加第二个入口，与自家导出的区别在数据库与其中的路径，目标用 `rememberSaveable` 存，避免选择文件期间被回收后退回自家格式；8 个 locale 新增 `backup_page_export_official`、`backup_page_export_official_desc`、`backup_page_export_failed`、`backup_page_export_schema_diverged`；`BackupManagerTest` 补一条官方目标的 androidTest
 - 理由：改结构之后自家备份官方读不了，需要一个能把数据交回官方的出口；它和自家导出并列，不是把现有导出改掉
-- 合并注意：当前双方 schema 一致，两个出口的产物几乎相同：适配层只做「一致就原样返回、分叉就失败」，裁剪逻辑等真改结构时再补。失败是刻意的，静默产出官方打不开的备份要等到恢复时才发现；分叉走单独的提示文案，技术原因只进日志。导出失败时会尝试删掉选择位置时建出的空文档，尽量不留 0 字节文件（删除本身可能被 provider 拒绝，是 best-effort）。`settings.json` 不裁，官方解码器的 `ignoreUnknownKeys` 会忽略多余字段，这一点由 `OfficialSettingsCompatibilityTest` 钉住。WebDAV 出口暂时只产出 `SELF` 格式。上游若改 `createBackup` 的签名或备份页的导出分组，第二个入口要跟着调整
+- 合并注意：当前双方 schema 一致，两个出口的差别只在本应用独占的选项与路径改写：适配层做「一致就把路径换成官方安装的位置、分叉就失败」，裁表裁列等真改结构时再补（路径改写见 C30）。失败是刻意的，静默产出官方打不开的备份要等到恢复时才发现；分叉走单独的提示文案，技术原因只进日志。导出失败时会尝试删掉选择位置时建出的空文档，尽量不留 0 字节文件（删除本身可能被 provider 拒绝，是 best-effort）。`settings.json` 不裁字段，官方解码器的 `ignoreUnknownKeys` 会忽略多余字段，这一点由 `OfficialSettingsCompatibilityTest` 钉住；但官方不认识的枚举值它吞不掉，所以官方出口会把工作区选项去掉（C29）。WebDAV 出口暂时只产出 `SELF` 格式。上游若改 `createBackup` 的签名或备份页的导出分组，第二个入口要跟着调整
 
 ### C19 附件按替换语义导入，导入的原始备份留底
 
@@ -168,7 +168,7 @@
 
 ### C21 导入器写入层
 
-- 落点：新增 `data/sync/official/OfficialTableOrder.kt`（从快照的外键推出写入顺序，循环外键报错）、`OfficialDatabaseWriter.kt`（一个事务把读出的行写进新建的空库，行级照抄不动 JSON 字段）、`OfficialUrlRewriter.kt`（把官方备份里带包名的绝对 `file://` 附件引用重定向到当前安装）；`OfficialUrlRewriterTest` 七条 JVM 测试、`OfficialTableOrderTest` 四条 JVM 测试、`OfficialDatabaseWriterTest` 四条 androidTest
+- 落点：新增 `data/sync/official/OfficialTableOrder.kt`（从快照的外键推出写入顺序，循环外键报错）、`OfficialDatabaseWriter.kt`（一个事务把读出的行写进新建的空库，行级照抄不动 JSON 字段）、`OfficialUrlRewriter.kt`（把任意安装的绝对 `file://` files 前缀换成给定前缀，导入与官方兼容导出两个方向共用）；`OfficialUrlRewriterTest` 七条 JVM 测试、`OfficialTableOrderTest` 四条 JVM 测试、`OfficialDatabaseWriterTest` 四条 androidTest
 - 理由：读取层只负责读，导入器还要把数据写进我们自己结构的库
 - 合并注意：只写新建的空库，不接入口、不碰正在用的数据。这几个文件都是新增，上游不会碰。设备上跑 androidTest 前要先 `rm -f` 目标文件再 `adb push`，否则推的是旧字节
 

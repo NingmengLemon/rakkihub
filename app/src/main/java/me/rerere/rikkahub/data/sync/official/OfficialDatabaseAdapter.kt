@@ -1,6 +1,7 @@
 package me.rerere.rikkahub.data.sync.official
 
 import android.database.sqlite.SQLiteDatabase
+import me.rerere.rikkahub.data.sync.DatabaseBackup
 import java.io.File
 
 /** 官方客户端的 applicationId，官方安装里附件路径的包名段就是它。 */
@@ -54,21 +55,37 @@ internal object OfficialDatabaseAdapter {
         val target = File(snapshot.parentFile, "official-${snapshot.name}")
         snapshot.copyTo(target, overwrite = true)
         SQLiteDatabase.openDatabase(target.absolutePath, null, SQLiteDatabase.OPEN_READWRITE).use { database ->
-            val schema = OfficialSnapshots.forVersion(database.version) ?: return target
-            for ((table, definition) in schema.tables) {
-                val textColumns = definition.columns.filter { it.affinity == "TEXT" }.map { it.name }
-                for (column in textColumns) {
-                    for ((from, to) in rewrites) {
-                        database.execSQL(
-                            "UPDATE `$table` SET `$column` = REPLACE(`$column`, ?, ?) WHERE `$column` LIKE ?",
-                            arrayOf(from, to, "%${from.removePrefix("file://")}%"),
-                        )
+            val schema = checkNotNull(OfficialSnapshots.forVersion(database.version)) {
+                "官方快照里没有 v${database.version}，不该走到这里"
+            }
+            database.beginTransaction()
+            try {
+                for ((table, definition) in schema.tables) {
+                    val textColumns = definition.columns.filter { it.affinity == "TEXT" }.map { it.name }
+                    for (column in textColumns) {
+                        for ((from, to) in rewrites) {
+                            // LIKE 只是省掉无谓的整列重写；模式里的 % 与 _ 要转义，
+                            // 否则包名里的下划线会多匹配别的行。
+                            database.execSQL(
+                                "UPDATE `$table` SET `$column` = REPLACE(`$column`, ?, ?) " +
+                                    "WHERE `$column` LIKE ? ESCAPE '\\'",
+                                arrayOf(from, to, "%${escapeLike(from.removePrefix("file://"))}%"),
+                            )
+                        }
                     }
                 }
+                database.setTransactionSuccessful()
+            } finally {
+                database.endTransaction()
             }
         }
+        // 归档只拷 .db：确认写入都落在主文件、没有留在副文件里（快照来源改成 WAL 库时会在这里失败）
+        DatabaseBackup.removeSidecars(target)
         return target
     }
+
+    private fun escapeLike(value: String): String =
+        value.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
 
     private fun readHeader(snapshot: File): Pair<Int, String?> {
         val database = SQLiteDatabase.openDatabase(snapshot.absolutePath, null, SQLiteDatabase.OPEN_READONLY)

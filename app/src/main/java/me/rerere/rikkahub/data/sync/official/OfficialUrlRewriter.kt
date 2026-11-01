@@ -1,11 +1,12 @@
 package me.rerere.rikkahub.data.sync.official
 
 /**
- * 把官方的绝对文件 URI 重定向到当前安装。
+ * 把绝对文件 URI 里的安装路径换成另一个安装的。
  *
- * 官方把附件引用存成 `file:///data/user/0/<包名>/files/upload/...`，包名是路径的一部分。
- * 导入到改过包名的应用之后，这些路径既不存在也无权访问，消息里的图片、文档、头像会全部
- * 失配。写入前把前缀换成当前应用的实际路径。
+ * 附件引用存成 `file:///data/user/0/<包名>/files/upload/...`，包名是路径的一部分，换一个
+ * 包名安装之后这些路径既不存在也无权访问，消息里的图片、文档、头像会全部失配。两个方向都用
+ * 这一套：导入时换成当前安装（官方备份、以及我们别的包名的备份），导出官方兼容备份时换成
+ * 官方安装。
  *
  * 只认「绝对 files 目录」这一种形状：官方包名、本 fork 的旧包名都可能出现，所以不硬编码
  * 任何包名。相对路径、`content://`、网络 URL 都原样返回。
@@ -18,7 +19,7 @@ internal object OfficialUrlRewriter {
     private val absoluteFilesUri = Regex("""file:///data/(?:user/\d+|data)/[^/]+/files/""")
 
     /**
-     * @param filesUriPrefix 当前应用的 files 目录 URI 前缀，形如 `file:///data/user/0/<包>/files/`
+     * @param filesUriPrefix 目标安装的 files 目录 URI 前缀，形如 `file:///data/user/0/<包>/files/`
      */
     fun rewrite(url: String, filesUriPrefix: String): String =
         if (url.startsWith("file://") && absoluteFilesUri.containsMatchIn(url)) {

@@ -502,7 +502,7 @@ class BackupManagerTest {
      * 导出时换掉，否则装过去之后图片与文档全断。自家的出口不能改。
      */
     @Test fun officialExportPointsAttachmentsAtTheOfficialInstall() = runBlocking {
-        val ours = context.filesDir.toUri().toString().trimEnd('/') + "/upload/x.png"
+        val ours = canonicalFileUrl("upload/x.png")
         liveDatabase.openHelper.writableDatabase.execSQL(
             "INSERT INTO ConversationEntity (id, title, nodes, create_at, update_at) " +
                 "VALUES ('c1', 'demo', '[]', 1, 2)",
@@ -534,6 +534,35 @@ class BackupManagerTest {
             "自家出口要保留本应用的路径，实际是 $selfMessages",
             selfMessages.contains("/${context.packageName}/"),
         )
+    }
+
+    /**
+     * 官方出口的归档再恢复回本应用。
+     *
+     * 库里的路径现在属于官方安装，分流会把它当成外来路径交给转换器，最后必须换回本机路径；
+     * 这是本批改动新触发的路径，值得钉住。
+     */
+    @Test fun officialArchiveRestoresBackIntoThisInstall() = runBlocking {
+        liveDatabase.openHelper.writableDatabase.execSQL(
+            "INSERT INTO ConversationEntity (id, title, nodes, create_at, update_at) " +
+                "VALUES ('c1', 'demo', '[]', 1, 2)",
+        )
+        liveDatabase.openHelper.writableDatabase.execSQL(
+            "INSERT INTO message_node (id, conversation_id, node_index, messages, select_index) " +
+                "VALUES ('n1', 'c1', 0, ?, 0)",
+            arrayOf("""[{"type":"image","url":"${canonicalFileUrl("upload/x.png")}"}]"""),
+        )
+        val archive = manager.createBackup(
+            includeDatabase = true,
+            includeFiles = false,
+            backupTarget = BackupTarget.OFFICIAL,
+        )
+
+        manager.stageRestore(archive, includeDatabase = true, includeFiles = false)
+
+        val staged = stagedMessages()
+        assertTrue("应当换回本机路径，实际是 $staged", staged.contains("/${context.packageName}/"))
+        assertFalse("不应残留官方安装的路径，实际是 $staged", staged.contains("/$OFFICIAL_APPLICATION_ID/"))
     }
 
     /** settings 里的头像同样是绝对路径，官方出口也要换成官方安装的位置。 */
@@ -570,6 +599,22 @@ class BackupManagerTest {
         } finally {
             store.update { settings ->
                 settings.copy(displaySetting = settings.displaySetting.copy(userAvatar = original))
+            }
+        }
+    }
+
+    /** 真机上的附件路径形态；测试的 filesDir 挂在 cache 下，导出逻辑会补上规范形态。 */
+    private fun canonicalFileUrl(path: String): String =
+        "file:///data/user/0/${context.packageName}/files/$path"
+
+    /** 暂存库里 `message_node.messages` 拼起来的内容。 */
+    private fun stagedMessages(): String {
+        val staged = File(context.noBackupFilesDir, "backup-restore/pending/payload/database/rikka_hub")
+        return SQLiteDatabase.openDatabase(staged.absolutePath, null, SQLiteDatabase.OPEN_READONLY).use { db ->
+            db.rawQuery("SELECT messages FROM message_node", null).use { cursor ->
+                buildString {
+                    while (cursor.moveToNext()) append(cursor.getString(0))
+                }
             }
         }
     }

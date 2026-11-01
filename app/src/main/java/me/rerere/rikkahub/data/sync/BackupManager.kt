@@ -31,6 +31,7 @@ import me.rerere.rikkahub.data.sync.official.OfficialDatabaseAdapter
 import me.rerere.rikkahub.data.sync.official.OfficialDatabaseConverter
 import me.rerere.rikkahub.data.sync.official.OfficialDatabaseHeaders
 import me.rerere.rikkahub.data.sync.official.OfficialDatabaseSchema
+import me.rerere.rikkahub.data.sync.official.OfficialExportPaths
 import me.rerere.rikkahub.data.sync.official.OfficialForeignAttachmentPaths
 import me.rerere.rikkahub.data.sync.official.OfficialRestorePlan
 import me.rerere.rikkahub.data.sync.official.OfficialRestorePlanner
@@ -323,14 +324,15 @@ class BackupManager(
     private fun currentFilesUriPrefix(): String =
         context.filesDir.toUri().toString().trimEnd('/') + "/"
 
-    /**
-     * 官方安装里对应的前缀：只有包名段不同。用户号取自本机当前安装的路径，所以工作资料里
-     * 导出也能对上。
-     */
     private fun officialFilesUriPrefix(): String =
-        currentFilesUriPrefix().replace("/${context.packageName}/", "/$OFFICIAL_APPLICATION_ID/")
+        OfficialExportPaths.officialFilesPrefix(currentFilesUriPrefix(), context.packageName, OFFICIAL_APPLICATION_ID)
 
-    /** 官方兼容出口的 settings.json：把附件与头像的绝对路径换成官方安装的位置。 */
+    /**
+     * 官方兼容出口的 settings.json：把绝对 files 路径换成官方安装的位置。
+     *
+     * 这里用的是「任何安装的绝对 files 路径」那条正则，因为 settings 里可能残留官方或别的
+     * 安装的头像路径；库那边只改本应用的前缀（含两种形态），见 [OfficialExportPaths]。
+     */
     private fun rewriteForOfficial(settingsJson: String): String {
         val official = officialFilesUriPrefix()
         return if (official == currentFilesUriPrefix()) {
@@ -340,11 +342,12 @@ class BackupManager(
         }
     }
 
-    private fun attachmentPrefixRewritesForOfficial(): List<Pair<String, String>> {
-        val ours = currentFilesUriPrefix()
-        val official = officialFilesUriPrefix()
-        return if (official == ours) emptyList() else listOf(ours to official)
-    }
+    private fun attachmentPrefixRewritesForOfficial(): List<Pair<String, String>> =
+        OfficialExportPaths.attachmentRewrites(
+            filesDirUri = currentFilesUriPrefix(),
+            packageName = context.packageName,
+            officialPackage = OFFICIAL_APPLICATION_ID,
+        )
 
     /**
      * 把暂存库转成当前版本并替换掉它。

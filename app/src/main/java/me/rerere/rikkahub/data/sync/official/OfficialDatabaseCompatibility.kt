@@ -10,7 +10,7 @@ package me.rerere.rikkahub.data.sync.official
 internal object OfficialDatabaseCompatibility {
 
     sealed interface Verdict {
-        /** 版本与 identity hash 都与官方一致，可以原样交给官方 */
+        /** 版本与 identity hash 都与官方一致，库的形状官方能直接打开 */
         data object Identical : Verdict
 
         /** 已经分叉，需要裁剪，而裁剪还没实现 */
