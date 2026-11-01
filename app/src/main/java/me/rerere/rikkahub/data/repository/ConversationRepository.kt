@@ -306,6 +306,10 @@ class ConversationRepository(
         return conversationDAO.existsById(uuid.toString())
     }
 
+    /** 只取 id，草稿清理这类「只关心存不存在」的场景用。 */
+    suspend fun getConversationIds(): Set<Uuid> =
+        conversationDAO.getAllIds().mapNotNull { runCatching { Uuid.parse(it) }.getOrNull() }.toSet()
+
     suspend fun countConversations(): Int {
         return conversationDAO.countAll()
     }

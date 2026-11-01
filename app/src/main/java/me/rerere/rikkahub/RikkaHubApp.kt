@@ -27,6 +27,7 @@ import kotlinx.coroutines.runBlocking
 import me.rerere.common.android.appTempFolder
 import me.rerere.rikkahub.data.ai.MemoryConsolidationScheduler
 import me.rerere.rikkahub.data.datastore.SettingsStore
+import me.rerere.rikkahub.data.files.ChatDraftStore
 import me.rerere.rikkahub.data.files.FileFolders
 import me.rerere.rikkahub.data.files.FilesManager
 import me.rerere.rikkahub.data.remote.ModelsDevUpdater
@@ -40,6 +41,7 @@ import me.rerere.rikkahub.di.dataSourceModule
 import me.rerere.rikkahub.di.repositoryModule
 import me.rerere.rikkahub.di.viewModelModule
 import me.rerere.rikkahub.service.WebServerService
+import me.rerere.rikkahub.ui.hooks.readLastConversationId
 import me.rerere.rikkahub.utils.CrashHandler
 import me.rerere.rikkahub.utils.DatabaseUtil
 import me.rerere.rikkahub.utils.JsonInstant
@@ -97,6 +99,9 @@ class RikkaHubApp : Application() {
 
         // cleanup workspace temp dirs (proot + rootfs /tmp)
         cleanupWorkspaceTempDirs()
+
+        // 清理会话已经不在库里的聊天草稿
+        cleanupOrphanDrafts()
 
         // check workspace integrity (mark workspaces with missing files as broken after backup restore)
         checkWorkspaceIntegrity()
@@ -181,6 +186,22 @@ class RikkaHubApp : Application() {
             val dir = appTempFolder
             if (dir.exists()) {
                 dir.deleteRecursively()
+            }
+        }
+    }
+
+    /**
+     * 删掉不该再留的草稿。保留集是库里的会话加上上次打开的会话：那个会话没落过库，但关掉
+     * 「启动新建会话」时下次启动会直接打开它。其余规则见 [ChatDraftStore.deleteOrphans]。
+     */
+    private fun cleanupOrphanDrafts() {
+        get<AppScope>().launch(Dispatchers.IO) {
+            runCatching {
+                val existing = get<ConversationRepository>().getConversationIds()
+                val removed = get<ChatDraftStore>().deleteOrphans(existing, readLastConversationId())
+                if (removed > 0) Log.i(TAG, "Removed $removed stale chat draft files")
+            }.onFailure {
+                Log.e(TAG, "cleanupOrphanDrafts failed", it)
             }
         }
     }

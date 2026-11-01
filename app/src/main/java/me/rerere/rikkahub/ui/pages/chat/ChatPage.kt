@@ -408,8 +408,7 @@ private fun ChatPageContent(
                     vm.regenerateAtMessage(it)
                 },
                 onEdit = {
-                    inputState.editingMessage = it.id
-                    inputState.setContents(it.parts)
+                    vm.beginEditingMessage(messageId = it.id, parts = it.parts)
                 },
                 onForkMessage = {
                     scope.launch {

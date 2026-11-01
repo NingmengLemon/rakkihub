@@ -7,18 +7,23 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.core.net.toUri
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.debounce
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.runBlocking
 import me.rerere.ai.provider.Model
 import me.rerere.ai.ui.UIMessage
 import me.rerere.ai.ui.UIMessagePart
@@ -26,6 +31,7 @@ import me.rerere.ai.ui.isEmptyInputMessage
 import me.rerere.rikkahub.R
 import me.rerere.rikkahub.data.datastore.Settings
 import me.rerere.rikkahub.data.datastore.SettingsStore
+import me.rerere.rikkahub.data.files.ChatDraftStore
 import me.rerere.rikkahub.data.files.FilesManager
 import me.rerere.rikkahub.data.model.Assistant
 import me.rerere.rikkahub.data.model.Avatar
@@ -37,13 +43,16 @@ import me.rerere.rikkahub.data.model.getChatModelOf
 import me.rerere.rikkahub.data.repository.FavoriteRepository
 import me.rerere.rikkahub.service.ChatError
 import me.rerere.rikkahub.service.ChatService
-import me.rerere.rikkahub.ui.hooks.writeStringPreference
+import me.rerere.rikkahub.ui.hooks.writeLastConversationId
 import me.rerere.rikkahub.ui.hooks.ChatInputState
 import me.rerere.rikkahub.web.ApiException
 import java.util.Locale
 import kotlin.uuid.Uuid
 
 private const val TAG = "ChatVM"
+
+/** 输入停顿多久之后写草稿：太短会频繁写盘，太长会让刚打的字在退出时丢 */
+private const val DRAFT_SAVE_DELAY = 500L
 
 class ChatVM(
     id: String,
@@ -52,6 +61,7 @@ class ChatVM(
     private val chatService: ChatService,
     private val filesManager: FilesManager,
     private val favoriteRepository: FavoriteRepository,
+    private val draftStore: ChatDraftStore,
 ) : ViewModel() {
     private val _conversationId: Uuid = Uuid.parse(id)
     val conversation: StateFlow<Conversation> = chatService.getConversationFlow(_conversationId)
@@ -59,6 +69,18 @@ class ChatVM(
 
     // 聊天输入状态 - 保存在 ViewModel 中避免 TransactionTooLargeException
     val inputState = ChatInputState()
+
+    /**
+     * 草稿状态。
+     *
+     * [lastPersistedDraft] 是磁盘上那份，用来跳过「恢复之后又把同样的内容写一遍」；
+     * [editDraft] 暂存编辑历史消息之前输入框里的内容，编辑结束后放回去。
+     */
+    private var lastPersistedDraft: ChatDraftStore.Draft? = null
+    private val editDraft = ChatEditDraft()
+
+    // 这个会话已经被删掉了，退出时不能把草稿写回一个不存在的会话
+    private var conversationDeleted = false
 
     // 异步任务 (从ChatService获取，响应式)
     val conversationJob: StateFlow<Job?> =
@@ -84,13 +106,91 @@ class ChatVM(
         }
 
         // 记住对话ID, 方便下次启动恢复
-        context.writeStringPreference("lastConversationId", _conversationId.toString())
+        context.writeLastConversationId(_conversationId)
+
+        // 草稿：先把上次的恢复出来，再开始观察，否则恢复本身会被当成一次「清空」写回去。
+        // 编辑历史消息期间观察到的值是 null（不写盘），编辑结束由下面那段观察把编辑前的内容放回输入框
+        viewModelScope.launch {
+            val restored = draftStore.load(_conversationId)
+            lastPersistedDraft = restored
+            restored?.let {
+                if (inputState.isEditing()) {
+                    // 恢复得刚好撞上进编辑：别覆盖编辑内容，编辑结束后再放回
+                    editDraft.restoreAfterEditing(it)
+                } else {
+                    applyDraftToInput(it)
+                }
+            }
+            snapshotFlow { if (inputState.isEditing()) null else currentDraft() }
+                .debounce(DRAFT_SAVE_DELAY)
+                .collectLatest { draft -> if (draft != null) writeDraft(draft) }
+        }
+        viewModelScope.launch {
+            // 编辑结束（发送、长按发送、取消）都要把输入框还给用户，不能等防抖
+            snapshotFlow { inputState.isEditing() }
+                .distinctUntilChanged()
+                .collect { editing ->
+                    if (!editing) editDraft.finishEditing(currentDraft())?.let(::applyDraftToInput)
+                }
+        }
     }
 
     override fun onCleared() {
         super.onCleared()
+        // 防抖窗口里的最后一行还没落盘，这里补一次；草稿很小，同步写不会卡住退出
+        if (!conversationDeleted) {
+            val draft = if (inputState.isEditing()) {
+                // 编辑中被销毁：输入框里是编辑内容，磁盘上该留的是进编辑前那份
+                editDraft.parkedDraft()
+            } else {
+                editDraft.draftToPersistOnExit(currentDraft())
+            }
+            draft?.let {
+                runCatching { runBlocking { writeDraft(it) } }
+                    .onFailure { error -> Log.w(TAG, "Failed to persist the chat draft", error) }
+            }
+        }
         // 移除对话引用
         chatService.removeConversationReference(_conversationId)
+    }
+
+    /**
+     * 开始编辑历史消息。
+     *
+     * 输入框要被编辑内容占用，编辑前的内容先交给 [editDraft]，编辑结束后放回去。
+     * 这份内容同时另起一次写盘（不等防抖）：否则还在防抖窗口里的那几行会因为进了编辑而丢掉。
+     */
+    fun beginEditingMessage(messageId: Uuid, parts: List<UIMessagePart>) {
+        if (!inputState.isEditing()) {
+            val current = currentDraft()
+            editDraft.beginEditing(current)
+            if (!current.isEmpty) viewModelScope.launch { writeDraft(current) }
+        }
+        inputState.editingMessage = messageId
+        inputState.setContents(parts)
+    }
+
+    private suspend fun writeDraft(draft: ChatDraftStore.Draft) {
+        if (draft == lastPersistedDraft) return
+        try {
+            draftStore.save(_conversationId, draft)
+            lastPersistedDraft = draft
+        } catch (e: CancellationException) {
+            // 取消不是写失败，交给上层按取消处理
+            throw e
+        } catch (e: Exception) {
+            Log.w(TAG, "Failed to persist the chat draft", e)
+        }
+    }
+
+    private fun currentDraft() = ChatDraftStore.Draft(
+        text = inputState.textContent.text.toString(),
+        parts = inputState.messageContent,
+    )
+
+    private fun applyDraftToInput(draft: ChatDraftStore.Draft) {
+        inputState.messageContent = draft.parts
+        inputState.setMessageText(draft.text)
     }
 
     // 用户设置
@@ -266,6 +366,8 @@ class ChatVM(
     fun deleteConversation(conversation: Conversation): Job =
         viewModelScope.launch {
             chatService.deleteConversation(conversation.id)
+            // 删会话时 ChatService 已经顺手删了草稿，别在退出时又给它写回去
+            if (conversation.id == _conversationId) conversationDeleted = true
         }
 
     fun updatePinnedStatus(conversation: Conversation) {

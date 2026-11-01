@@ -53,7 +53,7 @@ import kotlinx.coroutines.launch
 import me.rerere.rikkahub.data.datastore.Settings
 import me.rerere.rikkahub.data.datastore.SettingsStore
 import me.rerere.rikkahub.data.datastore.getCurrentAssistant
-import me.rerere.rikkahub.ui.hooks.writeStringPreference
+import me.rerere.rikkahub.ui.hooks.writeLastConversationId
 import me.rerere.rikkahub.ui.theme.RikkahubTheme
 import me.rerere.rikkahub.RouteActivity
 import me.rerere.rikkahub.utils.CrashHandler
@@ -166,7 +166,7 @@ class SafeModeActivity : ComponentActivity() {
                         settings = settings,
                         onAssistantSelected = { assistantId ->
                             scope.launch { settingsStore.selectAssistant(assistantId) }
-                            context.writeStringPreference("lastConversationId", null)
+                            context.writeLastConversationId(null)
                             showAssistantPicker = false
                         },
                         onDismiss = { showAssistantPicker = false }

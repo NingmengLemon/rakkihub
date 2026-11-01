@@ -38,6 +38,7 @@
 | C28 | settings 形状校验 | 新增 |
 | C29 | 备份可选包含工作区文件 | 新增 |
 | C30 | 官方兼容导出改写附件路径 | 改造 |
+| C31 | 聊天草稿落盘 | 新增 |
 
 ## 明细
 
@@ -225,3 +226,9 @@
 - 落点：新增 `data/sync/official/OfficialExportPaths.kt`（纯函数，推导要替换的前缀对：本安装实际的 files 目录，加上 `/data/user/<用户号>/<包名>/files/` 与 `/data/data/<包名>/files/` 两种规范形态，用户号从路径里取；另带 `LIKE` 模式的字面量转义）与 `OfficialExportPathsTest` 十条 JVM 用例；`OfficialDatabaseAdapter.adaptForOfficial` 增加 `attachmentPrefixRewrites`，一致性校验之后逐表逐列对 TEXT 列做前缀 `REPLACE`（一个事务、`LIKE` 模式转义、写完确认没有残留副文件），产出改写过的库副本（没有要改的就返回原快照）；`BackupManager.createBackup` 用这份前缀对改写库，settings 走 `OfficialUrlRewriter.rewriteEmbedded`；`OFFICIAL_APPLICATION_ID` 常量放在 official 包里；`OfficialUrlRewriter` 的 KDoc 改成方向中立（导入与导出共用）；`BackupManagerTest` 补三条用例（消息里的附件、settings 里的头像、官方归档回灌本应用），每条都同时断言自家出口不改或回灌后换回本机路径
 - 理由：官方客户端恢复只把附件搬进自己的 files 目录，不会改库与设置里的路径。我们导出的库里存的是本应用的绝对 `file://`，装过去之后图片、文档、头像全断
 - 合并注意：改写只在 OFFICIAL 目标发生，自家出口一行不动。官方包名写死在 `OFFICIAL_APPLICATION_ID`，官方换 applicationId 时要跟着改。这条只解决路径，schema 分叉后的裁表裁列仍待实现；官方客户端实际恢复一遍仍是人工闸门
+
+### C31 聊天草稿落盘
+
+- 落点：新增 `data/files/ChatDraftStore.kt`（一个会话一个 JSON，先写临时文件再原子替换、临时名带随机后缀，坏文件当作没有草稿，空草稿删文件，读写都在 IO 上，另有 `deleteOrphans`）与 `ChatDraftStoreTest` 十三条 JVM 用例；`RepositoryModule` 注册实例并把目录指到 `noBackupFilesDir/chat-drafts`；`ChatVM` 加构造参数（`ViewModelModule` 接线），`init` 里先恢复再观察输入变化（`snapshotFlow` 加 500ms 防抖，编辑历史消息期间观察值是 null），另有一段观察编辑状态的转变、编辑结束立刻把编辑前的内容放回输入框；`onCleared` 补一次同步写，编辑中被销毁时留的是进编辑前那份；新增 `ChatEditDraft` 收起暂存的放回规则，`ChatEditDraftTest` 九条 JVM 用例钉住，`ChatVM.beginEditingMessage` 进编辑前把草稿交给它，并另起一次写盘（不等防抖），`ChatPage` 的编辑入口改为调它；`ChatService.deleteConversation` 顺手删草稿（没落过库的新会话也要覆盖），`ConversationRepository.getConversationIds` 交给 `RikkaHubApp` 启动时清理；`ui/hooks/SharedPreferences` 新增 `readLastConversationId` 与 `writeLastConversationId`，启动页、`ChatVM`、`RikkaHubApp` 清理与 `SafeModeActivity` 共用
+- 理由：输入框内容只在 ViewModel 里，进程一死就没了，附件引用也跟着消失；将来做附件清理时，草稿里的引用必须能被扫描到
+- 合并注意：草稿是文件不是表，不动 Room schema，官方兼容导出不受影响；放 `noBackupFilesDir` 是因为 `filesDir` 整个目录被 web 路由暴露，草稿也不进备份。只记文字与附件，不记「正在编辑哪条消息」。清理的保留集是「库里的会话 + 上次打开的会话」：新建会话的 id 只在内存里，没发消息就退进程时库里查不到它，但关掉「启动新建会话」时下次启动会直接打开它，所以不能按「不在库里」删。编辑结束后草稿立刻放回输入框（不等防抖），放回时输入框不是空的话不覆盖，以用户新写的内容为准；删除会话会一起删草稿，撤销删除不会恢复草稿，从别的页面删掉还停在聊天页上的会话后，页面继续输入会重新写出一份草稿，这个 id 仍是「上次打开的会话」时启动清理会留着它。防抖窗口内进程被杀丢的是最后一次停顿之后的内容；移除附件会立刻删文件，所以恢复出的草稿可能带悬空引用。待发送队列仍只在内存里，清理扫描得读活动会话或先把队列落盘。`ChatVM`、`ChatService` 与 `RouteActivity` 都是上游热区，合并时按本行复核

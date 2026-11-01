@@ -1,6 +1,7 @@
 package me.rerere.rikkahub.di
 
 import android.content.Context
+import me.rerere.rikkahub.data.files.ChatDraftStore
 import me.rerere.rikkahub.data.files.FileFolders
 import me.rerere.rikkahub.data.files.FilesManager
 import me.rerere.rikkahub.data.repository.ConversationRepository
@@ -49,6 +50,14 @@ val repositoryModule = module {
 
     single {
         FilesRepository(get())
+    }
+
+    single {
+        val context: Context = get()
+        ChatDraftStore(
+            directory = File(context.noBackupFilesDir, "chat-drafts"),
+            json = get(),
+        )
     }
 
     single {

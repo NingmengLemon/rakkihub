@@ -14,6 +14,7 @@ import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.channels.awaitClose
 import kotlinx.coroutines.flow.buffer
 import kotlinx.coroutines.flow.callbackFlow
+import kotlin.uuid.Uuid
 
 @Composable
 fun rememberSharedPreferenceString(
@@ -77,6 +78,20 @@ fun Context.writeStringPreference(key: String, value: String?) {
 
 fun Context.readStringPreference(key: String, defaultValue: String? = null): String? {
     return getSharedPreferences("rikkahub.preferences", Context.MODE_PRIVATE).getString(key, defaultValue)
+}
+
+private const val KEY_LAST_CONVERSATION = "lastConversationId"
+
+/**
+ * 上次打开的会话。启动页要恢复它，草稿清理要知道它可能被再次打开，键只在这里出现。
+ * 值解析不了时当作没有，别让一个坏值把启动或清理卡住。
+ */
+fun Context.readLastConversationId(): Uuid? =
+    readStringPreference(KEY_LAST_CONVERSATION)?.let { runCatching { Uuid.parse(it) }.getOrNull() }
+
+/** 传 null 表示忘掉上次的会话，下次启动就开新的 */
+fun Context.writeLastConversationId(conversationId: Uuid?) {
+    writeStringPreference(KEY_LAST_CONVERSATION, conversationId?.toString())
 }
 
 fun Context.writeBooleanPreference(key: String, value: Boolean) {

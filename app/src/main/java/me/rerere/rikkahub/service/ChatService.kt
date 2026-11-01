@@ -45,6 +45,7 @@ import me.rerere.rikkahub.data.datastore.SettingsStore
 import me.rerere.rikkahub.data.datastore.getCurrentAssistant
 import me.rerere.rikkahub.data.event.AppEvent
 import me.rerere.rikkahub.data.event.AppEventBus
+import me.rerere.rikkahub.data.files.ChatDraftStore
 import me.rerere.rikkahub.data.files.FilesManager
 import me.rerere.rikkahub.data.model.Assistant
 import me.rerere.rikkahub.data.model.Conversation
@@ -108,6 +109,7 @@ class ChatService(
     val mcpManager: McpManager,
     private val filesManager: FilesManager,
     private val folderRepository: FolderRepository,
+    private val chatDraftStore: ChatDraftStore,
 ) {
     /** 一轮生成的结果 */
     private sealed interface TurnResult {
@@ -1013,6 +1015,8 @@ class ChatService(
             // 数据库那份不知道只在内存里出现过的附件
             previous?.let { filesManager.deleteChatFiles(it.files) }
         }
+        // 会话的输入框内容也属于它。没落过库的新会话在仓库里查不到，所以删在这里
+        chatDraftStore.delete(conversationId)
         sessionManager.removeIfIdle(session)
     }
 
