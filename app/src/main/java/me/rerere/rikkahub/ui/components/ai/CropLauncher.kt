@@ -10,6 +10,7 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.platform.LocalContext
 import androidx.core.net.toUri
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -28,7 +29,7 @@ import java.io.File
  */
 @Composable
 internal fun useCropLauncher(
-    onCroppedImageReady: (Uri) -> Unit,
+    onCroppedImageReady: suspend (Uri) -> Unit,
     onCleanup: (() -> Unit)? = null,
     aspectRatio: Float? = null,
 ): (Uri) -> Unit {
@@ -54,21 +55,26 @@ internal fun useCropLauncher(
                 saving = true
                 scope.launch {
                     val outputFile = File(context.appTempFolder, "crop_output_${System.currentTimeMillis()}.jpg")
-                    runCatching {
-                        withContext(Dispatchers.IO) {
-                            outputFile.outputStream().use { bitmap.compress(Bitmap.CompressFormat.JPEG, 90, it) }
+                    try {
+                        runCatching {
+                            withContext(Dispatchers.IO) {
+                                outputFile.outputStream().use { bitmap.compress(Bitmap.CompressFormat.JPEG, 90, it) }
+                            }
+                            onCroppedImageReady(outputFile.toUri())
+                        }.onFailure { error ->
+                            if (error is CancellationException) throw error
+                            Logging.log("CropLauncher", "crop failed: ${error.message} | ${error.stackTraceToString()}")
+                            toaster.show(
+                                "Failed to crop image: ${error.message ?: "unknown error"}",
+                                type = ToastType.Error
+                            )
                         }
-                        onCroppedImageReady(outputFile.toUri())
-                    }.onFailure { error ->
-                        Logging.log("CropLauncher", "crop failed: ${error.message} | ${error.stackTraceToString()}")
-                        toaster.show(
-                            "Failed to crop image: ${error.message ?: "unknown error"}",
-                            type = ToastType.Error
-                        )
+                    } finally {
+                        // 取消时也要删临时文件并走 onCleanup，否则 camera_*.jpg 会一直留到系统清缓存
+                        outputFile.delete()
+                        saving = false
+                        finish()
                     }
-                    outputFile.delete()
-                    saving = false
-                    finish()
                 }
             },
         )

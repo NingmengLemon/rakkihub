@@ -40,6 +40,7 @@
 | C30 | 官方兼容导出改写附件路径 | 改造 |
 | C31 | 聊天草稿落盘 | 新增 |
 | C32 | 附件按内容去重，删除改为摘引用 | 新增 |
+| C33 | 附件拷贝挪出主线程 | 改造 |
 
 ## 明细
 
@@ -239,3 +240,9 @@
 - 落点：新增 `data/files/ContentAddressedFiles.kt`（边写边算 SHA-256，写进同目录的 `.pending-<uuid>` 临时文件，落盘后按指纹改名，目标已存在就复用）与 `FileUtils.buildContentFileName`（扩展名优先按 MIME，其次来源文件名）；`FilesManager` 的 upload 写入全部走它（`saveManagedFrom*`、`createChatFilesByContents/ByByteArrays`、`createChatTextFile`），`createManagedFileEntity` 遇到同一路径复用已有登记，`syncFolder` 不登记 `.pending-*`；新增 `data/files/AttachmentReferences.kt`（从 JSON 与草稿文本里摘 `file:` 地址、归一成规范路径）、`LiveAttachmentReferences.kt`（进程内登记输入框附件，编辑历史消息期间草稿不写输入框，靠它兜住）与 `AttachmentCleaner.kt`（扫引用点、删无引用文件与 `managed_files` 行，`collectReferencedPaths` 与 `shouldDeleteUploadFile` 单独成纯函数）；删掉所有立即删文件的入口：`ChatService` 的落库差异删除与队列附件清理、删会话时的文件删除、`ConversationRepository.deleteConversation`、输入框移除附件（`AttachmentChips`、`ChatInputState.shouldDeleteFileOnRemove`）、助手头像与背景、用户头像，`FilesManager.deleteChatFiles`、`MessageQueue.unreferencedQueuedAttachmentUrls` 与上游的 `QueuedAttachmentCleanupTest.kt` 一并删除；`MessageNodeDAO.getContentsWithFileReferences` 只取含 `file:` 的消息行，`ChatDraftStore.referencedFileUrls`、`ChatService.unsavedAttachmentUrls` 与 `ChatService.isGenerating` 补上库外与内存引用；设置的文件管理页加「清理无引用的文件」入口，按天清理也走同一套引用判断（`AttachmentCleaner.cleanOlderThan`，`FilesManager.deleteOlderThan` 删除），新增 7 条文案 × 8 个 locale；新增 `ContentAddressedFilesTest` 四条、`AttachmentReferencesTest` 五条、`AttachmentCleanerTest` 十二条、`LiveAttachmentReferencesTest` 五条 JVM 用例，`ChatDraftStoreTest` 补一条草稿引用扫描
 - 理由：文件名原来是随机 UUID，写之前无从判断内容是否已经存在，同一张图在多个会话、多条消息里各存一份，备份体积里有很大一块是重复内容。改成内容寻址之后同内容只留一份，删除也就不能再按「删消息就删文件」做
 - 合并注意：引用形式没变，还是绝对 `file://`，所以序列化格式、Room schema、官方兼容导出与备份格式都不受影响；`managed_files` 只是旁路索引，消息读取不经过它，去重之后同一路径只有一条登记。清理是「宁可少收垃圾也不能删错」：解析不了的地址按文件名保守保留，生成开始前与删除前各查一次 `isGenerating`，工具结果里的新文件可能还没落库；输入框里的附件由草稿（C31）与 `LiveAttachmentReferences`（C32）保活，编辑历史消息期间不写草稿的那部分也在后者里；Web 客户端上传后还停在浏览器输入框里的附件不在扫描范围，清理前别让浏览器里留着没发出去的附件；工作区把 `filesDir/upload` bind mount 到 `/upload`，从终端写进去的文件没有任何引用，也会被清掉。消息扫描一次把所有含本地地址的行读进内存，历史很大时是手动清理的时间与内存上限。文件页的按天清理也走同一套引用判断，只删没有引用、且登记时间（没有登记时按文件修改时间）早于截止时间的 upload 文件；登记时间在去重复用时不刷新，所以年龄是「首次写进来的时间」，不是「最后一次被用」；「全部文件」、单个删除与 Web 的 `DELETE /api/files/{id}` 仍然直接删文件，这是显式的破坏性操作。存量文件的随机名不会自动归并，去重只作用于新写入。`FilesManager`、`ChatService`、`ConversationRepository`、`AttachmentChips`、`AssistantVM`、`AssistantDetailVM`、`ChatVM`、`SettingFilesPage`、`ViewModelModule`、`RepositoryModule` 都动了，合并时按本行复核
+
+### C33 附件拷贝挪出主线程
+
+- 落点：附件进入 upload 的 UI 调用点把拷贝与 MIME 查询包进 `withContext(Dispatchers.IO)`：`ChatPage` 的分享入口、`ChatAttachmentPicker` 的选图、拍照（裁剪与不裁剪）、视频、音频、文档，`UIAvatar.saveAvatarImage`，`BackgroundPicker`。`CropLauncher.useCropLauncher` 的 `onCroppedImageReady` 改成 `suspend`，调用方在回调里等拷贝完成再返回，`CropLauncher` 等回调返回后才删裁剪用的临时文件；取消时重抛 `CancellationException`，不弹「裁剪失败」。相机不裁剪时输出文件在拷贝完成后的 `finally` 里删。`ChatService.forkConversationAtMessage` 把 `source.fork(...)` 包在 `withContext(IO)` 里，`copyFile` 仍是同步 lambda。`ChatInput` 的粘贴图片保持同步，`consume` 出来的内容离开回调可能失效。
+- 理由：主线程上拷贝大文件会卡界面甚至 ANR，C32 给内容寻址写入加了 `fsync` 之后更明显。
+- 合并注意：`CropLauncher` 的回调现在是 suspend 契约，调用方必须在回调里完成拷贝再返回，否则临时文件会在拷贝前被删；`ChatPage`、`ChatAttachmentPicker`、`ChatInput`、`CropLauncher`、`UIAvatar`、`BackgroundPicker`、`ChatService` 都动过，合并时按本行复核。异步化带来一个已知交错：拷贝期间用户可以发送或关闭选择器，附件会在拷贝完成后追加到输入框，分享路径还会整体覆盖输入框内容；没有加「导入中」状态。粘贴路径必须保持同步；fork 的 `copyFile` 参数仍是同步类型，只是在调用点包了 IO。

@@ -1080,8 +1080,10 @@ class ChatService(
     ): Conversation {
         val source = withLoadedSession(conversationId) { it.state.value }
         val existingTitles = conversationRepo.getTitlesOfAssistant(source.assistantId)
-        val fork = source.fork(messageId, existingTitles, copyFile = ::copyChatFile)
-            ?: throw NotFoundException("Message not found")
+        // fork 会把这条消息之前的本地附件各复制一份，内容寻址写入带 fsync，放到 IO 上做
+        val fork = withContext(Dispatchers.IO) {
+            source.fork(messageId, existingTitles, copyFile = ::copyChatFile)
+        } ?: throw NotFoundException("Message not found")
         // 新会话直接落库，打开时再从数据库加载
         val forkConversation = conversationStore.prepareWrite()(fork)
         conversationRepo.insertConversation(forkConversation)

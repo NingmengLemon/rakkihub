@@ -399,6 +399,7 @@ private fun TextInputRow(
             ReceiveContentListener { transferableContent ->
                 when {
                     transferableContent.hasMediaType(MediaType.Image) -> {
+                        // 粘贴回调是同步的，consume 出来的内容离开回调就可能失效，这里只能同步拷贝
                         transferableContent.consume { item ->
                             val uri = item.uri
                             if (uri != null) {

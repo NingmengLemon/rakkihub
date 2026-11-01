@@ -52,6 +52,8 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.em
 import androidx.compose.ui.unit.sp
 import coil3.compose.AsyncImage
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 import me.rerere.hugeicons.HugeIcons
 import me.rerere.hugeicons.stroke.Edit03
 import me.rerere.rikkahub.R
@@ -106,8 +108,8 @@ fun UIAvatar(
     var showUrlInput by remember { mutableStateOf(false) }
     var urlInput by remember { mutableStateOf("") }
 
-    fun saveAvatarImage(uri: Uri) {
-        val localUris = filesManager.createChatFilesByContents(listOf(uri))
+    suspend fun saveAvatarImage(uri: Uri) {
+        val localUris = withContext(Dispatchers.IO) { filesManager.createChatFilesByContents(listOf(uri)) }
         localUris.firstOrNull()?.let { localUri ->
             onUpdate?.invoke(Avatar.Image(localUri.toString()))
         }

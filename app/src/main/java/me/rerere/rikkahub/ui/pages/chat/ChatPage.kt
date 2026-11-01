@@ -50,9 +50,11 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import me.rerere.ui.toast.ToastType
 import dev.chrisbanes.haze.hazeSource
 import dev.chrisbanes.haze.rememberHazeState
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import me.rerere.ai.provider.Model
 import me.rerere.ai.provider.ProviderSetting
 import me.rerere.ai.ui.UIMessagePart
@@ -151,9 +153,10 @@ fun ChatPage(id: Uuid, text: String?, files: List<Uri>, nodeId: Uuid? = null) {
     // 初始化输入状态（处理传入的 files 和 text 参数）
     LaunchedEffect(files, text) {
         if (files.isNotEmpty()) {
-            val localFiles = filesManager.createChatFilesByContents(files)
-            val contentTypes = files.mapNotNull { file ->
-                filesManager.getFileMimeType(file)
+            // 分享进来的文件可能很大，拷贝与类型查询放到 IO 上，避免卡住主线程
+            val (localFiles, contentTypes) = withContext(Dispatchers.IO) {
+                filesManager.createChatFilesByContents(files) to
+                    files.mapNotNull { file -> filesManager.getFileMimeType(file) }
             }
             val parts = buildList {
                 localFiles.forEachIndexed { index, file ->
