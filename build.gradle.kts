@@ -10,8 +10,8 @@ plugins {
 }
 
 spotless {
-    // 只格式化相对 origin/ref 有改动的文件，避免一次性重排整个仓库
-    ratchetFrom("origin/ref")
+    // 只格式化相对 origin/main 有改动的文件，也就是本批还没推出去的改动
+    ratchetFrom("origin/main")
 
     // Spotless 只从 .editorconfig 读标准属性，ktlint 的风格和规则开关得写在这里
     val ktlintVersion = libs.versions.ktlint.get()

@@ -31,49 +31,44 @@
 
 远端默认分支是 `main`，`origin/HEAD` 指向它；缓存过期时用 `git remote set-head origin -a` 刷新。
 
-`origin/ref` 要保留并跟随上游：`spotlessCheck` 拿它当比较基点，原因见 [`build.md`](build.md) 的格式检查一节。
+`origin/ref` 与 `origin/main` 都要保留：`ref` 是上游镜像，`main` 是工作分支。`spotlessCheck` 以 `origin/main` 为比较基点，与 `origin/ref` 无关，原因见 [`build.md`](build.md) 的格式检查一节。
 
-## 上游同步流程
+## 上游参考流程
+
+本仓库按独立更新维护：上游只作参考，不合并。`ref` 是上游镜像，按下面的方式更新：
 
 ```powershell
 git fetch upstream --no-tags
 git checkout ref
 git merge --ff-only upstream/master
 git push origin ref
-git checkout main
-git merge ref
 ```
 
 `ref` 上用 `--ff-only`，一旦出现非快进说明有东西误提交到了 `ref`，先查清楚再继续，不要用普通 merge 掩盖。
 
-合并到 `main` 后跑一遍测试：
+看上游改了什么的入口：
 
 ```powershell
-$env:JAVA_HOME='E:\WorkBench\Java\jdk-23.0.2'; $env:PATH="$env:JAVA_HOME\bin;$env:PATH"
-.\gradlew.bat test --continue --console=plain
+git log --oneline <上次查看点>..upstream/master
 ```
 
-判据是「没有新增失败」，不是「全部通过」；Windows 上固定失败的那批用例见 [`build.md`](build.md) 的测试一节。
+按 [`roadmap.md`](roadmap.md) 的模块参考表筛：保命层读 diff 自己移植，能力层评估后自己实现，地基层跳过。移植之后跑测试，判据是「没有新增失败」，Windows 上固定失败的那批用例见 [`build.md`](build.md) 的测试一节。移植时按 [`checklist.md`](checklist.md) 复核已登记的定制没有被覆盖，新增或删除文案按 [`locale.md`](locale.md) 处理。
 
-测试之外还有两步：按 [`checklist.md`](checklist.md) 逐项复核定制没有被静默丢掉，按 [`locale.md`](locale.md) 处理新增或删除的文案。
+完整的移植流程与模块划分见 [`roadmap.md`](roadmap.md) 的「独立更新」一节。
 
-以上是当前的合并流程。方向是切到独立更新（不再合并上游，只参考它的提交），切换之后本节流程作废，见 [`roadmap.md`](roadmap.md) 的「独立更新」一节。
+### 上次查看点
 
-### 当前待处理的同步
-
-无。上游已同步到 `a5db9c9b`，下一次同步从该点开始。
+上游镜像停在 `a5db9c9b`，下一次看上游从该点之后开始。
 
 ## 定制原则
 
-本节中「改动尽量小，优先断入口」与「避开上游热区」两条是为降低上游合并成本而设的，会随整分支合并结束而失效；其余几条不依赖合并成本。失效的时机、放开之后的具体差异，以及另外几处同类的合并成本让步，见 [`roadmap.md`](roadmap.md) 的「定制原则的适用范围」一节。
+「改动尽量小，优先断入口」与「避开上游热区」两条是合并成本的对价；在独立更新下它们在 `app/` 里不再适用，只有 `ai/` 仍按「改动尽量小」处理。其余几条不依赖合并成本。具体差异见 [`roadmap.md`](roadmap.md) 的「定制原则的适用范围」一节。
 
 ### 改动尽量小，优先断入口
 
-删除功能时优先改条件、去掉入口，而不是删掉整段实现。上游改同一功能的实现时，条件行通常不会冲突，删光的实现则会在每次上游改动时反复冲突。
+这条现在只约束 `ai/`：它仍要参考上游，改动越小，移植上游对同一文件的改动时越容易比对。删除 `ai/` 里的功能时优先改条件、去掉入口，而不是删掉整段实现。确实要删整个文件，把路径记进 [`checklist.md`](checklist.md)，移植上游对该文件的改动时专门核对。
 
-确实要删整个文件时，把路径记进 [`checklist.md`](checklist.md)，合并时专门检查上游对该文件的改动。
-
-C8 与 C9 删的是完整实现而不是入口。这两项功能各自独立成文件，改动集中在自己那一小块里，不进入上游的核心改动路径；保留断入口会让每次上游改动都要重新确认入口是否还在，维护成本高于删除。与上游热区重叠的功能仍按上面这条规则处理。
+`app/` 不受这条约束：该删的实现在那里可以直接删掉，不必为了可合并性留入口或死代码。
 
 ### 数据结构
 
@@ -107,8 +102,8 @@ git log --oneline ref..main
 
 - 用 `subagent` 派发，不要用 `subagent_fork`。fork 会继承实现这批改动的对话上下文，失去独立视角的意义。
 - 在派发的 prompt 里要求子代理先加载 `code-review` 技能，再按其流程执行。
-- review 基线取 `ref..main`，即本批定制相对上游的全部改动。
-- 关注三件事：是否引入回归、是否触碰已存储数据的结构、是否符合本文件的定制原则。C8 与 C9 按「改动尽量小，优先断入口」一节的补充说明直接删了实现，不按「优先断入口」判；这条评审标准本身随该原则一并失效。
+- review 基线取 `origin/main..main`，即本批还没推出去的改动；要审计全部定制用 `git log --oneline ref..main`。
+- 关注三件事：是否引入回归、是否触碰已存储数据的结构、是否符合本文件的定制原则。`app/` 里已经不再要求「优先断入口」，评审按当前原则判断。
 - 未通过就修复后重跑，不得带病推送。通过后才允许 `git push origin main`。
 
 ### 文档与实现

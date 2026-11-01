@@ -26,7 +26,7 @@ Material 3 look (cards with dividers, plain forms).
 ./gradlew bundlePlayRelease      # 构建上架 Google Play 的 AAB
 ./gradlew test                   # 运行所有模块的 JVM 单元测试
 ./gradlew lint                   # 运行 Android Lint
-./gradlew spotlessApply          # 用 ktlint 格式化相对 origin/ref 改动过的 Kotlin 文件
+./gradlew spotlessApply          # 用 ktlint 格式化相对 origin/main 改动过的 Kotlin 文件
 ./gradlew spotlessCheck          # 只检查格式不改文件
 ```
 
@@ -131,14 +131,13 @@ This repository carries personal customizations on top of upstream `rikkahub/rik
   data-structure section of `docs/custom/README.md` lists the constraints.
 - A Room schema change also makes the official-compatible export fail until its trimming logic exists (see C18). That
   failure is deliberate, not a bug.
-- Prefer disabling an entry point over deleting an implementation, so upstream merges stay cheap. This is a
-  merge-cost concession rather than a permanent rule; it lifts once the branch switches to independent updates, as
-  described in the customization-principles section of `docs/custom/roadmap.md`.
-- The plan is to switch to independent updates: stop merging upstream, read its commits, and port feature or bugfix
-  ideas by hand instead of tracking it. Until the switch, whole-branch merge is the current rule and the C3 deletion in
-  `ai/util/Request.kt` is replayed on every merge, since it is the only customization under `ai/`; after the switch,
-  keep that deletion whenever upstream changes to the file are ported. The module reference table and the porting
-  procedure live in the independent-update section of `docs/custom/roadmap.md`.
+- The branch is on independent updates: upstream is read, not merged. Read its commits, port feature or bugfix ideas
+  by hand, and keep the C3 deletion in `ai/util/Request.kt` whenever upstream changes to that file are ported. The
+  module reference table and the porting procedure live in the independent-update section of
+  `docs/custom/roadmap.md`.
+- The merge-cost concessions are gone now that the branch is on independent updates: inside `app/`, delete
+  implementations outright instead of leaving entry-point shells, and edit the hot files freely. Keep changes small
+  inside `ai/`, which is still read against upstream (C3 is the only customization there).
 - Before pushing a batch of customizations, run an independent review: dispatch a fresh-context `subagent` (not
-  `subagent_fork`) and have it load the `code-review` skill, reviewing `ref..main`. Fix what it finds and re-run
-  until it passes; only then `git push origin main`.
+  `subagent_fork`) and have it load the `code-review` skill, reviewing `origin/main..main` (the batch; use `ref..main`
+  to audit every customization). Fix what it finds and re-run until it passes; only then `git push origin main`.
