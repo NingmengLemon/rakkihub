@@ -630,6 +630,7 @@
   <string name="setting_display_page_message_jumper_position_title">Position der Nachrichten-Sprungleiste</string>
   <string name="setting_display_page_notification_message_generated">Benachrichtigung nach generierter Nachricht aktivieren</string>
   <string name="setting_display_page_notification_message_generated_desc">Eine Benachrichtigung anzeigen, wenn eine Nachricht generiert wurde und die App nicht im Vordergrund ist</string>
+  <string name="setting_files_page_clean_range_keep">Noch verwendete Dateien bleiben erhalten.</string>
   <string name="setting_files_page_clean_range_description">Wähle Dateien aus, die dauerhaft gelöscht werden sollen. Diese Aktion kann nicht rückgängig gemacht werden.</string>
   <string name="setting_files_page_clean_title">Dateien bereinigen?</string>
   <string name="setting_files_page_clean_unused_busy">Eine Antwort wird noch generiert. Versuche es später erneut.</string>

@@ -364,30 +364,6 @@ class FilesManager(
         false
     }
 
-    suspend fun deleteOlderThan(
-        folder: String = FileFolders.UPLOAD,
-        cutoffMillis: Long,
-    ): Boolean = withContext(Dispatchers.IO) {
-        var allDeleted = true
-        repository.listByFolder(folder).first()
-            .filter { it.createdAt < cutoffMillis }
-            .forEach { entity ->
-                val file = getFile(entity)
-                val deletedFromDisk = !file.exists() || runCatching {
-                    file.deleteRecursively()
-                }.getOrDefault(false)
-
-                if (deletedFromDisk) {
-                    if (repository.deleteById(entity.id) == 0) {
-                        allDeleted = false
-                    }
-                } else {
-                    allDeleted = false
-                }
-            }
-        allDeleted
-    }
-
     /** 上传目录的写入走内容寻址：同一份内容复用同一个文件 */
     private fun writeUploadContent(
         displayName: String,

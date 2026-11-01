@@ -34,14 +34,14 @@ class AttachmentCleanerTest {
     fun `a file that nothing references can go`() {
         val file = File(directory, "hash.jpg").apply { writeText("x") }
 
-        assertTrue(isUnreferencedUploadFile(file, emptySet(), emptyList(), now))
+        assertTrue(shouldDeleteUploadFile(file, emptySet(), emptyList(), now))
     }
 
     @Test
     fun `a referenced file stays`() {
         val file = File(directory, "hash.jpg").apply { writeText("x") }
 
-        assertFalse(isUnreferencedUploadFile(file, setOf(file.canonicalPath), emptyList(), now))
+        assertFalse(shouldDeleteUploadFile(file, setOf(file.canonicalPath), emptyList(), now))
     }
 
     @Test
@@ -49,7 +49,7 @@ class AttachmentCleanerTest {
         val file = File(directory, "${ContentAddressedFiles.PENDING_PREFIX}x").apply { writeText("x") }
         file.setLastModified(now - 60_000L)
 
-        assertFalse(isUnreferencedUploadFile(file, emptySet(), emptyList(), now))
+        assertFalse(shouldDeleteUploadFile(file, emptySet(), emptyList(), now))
     }
 
     @Test
@@ -57,14 +57,14 @@ class AttachmentCleanerTest {
         val file = File(directory, "${ContentAddressedFiles.PENDING_PREFIX}x").apply { writeText("x") }
         file.setLastModified(now - 2 * 60 * 60 * 1000L)
 
-        assertTrue(isUnreferencedUploadFile(file, emptySet(), emptyList(), now))
+        assertTrue(shouldDeleteUploadFile(file, emptySet(), emptyList(), now))
     }
 
     @Test
     fun `a file mentioned by an unparsable url stays`() {
         val file = File(directory, "hash.jpg").apply { writeText("x") }
 
-        assertFalse(isUnreferencedUploadFile(file, emptySet(), listOf("file:%zzhash.jpg"), now))
+        assertFalse(shouldDeleteUploadFile(file, emptySet(), listOf("file:%zzhash.jpg"), now))
     }
 
     @Test
@@ -89,6 +89,95 @@ class AttachmentCleanerTest {
 
         assertTrue(referenced.isEmpty())
         assertTrue(unresolved.isEmpty())
-        assertTrue(isUnreferencedUploadFile(file, referenced, unresolved, now))
+        assertTrue(shouldDeleteUploadFile(file, referenced, unresolved, now))
+    }
+
+    @Test
+    fun `an old unreferenced file can go when cleaning by age`() {
+        val file = File(directory, "hash.jpg").apply { writeText("x") }
+
+        assertTrue(
+            shouldDeleteUploadFile(
+                file = file,
+                referencedPaths = emptySet(),
+                unresolvedUrls = emptyList(),
+                now = now,
+                cutoffMillis = now - 1_000,
+                createdAtMillis = now - 10_000,
+            ),
+        )
+    }
+
+    @Test
+    fun `a recent file stays when cleaning by age`() {
+        val file = File(directory, "hash.jpg").apply { writeText("x") }
+
+        assertFalse(
+            shouldDeleteUploadFile(
+                file = file,
+                referencedPaths = emptySet(),
+                unresolvedUrls = emptyList(),
+                now = now,
+                cutoffMillis = now - 1_000,
+                createdAtMillis = now,
+            ),
+        )
+    }
+
+    @Test
+    fun `an old but referenced file stays when cleaning by age`() {
+        val file = File(directory, "hash.jpg").apply { writeText("x") }
+
+        assertFalse(
+            shouldDeleteUploadFile(
+                file = file,
+                referencedPaths = setOf(file.canonicalPath),
+                unresolvedUrls = emptyList(),
+                now = now,
+                cutoffMillis = now - 1_000,
+                createdAtMillis = now - 10_000,
+            ),
+        )
+    }
+
+    @Test
+    fun `a file created exactly at the cutoff stays`() {
+        val file = File(directory, "hash.jpg").apply { writeText("x") }
+
+        assertFalse(
+            shouldDeleteUploadFile(
+                file = file,
+                referencedPaths = emptySet(),
+                unresolvedUrls = emptyList(),
+                now = now,
+                cutoffMillis = now - 1_000,
+                createdAtMillis = now - 1_000,
+            ),
+        )
+    }
+
+    @Test
+    fun `an unregistered file falls back to its modification time`() {
+        val file = File(directory, "hash.jpg").apply { writeText("x") }
+        file.setLastModified(now - 10_000)
+
+        assertTrue(
+            shouldDeleteUploadFile(
+                file = file,
+                referencedPaths = emptySet(),
+                unresolvedUrls = emptyList(),
+                now = now,
+                cutoffMillis = now - 1_000,
+            ),
+        )
+        assertFalse(
+            shouldDeleteUploadFile(
+                file = File(directory, "recent.jpg").apply { writeText("x") }.apply { setLastModified(now) },
+                referencedPaths = emptySet(),
+                unresolvedUrls = emptyList(),
+                now = now,
+                cutoffMillis = now - 1_000,
+            ),
+        )
     }
 }

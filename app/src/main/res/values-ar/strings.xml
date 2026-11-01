@@ -713,6 +713,7 @@
   <string name="setting_files_page_clean_content_description">تنظيف الملفات</string>
   <string name="setting_files_page_clean_failed_toast">تعذر تنظيف بعض الملفات</string>
   <string name="setting_files_page_clean_older_than_days">أقدم من %1$d يومًا</string>
+  <string name="setting_files_page_clean_range_keep">يتم الاحتفاظ بالملفات قيد الاستخدام.</string>
   <string name="setting_files_page_clean_range_description">حدد الملفات لحذفها نهائيًا. لا يمكن التراجع عن هذا الإجراء.</string>
   <string name="setting_files_page_clean_title">هل تريد تنظيف الملفات؟</string>
   <string name="setting_files_page_clean_unused_busy">لا يزال هناك رد قيد الإنشاء. أعد المحاولة لاحقًا.</string>

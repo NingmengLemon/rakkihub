@@ -633,6 +633,7 @@
   <string name="setting_files_page_clean_content_description">清理文件</string>
   <string name="setting_files_page_clean_failed_toast">部分文件清理失败</string>
   <string name="setting_files_page_clean_older_than_days">%1$d 天前</string>
+  <string name="setting_files_page_clean_range_keep">仍在使用的文件会保留。</string>
   <string name="setting_files_page_clean_range_description">选择要永久删除的文件。此操作无法撤销。</string>
   <string name="setting_files_page_clean_title">清理文件？</string>
   <string name="setting_files_page_clean_unused_busy">正在生成回复，请稍后再试</string>

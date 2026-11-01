@@ -640,6 +640,7 @@
   <string name="setting_files_page_clean_content_description">Clean files</string>
   <string name="setting_files_page_clean_failed_toast">Some files could not be cleaned</string>
   <string name="setting_files_page_clean_older_than_days">Older than %1$d days</string>
+  <string name="setting_files_page_clean_range_keep">Files still in use are kept.</string>
   <string name="setting_files_page_clean_range_description">Select files to permanently delete. This action cannot be undone.</string>
   <string name="setting_files_page_clean_title">Clean files?</string>
   <string name="setting_files_page_clean_unused_busy">A reply is still generating. Try again later.</string>

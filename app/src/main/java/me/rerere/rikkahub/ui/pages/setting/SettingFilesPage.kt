@@ -177,6 +177,7 @@ fun SettingFilesPage(
                             when {
                                 result == null -> toaster.show(cleanUnusedFailedToast)
                                 result.busy -> toaster.show(cleanUnusedBusyToast)
+                                result.failedFiles > 0 -> toaster.show(cleanUnusedFailedToast)
                                 result.removedFiles == 0 -> toaster.show(cleanUnusedEmptyToast)
                                 else -> toaster.show(
                                     context.getString(
@@ -215,13 +216,28 @@ fun SettingFilesPage(
                 onClean = {
                     showCleanSheet = false
                     scope.launch {
-                        val ok = selectedCleanRange.days?.let { days ->
-                            filesManager.deleteOlderThan(
-                                folder = selectedFolder,
-                                cutoffMillis = System.currentTimeMillis() - TimeUnit.DAYS.toMillis(days.toLong()),
-                            )
-                        } ?: filesManager.deleteAll(selectedFolder)
-                        toaster.show(if (ok) cleanedToast else cleanFailedToast)
+                        val days = selectedCleanRange.days
+                        if (days != null) {
+                            // 按天清理也走标记-清除：去重之后「文件旧」不代表「没人用」
+                            val result = try {
+                                attachmentCleaner.cleanOlderThan(
+                                    cutoffMillis = System.currentTimeMillis() - TimeUnit.DAYS.toMillis(days.toLong()),
+                                )
+                            } catch (e: CancellationException) {
+                                throw e
+                            } catch (e: Exception) {
+                                Log.w("SettingFilesPage", "Failed to clean old attachments", e)
+                                null
+                            }
+                            when {
+                                result == null -> toaster.show(cleanFailedToast)
+                                result.busy -> toaster.show(cleanUnusedBusyToast)
+                                result.failedFiles > 0 -> toaster.show(cleanFailedToast)
+                                else -> toaster.show(cleanedToast)
+                            }
+                        } else {
+                            toaster.show(if (filesManager.deleteAll(selectedFolder)) cleanedToast else cleanFailedToast)
+                        }
                     }
                 },
             )
@@ -337,7 +353,11 @@ private fun CleanFilesSheet(
                 style = MaterialTheme.typography.headlineSmall,
             )
             Text(
-                text = stringResource(R.string.setting_files_page_clean_range_description),
+                text = if (selectedRange.days != null) {
+                    stringResource(R.string.setting_files_page_clean_range_keep)
+                } else {
+                    stringResource(R.string.setting_files_page_clean_range_description)
+                },
                 style = MaterialTheme.typography.bodyMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
