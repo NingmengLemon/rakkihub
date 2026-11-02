@@ -44,7 +44,7 @@ def categorize(url: str) -> tuple[str, str | None]:
 
 
 def main() -> int:
-    parser = argparse.ArgumentParser(description=__doc__)
+    parser = argparse.ArgumentParser(description='统计一份 RikkaHub 数据库里的附件引用形状。')
     parser.add_argument('--db', required=True, help='拉下来的数据库文件')
     args = parser.parse_args()
 
@@ -53,7 +53,11 @@ def main() -> int:
         print(f'no such database: {database}', file=sys.stderr)
         return 1
 
-    db = sqlite3.connect(f'{database.resolve().as_uri()}?mode=ro', uri=True)
+    try:
+        db = sqlite3.connect(f'{database.resolve().as_uri()}?mode=ro', uri=True)
+    except sqlite3.Error as error:
+        print(f'cannot open the database: {error}', file=sys.stderr)
+        return 1
     try:
         conversations = db.execute('select count(*) from "ConversationEntity"').fetchone()[0]
         rows = db.execute('select messages from message_node').fetchall()
