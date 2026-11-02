@@ -51,7 +51,7 @@
 
 ### C1 移除媒体创作与生图
 
-- 落点：`RouteActivity`（删 `Screen.ImageGen`、`Screen.MediaCreation`、`Screen.MediaCreationSessions` 及其 entry 与 intent 处理，`Screen.SettingMedia` 的 entry 保留）、`ChatDrawer`（侧边栏两个入口）、`ViewModelModule`、`RikkaHubApp`（启动恢复）、`SettingPage`（媒体设置入口）、`shortcuts.xml`、`AndroidManifest`；删除 `ui/pages/mediacreation` 与 `ui/pages/imggen`，以及它们遗留的 157 条无引用字符串（以 `media_creation_*`、`imggen_page_*` 为主，另有 `chat_page_menu_image_generation`、`shortcut_media_creation`、`setting_page_media_desc`、`menu`）；`media_creation_*` 中仍有 19 条在用（`MediaCreationService`、`MediaCreationForegroundService`、`RikkaHubApp`），不要按前缀整批删；`sketch_draw_on_image` 保留，它同时是聊天输入框画板的按钮文案
+- 落点：`RouteActivity`（删 `Screen.ImageGen`、`Screen.MediaCreation`、`Screen.MediaCreationSessions` 及其 entry 与 intent 处理，`Screen.SettingMedia` 的 entry 保留）、`ChatDrawer`（侧边栏两个入口）、`ViewModelModule`、`RikkaHubApp`（启动恢复）、`SettingPage`（媒体设置入口）、`shortcuts.xml`、`AndroidManifest`；删除 `ui/pages/mediacreation` 与 `ui/pages/imggen`，以及它们遗留的 157 条无引用字符串（以 `media_creation_*`、`imggen_page_*` 为主，另有 `chat_page_menu_image_generation`、`shortcut_media_creation`、`setting_page_media_desc`、`menu`）；`media_creation_*` 中仍有 19 条在用（`MediaCreationService`、`MediaCreationForegroundService`、`RikkaHubApp`），不要按前缀整批删；`sketch_draw_on_image` 保留，它同时是聊天输入框画板的按钮文案；`res/drawable/ic_media_creation.xml` 随入口一起删掉
 - 理由：不使用
 - 合并注意：刻意保留未动：`data/model/MediaCreation.kt`、`data/files/MediaCreationFiles.kt`、`data/db` 下的实体与 DAO、`data/repository/MediaCreationRepository.kt`、`service/MediaCreationService.kt`、`service/MediaCreationForegroundService.kt`、整个 `mediagen/` 模块、manifest 的 `<service>` 声明、`Settings.mediaGenerationProviders`、`SettingMediaPage.kt` 及其路由。合并时不要因为界面上看不到就顺手删掉这些。两处冲突风险：上游若重排 `RouteActivity` 的 `Screen` 与 entry 列表；上游 `feat/mediagen` 分支（16 提交，2026-10-05 仍有活动）正在改 `MediaCreationService.kt` 与被删除的 mediacreation UI，合并时按该分支进度判断是否恢复部分实现
 
@@ -88,7 +88,7 @@
 
 - 落点：生成侧：`ChatService` 的 `generateSuggestion` 方法与每轮结束时的调用、`ConversationMetaGenerator.generateSuggestions`；`data/ai/prompts/Suggestion.kt` 整个删除，`DEFAULT_SUGGESTION_PROMPT` 内联到 `Settings.kt` 作为字段默认值。UI 侧：`ChatList` 的 `onClickSuggestion` 参数与 `ChatSuggestionsRow`、`ChatPage` 的回调、`SettingModelPage` 的开关、`SettingModelPromptPage` 的建议提示词编辑项；7 个 locale 删掉四条建议文案，`setting_model_page_fast_model_desc` 去掉「chat suggestions」的说法
 - 理由：不用这个功能，每条回复都会多一次生成请求
-- 合并注意：保留存储与协议：`Settings.enableSuggestion`、`Settings.suggestionPrompt` 的字段与 DataStore key 不动，`Conversation.chatSuggestions` 是 Room 字段不能删，`WebDto.chatSuggestions` 与 `ConversationRepository.updateChatSuggestions` 一并保留，历史数据仍能读出与同步。`UsageSource.SUGGESTION` 枚举值保留，用量统计里不会再有新记录。`setting_model_page_suggestion_prompt_vars` 仍被标题提示词项使用，没有删
+- 合并注意：保留存储与协议：`Settings.enableSuggestion`、`Settings.suggestionPrompt` 的字段与 DataStore key 不动，`Conversation.chatSuggestions` 是 Room 字段不能删，`WebDto.chatSuggestions` 与 `ConversationRepository.updateChatSuggestions` 一并保留，历史数据仍能读出与同步。`UsageSource.SUGGESTION` 枚举值保留，用量统计里不会再有新记录。`setting_model_page_suggestion_prompt_vars` 仍被标题提示词项使用，没有删。`web-ui` 仍会渲染历史会话里已存的 `chatSuggestions`，只影响旧数据，React 侧没有跟删
 
 ### C7 应用图标旋转 180 度
 
@@ -136,7 +136,7 @@
 
 - 落点：`SettingPage.kt`（about 分组里的分享 item、`shareText`/`share`/`noShareApp` 三个局部变量与三个失效 import）、7 个 locale 的 `setting_page_share`、`setting_page_share_desc`、`setting_page_share_text`、`setting_page_no_share_app`；品牌文案：`setting_page_web_server_desc`（7 个 locale）、`oauth` 模块的 4 条回调提示（7 个 locale）、`web-ui` 的 `page.json` 标题与描述、`conversation-sidebar.tsx` 的侧边栏标题
 - 理由：分享出去还自称官方品牌并指向上游官网，没有意义；其余文案跟着应用名一起改成 RakkiHub
-- 合并注意：`search-picker.tsx` 里的 `rikkahub: "RikkaHub"` 是搜索服务的显示名，指官方接口，保留；`backup_page_import_from_official` 的「Import from RikkaHub」指官方应用，同样保留
+- 合并注意：`search-picker.tsx` 里的 `rikkahub: "RikkaHub"` 是搜索服务的显示名，指官方接口，保留；`backup_page_import_from_official` 的「Import from RikkaHub」指官方应用，同样保留。About 页的 `RikkaHub` 标题与 `rikka-ai.com`、`docs.rikka-ai.com`、GitHub、LICENSE 链接保留，`web-ui` 页脚的官方站链接也保留，作为上游出处标注，没有改成自己的品牌
 
 ### C15 移除更新检查
 
@@ -260,8 +260,8 @@
 
 ### C35 模型选择支持多关键词搜索
 
-- 来源：上游 `5ad19405`（`feat(model): 模型选择面板支持多关键词搜索`），代码与该提交一致，只补了对应用例。
-- 落点：`ai/src/main/java/me/rerere/ai/provider/Model.kt` 加 `List<Model>.filterByKeywords`（按空格拆关键词、忽略大小写、每个关键词命中 `modelId` 或 `displayName` 的一部分、不要求顺序，空查询返回原列表）；`ModelList.kt` 的聊天模型面板与 `SettingProviderDetailPage.kt` 的可用模型面板共用这一条规则；新增 `ModelFilterTest` 六条 JVM 用例。
+- 来源：上游 `5ad19405`（`feat(model): 模型选择面板支持多关键词搜索`），代码与该提交一致；`ModelFilterTest` 六条用例与 `ref` 里的那份相同，本分支相对它的差异只有 KDoc 与一个空行。
+- 落点：`ai/src/main/java/me/rerere/ai/provider/Model.kt` 加 `List<Model>.filterByKeywords`（按空格拆关键词、忽略大小写、每个关键词命中 `modelId` 或 `displayName` 的一部分、不要求顺序，空查询返回原列表）；`ModelList.kt` 的聊天模型面板与 `SettingProviderDetailPage.kt` 的可用模型面板共用这一条规则；`ModelFilterTest` 六条 JVM 用例（与上游该提交一致）。
 - 理由：聊天面板原来整串匹配且只看 `displayName`，多词或按模型 ID 搜不到；提供商详情的面板已经按空格拆词并同时匹配 `modelId` 与 `displayName`。这次抽成共用函数，两边用同一条规则，聊天面板也因此能按模型 ID 搜。
 - 移植注意：`filterByKeywords` 在 `ai/`，该模块仍尽量跟随上游；以后跟随上游对 `Model.kt` 的改动时保留这个函数，两个 UI 调用点在 `app/`，合并成本让步已不适用。上游后续如果再改这块，按本行核对。
 
