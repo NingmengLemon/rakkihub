@@ -845,7 +845,6 @@
   <string name="setting_provider_page_tool">工具</string>
   <string name="setting_provider_page_use_service_account">使用服務帳號</string>
   <string name="setting_provider_page_vertex_ai">Vertex AI</string>
-  <string name="setting_tts_page_add">新增</string>
   <string name="settings">設定</string>
   <string name="share">分享</string>
   <string name="share_handler_page_title">選擇一個助手處理分享</string>

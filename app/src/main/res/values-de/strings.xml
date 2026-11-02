@@ -762,7 +762,7 @@
   <string name="setting_model_page_chat_model">Chat-Modell</string>
   <string name="setting_model_page_chat_model_desc">Globales Standard-Chat-Modell</string>
   <string name="setting_model_page_fast_model">Schnelles Modell</string>
-  <string name="setting_model_page_fast_model_desc">Modell für Titel, Chat-Vorschläge und andere schnelle oder Hintergrundaufgaben</string>
+  <string name="setting_model_page_fast_model_desc">Modell für Titel und andere schnelle oder Hintergrundaufgaben</string>
   <string name="setting_model_page_ocr_model">OCR-Modell</string>
   <string name="setting_page_extensions_desc">Prompt-Injektionen, Skills und mehr verwalten</string>
   <string name="setting_page_general_settings">Allgemeine Einstellungen</string>
@@ -878,7 +878,6 @@
   <string name="setting_provider_page_tool">Tool</string>
   <string name="setting_provider_page_use_service_account">Dienstkonto verwenden</string>
   <string name="setting_provider_page_vertex_ai">Vertex AI</string>
-  <string name="setting_tts_page_add">Hinzufügen</string>
   <string name="settings">Einstellungen</string>
   <string name="share">Teilen</string>
   <string name="share_handler_page_title">Assistenten auswählen</string>
@@ -1181,7 +1180,7 @@
   <string name="media_creation_error_cancelled_remotely">Die Aufgabe wurde auf dem Server abgebrochen</string>
   <string name="media_creation_error_expired">Die Aufgabe ist abgelaufen</string>
   <string name="setting_media_page_empty">Noch keine Medien-Generierungsanbieter. Tippe oben auf +, um einen hinzuzufügen.</string>
-  <string name="setting_media_page_s3_desc">Einige APIs akzeptieren Assets nur unter öffentlichen URLs (etwa Referenzbilder und Referenzvideos für die Videogenerierung). Richte hier einen S3-kompatiblen Objektspeicherdienst ein; lokale Dateien werden zuerst in dessen Bucket hochgeladen und dann der API als temporäre URLs übergeben. Hochgeladene Dateien werden nach 7 Tagen automatisch bereinigt. Diese Konfiguration ist unabhängig vom S3, das für Backups verwendet wird.</string>
+  <string name="setting_media_page_s3_desc">Einige APIs akzeptieren Assets nur unter öffentlichen URLs (etwa Referenzbilder und Referenzvideos für die Videogenerierung). Richte hier einen S3-kompatiblen Objektspeicherdienst ein; lokale Dateien werden zuerst in dessen Bucket hochgeladen und dann der API als temporäre URLs übergeben. Hochgeladene Dateien werden nach 7 Tagen automatisch bereinigt.</string>
   <string name="setting_media_page_provider_type">Anbietertyp</string>
   <string name="setting_media_page_provider_name">Name</string>
   <string name="setting_media_page_workspace_id">Arbeitsbereichs-ID</string>

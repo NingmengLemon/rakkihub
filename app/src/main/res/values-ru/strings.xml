@@ -847,7 +847,6 @@
   <string name="setting_provider_page_tool">Инструмент</string>
   <string name="setting_provider_page_use_service_account">Использовать сервисный аккаунт</string>
   <string name="setting_provider_page_vertex_ai">Vertex AI</string>
-  <string name="setting_tts_page_add">Добавить</string>
   <string name="settings">Настройки</string>
   <string name="share">Поделиться</string>
   <string name="share_handler_page_title">Выбрать ассистента</string>

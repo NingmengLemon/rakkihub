@@ -867,7 +867,6 @@ mDNS 地址：使用 .local 主机名，同一网络中的其他设备可通过�
   <string name="setting_provider_page_tool">工具</string>
   <string name="setting_provider_page_use_service_account">使用服务账号</string>
   <string name="setting_provider_page_vertex_ai">Vertex AI</string>
-  <string name="setting_tts_page_add">添加</string>
   <string name="settings">设置</string>
   <string name="share">分享</string>
   <string name="share_handler_page_title">选择一个助手处理分享</string>

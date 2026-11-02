@@ -847,7 +847,6 @@ mDNSアドレス: .localホスト名を使用し、IPを知らなくても同じ
   <string name="setting_provider_page_tool">ツール</string>
   <string name="setting_provider_page_use_service_account">サービスアカウントを使用</string>
   <string name="setting_provider_page_vertex_ai">Vertex AI</string>
-  <string name="setting_tts_page_add">追加</string>
   <string name="settings">設定</string>
   <string name="share">共有</string>
   <string name="share_handler_page_title">共有を処理するアシスタントを選択</string>
