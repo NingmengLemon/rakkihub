@@ -119,7 +119,7 @@ v31 的样本推成 `rikkahub-sample-v31.db` 与 `backup-expectations-v31.json`�
 | 官方客户端导出 | v32（官方 3.1.1，带附件引用） | 表数据与转换产物全量；附件逐个比；settings 的条数、id 集合、当前助手与模型 |
 | 构造样本 | `BackupManagerTest` 里改 identity 的用例 | 覆盖接线，无独立样本 |
 | 本 fork 旧构建 | v31（产出自 3.1.0 (193)，包名还是 `me.rerere.rikkahub`） | 表数据与内容摘要；settings 只手工核对过条数（经 migrate 与 decode 后不变），没有脚本或测试复现；附件未逐个比 |
-| 本应用自己导出 | `BackupManagerTest` 的常规恢复用例与 `foreignAttachmentPathsAreRewrittenOnSameVersionRestore` | 常规用例覆盖原路径，但没有插入引用，「引用都属于当前安装、不经转换器」没有用例断言；指向别的安装的旧绝对引用命中 C25，同版本也走转换器；新写或重存过的消息引用是相对形态，按当前安装解析；迁移链升级无样本或用例 |
+| 本应用自己导出 | `BackupManagerTest` 的常规恢复用例与 `foreignAttachmentPathsAreRewrittenOnSameVersionRestore`、`OfficialForeignAttachmentPathsTest`（探测判定） | 常规用例覆盖原路径，但没有插入引用，「引用都属于当前安装、恢复时不走转换器」这条恢复路径没有用例；探测判定由 `OfficialForeignAttachmentPathsTest` 覆盖（androidTest，不进 CI）。指向别的安装的旧绝对引用命中 C25，同版本也走转换器；新写或重存过的消息引用是相对形态，按当前安装解析；迁移链升级无样本或用例 |
 | 高版本库 | `BackupManagerTest` 的拒绝用例 | 验过 |
 | 官方兼容出口 | `BackupManagerTest` 的两条路径改写用例，外加一条「官方出口归档再恢复回本应用」 | 绝对与相对路径改写验过；设备上导出并交给官方客户端恢复过一次（170 会话 / 676 节点 / 66 个节点带官方绝对引用 / 98 个 upload 文件，测试图片能显示）；schema 裁剪未实现 |
 | 本应用自己导出、换包名恢复 | 临时 `.crosscheck` 包名的构建 | 170 会话 / 676 节点；2 个节点带相对引用，按新安装解析；64 个节点带官方绝对引用，经 C25 改写；98 个 upload 文件；测试图片显示 |
