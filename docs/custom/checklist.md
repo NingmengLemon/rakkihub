@@ -45,6 +45,7 @@
 | C35 | 模型选择支持多关键词搜索 | 改造 |
 | C36 | 消息附件引用按相对路径存储 | 改造 |
 | C37 | CI 跑格式检查与 JVM 测试 | 改造 |
+| C38 | 设置页提示授予本地网络权限 | 新增 |
 
 ## 明细
 
@@ -243,7 +244,7 @@
 
 - 落点：新增 `data/files/ContentAddressedFiles.kt`（边写边算 SHA-256，写进同目录的 `.pending-<uuid>` 临时文件，落盘后按指纹改名，目标已存在就复用）与 `FileUtils.buildContentFileName`（扩展名优先按 MIME，其次来源文件名）；`FilesManager` 的 upload 写入全部走它（`saveManagedFrom*`、`createChatFilesByContents/ByByteArrays`、`createChatTextFile`），`createManagedFileEntity` 遇到同一路径复用已有登记，`syncFolder` 不登记 `.pending-*`；新增 `data/files/AttachmentReferences.kt`（从 JSON 与草稿文本里摘 `file:` 地址、归一成规范路径）、`LiveAttachmentReferences.kt`（进程内登记输入框附件，编辑历史消息期间草稿不写输入框，靠它兜住）与 `AttachmentCleaner.kt`（扫引用点、删无引用文件与 `managed_files` 行，`collectReferencedPaths` 与 `shouldDeleteUploadFile` 单独成纯函数）；删掉所有立即删文件的入口：`ChatService` 的落库差异删除与队列附件清理、删会话时的文件删除、`ConversationRepository.deleteConversation`、输入框移除附件（`AttachmentChips`、`ChatInputState.shouldDeleteFileOnRemove`）、助手头像与背景、用户头像，`FilesManager.deleteChatFiles`、`MessageQueue.unreferencedQueuedAttachmentUrls` 与上游的 `QueuedAttachmentCleanupTest.kt` 一并删除；`MessageNodeDAO.getContentsWithFileReferences` 只取含 `file:` 的消息行，`ChatDraftStore.referencedFileUrls`、`ChatService.unsavedAttachmentUrls` 与 `ChatService.isGenerating` 补上库外与内存引用；设置的文件管理页加「清理无引用的文件」入口，按天清理也走同一套引用判断（`AttachmentCleaner.cleanOlderThan`，`FilesManager.deleteOlderThan` 删除），新增 7 条文案 × 8 个 locale；新增 `ContentAddressedFilesTest` 四条、`AttachmentReferencesTest` 五条、`AttachmentCleanerTest` 十二条、`LiveAttachmentReferencesTest` 五条 JVM 用例，`ChatDraftStoreTest` 补一条草稿引用扫描
 - 理由：文件名原来是随机 UUID，写之前无从判断内容是否已经存在，同一张图在多个会话、多条消息里各存一份，备份体积里有很大一块是重复内容。改成内容寻址之后同内容只留一份，删除也就不能再按「删消息就删文件」做
-- 合并注意：内存与 UI 的引用形式仍是绝对 `file://`；消息库里落盘的是相对形态（C36），清理按两种形态解析，官方导出的改写也覆盖相对形态；序列化格式与 Room schema 不变。`managed_files` 只是旁路索引，消息读取不经过它，去重之后同一路径只有一条登记。清理是「宁可少收垃圾也不能删错」：解析不了的地址按文件名保守保留，生成开始前与删除前各查一次 `isGenerating`，工具结果里的新文件可能还没落库；输入框里的附件由草稿（C31）与 `LiveAttachmentReferences`（C32）保活，编辑历史消息期间不写草稿的那部分也在后者里；Web 客户端上传后还停在浏览器输入框里的附件不在扫描范围，清理前别让浏览器里留着没发出去的附件；工作区把 `filesDir/upload` bind mount 到 `/upload`，从终端写进去的文件没有任何引用，也会被清掉。消息扫描一次把所有含本地地址的行读进内存，历史很大时是手动清理的时间与内存上限；删除前还会再取一次只存在于内存的输入框登记与内存会话、队列引用，缩小扫描窗口内新加附件被误删的可能。文件页的按天清理也走同一套引用判断，只删没有引用、且登记时间（没有登记时按文件修改时间）早于截止时间的 upload 文件；登记时间在去重复用时不刷新，所以年龄是「首次写进来的时间」，不是「最后一次被用」；「全部文件」、单个删除与 Web 的 `DELETE /api/files/{id}` 仍然直接删文件，这是显式的破坏性操作。存量文件的随机名不会自动归并，去重只作用于新写入。`FilesManager`、`ChatService`、`ConversationRepository`、`AttachmentChips`、`AssistantVM`、`AssistantDetailVM`、`ChatVM`、`SettingFilesPage`、`ViewModelModule`、`RepositoryModule` 都动了，合并时按本行复核。真实清理在设备上跑过一次：相对引用的文件保留；指向别的安装的悬空引用按无引用处理（样本已恢复）。
+- 合并注意：内存与 UI 的引用形式仍是绝对 `file://`；消息库里落盘的是相对形态（C36），清理按两种形态解析，官方导出的改写也覆盖相对形态；序列化格式与 Room schema 不变。`managed_files` 只是旁路索引，消息读取不经过它，去重之后同一路径只有一条登记。清理是「宁可少收垃圾也不能删错」：解析不了的地址按文件名保守保留，生成开始前与删除前各查一次 `isGenerating`，工具结果里的新文件可能还没落库；输入框里的附件由草稿（C31）与 `LiveAttachmentReferences`（C32）保活，编辑历史消息期间不写草稿的那部分也在后者里；Web 客户端上传后还停在浏览器输入框里的附件不在扫描范围，清理前别让浏览器里留着没发出去的附件；工作区把 `filesDir/upload` bind mount 到 `/upload`，从终端写进去的文件没有任何引用，也会被清掉。消息扫描一次把所有含本地地址的行读进内存，历史很大时是手动清理的时间与内存上限；删除前还会再取一次只存在于内存的输入框登记与内存会话、队列引用，缩小扫描窗口内新加附件被误删的可能。文件页的按天清理也走同一套引用判断，只删没有引用、且登记时间（没有登记时按文件修改时间）早于截止时间的 upload 文件；登记时间在去重复用时不刷新，所以年龄是「首次写进来的时间」，不是「最后一次被用」；「全部文件」、单个删除与 Web 的 `DELETE /api/files/{id}` 仍然直接删文件，这是显式的破坏性操作。存量文件的随机名不会自动归并，去重只作用于新写入。`FilesManager`、`ChatService`、`ConversationRepository`、`AttachmentChips`、`AssistantVM`、`AssistantDetailVM`、`ChatVM`、`SettingFilesPage`、`ViewModelModule`、`RepositoryModule` 都动了，合并时按本行复核。
 
 ### C33 附件拷贝挪出主线程
 
@@ -268,10 +269,17 @@
 
 - 落点：新增 `data/files/AttachmentUrlStorage.kt`（两个纯函数：落盘前只把 JSON 里 `url` 字段的、本安装 files 目录下的 upload 绝对地址换成 `file:upload/...`，读取后还原；本安装的 `/data/user/<用户号>/` 与旧的 `/data/data/` 两种绝对形态都认）与九条 JVM 用例；`ConversationRepository` 构造多一个 `attachmentFilesDirUri`（Koin 里从 `context.filesDir` 生成），`saveMessageNodes` 落库前转换，读取消息时还原；`AttachmentReferences.fileUrlToCanonicalPath` 与 `collectReferencedPaths` 的 `filesDir` 改成必填，把相对形态还原成规范路径，`AttachmentCleaner` 扫描时传入当前 filesDir；`OfficialExportPaths.attachmentRewrites` 增加 `"url":"file:upload/` 到官方安装前缀的替换（包名相同时也要换，官方客户端只认绝对路径），配 `OfficialExportPathsTest` 断言，官方兼容导出的库仍是官方能读的绝对地址。`AttachmentCleanerTest` 补一条真实 `upload/` 文件的相对形态解析用例，删掉 `MessageNodeDAO` 里没有调用点、会绕过转换的 `getNodesOfConversation`、`insert`、`update`。
 - 理由：消息库与随它导出的备份原来把安装路径写死在每条附件地址里，包名或用户号一变就整体失效；导入侧的路径重写是事后补救，落盘形态本身应该可移植。改完之后相对地址在任意安装下都能解析，旧库里的绝对地址继续有效并在下一次保存时转换。
-- 合并注意：消息 JSON 的读写都经过 `ConversationRepository` 的转换，别的入口直接读写 `MessageNodeEntity.messages` 会绕过它；设置里的头像仍存绝对地址（靠导入侧重写），草稿不随备份走，两者都没改。清理与官方导出都按绝对、相对两种形态处理；官方导出的相对前缀带 `"url":"` 字段边界，避免碰到正文。旧数据不做一次性迁移，读到什么算什么，下一次保存时本安装的两种绝对形态都会转成相对。C36 之前的构建读到新库里的相对地址时图片大概率显示不出来，点音频、视频的附件可能抛异常，文档附件会退化成 ERROR 文本；数据不丢，升级后恢复。官方兼容导出与官方客户端恢复在设备上验过一次：导出的库与恢复后的库都是 170 个会话、676 个节点，66 条引用全是官方绝对路径，官方 upload 目录 98 个文件，测试图片能显示。跨包名恢复也验过一次：相对引用按新安装解析，旧的官方绝对引用经 C25 改写成新安装。
+- 合并注意：消息 JSON 的读写都经过 `ConversationRepository` 的转换，别的入口直接读写 `MessageNodeEntity.messages` 会绕过它；设置里的头像仍存绝对地址（靠导入侧重写），草稿不随备份走，两者都没改。清理与官方导出都按绝对、相对两种形态处理；官方导出的相对前缀带 `"url":"` 字段边界，避免碰到正文。旧数据不做一次性迁移，读到什么算什么，下一次保存时本安装的两种绝对形态都会转成相对。C36 之前的构建读到新库里的相对地址时图片大概率显示不出来，点音频、视频的附件可能抛异常，文档附件会退化成 ERROR 文本；数据不丢，升级后恢复。
 
 ### C37 CI 跑格式检查与 JVM 测试
 
 - 落点：新增 `.github/workflows/checks.yml`（push 到 `main`、PR、手动触发）：环境与每日构建一致（JDK 21、pnpm 11、Node 22、web-ui 依赖、submodules），跑 `spotlessCheck` 与 `:app:testGithubDebugUnitTest`、`:ai:testDebugUnitTest`、`:workspace:testDebugUnitTest`，失败时上传测试报告。push 时把 `origin/main` 指到 `github.event.before` 再跑格式检查（首次推送、强推后基点不可达时跳过并打 notice），PR 用基线的 `origin/main`，手动触发没有可靠基点也跳过；测试是全绿判据。`docs/custom/roadmap.md` 的 2.2 与 `docs/custom/build.md` 同步。
 - 理由：仓库原来只有每日构建，格式与测试靠人工；这两类检查反复出现（Windows 固定失败、spotless 的 ratchet 基点），把它们做成自动闸门。app、ai 与 workspace 是定制最集中的三个模块，其余模块的测试本轮不跑，边际收益低。
 - 合并注意：环境版本（JDK/pnpm/Node）与 `daily-build.yml` 两处维护，上游改其中之一时两边一起更新；`spotlessCheck` 的基点在 push 时由 workflow 改写，本地仍按 `origin/main`，build.md 有说明。CI 在 Linux 上跑，Windows 本机那批文件占用失败预期不再出现，首次跑批确认；若红了先看平台差异。`checks.yml` 是相对上游新增的文件，上游若加同名 workflow 时按本行核对（不会自动合并）。
+
+### C38 设置页提示授予本地网络权限
+
+- 来源：上游 `903e058b`（`feat(setting): 设置页顶部提示授予本地网络权限`），代码与该提交一致。
+- 落点：新增 `ui/components/ui/permission/LocalNetworkPermissionCard.kt`（`rememberLocalNetworkPermissionState` 在 SDK 37 及以上返回权限状态，`LocalNetworkPermissionCard` 是点一下发起申请的提示卡）；`SettingPage` 在通用设置之前按未授权状态插入这张卡；8 个 locale 的 `permission_local_network_desc` 改成覆盖「连接局域网内的自建服务」与「其他设备访问 Web 服务器」两类场景。
+- 理由：targetSdk 37 起应用默认不能访问局域网，而只有 Web 服务器页会申请这个权限；连局域网里的自建 provider、SearXNG、MCP 服务只会超时，没有地方提示用户去授权。卡片只在未授权时出现，已经授权的安装不受影响。
+- 移植注意：卡片用 `PermissionLocalNetwork`（`PermissionTypes.kt` 里标了 `@RequiresApi(37)`），SDK 判断在 `rememberLocalNetworkPermissionState` 里；`RikkaHubApp` 启动 Web 服务器前也会检查这个权限，那处逻辑没动。上游以后改这张卡或权限申请流程时按本行核对。
