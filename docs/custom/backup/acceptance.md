@@ -9,7 +9,7 @@
 1. 带附件引用的官方客户端备份。跨安装，会命中 C25 的探测而走转换器，验的是转换与附件路径重写。内容要覆盖多分支会话与重新生成、带附件与工具调用的消息、多 provider 与自定义 assistant、自定义主题与提示词。
 2. 构造样本：把官方备份的 identity 改掉，让它落进 `OfficialRestorePlanner` 的 Convert 分支。Convert 要求双方版本号相同、identity 不同且该版本有快照。官方目前发布的 v32 与本仓库同版本、同 identity，所以这条要等官方在同一个版本号上改结构才会被真实样本触发；在那之前只能用构造样本验证。
 3. 本 fork 旧构建导出的备份（改包名前，包名还是 `me.rerere.rikkahub`，带附件引用）。同样跨安装、同样命中 C25 走转换器；与第 1 类的区别是版本更低、settings 更旧。
-4. 本应用自己导出、且与当前安装同一包名同一用户号的备份。不跨安装，走原路径：Room 打开、checkpoint，不经转换器。消息引用里新写或重存过的是相对形态（C36），没重存过的仍是本安装的绝对路径；相对形态按当前安装解析，绝对路径靠 C25 重写。设置仍是绝对路径。版本低于当前时才会走迁移链升级，这一类目前没有样本或用例。
+4. 本应用自己导出、且与当前安装同一包名同一用户号的备份。不跨安装：库由 Room 直接打开、checkpoint。消息引用里新写或重存过的是相对形态（C36），按当前安装解析；没重存过的仍是绝对路径，路径属于当前安装时原样可用，指向别的安装（官方备份、旧包名）时由 C25 在导入时重写，这种情况下同版本也会走转换器。设置仍是绝对路径。版本低于当前时还会走迁移链升级，这一类目前没有样本或用例。
 5. 版本高于我们的库，必须明确报错。
 6. 官方兼容出口（要求 8）产出的备份，交给官方客户端恢复。步骤与判据见「设备验收」的「官方兼容出口」。
 
@@ -23,20 +23,27 @@
 
 1. 应用里导出，出口选官方兼容（`BackupTarget.OFFICIAL`）。
 2. 装官方客户端（`me.rerere.rikkahub`），从文件恢复这份 zip。官方恢复不重建全文索引，恢复完搜索结果可能为空；搜索那条判据以两边索引都建好的状态为准。
-3. 停掉应用，把库联同 `-wal`、`-shm` 拉下来数节点与引用，再数 upload 文件。`PKG` 换成实际包名，序列号按设备填：
+3. 在会话里打开那张测试图片，确认能显示。
+4. 停掉应用，把库联同 `-wal`、`-shm` 拉下来数节点与引用，再数 upload 文件。`PKG` 换成实际包名，序列号按设备填：
 
    ```bash
    PKG=me.rerere.rikkahub
+   mkdir -p build
+   rm -f build/rikka_hub.pulled build/rikka_hub.pulled-wal build/rikka_hub.pulled-shm
    adb -s <序列号> shell am force-stop $PKG
-   adb -s <序列号> shell "su -c 'cp /data/user/0/$PKG/databases/rikka_hub /data/local/tmp/rikka_hub.pulled && cp /data/user/0/$PKG/databases/rikka_hub-wal /data/local/tmp/rikka_hub.pulled-wal && cp /data/user/0/$PKG/databases/rikka_hub-shm /data/local/tmp/rikka_hub.pulled-shm && chmod 644 /data/local/tmp/rikka_hub.pulled*'"
-   for suffix in '' -wal -shm; do
-       adb -s <序列号> pull /data/local/tmp/rikka_hub.pulled$suffix build/rikka_hub.pulled$suffix
+   # 主库一定在；-wal / -shm 在干净关闭过的情况下可能没有，按可选处理。
+   # 设备侧先清同名旧文件，免得把上一次另一个包的 sidecar 也拉下来。
+   adb -s <序列号> shell "su -c 'rm -f /data/local/tmp/rikka_hub* && cp /data/user/0/$PKG/databases/rikka_hub* /data/local/tmp/ && chmod 644 /data/local/tmp/rikka_hub*'"
+   adb -s <序列号> pull /data/local/tmp/rikka_hub build/rikka_hub.pulled
+   for suffix in -wal -shm; do
+       adb -s <序列号> pull /data/local/tmp/rikka_hub$suffix build/rikka_hub.pulled$suffix 2>/dev/null || true
    done
    python tools/backup-ref-counts.py --db build/rikka_hub.pulled
-   adb -s <序列号> shell "su -c 'ls /data/user/0/$PKG/files/upload | wc -l'"
+   # upload 目录不存在时这条返回非零，不会给出 0
+   adb -s <序列号> shell "su -c 'test -d /data/user/0/$PKG/files/upload && ls /data/user/0/$PKG/files/upload | wc -l'"
    ```
 
-   本次结果：会话 170、节点 676；66 个节点带附件引用，全部是官方安装的绝对路径，相对形态 0 个节点；upload 文件 98；抽一张测试图片能显示。
+   本次结果：会话 170、节点 676；66 个节点带附件引用，全部是官方安装的绝对路径，相对形态 0 个节点；upload 文件 98；测试图片能显示。要连搜索一起验，按「判据」的查询集在两边各跑一次。
 
 ### 换包名恢复
 
@@ -51,8 +58,9 @@
    ```
 
 3. 新安装里从文件恢复这份 zip，重启应用等 pending 生效，日志里有 `Rebuilt search indexes after restore`。
-4. 按上一节的命令取数，把 `PKG` 换成 `top.lemoneko.rakkihub.crosscheck`。
-5. 验完把 `applicationIdSuffix` 改回 `.debug`，卸载 `.crosscheck` 安装。
+4. 在会话里打开测试图片，确认按新安装显示；数库只能证明引用形态，解析得靠应用这边看。
+5. 按上一节的命令取数，把 `PKG` 换成 `top.lemoneko.rakkihub.crosscheck`。
+6. 验完把 `applicationIdSuffix` 改回 `.debug`，卸载 `.crosscheck` 安装。
 
 本次结果：会话 170、节点 676；2 个节点带相对引用，按新安装解析；64 个节点带官方绝对引用，经 C25 改写成新安装；upload 文件 98；测试图片正常显示。
 
@@ -111,7 +119,7 @@ v31 的样本推成 `rikkahub-sample-v31.db` 与 `backup-expectations-v31.json`�
 | 官方客户端导出 | v32（官方 3.1.1，带附件引用） | 表数据与转换产物全量；附件逐个比；settings 的条数、id 集合、当前助手与模型 |
 | 构造样本 | `BackupManagerTest` 里改 identity 的用例 | 覆盖接线，无独立样本 |
 | 本 fork 旧构建 | v31（产出自 3.1.0 (193)，包名还是 `me.rerere.rikkahub`） | 表数据与内容摘要；settings 只手工核对过条数（经 migrate 与 decode 后不变），没有脚本或测试复现；附件未逐个比 |
-| 本应用自己导出 | `BackupManagerTest` 的常规恢复用例 | 覆盖原路径（不经转换器）；新写或重存过的消息引用是相对形态，按当前安装解析；没重存过的老会话仍是绝对路径；迁移链升级无样本或用例 |
+| 本应用自己导出 | `BackupManagerTest` 的常规恢复用例与 `foreignAttachmentPathsAreRewrittenOnSameVersionRestore` | 引用都属于当前安装时覆盖原路径（不经转换器）；指向别的安装的旧绝对引用命中 C25，同版本也走转换器；新写或重存过的消息引用是相对形态，按当前安装解析；迁移链升级无样本或用例 |
 | 高版本库 | `BackupManagerTest` 的拒绝用例 | 验过 |
 | 官方兼容出口 | `BackupManagerTest` 的两条路径改写用例，外加一条「官方出口归档再恢复回本应用」 | 绝对与相对路径改写验过；设备上导出并交给官方客户端恢复过一次（170 会话 / 676 节点 / 66 个节点带官方绝对引用 / 98 个 upload 文件，测试图片能显示）；schema 裁剪未实现 |
 | 本应用自己导出、换包名恢复 | 临时 `.crosscheck` 包名的构建 | 170 会话 / 676 节点；2 个节点带相对引用，按新安装解析；64 个节点带官方绝对引用，经 C25 改写；98 个 upload 文件；测试图片显示 |

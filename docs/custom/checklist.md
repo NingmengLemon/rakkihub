@@ -281,5 +281,5 @@
 
 - 来源：上游 `903e058b`（`feat(setting): 设置页顶部提示授予本地网络权限`），代码与该提交一致。
 - 落点：新增 `ui/components/ui/permission/LocalNetworkPermissionCard.kt`（`rememberLocalNetworkPermissionState` 在 SDK 37 及以上返回权限状态，`LocalNetworkPermissionCard` 是点一下发起申请的提示卡）；`SettingPage` 在通用设置之前按未授权状态插入这张卡；8 个 locale 的 `permission_local_network_desc` 改成覆盖「连接局域网内的自建服务」与「其他设备访问 Web 服务器」两类场景。
-- 理由：targetSdk 37 起应用默认不能访问局域网，而只有 Web 服务器页会申请这个权限；连局域网里的自建 provider、SearXNG、MCP 服务只会超时，没有地方提示用户去授权。卡片只在未授权时出现，已经授权的安装不受影响。
+- 理由：targetSdk 37 起应用默认不能访问局域网。Web 服务器页会申请这个权限，但连局域网里的自建 provider、SearXNG、MCP 服务时没有对应入口，只会超时；设置页的提示卡补上这个入口。卡片只在未授权时出现，已经授权的安装不受影响。
 - 移植注意：卡片用 `PermissionLocalNetwork`（`PermissionTypes.kt` 里标了 `@RequiresApi(37)`），SDK 判断在 `rememberLocalNetworkPermissionState` 里；`RikkaHubApp` 启动 Web 服务器前也会检查这个权限，那处逻辑没动。上游以后改这张卡或权限申请流程时按本行核对。
