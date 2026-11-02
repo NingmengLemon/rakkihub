@@ -120,7 +120,8 @@ version == ourVersion：
 - `upload/` 与 `fonts/` 在导出侧只收顶层文件，替换侧却是递归删除。payload 同时带数据库时，live 里这两个目录下的子目录文件会被删掉，因为它们不可能出现在任何 payload 里。这符合替换语义，但值得知道。
 - `media_creation/` 下的 `.part` 临时文件导出时被跳过，替换时会当成「备份里没有」而删除。它们是半成品，删掉通常无害，但下载中的任务会受影响。
 - 读取层与写入层的单元测试仍用应用自己创建的库当替身；真实官方样本走 `OfficialSampleAcceptanceTest`，只在设备上有样本时执行。
-- live 文件名里带反斜杠会让整次导入失败。校验放在 `buildRemovalEntries` 里、journal 落地之前，所以失败会走 `failed-*` 分支：用户看到「已保留原数据」，下次启动不会重播。漏掉这层校验的话，`apply` 会反复抛异常，而 `RikkaHubApp` 只捕获 `RestoreFailedException`，结果是每次启动都崩。这种文件名不需要 root 就能产生：`FileUtils` 从 provider 的 displayName 取扩展名，`foo.\x` 会拼出带反斜杠的名字。
+- live 文件名里带反斜杠会让整次导入与整次导出失败。导入的校验放在 `buildRemovalEntries` 里、journal 落地之前，所以失败会走 `failed-*` 分支：用户看到「已保留原数据」，下次启动不会重播。漏掉这层校验的话，`apply` 会反复抛异常，而 `RikkaHubApp` 只捕获 `RestoreFailedException`，结果是每次启动都崩。导出侧 `BackupManager.collectAttachments` 走同一条校验，会直接抛错，得先把这个文件移走。这种文件名不需要 root 就能产生：`FileUtils` 从 provider 的 displayName 取扩展名，`foo.\x` 会拼出带反斜杠的名字。
+- 解压归档不设条目数或体积上限：备份由用户自己选，`stageRestore` 逐条流式写入并在失败时清掉暂存目录，但一个异常大的归档仍可能先把设备磁盘写满。
 - 归档目前在应用内取不回来，需要 root 或 adb。
 - 字段语义变化无法从 header 识别，只能靠流程。
 - 附件已经按内容寻址（C32），但去重只作用于新写入：归档里的文件按原文件名落盘，导入不会把同内容的文件归并成一份；存量文件的随机名也不会自动改成内容指纹。两份同内容的旧文件会一直各自存在，直到各自没人引用后被清理收走。
