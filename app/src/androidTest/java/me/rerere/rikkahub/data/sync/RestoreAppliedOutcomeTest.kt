@@ -79,7 +79,10 @@ class RestoreAppliedOutcomeTest {
         manager.stageRestore(sampleZip, includeDatabase = true, includeFiles = true)
         // 设置存储是进程级单例，pending 里的 settings.json 会被写进这台设备的真实设置；
         // 样本的设置不属于它，先删掉。数据库与附件仍然从同一个 pending 目录装。
-        val pendingSettings = File(context.noBackupFilesDir, "backup-restore/pending/settings.json")
+        val pendingSettings = File(
+            context.noBackupFilesDir,
+            "backup-restore/pending/${BackupManager.SETTINGS_ENTRY}",
+        )
         assertTrue("样本的 settings.json 应当已经暂存", pendingSettings.delete())
         val restored = BackupManager.applyPendingRestore(context, JsonInstant)
         assertTrue("应当真的恢复了东西", restored)

@@ -167,10 +167,12 @@ class BackupManagerTest {
 
     /**
      * 设置存储是进程级单例，apply 会把 pending 里的 settings 写进这台设备的真实设置。
-     * 只验数据库或附件的用例在 apply 之前把这份 Settings 删掉。
+     * 不验设置恢复的用例在 apply 之前把这份 Settings 删掉。
      */
     private fun dropStagedSettings() {
-        assertTrue(File(context.noBackupFilesDir, "backup-restore/pending/settings.json").delete())
+        assertTrue(
+            File(context.noBackupFilesDir, "backup-restore/pending/${BackupManager.SETTINGS_ENTRY}").delete()
+        )
     }
 
     @Test fun mediaCreationFilesKeepTheirDirectoriesAndSkipUnfinishedDownloads() = runBlocking {

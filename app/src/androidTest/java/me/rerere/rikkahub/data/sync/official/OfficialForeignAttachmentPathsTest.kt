@@ -31,7 +31,9 @@ class OfficialForeignAttachmentPathsTest {
         val context = InstrumentationRegistry.getInstrumentation().targetContext
         file = File(context.cacheDir, "foreign-paths-${UUID.randomUUID()}.db")
         database = SQLiteDatabase.openOrCreateDatabase(file, null)
-        database.execSQL("CREATE TABLE message_node (conversation_id TEXT, messages TEXT)")
+        database.execSQL(
+            "CREATE TABLE message_node (id TEXT, conversation_id TEXT, node_index INTEGER, messages TEXT, select_index INTEGER)"
+        )
         database.version = OfficialDatabaseSchema.VERSION
     }
 
