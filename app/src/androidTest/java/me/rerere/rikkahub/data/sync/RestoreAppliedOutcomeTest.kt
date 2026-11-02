@@ -28,8 +28,8 @@ import java.nio.file.Files
  * 恢复之后的判据：live 的附件目录里不能留着归档之外的文件。恢复是「装上归档里的」，不是「叠加」；
  * 旧文件留在那里会占空间，也会让同步把它们重新登记回来。
  *
- * 这个用例只验数据库与附件替换，不验设置：settings.json 在 apply 之前删掉，因为设置存储是
- * 进程级单例，写进去会覆盖这台设备上真实安装的设置。
+ * 这个用例只覆盖替换路径下的附件结果：不验数据库内容，也不验设置恢复。settings.json 在 apply
+ * 之前删掉，因为设置存储是进程级单例，写进去会覆盖这台设备上真实安装的设置。
  */
 @RunWith(AndroidJUnit4::class)
 class RestoreAppliedOutcomeTest {

@@ -136,7 +136,7 @@
 
 - 落点：`SettingPage.kt`（about 分组里的分享 item、`shareText`/`share`/`noShareApp` 三个局部变量与三个失效 import）、7 个 locale 的 `setting_page_share`、`setting_page_share_desc`、`setting_page_share_text`、`setting_page_no_share_app`；品牌文案：`setting_page_web_server_desc`（7 个 locale）、`oauth` 模块的 4 条回调提示（7 个 locale）、`web-ui` 的 `page.json` 标题与描述、`conversation-sidebar.tsx` 的侧边栏标题
 - 理由：分享出去还自称官方品牌并指向上游官网，没有意义；其余文案跟着应用名一起改成 RakkiHub
-- 合并注意：`search-picker.tsx` 里的 `rikkahub: "RikkaHub"` 是搜索服务的显示名，指官方接口，保留；`backup_page_import_from_official` 的「Import from RikkaHub」指官方应用，同样保留。About 页的 `RikkaHub` 标题与 `rikka-ai.com`、`docs.rikka-ai.com`、GitHub、LICENSE 链接保留，`web-ui` 页脚的官方站链接也保留，作为上游出处标注，没有改成自己的品牌
+- 合并注意：`search-picker.tsx` 里的 `rikkahub: "RikkaHub"` 是搜索服务的显示名，指官方接口，保留；`backup_page_import_from_official` 的「Import from RikkaHub」指官方应用，同样保留。`SettingAboutPage` 的 `RikkaHub` 标题与 `rikka-ai.com`、GitHub、LICENSE 链接保留，设置根页的 `docs.rikka-ai.com` 链接也保留，`web-ui` 页脚的官方站链接同样保留，作为上游出处标注，没有改成自己的品牌
 
 ### C15 移除更新检查
 
@@ -202,7 +202,7 @@
 
 - 落点：新增 `OfficialForeignAttachmentPaths`（只探测：库里的文本列是否还带着别的安装的 `file:///data/.../files/` 前缀）；`BackupManager.stageRestore` 在判定为迁移链之后再探一次，命中就改走转换器，由写入层把路径重写成本机；`BackupManagerTest` 加一条回归用例；新增 `OfficialForeignAttachmentPathsTest` 四条 instrumentation 用例（外来、本安装、混合、无引用）
 - 理由：判为迁移链的备份本来走迁移链，而迁移链不改数据。带附件的官方备份、或 C36 之前别的包名（debug / release、改过包名的构建）下产生的备份，消息、设置与头像里都可能带着生产者的绝对路径，装进当前安装后附件全部失配；C36 之后新写或重存过的消息引用是相对形态，不需要这一步；没再存过的老会话与设置仍是绝对路径。
-- 合并注意：探测只看快照覆盖的文本列，读不到快照就不猜、直接走迁移链。判断按出现位置做：先删掉当前安装的前缀，剩下的文本里还有 `file:///data/` 就算命中，同一格里既有本安装前缀又有外来前缀时也不会漏。代价是命中时要把整库复制一遍（转换器不改原库），换来的是路径一定被重写
+- 合并注意：探测只看快照覆盖的文本列，读不到快照就不猜、直接走迁移链。判断按出现位置做：先删掉当前安装的前缀，剩下的文本里还有 `file:///data/` 就算命中，同一格里既有本安装前缀又有外来前缀时也不会漏。代价是命中时要把整库复制一遍（转换器不改原库）。探测比写入宽：正文里出现别的 `file:///data/` 文本也会命中，这种情况下没有路径可改写
 
 ### C26 整份备份的附件验收
 

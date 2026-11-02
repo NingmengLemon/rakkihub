@@ -138,7 +138,7 @@ class BackupManagerTest {
         }
         assertTrue(archived != null)
         manager.stageRestore(archive, includeDatabase = false, includeFiles = false)
-        val staged = File(context.noBackupFilesDir, "backup-restore/pending/settings.json").readText()
+        val staged = File(context.noBackupFilesDir, "backup-restore/pending/${BackupManager.SETTINGS_ENTRY}").readText()
         assertEquals(archived, launchCountOf(staged))
     }
 
@@ -158,7 +158,7 @@ class BackupManagerTest {
             zip.closeEntry()
         }
         manager.stageRestore(archive, includeDatabase = false, includeFiles = false)
-        val staged = File(context.noBackupFilesDir, "backup-restore/pending/settings.json").readText()
+        val staged = File(context.noBackupFilesDir, "backup-restore/pending/${BackupManager.SETTINGS_ENTRY}").readText()
         assertEquals(0, launchCountOf(staged))
     }
 
