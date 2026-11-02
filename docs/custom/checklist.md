@@ -46,6 +46,7 @@
 | C36 | 消息附件引用按相对路径存储 | 改造 |
 | C37 | CI 跑格式检查与 JVM 测试 | 改造 |
 | C38 | 设置页提示授予本地网络权限 | 新增 |
+| C39 | 把 README 收成一份 fork 说明 | 改造 |
 
 ## 明细
 
@@ -69,9 +70,9 @@
 
 ### C4 清理赞助商图标、README 推广与启动赞助弹窗
 
-- 落点：`utils/AIIconMatcher.kt`（删掉 aihubmix 的图标映射与匹配正则）、`app/src/main/assets/icons/aihubmix-color.svg`（删除）、`README.md`、`README_ZH_CN.md`、`README_ZH_TW.md`（删掉 Sponsors 章节）、`SettingPage.kt`（删掉启动 100 次后的赞助弹窗及其失效的三个 import 与 `launchCount` 订阅）、`SettingVM.kt`（删掉失去唯一读者的 `launchCount`）、弹窗的 4 条 `setting_page_sponsor_alert_*` 字符串 × 7 个 locale
+- 落点：`utils/AIIconMatcher.kt`（删掉 aihubmix 的图标映射与匹配正则）、`app/src/main/assets/icons/aihubmix-color.svg`（删除）、`README.md`（删掉 Sponsors 章节；README 的现状见 C39）、`SettingPage.kt`（删掉启动 100 次后的赞助弹窗及其失效的三个 import 与 `launchCount` 订阅）、`SettingVM.kt`（删掉失去唯一读者的 `launchCount`）、弹窗的 4 条 `setting_page_sponsor_alert_*` 字符串 × 7 个 locale
 - 理由：不需要推广入口
-- 合并注意：捐赠页 `SettingDonatePage`、`SponsorAPI`、`Screen.SettingDonate` 与捐赠相关字符串保留不动。`Settings.sponsorAlertDismissedAt` 是已存储字段，未删除以免改动结构，只是不再有自动写入方，`DebugPage` 仍可手动改。刻意删除：`docs/sponsors/*.png` 与 `docs/donate.png` 已无引用，一并删掉；合并时上游若更新这些图片会成 modify/delete 冲突，按删除为准。三份 README 属上游高频改动文档，以上游最新版为准并重新删掉 Sponsors 章节；`SettingPage` 的弹窗区域与 `SettingProviderPage` 类似，上游若加回推广块，需要重新删除。`AIIconMatcher` 的图标映射本身不是推广入口，只删掉带推广性质的 aihubmix 那一条；上游后续新增的赞助商图标映射（3.1.1 的 `naapi`）保留
+- 合并注意：捐赠页 `SettingDonatePage`、`SponsorAPI`、`Screen.SettingDonate` 与捐赠相关字符串保留不动。`Settings.sponsorAlertDismissedAt` 是已存储字段，未删除以免改动结构，只是不再有自动写入方，`DebugPage` 仍可手动改。刻意删除：`docs/sponsors/*.png` 与 `docs/donate.png` 已无引用，一并删掉；合并时上游若更新这些图片会成 modify/delete 冲突，按删除为准。README 已收成一份 fork 说明，不再跟随上游，见 C39；`SettingPage` 的弹窗区域与 `SettingProviderPage` 类似，上游若加回推广块，需要重新删除。`AIIconMatcher` 的图标映射本身不是推广入口，只删掉带推广性质的 aihubmix 那一条；上游后续新增的赞助商图标映射（3.1.1 的 `naapi`）保留
 
 ### C5 移除 TTS 与 STT（语音合成与语音识别）
 
@@ -128,7 +129,7 @@
 
 ### C13 移除 Firebase 与 google-services
 
-- 落点：`app/build.gradle.kts`（两个 plugin alias、`firebase-bom` 与 `firebase-crashlytics` 依赖、冗余的 `barcode.scanning`）、根 `build.gradle.kts`（两个 plugin alias）、`libs.versions.toml`（firebase 三个版本、四个库定义、`google-services` 插件、`barcodeScanning`）、`AppModule.kt`（两处 import 与 `single { Firebase.crashlytics }` 绑定，这个绑定本来就没有消费者）、本地 `app/google-services.json`、`README.md`/`README_ZH_CN.md`/`README_ZH_TW.md`（删掉「需要 google-services.json 才能构建」的提示）、CI 的 `GOOGLE_SERVICES_JSON` secret 与 workflow 里的写入步骤；顺带为 `ImageUtils.kt` 补上显式的 `androidx.exifinterface` 依赖
+- 落点：`app/build.gradle.kts`（两个 plugin alias、`firebase-bom` 与 `firebase-crashlytics` 依赖、冗余的 `barcode.scanning`）、根 `build.gradle.kts`（两个 plugin alias）、`libs.versions.toml`（firebase 三个版本、四个库定义、`google-services` 插件、`barcodeScanning`）、`AppModule.kt`（两处 import 与 `single { Firebase.crashlytics }` 绑定，这个绑定本来就没有消费者）、本地 `app/google-services.json`、`README.md`（删掉「需要 google-services.json 才能构建」的提示；README 的现状见 C39）、CI 的 `GOOGLE_SERVICES_JSON` secret 与 workflow 里的写入步骤；顺带为 `ImageUtils.kt` 补上显式的 `androidx.exifinterface` 依赖
 - 理由：不需要崩溃上报，也不想让应用依赖 Google 的运行时服务
 - 合并注意：代码与构建脚本里已无 `com.google.firebase` 的引用；checked-in 的 baseline profile（`app/src/main/generated/baselineProfiles/`）里还留着 firebase 与 crashlytics 的历史条目，也有 C1/C5 删掉的 MediaCreation、ImgGen 与 TTS 类。这些条目指向已经不存在的类，ART 会跳过，不影响运行；重新生成能自愈，但在测试设备上跑不通（Gradle 装 nonMinifiedRelease 被系统拦下，用 su 装包后 instrumentation 又卡住并以 `DeadObjectException` 退出），真要重做需要换模拟器或干净设备。扫码在 3.1.1 由上游换成 CameraX 加 zxing，`quickie-bundled`、`barcode.scanning` 与 ML Kit 的传递依赖都不再存在；`androidx.exifinterface` 由上游在同一处显式声明，合并时删掉重复的那一行。上游若重新引入 Firebase，需要重新删除
 
@@ -283,3 +284,9 @@
 - 落点：新增 `ui/components/ui/permission/LocalNetworkPermissionCard.kt`（`rememberLocalNetworkPermissionState` 在 SDK 37 及以上返回权限状态，`LocalNetworkPermissionCard` 是点一下发起申请的提示卡）；`SettingPage` 在通用设置之前按未授权状态插入这张卡；8 个 locale 的 `permission_local_network_desc` 改成覆盖「连接局域网内的自建服务」与「其他设备访问 Web 服务器」两类场景。
 - 理由：targetSdk 37 起应用默认不能访问局域网。Web 服务器页会申请这个权限，但连局域网里的自建 provider、SearXNG、MCP 服务时没有对应入口，只会超时；设置页的提示卡补上这个入口。卡片只在未授权时出现，已经授权的安装不受影响。
 - 移植注意：卡片用 `PermissionLocalNetwork`（`PermissionTypes.kt` 里标了 `@RequiresApi(37)`），SDK 判断在 `rememberLocalNetworkPermissionState` 里；`RikkaHubApp` 启动 Web 服务器前也会检查这个权限，那处逻辑没动。上游以后改这张卡或权限申请流程时按本行核对。
+
+### C39 把 README 收成一份 fork 说明
+
+- 落点：根 `README.md` 重写为简体中文的 fork 说明（fork 定位、谨慎使用、官方仓库与官网、nightly 构建说明、定制文档入口、许可证），删除 `README_ZH_CN.md` 与 `README_ZH_TW.md`；`docs/README.md` 的说明同步，C4、C13 里涉及 README 的落点指向本项。
+- 理由：本仓库是个人分支，保留上游三份翻译会让人误以为这是官方项目，官方仓库链接也埋在功能列表后面。README 需要一眼说清这是个人 fork、有风险，并指向官方仓库。
+- 移植注意：上游 README 不再跟随；上游若改安装、构建或主要功能说明，按需抄进 `README.md` 与 `docs/custom/build.md`，不要恢复多语言版本。

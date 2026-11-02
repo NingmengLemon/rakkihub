@@ -1,85 +1,32 @@
 <div align="center">
-  <img src="docs/icon.png" alt="App Icon" width="100" />
-  <h1>RikkaHub</h1>
+  <img src="docs/icon.png" alt="App 图标" width="100" />
+  <h1>RakkiHub</h1>
 
-A native Android LLM chat client that supports switching between different providers for
-conversations 🤖💬
-
-Click to join our Discord server 👉 [【RikkaHub】](https://discord.gg/9weBqxe5c4)
-
-[简体中文](README_ZH_CN.md) | [繁體中文](README_ZH_TW.md) | English
+  [RikkaHub](https://github.com/rikkahub/rikkahub) 的个人 fork，自用。
 </div>
-
-<div align="center">
-  <img src="docs/img/poster.png" alt="RikkaHub" width="800" />
-</div>
-
-## 🚀 Download
-
-🔗 [Download from Website](https://rikka-ai.com/download) (Recommended)
-
-🔗 [Download from Google Play](https://play.google.com/store/apps/details?id=me.rerere.rikkahub)
 
 > [!WARNING]
-> There are many forked versions of RikkaHub. Issues with forks are unrelated to RikkaHub, so please use forks with caution to avoid privacy leaks or excessive permission requests.
+> 这是个人 fork，不是官方版本，与官方没有任何关系。代码按个人需要改过、删过功能，也不保证跟上上游。
+>
+> 请不要把它当官方客户端使用。需要稳定版本请去[官方仓库](https://github.com/rikkahub/rikkahub)或[官网](https://rikka-ai.com/)下载。从非官方渠道安装的 APK 可能有隐私泄露与过度申请权限的风险，使用前请自行判断。
 
-## ✨ Features
+## 这个仓库是什么
 
-- 🎨 Material 3 Expressive design and 🌙 Dark mode
-- 📦 Workspace: a proot-based Linux agent environment
-- 🎬 Media generation (image and video)
-- 🔄 Multiple AI Provider Support: custom API / URL / models (all OpenAI, Google, Anthropic compatible api)
-- 🖼️ Multimodal input support (Image, Text Documentation, PDF, Docx)
-- 🖥️ Web access for multi-platform use
-- 🛠️ MCP and Skills support
-- 📝 Markdown Rendering (with code highlighting, Latex formulas, tables, Mermaid)
-- 🔍 Search capabilities (Exa, Tavily, Zhipu, LinkUp, Brave, Perplexity, etc.)
-- 🧩 Prompt variables (model name, time, etc.)
-- 🤳 QR code export and import for providers
-- 🤖 Agent customization
-- 🧠 File-based memory
-- 📝 AI Translation
-- 🌐 Custom HTTP request headers and request bodies
-- 💌 Silly Tavern character card import
+- 官方项目是 [RikkaHub](https://github.com/rikkahub/rikkahub)，一个 Android LLM 聊天客户端。
+- 本仓库是它的个人定制分支，只为自己使用：不接 PR，也不提供支持。
+- 分支沿用上游的每日构建 workflow，GitHub 上有一个固定 tag 的 `nightly` prerelease，内容是按当前代码自动构建的 APK。它没有经过发布检查，不保证可用，也不是正式版本。
+- 应用名是 RakkiHub，包名 `top.lemoneko.rakkihub`（debug 变体为 `top.lemoneko.rakkihub.debug`），可以和官方版本并存安装。两边数据互不相通，迁移靠备份的导出与导入。
 
-## ✨ Development
+## 定制记录
 
-> [!IMPORTANT]
-> This project does not accept pull requests (PRs).
+逐项改动、理由与移植注意事项在 [`docs/custom/checklist.md`](docs/custom/checklist.md)。分支怎么跟上游走、数据层的约束见 [`docs/custom/README.md`](docs/custom/README.md)，构建方式见 [`docs/custom/build.md`](docs/custom/build.md)，备份的导入导出与验收见 [`docs/custom/backup/`](docs/custom/backup/)。
 
-This project is developed using [Android Studio](https://developer.android.com/studio).
+## 官方仓库
 
-Technology stack documentation:
+<https://github.com/rikkahub/rikkahub>
 
-- [Kotlin](https://kotlinlang.org/) (Development language)
-- [Koin](https://insert-koin.io/) (Dependency Injection)
-- [Jetpack Compose](https://developer.android.com/jetpack/compose) (UI framework)
-- [DataStore](https://developer.android.com/topic/libraries/architecture/datastore) (Preference data
-  storage)
-- [Room](https://developer.android.com/training/data-storage/room) (Database)
-- [Coil](https://coil-kt.github.io/coil/) (Image loading)
-- [Material 3 Expressive](https://m3.material.io/) (UI design)
-- [Navigation 3](https://developer.android.com/guide/navigation/navigation-3) (Navigation)
-- [Okhttp](https://square.github.io/okhttp/) (HTTP client)
-- [kotlinx.serialization](https://github.com/Kotlin/kotlinx.serialization) (JSON serialization)
+本仓库不镜像官方的最新状态，也不代表官方行为。遇到问题时先对照官方版本，判断是不是 fork 引入的。
 
-## 💰 Donate
+## 许可证
 
-* [Ko-fi](https://ko-fi.com/reovodev)
-* [爱发电](https://afdian.com/a/reovo)
-
-## ⭐ Star History
-
-If you like this project, please give it a star ⭐
-
-<a href="https://www.star-history.com/?type=date&repos=re-ovo%2Frikkahub">
- <picture>
-   <source media="(prefers-color-scheme: dark)" srcset="https://api.star-history.com/chart?repos=re-ovo/rikkahub&type=date&theme=dark&legend=top-left&sealed_token=qSytWeq7LkzQQViTjK0MYlvvA_qkfuwjOxOqgbRpLUZZwok5rO6LXhpVL7Mq-q3o89BfKpzE7g66BCy18H6eiqTsD8czD0J-HejLqmHy-npcvCTHu11wZw" />
-   <source media="(prefers-color-scheme: light)" srcset="https://api.star-history.com/chart?repos=re-ovo/rikkahub&type=date&legend=top-left&sealed_token=qSytWeq7LkzQQViTjK0MYlvvA_qkfuwjOxOqgbRpLUZZwok5rO6LXhpVL7Mq-q3o89BfKpzE7g66BCy18H6eiqTsD8czD0J-HejLqmHy-npcvCTHu11wZw" />
-   <img alt="Star History Chart" src="https://api.star-history.com/chart?repos=re-ovo/rikkahub&type=date&legend=top-left&sealed_token=qSytWeq7LkzQQViTjK0MYlvvA_qkfuwjOxOqgbRpLUZZwok5rO6LXhpVL7Mq-q3o89BfKpzE7g66BCy18H6eiqTsD8czD0J-HejLqmHy-npcvCTHu11wZw" />
- </picture>
-</a>
-
-## 📄 License
-
-This project is licensed under the [GNU Affero General Public License v3.0](LICENSE) (AGPL-3.0).
+本仓库是官方项目的衍生作品，按 [GNU Affero General Public License v3.0](LICENSE)（AGPL-3.0）授权，修改过的源码都在本仓库里。
