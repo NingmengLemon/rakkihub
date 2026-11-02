@@ -27,12 +27,13 @@ internal object OfficialForeignAttachmentPaths {
             if (columns.isEmpty()) continue
             for (column in columns) {
                 val hit = runCatching {
+                    // 先把属于当前安装的前缀整段删掉，剩下的文本里只要还有 file:///data/
+                    // 就是别的安装的路径。不能写成「含 file:///data/ 且不含当前前缀」：
+                    // NOT LIKE 是按整个单元格判的，同一格里两种前缀都有时会被漏掉，恢复就
+                    // 走迁移链，外来的绝对路径原样留下。
                     database.rawQuery(
-                        "SELECT 1 FROM `$table` WHERE `$column` LIKE '%file:///data/%' " +
-                            "AND `$column` NOT LIKE ? ESCAPE '\\' LIMIT 1",
-                        arrayOf(
-                            "%${OfficialExportPaths.escapeLikePattern(ourPrefix.removePrefix("file://"))}%",
-                        ),
+                        "SELECT 1 FROM `$table` WHERE REPLACE(`$column`, ?, '') LIKE '%file:///data/%' LIMIT 1",
+                        arrayOf(ourPrefix),
                     ).use { it.moveToFirst() }
                 }.getOrDefault(false)
                 if (hit) return true
