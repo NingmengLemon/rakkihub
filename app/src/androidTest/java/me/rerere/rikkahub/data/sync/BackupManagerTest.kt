@@ -165,6 +165,14 @@ class BackupManagerTest {
     private fun launchCountOf(settingsJson: String): Int? =
         JsonInstant.parseToJsonElement(settingsJson).jsonObject["launchCount"]?.jsonPrimitive?.int
 
+    /**
+     * 设置存储是进程级单例，apply 会把 pending 里的 settings 写进这台设备的真实设置。
+     * 只验数据库或附件的用例在 apply 之前把这份 Settings 删掉。
+     */
+    private fun dropStagedSettings() {
+        assertTrue(File(context.noBackupFilesDir, "backup-restore/pending/settings.json").delete())
+    }
+
     @Test fun mediaCreationFilesKeepTheirDirectoriesAndSkipUnfinishedDownloads() = runBlocking {
         val session = File(context.filesDir, "media_creation/session")
         File(session, "record").mkdirs()
@@ -181,8 +189,7 @@ class BackupManagerTest {
         session.deleteRecursively()
         manager.stageRestore(archive, includeDatabase = false, includeFiles = true)
         assertFalse(session.exists())
-        // Applying the staged settings would write to the real settings store of the app under test.
-        assertTrue(File(context.noBackupFilesDir, "backup-restore/pending/settings.json").delete())
+        dropStagedSettings()
         assertTrue(BackupManager.applyPendingRestore(context, JsonInstant))
         assertEquals("image", File(session, "record/out_0.png").readText())
         assertEquals("asset", File(session, "draft/asset.jpg").readText())
@@ -410,6 +417,7 @@ class BackupManagerTest {
             includeWorkspaceFiles = true,
         )
         liveDatabase.close()
+        dropStagedSettings()
         BackupManager.applyPendingRestore(context, JsonInstant)
         liveDatabase = AppDatabaseFactory.create(context)
 
@@ -447,6 +455,7 @@ class BackupManagerTest {
             includeWorkspaceFiles = true,
         )
         liveDatabase.close()
+        dropStagedSettings()
         BackupManager.applyPendingRestore(context, JsonInstant)
         liveDatabase = AppDatabaseFactory.create(context)
 
