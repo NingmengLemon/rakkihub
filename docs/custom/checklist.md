@@ -268,7 +268,7 @@
 
 - 落点：新增 `data/files/AttachmentUrlStorage.kt`（两个纯函数：落盘前只把 JSON 里 `url` 字段的、本安装 files 目录下的 upload 绝对地址换成 `file:upload/...`，读取后还原；本安装的 `/data/user/<用户号>/` 与旧的 `/data/data/` 两种绝对形态都认）与九条 JVM 用例；`ConversationRepository` 构造多一个 `attachmentFilesDirUri`（Koin 里从 `context.filesDir` 生成），`saveMessageNodes` 落库前转换，读取消息时还原；`AttachmentReferences.fileUrlToCanonicalPath` 与 `collectReferencedPaths` 的 `filesDir` 改成必填，把相对形态还原成规范路径，`AttachmentCleaner` 扫描时传入当前 filesDir；`OfficialExportPaths.attachmentRewrites` 增加 `"url":"file:upload/` 到官方安装前缀的替换（包名相同时也要换，官方客户端只认绝对路径），配 `OfficialExportPathsTest` 断言，官方兼容导出的库仍是官方能读的绝对地址。`AttachmentCleanerTest` 补一条真实 `upload/` 文件的相对形态解析用例，删掉 `MessageNodeDAO` 里没有调用点、会绕过转换的 `getNodesOfConversation`、`insert`、`update`。
 - 理由：消息库与随它导出的备份原来把安装路径写死在每条附件地址里，包名或用户号一变就整体失效；导入侧的路径重写是事后补救，落盘形态本身应该可移植。改完之后相对地址在任意安装下都能解析，旧库里的绝对地址继续有效并在下一次保存时转换。
-- 合并注意：消息 JSON 的读写都经过 `ConversationRepository` 的转换，别的入口直接读写 `MessageNodeEntity.messages` 会绕过它；设置里的头像仍存绝对地址（靠导入侧重写），草稿不随备份走，两者都没改。清理与官方导出都按绝对、相对两种形态处理；官方导出的相对前缀带 `"url":"` 字段边界，避免碰到正文。旧数据不做一次性迁移，读到什么算什么，下一次保存时本安装的两种绝对形态都会转成相对。C36 之前的构建读到新库里的相对地址时图片大概率显示不出来，点音频、视频的附件可能抛异常，文档附件会退化成 ERROR 文本；数据不丢，升级后恢复。官方兼容导出与官方客户端恢复在设备上验过一次：导出的库与恢复后的库都是 170 个会话、676 个节点，66 条引用全是官方绝对路径，官方 upload 目录 98 个文件，测试图片能显示。
+- 合并注意：消息 JSON 的读写都经过 `ConversationRepository` 的转换，别的入口直接读写 `MessageNodeEntity.messages` 会绕过它；设置里的头像仍存绝对地址（靠导入侧重写），草稿不随备份走，两者都没改。清理与官方导出都按绝对、相对两种形态处理；官方导出的相对前缀带 `"url":"` 字段边界，避免碰到正文。旧数据不做一次性迁移，读到什么算什么，下一次保存时本安装的两种绝对形态都会转成相对。C36 之前的构建读到新库里的相对地址时图片大概率显示不出来，点音频、视频的附件可能抛异常，文档附件会退化成 ERROR 文本；数据不丢，升级后恢复。官方兼容导出与官方客户端恢复在设备上验过一次：导出的库与恢复后的库都是 170 个会话、676 个节点，66 条引用全是官方绝对路径，官方 upload 目录 98 个文件，测试图片能显示。跨包名恢复也验过一次：相对引用按新安装解析，旧的官方绝对引用经 C25 改写成新安装。
 
 ### C37 CI 跑格式检查与 JVM 测试
 
