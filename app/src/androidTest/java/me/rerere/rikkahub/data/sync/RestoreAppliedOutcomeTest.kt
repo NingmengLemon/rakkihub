@@ -12,7 +12,6 @@ import kotlinx.serialization.json.jsonPrimitive
 import me.rerere.rikkahub.data.datastore.SettingsStore
 import me.rerere.rikkahub.data.db.AppDatabase
 import me.rerere.rikkahub.data.db.AppDatabaseFactory
-import me.rerere.rikkahub.data.db.fts.MessageFtsManager
 import me.rerere.rikkahub.utils.JsonInstant
 import org.junit.After
 import org.junit.Assert.assertEquals
@@ -26,12 +25,11 @@ import java.io.File
 import java.nio.file.Files
 
 /**
- * 恢复之后的两条判据：
+ * 恢复之后的判据：live 的附件目录里不能留着归档之外的文件。恢复是「装上归档里的」，不是「叠加」；
+ * 旧文件留在那里会占空间，也会让同步把它们重新登记回来。
  *
- * 1. live 的附件目录里不能留着归档之外的文件。恢复是「装上归档里的」，不是「叠加」；
- *    旧文件留在那里会占空间，也会让同步把它们重新登记回来。
- * 2. 索引要在恢复后真的能用。搜索是派生数据，库里搬不过来，只能重建；这里用归档里真实存在的
- *    关键词查一次，确认能搜到对应会话。
+ * 这个用例只验数据库与附件替换，不验设置：settings.json 在 apply 之前删掉，因为设置存储是
+ * 进程级单例，写进去会覆盖这台设备上真实安装的设置。
  */
 @RunWith(AndroidJUnit4::class)
 class RestoreAppliedOutcomeTest {
@@ -79,7 +77,10 @@ class RestoreAppliedOutcomeTest {
         stale.writeText("should be removed by restore")
 
         manager.stageRestore(sampleZip, includeDatabase = true, includeFiles = true)
-        // 恢复到 temp 目录里，不碰这台设备上真正的安装
+        // 设置存储是进程级单例，pending 里的 settings.json 会被写进这台设备的真实设置；
+        // 样本的设置不属于它，先删掉。数据库与附件仍然从同一个 pending 目录装。
+        val pendingSettings = File(context.noBackupFilesDir, "backup-restore/pending/settings.json")
+        assertTrue("样本的 settings.json 应当已经暂存", pendingSettings.delete())
         val restored = BackupManager.applyPendingRestore(context, JsonInstant)
         assertTrue("应当真的恢复了东西", restored)
 
