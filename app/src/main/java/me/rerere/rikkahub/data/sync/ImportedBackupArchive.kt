@@ -16,31 +16,44 @@ import java.time.format.DateTimeFormatter
 internal object ImportedBackupArchive {
     private val stamp = DateTimeFormatter.ofPattern("yyyyMMdd_HHmmss_SSS")
 
+    // 两次导入可能重叠：stageRestore 只串行到发布 pending 为止，归档发生在它返回之后。
+    // 写入选名字与改名的这一段要串行，否则另一次导入会插在存在性判断与改名之间。
+    private val writeLock = Any()
+
     /**
      * 复制 [source] 到 [directory]，返回落盘位置；失败时返回带原因的 [Result]，由调用方记日志。
      *
      * 先写临时文件再原子改名，进程中途被杀不会留下截断的归档；文件名带毫秒，同一秒内多次
      * 导入不会互相覆盖。同毫秒撞名时追加序号（Linux 上连续两次调用会撞上），不覆盖已有文件：
-     * 宁可多出一份，也不要悄悄替换掉上一份。失败时会尝试删掉临时文件，不在目录里留残渣
-     * （删除本身可能失败，是 best-effort）。
+     * 宁可多出一份，也不要悄悄替换掉上一份。写入串行化，同一进程里的并发导入不会抢同一个
+     * 文件名；进程外的并发不在保证范围内，这个目录只有本应用会写。失败时会尝试删掉临时
+     * 文件，不在目录里留残渣（删除本身可能失败，是 best-effort）。
+     *
+     * [now] 只给用例固定时间用，生产调用取默认值。
      */
-    fun store(source: File, directory: File): Result<File> = runCatching {
-        check(directory.isDirectory || directory.mkdirs()) { "Cannot create archive directory" }
-        val stampText = stamp.format(LocalDateTime.now())
-        var target = File(directory, "imported_$stampText.zip")
-        var suffix = 1
-        while (target.exists()) {
-            suffix += 1
-            target = File(directory, "imported_${stampText}_$suffix.zip")
+    fun store(
+        source: File,
+        directory: File,
+        now: LocalDateTime = LocalDateTime.now(),
+    ): Result<File> = runCatching {
+        synchronized(writeLock) {
+            check(directory.isDirectory || directory.mkdirs()) { "Cannot create archive directory" }
+            val stampText = stamp.format(now)
+            var target = File(directory, "imported_$stampText.zip")
+            var suffix = 1
+            while (target.exists()) {
+                suffix += 1
+                target = File(directory, "imported_${stampText}_$suffix.zip")
+            }
+            val temporary = File(directory, target.name + ".tmp")
+            try {
+                Files.copy(source.toPath(), temporary.toPath(), REPLACE_EXISTING)
+                Files.move(temporary.toPath(), target.toPath(), ATOMIC_MOVE)
+            } catch (e: Exception) {
+                temporary.delete()
+                throw e
+            }
+            target
         }
-        val temporary = File(directory, target.name + ".tmp")
-        try {
-            Files.copy(source.toPath(), temporary.toPath(), REPLACE_EXISTING)
-            Files.move(temporary.toPath(), target.toPath(), ATOMIC_MOVE)
-        } catch (e: Exception) {
-            temporary.delete()
-            throw e
-        }
-        target
     }
 }
