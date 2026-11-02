@@ -74,7 +74,7 @@ class OfficialBackupLayoutTest {
     @Test
     fun `path traversal is left to the caller`() {
         // 快照只按目录归类，不做路径穿越检查；导入器拿到条目后仍必须走 PendingRestore.resolveInside，
-        // 那里才会拒绝 ".."、反斜杠与控制字符。这条测试把职责边界固定下来。
+        // 那里才会拒绝 ".."、反斜杠与空路径。这条路不作为安全边界，只固定两层的职责划分。
         assertTrue(OfficialBackupLayout.isAttachmentEntry("skills/../escape.txt"))
     }
 }
