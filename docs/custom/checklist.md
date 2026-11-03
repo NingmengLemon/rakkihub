@@ -47,6 +47,9 @@
 | C37 | CI 跑格式检查与 JVM 测试 | 改造 |
 | C38 | 设置页提示授予本地网络权限 | 新增 |
 | C39 | 把 README 收成一份 fork 说明 | 改造 |
+| C40 | 导入时附件按内容寻址，归档必须有数据库与设置 | 改造 |
+| C41 | 备份与恢复按阶段报进度，六个入口互斥 | 改造 |
+| C42 | 备份页按本应用与官方 RikkaHub 分组 | 改造 |
 
 ## 明细
 
@@ -117,9 +120,9 @@
 
 ### C11 导出备份显示进度
 
-- 落点：`BackupManager.createBackup`（新增可选 `onProgress` 回调与 `BackupProgress`，附件先收集成列表再写入）；`WebDavSync.prepareBackupFile`（透传回调）；`BackupVM`（`exportProgress` 状态与 `finally` 清理）；`ImportExportTab`（打包阶段显示确定进度，写入目标文件阶段显示不确定进度）；7 个 locale 新增 `backup_page_export_packing` 与 `backup_page_saving`
-- 理由：附件多时导出要等很久，没有进度不知道卡在哪一步
-- 合并注意：打包阶段按条目推进：`settings.json`、数据库快照、每个附件各算一条，`total` 与 `advance()` 的调用点一一对应。改为先收集附件再写入是为了给出确定的总数，代价是「列出」与「写入」之间文件消失的窗口从一个文件扩大到整个打包阶段；`PARTIAL_SUFFIX` 过滤与 `resolveInside` 校验都保留
+- 落点：`BackupManager.createBackup` 的可选 `onProgress` 与 `BackupProgress`（阶段与阶段内条目数，见 C41）；`WebDavSync.prepareBackupFile` 透传；`BackupVM` 的 `exportProgress` 状态在 `finally` 里清空；`ImportExportTab` 的进度行：打包与写目标文件两段都显示，写目标文件那一段是不确定进度。`backup_page_saving` 保留，原来的 `backup_page_export_packing` 已被 C41 的分阶段文案取代。
+- 理由：附件多时导出要等很久，没有进度不知道卡在哪一步。
+- 合并注意：打包阶段先收集附件列表再写入，为的是给出每段确定的总数；代价是「列出」与「写入」之间文件消失的窗口从一个文件扩大到整个打包阶段，`PARTIAL_SUFFIX` 过滤与 `resolveInside` 校验都保留。进度模型改成阶段制之后，条目总数的算法在 C41 里。
 
 ### C12 改包名与应用名
 
@@ -167,7 +170,7 @@
 
 - 落点：`PendingRestore.buildEntries` 与新增的 `buildRemovalEntries`（对归档里实际存在的附件目录，为 live 上有、payload 里没有的文件合成 `install = false` 的删除条目，复用现有 journal 与 rollback；只在数据库也一起替换时才做）；新增 `ImportedBackupArchive`（原子写入 `noBackupFilesDir/imported-backups/`，`stageRestore` 成功后才归档）；`WebDavSync.restoreFromBackupFile` 接上归档；`PendingRestoreTest` 补五条、新增 `ImportedBackupArchiveTest` 五条
 - 理由：导入官方备份时附件是合并不是替换，目标目录里多出来的文件永远留着，启动时 `syncManagedFiles` 还会把它们重新登记进 `managed_files`，技能目录里的旧技能也会被扫到；另外导入完原始 zip 就没了，写坏数据没有回退来源
-- 合并注意：删除条目只用文件级条目，不做目录级 rename：journal 与 rollback 都按路径记录单个文件，目录条目得为它们另加一套状态。`install = false` 的条目让 apply 把目标移进 `originals/`、rollback 再移回来，现有 journal 一行都不用改。只导附件时保持叠加语义，因为现有库还引用着 live 上的文件。空目录无法表达、`upload`/`fonts` 的平铺与递归不对称，都记在 [`backup/README.md`](backup/README.md) 的已知限制里。归档放 `noBackupFilesDir` 而不是 `filesDir`，后者整个目录被 web 路由暴露
+- 合并注意：删除条目只用文件级条目，不做目录级 rename：journal 与 rollback 都按路径记录单个文件，目录条目得为它们另加一套状态。`install = false` 的条目让 apply 把目标移进 `originals/`、rollback 再移回来，现有 journal 一行都不用改。只导附件时保持叠加语义，因为现有库还引用着 live 上的文件；导入现在必须带数据库（C40），这条分支只剩更早版本留下的 pending 目录会走到。空目录无法表达、`upload`/`fonts` 的平铺与递归不对称，都记在 [`backup/README.md`](backup/README.md) 的已知限制里。归档放 `noBackupFilesDir` 而不是 `filesDir`，后者整个目录被 web 路由暴露
 
 ### C20 导入器读取层
 
@@ -245,7 +248,7 @@
 
 - 落点：新增 `data/files/ContentAddressedFiles.kt`（边写边算 SHA-256，写进同目录的 `.pending-<uuid>` 临时文件，落盘后按指纹改名，目标已存在就复用）与 `FileUtils.buildContentFileName`（扩展名优先按 MIME，其次来源文件名）；`FilesManager` 的 upload 写入全部走它（`saveManagedFrom*`、`createChatFilesByContents/ByByteArrays`、`createChatTextFile`），`createManagedFileEntity` 遇到同一路径复用已有登记，`syncFolder` 不登记 `.pending-*`；新增 `data/files/AttachmentReferences.kt`（从 JSON 与草稿文本里摘 `file:` 地址、归一成规范路径）、`LiveAttachmentReferences.kt`（进程内登记输入框附件，编辑历史消息期间草稿不写输入框，靠它兜住）与 `AttachmentCleaner.kt`（扫引用点、删无引用文件与 `managed_files` 行，`collectReferencedPaths` 与 `shouldDeleteUploadFile` 单独成纯函数）；删掉所有立即删文件的入口：`ChatService` 的落库差异删除与队列附件清理、删会话时的文件删除、`ConversationRepository.deleteConversation`、输入框移除附件（`AttachmentChips`、`ChatInputState.shouldDeleteFileOnRemove`）、助手头像与背景、用户头像，`FilesManager.deleteChatFiles`、`MessageQueue.unreferencedQueuedAttachmentUrls` 与上游的 `QueuedAttachmentCleanupTest.kt` 一并删除；`MessageNodeDAO.getContentsWithFileReferences` 只取含 `file:` 的消息行，`ChatDraftStore.referencedFileUrls`、`ChatService.unsavedAttachmentUrls` 与 `ChatService.isGenerating` 补上库外与内存引用；设置的文件管理页加「清理无引用的文件」入口，按天清理也走同一套引用判断（`AttachmentCleaner.cleanOlderThan`，`FilesManager.deleteOlderThan` 删除），新增 7 条文案 × 8 个 locale；新增 `ContentAddressedFilesTest` 四条、`AttachmentReferencesTest` 六条、`AttachmentCleanerTest` 十三条、`LiveAttachmentReferencesTest` 五条 JVM 用例，`ChatDraftStoreTest` 补一条草稿引用扫描
 - 理由：文件名原来是随机 UUID，写之前无从判断内容是否已经存在，同一张图在多个会话、多条消息里各存一份，备份体积里有很大一块是重复内容。改成内容寻址之后同内容只留一份，删除也就不能再按「删消息就删文件」做
-- 合并注意：内存与 UI 的引用形式仍是绝对 `file://`；消息库里落盘的是相对形态（C36），清理按两种形态解析，官方导出的改写也覆盖相对形态；序列化格式与 Room schema 不变。`managed_files` 只是旁路索引，消息读取不经过它，去重之后同一路径只有一条登记。清理是「宁可少收垃圾也不能删错」：解析不了的地址按文件名保守保留，生成开始前与删除前各查一次 `isGenerating`，工具结果里的新文件可能还没落库；输入框里的附件由草稿（C31）与 `LiveAttachmentReferences`（C32）保活，编辑历史消息期间不写草稿的那部分也在后者里；Web 客户端上传后还停在浏览器输入框里的附件不在扫描范围，清理前别让浏览器里留着没发出去的附件；工作区把 `filesDir/upload` bind mount 到 `/upload`，从终端写进去的文件没有任何引用，也会被清掉。消息扫描一次把所有含本地地址的行读进内存，历史很大时是手动清理的时间与内存上限；删除前还会再取一次只存在于内存的输入框登记与内存会话、队列引用，缩小扫描窗口内新加附件被误删的可能。文件页的按天清理也走同一套引用判断，只删没有引用、且登记时间（没有登记时按文件修改时间）早于截止时间的 upload 文件；登记时间在去重复用时不刷新，所以年龄是「首次写进来的时间」，不是「最后一次被用」；「全部文件」、单个删除与 Web 的 `DELETE /api/files/{id}` 仍然直接删文件，这是显式的破坏性操作。存量文件的随机名不会自动归并，去重只作用于新写入。`FilesManager`、`ChatService`、`ConversationRepository`、`AttachmentChips`、`AssistantVM`、`AssistantDetailVM`、`ChatVM`、`SettingFilesPage`、`ViewModelModule`、`RepositoryModule` 都动了，合并时按本行复核。
+- 合并注意：内存与 UI 的引用形式仍是绝对 `file://`；消息库里落盘的是相对形态（C36），清理按两种形态解析，官方导出的改写也覆盖相对形态；序列化格式与 Room schema 不变。`managed_files` 只是旁路索引，消息读取不经过它，去重之后同一路径只有一条登记。清理是「宁可少收垃圾也不能删错」：解析不了的地址按文件名保守保留，生成开始前与删除前各查一次 `isGenerating`，工具结果里的新文件可能还没落库；输入框里的附件由草稿（C31）与 `LiveAttachmentReferences`（C32）保活，编辑历史消息期间不写草稿的那部分也在后者里；Web 客户端上传后还停在浏览器输入框里的附件不在扫描范围，清理前别让浏览器里留着没发出去的附件；工作区把 `filesDir/upload` bind mount 到 `/upload`，从终端写进去的文件没有任何引用，也会被清掉。消息扫描一次把所有含本地地址的行读进内存，历史很大时是手动清理的时间与内存上限；删除前还会再取一次只存在于内存的输入框登记与内存会话、队列引用，缩小扫描窗口内新加附件被误删的可能。文件页的按天清理也走同一套引用判断，只删没有引用、且登记时间（没有登记时按文件修改时间）早于截止时间的 upload 文件；登记时间在去重复用时不刷新，所以年龄是「首次写进来的时间」，不是「最后一次被用」；「全部文件」、单个删除与 Web 的 `DELETE /api/files/{id}` 仍然直接删文件，这是显式的破坏性操作。存量文件的随机名不会被就地归并：应用不会主动扫盘改名，只有带数据库的导入会把归档里的文件按内容改名并去掉重复（C40）。`FilesManager`、`ChatService`、`ConversationRepository`、`AttachmentChips`、`AssistantVM`、`AssistantDetailVM`、`ChatVM`、`SettingFilesPage`、`ViewModelModule`、`RepositoryModule` 都动了，合并时按本行复核。
 
 ### C33 附件拷贝挪出主线程
 
@@ -255,9 +258,9 @@
 
 ### C34 备份与工作区文件的拷贝挪出主线程
 
-- 落点：`ImportExportTab` 的导出复制（临时 zip 到用户选择的位置）与导入暂存（用户选择的位置到 cache 临时包，连同 `vm.restoreFromLocalFile`）包进 `withContext(Dispatchers.IO)`；`vm.exportToFile` 在主线程调用，打包主体在 `BackupManager` 里自带 IO 派发，只有复制在 IO。`ImportExportTab` 的开流失败（`openOutputStream`/`openInputStream` 返回 null）按失败处理，不会静默报成功或拿空包去恢复；失败分支会删掉目标文档，若用户选择覆盖已有文档，null 开流时那份文档也会被删，这是失败清理策略的残余风险。复制被取消时重抛 `CancellationException`、不弹失败；导出取消会静默删掉没写完的目标文档；`exportingTarget` 与 `isRestoring` 的复位在 `finally`；导出临时文件在 `finally` 里删。`WorkspaceDetailPage` 的文件选择器把名字查询、`openInputStream` 与交给 VM 都放进同一个 IO 块，避免交接前被取消留下没关闭的流。
+- 落点：`ImportExportTab` 的导出复制（临时 zip 到用户选择的位置）与导入暂存（用户选择的位置到 cache 临时包，连同 `vm.restoreFromLocalFile`）包进 `withContext(Dispatchers.IO)`；`vm.exportToFile` 在主线程调用，打包主体在 `BackupManager` 里自带 IO 派发，只有复制在 IO。`ImportExportTab` 的开流失败（`openOutputStream`/`openInputStream` 返回 null）按失败处理，不会静默报成功或拿空包去恢复；失败分支会删掉目标文档，若用户选择覆盖已有文档，null 开流时那份文档也会被删，这是失败清理策略的残余风险。复制被取消时重抛 `CancellationException`、不弹失败；导出取消会静默删掉没写完的目标文档；导出与导入的占用由 `BackupVM` 的统一锁管理，`release` 在 `finally` 里调用（C41）；导出临时文件在 `finally` 里删。`WorkspaceDetailPage` 的文件选择器把名字查询、`openInputStream` 与交给 VM 都放进同一个 IO 块，避免交接前被取消留下没关闭的流。
 - 理由：备份 zip 可能有几百 MB，整包复制放在主线程会卡界面甚至 ANR；SAF 的查询与打开是 binder 调用，也放到 IO 更稳。
-- 合并注意：改了上游的 `ImportExportTab` 与 `WorkspaceDetailPage`，合并时按本行复核。`restoreFromLocalFile` 从 IO 块里调用，其链路自带 IO 派发；`exportToFile` 仍在主线程调用，内部只碰 StateFlow、设置读写与 IO，不能假设自己必须在 Main。导出与导入之间不互斥，复制期间仍可启动另一条，没有数据竞争。取消时清理与状态复位都在 `finally` / `catch` 里，不要让 `CancellationException` 走进失败提示。恢复在 `stageRestore` 里发布 pending 之后才归档原始包；如果取消发生在发布之后，pending 仍会在下次启动生效，界面可能没弹成功提示。
+- 合并注意：改了上游的 `ImportExportTab` 与 `WorkspaceDetailPage`，合并时按本行复核。`restoreFromLocalFile` 从 IO 块里调用，其链路自带 IO 派发；`exportToFile` 仍在主线程调用，内部只碰 StateFlow、设置读写与 IO，不能假设自己必须在 Main。六个备份入口共用一把锁（C41），复制期间不能再启动另一条；锁的抢占与释放在 `BackupVM` 里，与这里的 IO 派发无关。取消时清理在 `finally` / `catch` 里，不要让 `CancellationException` 走进失败提示。恢复在 `stageRestore` 里发布 pending 之后才归档原始包；如果取消发生在发布之后，pending 仍会在下次启动生效，界面可能没弹成功提示。
 
 ### C35 模型选择支持多关键词搜索
 
@@ -290,3 +293,21 @@
 - 落点：根 `README.md` 重写为简体中文的 fork 说明（fork 定位、谨慎使用、官方仓库与官网、nightly 构建说明、定制文档入口、许可证），删除 `README_ZH_CN.md` 与 `README_ZH_TW.md`；`docs/README.md` 的说明同步，C4、C13 里涉及 README 的落点指向本项。
 - 理由：本仓库是个人分支，保留上游三份翻译会让人误以为这是官方项目，官方仓库链接也埋在功能列表后面。README 需要一眼说清这是个人 fork、有风险，并指向官方仓库。
 - 移植注意：上游 README 不再跟随；上游若改安装、构建或主要功能说明，按需抄进 `README.md` 与 `docs/custom/build.md`，不要恢复多语言版本。
+
+### C40 导入时附件按内容寻址，归档必须有数据库与设置
+
+- 落点：`WebDavConfig.BackupItem` 加 `SELECTABLE`（只有 `FILES` 与 `WORKSPACES`）与 `normalize`（聊天记录始终在内，`DEFAULT_SELECTION` 由它生成）；`BackupManager.createBackup` 去掉 `includeDatabase`，始终写数据库快照，写进 settings.json 的 `items` 也先归一；`stageRestore` 同样去掉该参数，并改成先列条目再解压：`planRestoreEntries` 在第一个字节写入之前判定，缺 `rikka_hub.db` 抛 `BackupRejectedException(MISSING_DATABASE)`、缺 `settings.json` 抛 `MISSING_SETTINGS`；`upload/` 下的附件解压时按 SHA-256 改名并去重，新增 `ImportedUploadFiles`（`upload/` 条目直接走 C32 的 `ContentAddressedFiles.write`，名字用 `FileUtils.buildContentFileName`，指纹与命名不另写一套）与 `UploadNames.rewriteDatabase`（从 `sqlite_master` 与 `PRAGMA table_info` 现查表与文本列，逐行把 `files/upload/<名字>` 与 `file:upload/<名字>` 换成新名字，`message_fts` 与影子表跳过；`managed_files.relative_path` 单独处理，先按新路径分组、每组只留 id 最小的一行再改名，避免撞唯一索引），settings.json 的替换复用 `ImportedUploadFiles.rewrite`；新增 `BackupRejectedException` 与两条文案，`ImportExportTab`、`WebDavTab` 通过 `restoreErrorMessage` 选文案；两页的「备份内容」只列 `SELECTABLE`，WebDAV 的持久化取值在读写两侧都过 `normalize`。测试：JVM 的 `ImportedUploadFilesTest`（五条）与 `BackupItemTest`（三条）；androidTest 的改名去重用例与两条拒绝用例；`BackupManagerTest`、`OfficialBackupRestoreAcceptanceTest`、`RestoreAppliedOutcomeTest` 按新规则调整，后两者按「sha256 + 归档里的扩展名」算出 `upload/` 的期望落盘名。
+- 理由：官方给每次上传起随机 UUID 名，同一张图发几次就是几个文件；导入侧原来原样落盘，去重只作用于本应用的新写入。文件名由库里的文本列引用，改名必须连带改库、设置与文件登记，所以只有归档同时带数据库时才安全；只带附件的归档恢复出来对不上任何引用，应当在解压之前拒绝。设置与库是一对：库里的会话引用设置里的助手，缺一半会错配。
+- 合并注意：改名只做 `upload/`；`skills/`、`fonts/`、`media_creation/` 是自有目录，归档里的名字来自本应用的随机命名，改名要连带改工具结果里的引用，收益不值。扩展名取自归档里的文件名并转小写，导入侧拿不到可靠 MIME，同内容不同扩展名会落成两份。归档里附件条目的文件名带反斜杠时在计划阶段就拒绝，别留到 apply 才失败。`managed_files` 是唯一需要先去重的表（`relative_path` 有唯一索引）；`favorites.ref_key` 与 `workspaces.root` 也是唯一索引，但都不存附件路径。扫描跳过 `message_fts*`：索引里只有正文，恢复之后本来就要重建。顺序是转换、迁移、再改名、最后 settings，因为转换器先把安装前缀换成本机，改名作用在换过前缀的文本上。`PendingRestore.buildRemovalEntries` 的「只导附件」分支现在只剩更早版本留下的 pending 目录会走到。持久化的 `webDavConfig.items` 里每一项的含义没变，但聊天记录不能再关掉，旧值由 `normalize` 补上；`normalize` 幂等，解码与 DataStore key 都不动。相关记录同步在 [`backup/README.md`](backup/README.md)、[`backup/importer.md`](backup/importer.md) 与 [`backup/acceptance.md`](backup/acceptance.md)。
+
+### C41 备份与恢复按阶段报进度，六个入口互斥
+
+- 落点：新增 `data/sync/BackupProgress.kt`（`BackupStage` 与 `BackupProgress`，`FILES`、`WORKSPACES`、`EXTRACTING` 按条目计，`DATABASE` 段 `total` 恒为 0）；`BackupManager.createBackup` 在清点、写数据库、附件、工作区四处上报，`stageRestore` 在解压与校验数据库两处上报；`WebDavSync.prepareBackupFile` / `restoreFromLocalFile` 透传 `onProgress`；`BackupVM` 增加 `exportProgress`、`restoreProgress` 与 `operation`（`BackupOperation` 六种入口，`claim`/`release` 用 `compareAndSet` 抢占，选文件的系统面板打开期间也算占用，进度在 `finally` 里清空）；`ImportExportTab` 把进度行放进触发操作所在的分组，数据库段给不确定动画，附件与解压段给 `done / total`，写目标文件与读源文件两段沿用不确定动画；`WebDavTab` 的备份按钮、恢复列表与 `BackupFilesSheet` 用同一个锁；`BackupComponents` 新增 `backupProgressItem`，确定进度的 `LinearProgressIndicator` 传 `drawStopIndicator = {}`，去掉 material3 默认在轨道末端画的停靠点。文案：新增 12 条（分组标题 2 条、依赖说明 1 条、拒绝 2 条、导出阶段 4 条、导入阶段 3 条），删掉 `backup_page_export_packing`，八份 locale 同步。
+- 理由：原来只数 zip 条目，数据库快照与官方出口的整库改写挤在同一次 tick 之间，100 个附件时进度条停在 1% 很久，看起来像卡住；导入只有图标转圈，完全没有进度条。六个入口各管一段状态：导出期间能点导入，本地与 WebDAV 互不相干，并发导入要等对方跑完才发现 pending 已存在。
+- 合并注意：`BackupProgress` 是导出与导入共用的类型，WebDAV 页目前不显示进度，只共用锁。`operation` 在 picker 打开之前就占据，取消 picker 时释放；协程被取消时 `finally` 会释放并清空进度。`drawStopIndicator` 是 material3 1.5 的参数，升级 material3 时如果签名变化按本行改。进度文案里的 `%1$d` / `%2$d` 是条目数，改文案时八份 locale 的占位符要一致。
+
+### C42 备份页按本应用与官方 RikkaHub 分组
+
+- 落点：`ImportExportTab` 拆成三个 `CardGroup`：备份内容（多选与一行说明）、本应用（导出到文件、从文件导入）、官方 RikkaHub（导出给 RikkaHub、从官方导入），进度行跟着运行的操作走；`backupContentItem` 去掉标题行，按钮组下方固定一行说明（聊天记录与设置始终包含，附件与工作区文件可选）；新增 `backup_page_group_app` 与 `backup_page_group_official` 两条文案，八份 locale 同步。
+- 理由：官方兼容导出原来放在本应用那一组、从官方导入单独一组，同一个互操作方向被拆到两处；分组标题又和导出入口的标题重复。
+- 合并注意：官方那组的两条既有文案（`backup_page_export_official`、`backup_page_import_from_official`）保留，它们是 `docs/custom/locale.md` 品牌检查里放行的条目。`CardGroup` 的 `title` 是普通参数，分组标题不在 `backupContentItem` 里，两个 tab 共用同一份组件。

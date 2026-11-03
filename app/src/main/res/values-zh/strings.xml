@@ -153,6 +153,7 @@
   <string name="back">返回</string>
   <string name="backup_page_backing_up">备份中...</string>
   <string name="backup_page_backup_items">备份项目</string>
+  <string name="backup_page_backup_items_hint">聊天记录与设置始终包含，附件与工作区文件可选。</string>
   <string name="backup_page_backup_now">立即备份</string>
   <string name="backup_page_backup_success">备份成功</string>
   <string name="backup_page_chat_records">聊天记录</string>
@@ -165,9 +166,14 @@
   <string name="backup_page_exporting">正在导出...</string>
   <string name="backup_page_export_official">导出给 RikkaHub</string>
   <string name="backup_page_export_official_desc">生成官方 RikkaHub 可恢复的备份</string>
+  <string name="backup_page_group_app">本应用</string>
+  <string name="backup_page_group_official">官方 RikkaHub</string>
   <string name="backup_page_export_failed">导出失败</string>
   <string name="backup_page_export_schema_diverged">无法生成官方兼容的备份：本应用的数据结构已经改变。请改用普通导出</string>
-  <string name="backup_page_export_packing">正在打包 %1$d / %2$d</string>
+  <string name="backup_page_export_preparing">正在准备...</string>
+  <string name="backup_page_export_database">正在导出数据库...</string>
+  <string name="backup_page_export_files">正在打包文件 %1$d / %2$d</string>
+  <string name="backup_page_export_workspaces">正在打包工作区文件 %1$d / %2$d</string>
   <string name="backup_page_saving">正在保存...</string>
   <string name="backup_page_files">文件</string>
   <string name="backup_page_workspaces">工作区</string>
@@ -176,6 +182,9 @@
   <string name="backup_page_import_official_desc">先在官方 RikkaHub 中导出备份，再在此选择该文件</string>
   <string name="backup_page_import_export">本地</string>
   <string name="backup_page_importing">正在恢复...</string>
+  <string name="backup_page_import_database">正在检查数据库...</string>
+  <string name="backup_page_import_extracting">正在解压 %1$d / %2$d</string>
+  <string name="backup_page_import_reading">正在读取备份文件...</string>
   <string name="backup_page_loading_failed">加载备份文件失败: %s</string>
   <string name="backup_page_local_backup_export">导出为文件</string>
   <string name="backup_page_local_backup_import">备份文件导入</string>
@@ -195,6 +204,8 @@
   <string name="backup_page_restart_desc">应用需要重启以使设置生效。</string>
   <string name="backup_page_restore">恢复</string>
   <string name="backup_page_restore_failed">恢复失败: %s</string>
+  <string name="backup_page_restore_missing_database">这份备份里没有聊天记录，请重新导出一份包含聊天记录的备份。</string>
+  <string name="backup_page_restore_missing_settings">这份备份里没有设置。</string>
   <string name="backup_page_restore_now">恢复</string>
   <string name="backup_page_restore_success">恢复成功</string>
   <string name="backup_page_restoring">恢复中...</string>

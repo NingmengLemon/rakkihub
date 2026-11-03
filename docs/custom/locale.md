@@ -18,10 +18,10 @@
 
 ```powershell
 rg -n 'RikkaHub' app/src/main/res oauth/src/main/res -g '**/values*/strings.xml' |
-  Select-String -NotMatch 'name="(backup_page_import_from_official|backup_page_import_official_desc|backup_page_export_official|backup_page_export_official_desc|backup_page_export_schema_diverged)"'
+  Select-String -NotMatch 'name="(backup_page_group_official|backup_page_import_from_official|backup_page_import_official_desc|backup_page_export_official|backup_page_export_official_desc|backup_page_export_schema_diverged)"'
 ```
 
-放行的这五条都指官方应用：两条导入引导、两条导出说明，以及分叉时的失败提示。`web-ui` 的 `search-picker.tsx` 里 `rikkahub: "RikkaHub"` 是搜索服务的显示名，指官方接口，同样保留。
+放行的这六条都指官方应用：官方那组的标题、两条导入引导、两条导出说明，以及分叉时的失败提示。`web-ui` 的 `search-picker.tsx` 里 `rikkahub: "RikkaHub"` 是搜索服务的显示名，指官方接口，同样保留。
 
 ## 欠账
 

@@ -1,5 +1,6 @@
 package me.rerere.rikkahub.ui.pages.backup.components
 
+import android.content.Context
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
@@ -35,6 +36,7 @@ import androidx.compose.material3.FloatingToolbarDefaults.floatingToolbarVertica
 import androidx.compose.material3.HorizontalFloatingToolbar
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
+import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.SheetValue
@@ -62,6 +64,8 @@ import me.rerere.hugeicons.stroke.Connect
 import me.rerere.hugeicons.stroke.FileZip
 import me.rerere.hugeicons.stroke.Tick01
 import me.rerere.rikkahub.R
+import me.rerere.rikkahub.data.sync.BackupProgress
+import me.rerere.rikkahub.data.sync.BackupRejectedException
 import me.rerere.rikkahub.ui.components.ai.ExtensionEmptyState
 import me.rerere.rikkahub.ui.components.ui.CardGroup
 import me.rerere.rikkahub.ui.components.ui.CardGroupIcon
@@ -93,15 +97,13 @@ internal fun BackupActionIcon(
     }
 }
 
-// 「备份内容」多选项，本地与 WebDAV 页共用
+// 「备份内容」多选项，本地与 WebDAV 页共用。聊天记录始终包含，这里只有可选项。
 internal fun <T> CardGroupScope.backupContentItem(
     options: List<T>,
     selected: List<T>,
     onChange: (List<T>) -> Unit,
     label: @Composable (T) -> String,
-) = formItem(
-    headlineContent = { Text(stringResource(R.string.backup_page_backup_items)) },
-) {
+) = formItem {
     ConnectedMultiChoiceButtons(
         options = options,
         selected = selected,
@@ -115,7 +117,42 @@ internal fun <T> CardGroupScope.backupContentItem(
             icon = HugeIcons.Tick01,
         )
     }
+    Text(
+        text = stringResource(R.string.backup_page_backup_items_hint),
+        style = MaterialTheme.typography.bodyMedium,
+        color = MaterialTheme.colorScheme.onSurfaceVariant,
+    )
 }
+
+// 进度行：可数的一段给确定进度，数据库那两段给不确定动画
+internal fun CardGroupScope.backupProgressItem(
+    progress: BackupProgress?,
+    text: @Composable () -> String,
+) = formItem {
+    Text(text = text())
+    if (progress != null && progress.total > 0) {
+        LinearProgressIndicator(
+            progress = { progress.fraction },
+            modifier = Modifier.fillMaxWidth(),
+            // material3 默认在轨道末端画一个停靠点圆点，备份页不需要
+            drawStopIndicator = {},
+        )
+    } else {
+        LinearProgressIndicator(modifier = Modifier.fillMaxWidth())
+    }
+}
+
+/** 恢复失败的提示：缺条目这类拒绝有自己的文案，其余仍带原始信息。 */
+internal fun restoreErrorMessage(context: Context, error: Throwable): String =
+    when ((error as? BackupRejectedException)?.reason) {
+        BackupRejectedException.Reason.MISSING_DATABASE ->
+            context.getString(R.string.backup_page_restore_missing_database)
+
+        BackupRejectedException.Reason.MISSING_SETTINGS ->
+            context.getString(R.string.backup_page_restore_missing_settings)
+
+        null -> context.getString(R.string.backup_page_restore_failed, error.message ?: "")
+    }
 
 // WebDAV 页顶部的状态分组：上次备份时间，以及进入备份文件列表的入口
 @Composable
@@ -157,6 +194,7 @@ internal fun RemoteBackupStatus(
 @Composable
 internal fun RemoteBackupLayout(
     isBackingUp: Boolean,
+    enabled: Boolean,
     onTestConnection: () -> Unit,
     onBackup: () -> Unit,
     content: @Composable ColumnScope.() -> Unit,
@@ -203,7 +241,7 @@ internal fun RemoteBackupLayout(
             ) {
                 Button(
                     onClick = onBackup,
-                    enabled = !isBackingUp,
+                    enabled = enabled,
                 ) {
                     if (isBackingUp) {
                         CircularWavyProgressIndicator(modifier = Modifier.size(ButtonDefaults.IconSize))
@@ -245,6 +283,8 @@ internal fun <T> BackupFilesSheet(
     state: UiState<List<T>>,
     // 正在恢复的那份备份的文件名，恢复期间所有按钮都不可点
     restoringName: String?,
+    // 别的备份/恢复操作在跑时整个列表的按钮都不可点
+    enabled: Boolean,
     info: (T) -> BackupFileInfo,
     onDelete: (T) -> Unit,
     onRestore: (T) -> Unit,
@@ -290,7 +330,7 @@ internal fun <T> BackupFilesSheet(
                                     index = index,
                                     count = files.size,
                                     isRestoring = restoringName == fileInfo.name,
-                                    enabled = restoringName == null,
+                                    enabled = enabled && restoringName == null,
                                     onDelete = { onDelete(file) },
                                     onRestore = { onRestore(file) },
                                 )

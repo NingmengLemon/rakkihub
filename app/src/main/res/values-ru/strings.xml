@@ -153,6 +153,7 @@
   <string name="back">Назад</string>
   <string name="backup_page_backing_up">Идёт резервное копирование…</string>
   <string name="backup_page_backup_items">Элементы резервной копии</string>
+  <string name="backup_page_backup_items_hint">История чатов и настройки включаются всегда. Вложения и файлы рабочих пространств включаются по желанию.</string>
   <string name="backup_page_backup_now">Создать резервную копию</string>
   <string name="backup_page_backup_success">Резервное копирование выполнено успешно</string>
   <string name="backup_page_chat_records">История чатов</string>
@@ -165,9 +166,14 @@
   <string name="backup_page_exporting">Экспорт…</string>
   <string name="backup_page_export_official">Экспорт для RikkaHub</string>
   <string name="backup_page_export_official_desc">Создать резервную копию, которую сможет восстановить официальный RikkaHub</string>
+  <string name="backup_page_group_app">Это приложение</string>
+  <string name="backup_page_group_official">Официальный RikkaHub</string>
   <string name="backup_page_export_failed">Не удалось экспортировать</string>
   <string name="backup_page_export_schema_diverged">Невозможно создать резервную копию, совместимую с официальным RikkaHub: структура данных этого приложения изменилась. Используйте обычный экспорт</string>
-  <string name="backup_page_export_packing">Упаковка %1$d / %2$d</string>
+  <string name="backup_page_export_preparing">Подготовка…</string>
+  <string name="backup_page_export_database">Экспорт базы данных…</string>
+  <string name="backup_page_export_files">Упаковка файлов %1$d / %2$d</string>
+  <string name="backup_page_export_workspaces">Упаковка файлов рабочих пространств %1$d / %2$d</string>
   <string name="backup_page_saving">Сохранение...</string>
   <string name="backup_page_files">Файлы</string>
   <string name="backup_page_workspaces">Рабочие пространства</string>
@@ -176,6 +182,9 @@
   <string name="backup_page_import_official_desc">Сначала экспортируйте резервную копию из официального RikkaHub, затем выберите этот файл здесь</string>
   <string name="backup_page_import_export">Локальный</string>
   <string name="backup_page_importing">Импорт…</string>
+  <string name="backup_page_import_database">Проверка базы данных…</string>
+  <string name="backup_page_import_extracting">Распаковка %1$d / %2$d</string>
+  <string name="backup_page_import_reading">Чтение файла резервной копии…</string>
   <string name="backup_page_loading_failed">Не удалось загрузить файлы резервной копии: %s</string>
   <string name="backup_page_local_backup_export">Экспорт в файл</string>
   <string name="backup_page_local_backup_import">Импорт из файла</string>
@@ -195,6 +204,8 @@
   <string name="backup_page_restart_desc">Приложение необходимо перезапустить, чтобы изменения вступили в силу.</string>
   <string name="backup_page_restore">Восстановить</string>
   <string name="backup_page_restore_failed">Ошибка восстановления: %s</string>
+  <string name="backup_page_restore_missing_database">В этой резервной копии нет истории чатов. Экспортируйте новую копию с историей чатов.</string>
+  <string name="backup_page_restore_missing_settings">В этой резервной копии нет настроек.</string>
   <string name="backup_page_restore_now">Восстановить</string>
   <string name="backup_page_restore_success">Восстановление выполнено успешно</string>
   <string name="backup_page_restoring">Восстановление...</string>

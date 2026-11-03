@@ -43,7 +43,7 @@
    adb -s <序列号> shell "su -c 'test -d /data/user/0/$PKG/files/upload && ls /data/user/0/$PKG/files/upload | wc -l'"
    ```
 
-   本次结果：会话 170、节点 676；66 个节点带附件引用，全部是官方安装的绝对路径，相对形态 0 个节点；upload 文件 98；测试图片能显示。要连搜索一起验，按「判据」的查询集在两边各跑一次。
+   本次结果（官方侧，改名之前测的）：会话 170、节点 676；66 个节点带附件引用，全部是官方安装的绝对路径，相对形态 0 个节点；upload 文件 98；测试图片能显示。要连搜索一起验，按「判据」的查询集在两边各跑一次。
 
 ### 换包名恢复
 
@@ -62,12 +62,12 @@
 5. 按上一节的命令取数，把 `PKG` 换成 `top.lemoneko.rakkihub.crosscheck`。
 6. 验完把 `applicationIdSuffix` 改回 `.debug`，卸载 `.crosscheck` 安装。
 
-本次结果：会话 170、节点 676；2 个节点带相对引用，按新安装解析；64 个节点带官方绝对引用，经 C25 改写成新安装；upload 文件 98；测试图片正常显示。
+本次结果（改名之前测的）：会话 170、节点 676；2 个节点带相对引用，按新安装解析；64 个节点带官方绝对引用，经 C25 改写成新安装；upload 文件 98；测试图片正常显示。改名落地之后，被导入方的 `upload/` 是去重后的数量，要重跑取数。
 
 ## 判据
 
 - 每张表按主键排序后的行数与内容 SHA-256，规范化规则见下。
-- 附件的相对路径集合与每个文件的 SHA-256，外加「首次启动后 live 目录里没有归档之外的多余文件」。后一条由 `RestoreAppliedOutcomeTest` 核对：它拿期望文件里的附件集合与 live 的 `upload/` 逐项比，归档里出现 `skills/`、`fonts/` 这类目录时会直接失败（当前 v32 样本只有 `upload/`）。
+- 附件的内容摘要与「首次启动后 live 目录里没有归档之外的多余文件」。`upload/` 下的文件导入时按内容改名（C40），期望的落盘名由期望文件里的 sha256 与归档里的扩展名算出，同内容的条目会合并成一份，所以比较的是期望值去重后的集合；其它附件目录按原名。`RestoreAppliedOutcomeTest` 拿这份集合与 live 的 `upload/` 逐项比，归档里出现 `skills/`、`fonts/` 这类目录时会直接失败（当前 v32 样本只有 `upload/`）。
 - settings 的关键字段：助手与服务商的条数与 id 集合、当前助手、当前模型。期望值必须从同一份归档里取，跨归档借 `settings.json` 会把期望值算成另一份样本的数，表现为导入像丢了数据。
 - 搜索：固定一组查询与期望的会话 id 集合，导入前后结果集相同。**对比时要把搜索范围调成同一个**：搜索页有「当前助手 / 全部助手」两种范围，范围不同结果集不可比。基准取恢复之前（或官方客户端手动重建索引之后）的状态：官方客户端恢复后不重建全文索引，同一份备份在官方那边恢复出来会搜不到本该有的结果，那是索引没建，不是数据丢了。我们的 FTS 用 `tokenize = 'simple'`，与官方的分词不一定一致，所以判据要求「同一组查询在官方客户端能搜到、导入后在本 fork 也能搜到相同的会话」。这条需要官方客户端，是人工闸门，不进 CI。
 
@@ -121,6 +121,8 @@ v31 的样本推成 `rikkahub-sample-v31.db` 与 `backup-expectations-v31.json`�
 | 本 fork 旧构建 | v31（产出自 3.1.0 (193)，包名还是 `me.rerere.rikkahub`） | 表数据与内容摘要；settings 只手工核对过条数（经 migrate 与 decode 后不变），没有脚本或测试复现；附件未逐个比 |
 | 本应用自己导出 | `BackupManagerTest` 的常规恢复用例与 `foreignAttachmentPathsAreRewrittenOnSameVersionRestore`、`OfficialForeignAttachmentPathsTest`（探测判定） | 常规用例覆盖原路径，但没有插入引用，「引用都属于当前安装、恢复时不走转换器」这条恢复路径没有用例；探测判定由 `OfficialForeignAttachmentPathsTest` 覆盖（androidTest，不进 CI）。指向别的安装的旧绝对引用命中 C25，同版本也走转换器；新写或重存过的消息引用是相对形态，按当前安装解析；迁移链升级无样本或用例 |
 | 高版本库 | `BackupManagerTest` 的拒绝用例 | 验过 |
+| 缺条目拒绝 | `BackupManagerTest` 的 `archiveWithoutDatabaseIsRejectedBeforeStaging`、`archiveWithoutSettingsIsRejectedBeforeStaging` | 待设备重跑：判据是解压之前失败、不留 pending、现有库与附件不动 |
+| 导入改名与去重 | `ImportedUploadFilesTest`（JVM）与 `BackupManagerTest.importRenamesUploadsToContentNamesAndDropsDuplicates` | 待设备重跑：期望名由内容算出、同内容合并成一份、库与 `managed_files` 的引用一起换 |
 | 官方兼容出口 | `BackupManagerTest` 的两条路径改写用例，外加一条「官方出口归档再恢复回本应用」 | 绝对与相对路径改写验过；设备上导出并交给官方客户端恢复过一次（170 会话 / 676 节点 / 66 个节点带官方绝对引用 / 98 个 upload 文件，测试图片能显示）；schema 裁剪未实现 |
 | 本应用自己导出、换包名恢复 | 临时 `.crosscheck` 包名的构建 | 170 会话 / 676 节点；2 个节点带相对引用，按新安装解析；64 个节点带官方绝对引用，经 C25 改写；98 个 upload 文件；测试图片显示 |
 
@@ -131,3 +133,5 @@ v31 的样本推成 `rikkahub-sample-v31.db` 与 `backup-expectations-v31.json`�
 v31 的附件没有逐个在设备上比：整包推上设备再解压不划算，它覆盖的代码路径与 v32 相同。v16（官方 2.1.6）明确不支持，不纳入样本集。
 
 每次改动 schema 或 `Settings` 结构之后重跑全部样本与设备验收。只编译通过不算数。
+
+C40 与 C41 落地后，`upload/` 的落盘名与设备上的数量都变了，安卓端用例与上面两节的结果要重跑一次；表里标「待设备重跑」的行就是这批。

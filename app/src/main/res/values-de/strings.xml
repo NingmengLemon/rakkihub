@@ -105,11 +105,16 @@
   <string name="backup_page_exporting">Exportieren...</string>
   <string name="backup_page_export_official">Für RikkaHub exportieren</string>
   <string name="backup_page_export_official_desc">Ein Backup schreiben, das das offizielle RikkaHub wiederherstellen kann</string>
+  <string name="backup_page_group_app">Diese App</string>
+  <string name="backup_page_group_official">Offizieller RikkaHub</string>
   <string name="backup_page_export_failed">Export fehlgeschlagen</string>
   <string name="backup_page_export_schema_diverged">Ein RikkaHub-kompatibles Backup ist nicht möglich: Der Datenaufbau dieser App hat sich geändert. Nutze stattdessen den normalen Export</string>
   <string name="backup_page_files">Dateien</string>
   <string name="backup_page_workspaces">Arbeitsbereiche</string>
-  <string name="backup_page_export_packing">Packe %1$d / %2$d</string>
+  <string name="backup_page_export_preparing">Wird vorbereitet...</string>
+  <string name="backup_page_export_database">Datenbank wird exportiert...</string>
+  <string name="backup_page_export_files">Dateien werden gepackt %1$d / %2$d</string>
+  <string name="backup_page_export_workspaces">Arbeitsbereichsdateien werden gepackt %1$d / %2$d</string>
   <string name="backup_page_saving">Wird gespeichert...</string>
   <string name="backup_page_import_from_official">Aus RikkaHub importieren</string>
   <string name="backup_page_import_official_desc">Exportiere zuerst ein Backup aus dem offiziellen RikkaHub und wähle die Datei dann hier aus</string>
@@ -158,6 +163,8 @@
   <string name="backup_page_restart_desc">Die App muss neu gestartet werden, damit die Änderungen wirksam werden.</string>
   <string name="backup_page_restore">Wiederherstellen</string>
   <string name="backup_page_restore_failed">Wiederherstellung fehlgeschlagen: %s</string>
+  <string name="backup_page_restore_missing_database">Dieses Backup enthält keine Chatverläufe. Exportiere ein neues Backup mit Chatverläufen.</string>
+  <string name="backup_page_restore_missing_settings">Dieses Backup enthält keine Einstellungen.</string>
   <string name="backup_page_restore_now">Wiederherstellen</string>
   <string name="backup_page_restore_success">Wiederherstellung erfolgreich</string>
   <string name="backup_page_restoring">Wird wiederhergestellt...</string>
@@ -165,6 +172,9 @@
   <string name="backup_page_import_desc">Lokale Backup-Datei importieren</string>
   <string name="backup_page_import_export">Lokal</string>
   <string name="backup_page_importing">Wird importiert...</string>
+  <string name="backup_page_import_database">Datenbank wird geprüft...</string>
+  <string name="backup_page_import_extracting">Entpacke %1$d / %2$d</string>
+  <string name="backup_page_import_reading">Backup-Datei wird gelesen...</string>
   <string name="backup_page_loading_failed">Backup-Dateien konnten nicht geladen werden: %s</string>
   <string name="backup_page_local_backup_export">In Datei exportieren</string>
   <string name="backup_page_local_backup_import">Aus Datei importieren</string>
@@ -275,6 +285,7 @@
   <string name="back">Zurück</string>
   <string name="backup_page_backing_up">Backup wird erstellt...</string>
   <string name="backup_page_backup_items">Backup-Elemente</string>
+  <string name="backup_page_backup_items_hint">Chatverläufe und Einstellungen sind immer enthalten. Anhänge und Arbeitsbereichsdateien sind optional.</string>
   <string name="backup_page_backup_now">Jetzt sichern</string>
   <string name="backup_page_backup_success">Backup erfolgreich</string>
   <string name="backup_page_chat_records">Chatverläufe</string>

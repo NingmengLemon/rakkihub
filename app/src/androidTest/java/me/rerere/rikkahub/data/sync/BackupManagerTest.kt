@@ -33,6 +33,7 @@ import org.junit.runner.RunWith
 import org.koin.core.context.GlobalContext
 import java.io.File
 import java.nio.file.Files
+import java.security.MessageDigest
 import java.util.zip.ZipEntry
 import java.util.zip.ZipFile
 import java.util.zip.ZipOutputStream
@@ -72,6 +73,7 @@ class BackupManagerTest {
     @Test fun oldArchiveIgnoresShmAndLeavesLiveDatabaseUntouchedUntilStartup() = runBlocking {
         val source = File(directory, "source")
         val archive = File(directory, "legacy.zip")
+        val valid = manager.createBackup(includeFiles = false)
         withRoom(source) { room ->
             val db = room.openHelper.writableDatabase
             db.execSQL("CREATE TABLE backup_probe (text TEXT)")
@@ -79,6 +81,7 @@ class BackupManagerTest {
             db.query("PRAGMA wal_autocheckpoint=0").use { assertTrue(it.moveToFirst()) }
             db.execSQL("INSERT INTO backup_probe VALUES ('archived')")
             ZipOutputStream(archive.outputStream()).use { zip ->
+                ZipFile(valid).use { backup -> addEntry(zip, backup, BackupManager.SETTINGS_ENTRY) }
                 addFile(zip, DatabaseBackup.ARCHIVE_DATABASE, source)
                 addFile(zip, DatabaseBackup.WAL, File(source.path + "-wal"))
                 zip.putNextEntry(ZipEntry(DatabaseBackup.SHM))
@@ -86,7 +89,8 @@ class BackupManagerTest {
                 zip.closeEntry()
             }
         }
-        manager.stageRestore(archive, includeDatabase = true, includeFiles = false)
+        valid.delete()
+        manager.stageRestore(archive, includeFiles = false)
         assertEquals("live", probe(liveDatabase))
         val staged = File(context.noBackupFilesDir, "backup-restore/pending/payload/database/rikka_hub")
         assertTrue(staged.isFile)
@@ -100,14 +104,14 @@ class BackupManagerTest {
     }
 
     @Test fun newArchiveContainsStandaloneDatabaseAndNoWalOrShm() = runBlocking {
-        val archive = manager.createBackup(includeDatabase = true, includeFiles = false)
+        val archive = manager.createBackup(includeFiles = false)
         ZipFile(archive).use { zip ->
             assertTrue(zip.getEntry("settings.json") != null)
             assertTrue(zip.getEntry(DatabaseBackup.ARCHIVE_DATABASE) != null)
             assertEquals(null, zip.getEntry(DatabaseBackup.WAL))
             assertEquals(null, zip.getEntry(DatabaseBackup.SHM))
         }
-        manager.stageRestore(archive, includeDatabase = true, includeFiles = false)
+        manager.stageRestore(archive, includeFiles = false)
         assertEquals("live", probe(liveDatabase))
     }
 
@@ -119,7 +123,6 @@ class BackupManagerTest {
      */
     @Test fun officialTargetWritesArchiveThatStagingAccepts() = runBlocking {
         val archive = manager.createBackup(
-            includeDatabase = true,
             includeFiles = false,
             backupTarget = BackupTarget.OFFICIAL,
         )
@@ -127,37 +130,39 @@ class BackupManagerTest {
             assertTrue(zip.getEntry("settings.json") != null)
             assertTrue(zip.getEntry(DatabaseBackup.ARCHIVE_DATABASE) != null)
         }
-        manager.stageRestore(archive, includeDatabase = true, includeFiles = false)
+        manager.stageRestore(archive, includeFiles = false)
         assertEquals("live", probe(liveDatabase))
     }
 
     @Test fun launchCountStaysInSettingsJsonThroughBackupAndStaging() = runBlocking {
-        val archive = manager.createBackup(includeDatabase = false, includeFiles = false)
+        val archive = manager.createBackup(includeFiles = false)
         val archived = ZipFile(archive).use { zip ->
             launchCountOf(zip.getInputStream(zip.getEntry("settings.json")).readBytes().decodeToString())
         }
         assertTrue(archived != null)
-        manager.stageRestore(archive, includeDatabase = false, includeFiles = false)
+        manager.stageRestore(archive, includeFiles = false)
         val staged = File(context.noBackupFilesDir, "backup-restore/pending/${BackupManager.SETTINGS_ENTRY}").readText()
         assertEquals(archived, launchCountOf(staged))
     }
 
     @Test fun archiveWithoutLaunchCountRestoresItAsZero() = runBlocking {
-        val current = manager.createBackup(includeDatabase = false, includeFiles = false)
+        val current = manager.createBackup(includeFiles = false)
         val settingsJson = ZipFile(current).use { zip ->
             zip.getInputStream(zip.getEntry("settings.json")).readBytes().decodeToString()
         }
         val archive = File(directory, "no-launch-count.zip")
         ZipOutputStream(archive.outputStream()).use { zip ->
-            zip.putNextEntry(ZipEntry("settings.json"))
+            zip.putNextEntry(ZipEntry(BackupManager.SETTINGS_ENTRY))
             zip.write(
                 JsonObject(
                     JsonInstant.parseToJsonElement(settingsJson).jsonObject - "launchCount"
                 ).toString().toByteArray()
             )
             zip.closeEntry()
+            ZipFile(current).use { backup -> addEntry(zip, backup, DatabaseBackup.ARCHIVE_DATABASE) }
         }
-        manager.stageRestore(archive, includeDatabase = false, includeFiles = false)
+        current.delete()
+        manager.stageRestore(archive, includeFiles = false)
         val staged = File(context.noBackupFilesDir, "backup-restore/pending/${BackupManager.SETTINGS_ENTRY}").readText()
         assertEquals(0, launchCountOf(staged))
     }
@@ -182,14 +187,14 @@ class BackupManagerTest {
         File(session, "record/out_0.png").writeText("image")
         File(session, "record/out_1.mp4.part").writeText("half a video")
         File(session, "draft/asset.jpg").writeText("asset")
-        val archive = manager.createBackup(includeDatabase = false, includeFiles = true)
+        val archive = manager.createBackup(includeFiles = true)
         ZipFile(archive).use { zip ->
             assertTrue(zip.getEntry("media_creation/session/record/out_0.png") != null)
             assertTrue(zip.getEntry("media_creation/session/draft/asset.jpg") != null)
             assertEquals(null, zip.getEntry("media_creation/session/record/out_1.mp4.part"))
         }
         session.deleteRecursively()
-        manager.stageRestore(archive, includeDatabase = false, includeFiles = true)
+        manager.stageRestore(archive, includeFiles = true)
         assertFalse(session.exists())
         dropStagedSettings()
         assertTrue(BackupManager.applyPendingRestore(context, JsonInstant))
@@ -204,10 +209,13 @@ class BackupManagerTest {
             it.openHelper.writableDatabase.version = 9999
         }
         val archive = File(directory, "future.zip")
-        ZipOutputStream(archive.outputStream()).use { addFile(it, DatabaseBackup.ARCHIVE_DATABASE, future) }
+        ZipOutputStream(archive.outputStream()).use { zip ->
+            addSettingsEntry(zip)
+            addFile(zip, DatabaseBackup.ARCHIVE_DATABASE, future)
+        }
         var failed = false
         try {
-            manager.stageRestore(archive, includeDatabase = true, includeFiles = false)
+            manager.stageRestore(archive, includeFiles = false)
         } catch (_: Exception) {
             failed = true
         }
@@ -230,9 +238,12 @@ class BackupManagerTest {
             db.execSQL("UPDATE room_master_table SET identity_hash = '00000000000000000000000000000000'")
             DatabaseBackup.checkpoint(db)
         }
-        ZipOutputStream(archive.outputStream()).use { zip -> addFile(zip, DatabaseBackup.ARCHIVE_DATABASE, source) }
+        ZipOutputStream(archive.outputStream()).use { zip ->
+            addSettingsEntry(zip)
+            addFile(zip, DatabaseBackup.ARCHIVE_DATABASE, source)
+        }
 
-        manager.stageRestore(archive, includeDatabase = true, includeFiles = false)
+        manager.stageRestore(archive, includeFiles = false)
 
         val staged = File(context.noBackupFilesDir, "backup-restore/pending/payload/database/rikka_hub")
         assertTrue("转换结果应当已发布到 pending", staged.isFile)
@@ -258,9 +269,12 @@ class BackupManagerTest {
             DatabaseBackup.checkpoint(db)
             db.execSQL("PRAGMA user_version = 33")
         }
-        ZipOutputStream(archive.outputStream()).use { zip -> addFile(zip, DatabaseBackup.ARCHIVE_DATABASE, source) }
+        ZipOutputStream(archive.outputStream()).use { zip ->
+            addSettingsEntry(zip)
+            addFile(zip, DatabaseBackup.ARCHIVE_DATABASE, source)
+        }
 
-        val error = runCatching { manager.stageRestore(archive, includeDatabase = true, includeFiles = false) }
+        val error = runCatching { manager.stageRestore(archive, includeFiles = false) }
             .exceptionOrNull()
         assertTrue("高版本必须失败，实际是 $error", error is IllegalStateException)
         assertTrue(
@@ -294,9 +308,12 @@ class BackupManagerTest {
             )
             DatabaseBackup.checkpoint(db)
         }
-        ZipOutputStream(archive.outputStream()).use { zip -> addFile(zip, DatabaseBackup.ARCHIVE_DATABASE, source) }
+        ZipOutputStream(archive.outputStream()).use { zip ->
+            addSettingsEntry(zip)
+            addFile(zip, DatabaseBackup.ARCHIVE_DATABASE, source)
+        }
 
-        manager.stageRestore(archive, includeDatabase = true, includeFiles = false)
+        manager.stageRestore(archive, includeFiles = false)
 
         val staged = File(context.noBackupFilesDir, "backup-restore/pending/payload/database/rikka_hub")
         assertTrue("暂存库应当存在", staged.isFile)
@@ -320,7 +337,7 @@ class BackupManagerTest {
     @Test fun workspaceFilesStayOutOfTheArchiveUnlessAsked() = runBlocking {
         seedWorkspace("ws1", "notes/a.txt" to "hello")
 
-        val archive = manager.createBackup(includeDatabase = false, includeFiles = false)
+        val archive = manager.createBackup(includeFiles = false)
         ZipFile(archive).use { zip ->
             assertFalse(
                 "默认不应打包工作区文件",
@@ -336,13 +353,14 @@ class BackupManagerTest {
         File(workspaceDir("ws1"), "linux/bin").apply { mkdirs() }.resolve("sh").writeText("rootfs")
         File(workspaceDir("ws1"), "tmp").apply { mkdirs() }.resolve("scratch").writeText("tmp")
 
-        val archive = manager.createBackup(includeDatabase = false, includeFiles = false, includeWorkspaceFiles = true)
+        val archive = manager.createBackup(includeFiles = false, includeWorkspaceFiles = true)
         val entries = ZipFile(archive).use { zip -> zip.entries().asSequence().map { it.name }.toSet() }
         // 精确断言：多出任何条目（根文件系统、临时目录、目录条目）都会被抓到
         assertEquals(
-            "归档里只应有 settings 与工作区文件区的文件",
+            "归档里只应有 settings、数据库与工作区文件区的文件",
             setOf(
                 "settings.json",
+                DatabaseBackup.ARCHIVE_DATABASE,
                 workspaceArchivePath("ws1", "notes/a.txt"),
                 workspaceArchivePath("ws1", "empty/.keep"),
             ),
@@ -360,9 +378,13 @@ class BackupManagerTest {
             WorkspaceEntity(id = "ws-bad", name = "bad", root = "..", createdAt = 1, updatedAt = 1),
         )
 
-        val archive = manager.createBackup(includeDatabase = false, includeFiles = false, includeWorkspaceFiles = true)
+        val archive = manager.createBackup(includeFiles = false, includeWorkspaceFiles = true)
         val entries = ZipFile(archive).use { zip -> zip.entries().asSequence().map { it.name }.toSet() }
-        assertEquals("没有可打包的文件时只应剩 settings", setOf("settings.json"), entries)
+        assertEquals(
+            "没有可打包的文件时只应剩 settings 与数据库",
+            setOf("settings.json", DatabaseBackup.ARCHIVE_DATABASE),
+            entries,
+        )
     }
 
     /**
@@ -387,7 +409,6 @@ class BackupManagerTest {
             }
 
             val official = manager.createBackup(
-                includeDatabase = false,
                 includeFiles = false,
                 backupTarget = BackupTarget.OFFICIAL,
             )
@@ -397,7 +418,7 @@ class BackupManagerTest {
                 backupItems(official),
             )
 
-            val self = manager.createBackup(includeDatabase = false, includeFiles = false)
+            val self = manager.createBackup(includeFiles = false)
             assertTrue("自家的出口应保留用户勾选", backupItems(self).contains("WORKSPACES"))
         } finally {
             store.update { settings ->
@@ -409,12 +430,11 @@ class BackupManagerTest {
     /** 恢复时把文件搬进 live 的工作区文件区，和导出时的位置一致。 */
     @Test fun workspaceFilesLandInTheLiveWorkspace() = runBlocking {
         seedWorkspace("ws1", "notes/a.txt" to "hello")
-        val archive = manager.createBackup(includeDatabase = false, includeFiles = false, includeWorkspaceFiles = true)
+        val archive = manager.createBackup(includeFiles = false, includeWorkspaceFiles = true)
 
         workspaceLocalDir("ws1").deleteRecursively()
         manager.stageRestore(
             archive,
-            includeDatabase = false,
             includeFiles = false,
             includeWorkspaceFiles = true,
         )
@@ -442,7 +462,6 @@ class BackupManagerTest {
             writeText("keep")
         }
         val archive = manager.createBackup(
-            includeDatabase = true,
             includeFiles = true,
             includeWorkspaceFiles = true,
         )
@@ -452,7 +471,6 @@ class BackupManagerTest {
 
         manager.stageRestore(
             archive,
-            includeDatabase = true,
             includeFiles = true,
             includeWorkspaceFiles = true,
         )
@@ -470,10 +488,10 @@ class BackupManagerTest {
     /** 不勾选时既不打包也不恢复，恢复出来的目录保持原样。 */
     @Test fun workspaceFilesAreIgnoredWhenNotSelected() = runBlocking {
         seedWorkspace("ws1", "notes/a.txt" to "hello")
-        val archive = manager.createBackup(includeDatabase = false, includeFiles = false, includeWorkspaceFiles = true)
+        val archive = manager.createBackup(includeFiles = false, includeWorkspaceFiles = true)
 
         workspaceLocalDir("ws1").deleteRecursively()
-        manager.stageRestore(archive, includeDatabase = false, includeFiles = false)
+        manager.stageRestore(archive, includeFiles = false)
 
         assertFalse("没勾选就不该恢复工作区文件", workspaceLocalFile("ws1", "notes/a.txt").exists())
     }
@@ -492,7 +510,6 @@ class BackupManagerTest {
             val error = runCatching {
                 manager.stageRestore(
                     archive,
-                    includeDatabase = false,
                     includeFiles = false,
                     includeWorkspaceFiles = includeWorkspaceFiles,
                 )
@@ -525,7 +542,6 @@ class BackupManagerTest {
         )
 
         val official = manager.createBackup(
-            includeDatabase = true,
             includeFiles = false,
             backupTarget = BackupTarget.OFFICIAL,
         )
@@ -539,7 +555,7 @@ class BackupManagerTest {
             officialMessages.contains("/${context.packageName}/"),
         )
 
-        val self = manager.createBackup(includeDatabase = true, includeFiles = false)
+        val self = manager.createBackup(includeFiles = false)
         val selfMessages = archivedMessages(self)
         assertTrue(
             "自家出口要保留本应用的路径，实际是 $selfMessages",
@@ -564,7 +580,6 @@ class BackupManagerTest {
             arrayOf("""[{"type":"image","url":"${canonicalFileUrl("upload/x.png")}"}]"""),
         )
         val archive = manager.createBackup(
-            includeDatabase = true,
             includeFiles = false,
             backupTarget = BackupTarget.OFFICIAL,
         )
@@ -573,7 +588,7 @@ class BackupManagerTest {
         val officialUrl = "file:///data/user/0/$OFFICIAL_APPLICATION_ID/files/upload/x.png"
         assertTrue("导出时应当换成官方安装的路径，实际是 $exported", exported.contains(officialUrl))
 
-        manager.stageRestore(archive, includeDatabase = true, includeFiles = false)
+        manager.stageRestore(archive, includeFiles = false)
 
         val staged = stagedMessages()
         val ours = localFileUrl("upload/x.png")
@@ -593,7 +608,6 @@ class BackupManagerTest {
             }
 
             val official = manager.createBackup(
-                includeDatabase = false,
                 includeFiles = false,
                 backupTarget = BackupTarget.OFFICIAL,
             )
@@ -606,7 +620,7 @@ class BackupManagerTest {
                 officialAvatars.all { it.contains("/$OFFICIAL_APPLICATION_ID/") },
             )
 
-            val self = manager.createBackup(includeDatabase = false, includeFiles = false)
+            val self = manager.createBackup(includeFiles = false)
             val selfAvatars = avatarRefs(archiveText(self, "settings.json"))
             assertTrue(
                 "自家出口要保留本应用的路径，实际是 $selfAvatars",
@@ -617,6 +631,188 @@ class BackupManagerTest {
                 settings.copy(displaySetting = settings.displaySetting.copy(userAvatar = original))
             }
         }
+    }
+
+    /**
+     * 导入时 `upload/` 下的附件按内容改名，同内容只留一份，库与文件登记里的引用一起换掉。
+     *
+     * 官方给每次上传起随机 UUID 名，同一张图发几次就是几个文件；导入之后名字应当是本应用那套
+     * 内容指纹，重复的文件收成一份，引用跟着过去。
+     */
+    @Test fun importRenamesUploadsToContentNamesAndDropsDuplicates() = runBlocking {
+        val repeated = "same image".toByteArray()
+        val other = "another image".toByteArray()
+        val repeatedName = sha256(repeated) + ".png"
+        val otherName = sha256(other) + ".jpg"
+        liveDatabase.openHelper.writableDatabase.execSQL(
+            "INSERT INTO ConversationEntity (id, title, nodes, create_at, update_at) " +
+                "VALUES ('c1', 'demo', '[]', 1, 2)",
+        )
+        liveDatabase.openHelper.writableDatabase.execSQL(
+            "INSERT INTO message_node (id, conversation_id, node_index, messages, select_index) " +
+                "VALUES ('n1', 'c1', 0, ?, 0)",
+            arrayOf(
+                """[{"type":"image","url":"file:upload/aaaa-1.png"},""" +
+                    """{"type":"image","url":"file:upload/bbbb-2.png"},""" +
+                    """{"type":"image","url":"file:upload/cccc-3.jpg"},""" +
+                    """{"type":"image","url":"${localFileUrl("upload/aaaa-1.png")}"}]"""
+            ),
+        )
+        liveDatabase.openHelper.writableDatabase.execSQL(
+            "INSERT INTO managed_files " +
+                "(folder, relative_path, display_name, mime_type, size_bytes, created_at, updated_at) " +
+                "VALUES ('upload', 'upload/aaaa-1.png', 'a.png', 'image/png', 1, 1, 1), " +
+                "('upload', 'upload/bbbb-2.png', 'b.png', 'image/png', 1, 1, 1), " +
+                "('upload', 'upload/cccc-3.jpg', 'c.jpg', 'image/jpeg', 1, 1, 1)",
+        )
+        // 头像与消息里的绝对形态走同一条改名路径
+        val store = GlobalContext.get().get<SettingsStore>()
+        val originalAvatar = store.settingsFlow.value.displaySetting.userAvatar
+        try {
+            store.update { settings ->
+                settings.copy(
+                    displaySetting = settings.displaySetting.copy(
+                        userAvatar = Avatar.Image("file:upload/aaaa-1.png"),
+                    ),
+                )
+            }
+            val backup = manager.createBackup(includeFiles = false)
+            val archive = File(directory, "rename.zip")
+            ZipOutputStream(archive.outputStream()).use { zip ->
+                ZipFile(backup).use { source ->
+                    addEntry(zip, source, BackupManager.SETTINGS_ENTRY)
+                    addEntry(zip, source, DatabaseBackup.ARCHIVE_DATABASE)
+                }
+                addBytes(zip, "upload/aaaa-1.png", repeated)
+                addBytes(zip, "upload/bbbb-2.png", repeated)
+                addBytes(zip, "upload/cccc-3.jpg", other)
+            }
+            backup.delete()
+
+            manager.stageRestore(archive, includeFiles = true)
+
+            val payload = File(context.noBackupFilesDir, "backup-restore/pending/payload/files/upload")
+            assertEquals(
+                "同内容应当只留一份，名字按内容算",
+                listOf(repeatedName, otherName).sorted(),
+                payload.listFiles().orEmpty().map { it.name }.sorted(),
+            )
+            assertEquals(repeated.size.toLong(), File(payload, repeatedName).length())
+
+            val staged = File(context.noBackupFilesDir, "backup-restore/pending/payload/database/rikka_hub")
+            SQLiteDatabase.openDatabase(staged.absolutePath, null, SQLiteDatabase.OPEN_READONLY).use { db ->
+                val messages = db.rawQuery("SELECT messages FROM message_node WHERE id = 'n1'", null).use {
+                    check(it.moveToFirst())
+                    it.getString(0)
+                }
+                assertTrue("相对形态要改名，实际是 $messages", messages.contains("file:upload/$repeatedName"))
+                assertTrue("相对形态要改名，实际是 $messages", messages.contains("file:upload/$otherName"))
+                assertTrue(
+                    "绝对形态只换名字，实际是 $messages",
+                    messages.contains(localFileUrl("upload/$repeatedName")),
+                )
+                assertFalse("不应残留旧名字，实际是 $messages", messages.contains("aaaa-1.png"))
+                val paths = db.rawQuery("SELECT relative_path FROM managed_files", null).use { cursor ->
+                    buildList { while (cursor.moveToNext()) add(cursor.getString(0)) }
+                }
+                assertEquals(
+                    "文件登记应当跟着改名，重复的两行合成一行",
+                    listOf("upload/$repeatedName", "upload/$otherName").sorted(),
+                    paths.sorted(),
+                )
+            }
+
+            val stagedSettings = File(
+                context.noBackupFilesDir,
+                "backup-restore/pending/${BackupManager.SETTINGS_ENTRY}",
+            ).readText()
+            assertTrue(
+                "settings 里的头像也要改名，实际是 $stagedSettings",
+                stagedSettings.contains("file:upload/$repeatedName"),
+            )
+            assertFalse("settings 里不应残留旧名字", stagedSettings.contains("aaaa-1.png"))
+        } finally {
+            store.update { settings ->
+                settings.copy(displaySetting = settings.displaySetting.copy(userAvatar = originalAvatar))
+            }
+        }
+    }
+
+    /**
+     * 缺数据库的归档在解压之前被拒绝。
+     *
+     * 官方导出时可以只勾附件，那种备份恢复不了：附件名由库里的文本列引用，只搬文件对不上任何
+     * 引用。拒绝不能动现有数据，暂存目录也要清干净。
+     */
+    @Test fun archiveWithoutDatabaseIsRejectedBeforeStaging() = runBlocking {
+        val valid = manager.createBackup(includeFiles = false)
+        val archive = File(directory, "no-database.zip")
+        ZipOutputStream(archive.outputStream()).use { zip ->
+            ZipFile(valid).use { source -> addEntry(zip, source, BackupManager.SETTINGS_ENTRY) }
+            addBytes(zip, "upload/aaa.png", "image".toByteArray())
+        }
+        valid.delete()
+        val liveUpload = File(context.filesDir, "upload/keep.png").apply {
+            parentFile!!.mkdirs()
+            writeText("keep")
+        }
+
+        val error = runCatching { manager.stageRestore(archive, includeFiles = true) }.exceptionOrNull()
+
+        assertEquals(
+            BackupRejectedException.Reason.MISSING_DATABASE,
+            (error as? BackupRejectedException)?.reason,
+        )
+        assertFalse(File(context.noBackupFilesDir, "backup-restore/pending").exists())
+        assertTrue("拒绝不应删掉现有附件", liveUpload.isFile)
+        assertEquals("live", probe(liveDatabase))
+        val leftovers = File(context.noBackupFilesDir, "backup-restore").listFiles().orEmpty().toList()
+        assertTrue("拒绝后不应留下暂存目录，实际是 $leftovers", leftovers.isEmpty())
+    }
+
+    /** 缺 settings.json 的归档同样在解压之前被拒绝：库里的会话引用设置里的助手。 */
+    @Test fun archiveWithoutSettingsIsRejectedBeforeStaging() = runBlocking {
+        val source = File(directory, "database-only")
+        withRoom(source) { room -> room.openHelper.writableDatabase.execSQL("CREATE TABLE extra (id TEXT)") }
+        val archive = File(directory, "no-settings.zip")
+        ZipOutputStream(archive.outputStream()).use { zip ->
+            addFile(zip, DatabaseBackup.ARCHIVE_DATABASE, source)
+        }
+
+        val error = runCatching { manager.stageRestore(archive, includeFiles = false) }.exceptionOrNull()
+
+        assertEquals(
+            BackupRejectedException.Reason.MISSING_SETTINGS,
+            (error as? BackupRejectedException)?.reason,
+        )
+        assertFalse(File(context.noBackupFilesDir, "backup-restore/pending").exists())
+        assertEquals("live", probe(liveDatabase))
+    }
+
+    /**
+     * 归档里 `upload/` 的文件名带反斜杠：计划阶段就拒绝。
+     *
+     * 反斜杠会跟着扩展名进到按内容命名出来的名字里，写进 payload 之后要到 `apply` 阶段才被
+     * `resolveInside` 拒绝。那时光标已经过了「导入成功」，失败会推迟到下次启动，所以要在解压
+     * 之前拦下来。
+     */
+    @Test fun uploadEntryWithBackslashIsRejectedBeforePublishing() = runBlocking {
+        val valid = manager.createBackup(includeFiles = false)
+        val archive = File(directory, "backslash.zip")
+        ZipOutputStream(archive.outputStream()).use { zip ->
+            ZipFile(valid).use { source ->
+                addEntry(zip, source, BackupManager.SETTINGS_ENTRY)
+                addEntry(zip, source, DatabaseBackup.ARCHIVE_DATABASE)
+            }
+            addBytes(zip, "upload/x.a\\b", "image".toByteArray())
+        }
+        valid.delete()
+
+        val error = runCatching { manager.stageRestore(archive, includeFiles = true) }.exceptionOrNull()
+
+        assertTrue("必须拒绝，实际是 $error", error is IllegalArgumentException)
+        assertFalse(File(context.noBackupFilesDir, "backup-restore/pending").exists())
+        assertEquals("live", probe(liveDatabase))
     }
 
     /** 真机上的附件路径形态；测试的 filesDir 挂在 cache 下，导出逻辑会补上规范形态。 */
@@ -711,6 +907,31 @@ class BackupManagerTest {
         zip.putNextEntry(ZipEntry(name))
         file.inputStream().use { it.copyTo(zip) }
         zip.closeEntry()
+    }
+
+    private fun addEntry(zip: ZipOutputStream, source: ZipFile, name: String) {
+        zip.putNextEntry(ZipEntry(name))
+        source.getInputStream(source.getEntry(name)).use { it.copyTo(zip) }
+        zip.closeEntry()
+    }
+
+    private fun addBytes(zip: ZipOutputStream, name: String, bytes: ByteArray) {
+        zip.putNextEntry(ZipEntry(name))
+        zip.write(bytes)
+        zip.closeEntry()
+    }
+
+    private fun sha256(bytes: ByteArray): String =
+        MessageDigest.getInstance("SHA-256").digest(bytes).joinToString("") { "%02x".format(it) }
+
+    /** 手工搭归档时补一份合法 settings.json：恢复要求设置与数据库同时在。 */
+    private suspend fun addSettingsEntry(zip: ZipOutputStream) {
+        val valid = manager.createBackup(includeFiles = false)
+        try {
+            ZipFile(valid).use { backup -> addEntry(zip, backup, BackupManager.SETTINGS_ENTRY) }
+        } finally {
+            valid.delete()
+        }
     }
 
     private fun <T> withRoom(file: File, block: (AppDatabase) -> T): T {

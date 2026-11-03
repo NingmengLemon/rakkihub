@@ -6,6 +6,7 @@ import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
 import kotlinx.coroutines.runBlocking
 import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.int
 import kotlinx.serialization.json.jsonArray
 import kotlinx.serialization.json.jsonObject
@@ -72,7 +73,7 @@ class OfficialBackupRestoreAcceptanceTest {
         assumeTrue("没有放整份备份样本，跳过", sampleZip.isFile && expectations.isFile)
         val expected = Json.parseToJsonElement(expectations.readText()).jsonObject
 
-        manager.stageRestore(sampleZip, includeDatabase = true, includeFiles = true)
+        manager.stageRestore(sampleZip, includeFiles = true)
 
         val payload = File(context.noBackupFilesDir, "backup-restore/pending/payload")
         // 附件装在 payload/files 下，与 filesDir 的布局一致
@@ -80,7 +81,7 @@ class OfficialBackupRestoreAcceptanceTest {
         val attachments = expected.getValue("attachments").jsonArray.map { it.jsonObject }
         assertTrue("样本里应当有附件", attachments.isNotEmpty())
         for (entry in attachments) {
-            val path = entry.getValue("path").jsonPrimitive.content
+            val path = stagedPath(entry)
             val file = File(files, path)
             assertTrue("附件缺失：$path", file.isFile)
             assertEquals("附件大小：$path", entry.getValue("size").jsonPrimitive.long, file.length())
@@ -92,7 +93,7 @@ class OfficialBackupRestoreAcceptanceTest {
             .map { it.relativeTo(files).invariantSeparatorsPath }
             .filter { rel -> ATTACHMENT_FOLDERS.any { rel.startsWith("$it/") } }
             .toSet()
-        assertEquals("附件集合要与归档一致", attachments.map { it.getValue("path").jsonPrimitive.content }.toSet(), staged)
+        assertEquals("附件集合要与归档一致", attachments.map { stagedPath(it) }.toSet(), staged)
 
         val settingsFile = File(context.noBackupFilesDir, "backup-restore/pending/" + BackupManager.SETTINGS_ENTRY)
         assertTrue("settings 应当落地", settingsFile.isFile)
@@ -109,7 +110,7 @@ class OfficialBackupRestoreAcceptanceTest {
     fun settingsEntriesSurviveTheStagingPipeline() = runBlocking {
         assumeTrue("没有放整份备份样本，跳过", sampleZip.isFile && expectations.isFile)
         val expected = Json.parseToJsonElement(expectations.readText()).jsonObject
-        manager.stageRestore(sampleZip, includeDatabase = true, includeFiles = true)
+        manager.stageRestore(sampleZip, includeFiles = true)
         val settingsFile = File(context.noBackupFilesDir, "backup-restore/pending/" + BackupManager.SETTINGS_ENTRY)
         val settings = Json.parseToJsonElement(settingsFile.readText()).jsonObject
         val expectedSettings = expected.getValue("settings").jsonObject
@@ -148,6 +149,13 @@ class OfficialBackupRestoreAcceptanceTest {
         )
     }
 
+    /** `upload/` 下的附件导入时按内容改名，期望值要跟着换；其它目录原样。 */
+    private fun stagedPath(attachment: JsonObject): String {
+        val path = attachment.getValue("path").jsonPrimitive.content
+        if (!path.startsWith("upload/")) return path
+        val hash = attachment.getValue("sha256").jsonPrimitive.content
+        return "upload/" + ImportedUploadFiles.contentName(hash, path.removePrefix("upload/"))
+    }
     private fun sha256(file: File): String {
         val digest = MessageDigest.getInstance("SHA-256")
         file.inputStream().use { stream ->

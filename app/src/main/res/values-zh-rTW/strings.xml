@@ -153,6 +153,7 @@
   <string name="back">返回</string>
   <string name="backup_page_backing_up">備份中...</string>
   <string name="backup_page_backup_items">備份項目</string>
+  <string name="backup_page_backup_items_hint">聊天記錄與設定始終包含，附件與工作區檔案可選。</string>
   <string name="backup_page_backup_now">立即備份</string>
   <string name="backup_page_backup_success">備份成功</string>
   <string name="backup_page_chat_records">聊天記錄</string>
@@ -165,9 +166,14 @@
   <string name="backup_page_exporting">正在導出...</string>
   <string name="backup_page_export_official">導出給 RikkaHub</string>
   <string name="backup_page_export_official_desc">產生官方 RikkaHub 可恢復的備份</string>
+  <string name="backup_page_group_app">本應用</string>
+  <string name="backup_page_group_official">官方 RikkaHub</string>
   <string name="backup_page_export_failed">導出失敗</string>
   <string name="backup_page_export_schema_diverged">無法產生官方 RikkaHub 相容的備份：本應用的資料結構已變更。請改用一般導出</string>
-  <string name="backup_page_export_packing">正在打包 %1$d / %2$d</string>
+  <string name="backup_page_export_preparing">正在準備...</string>
+  <string name="backup_page_export_database">正在導出資料庫...</string>
+  <string name="backup_page_export_files">正在打包檔案 %1$d / %2$d</string>
+  <string name="backup_page_export_workspaces">正在打包工作區檔案 %1$d / %2$d</string>
   <string name="backup_page_saving">正在儲存...</string>
   <string name="backup_page_files">檔案</string>
   <string name="backup_page_workspaces">工作區</string>
@@ -176,6 +182,9 @@
   <string name="backup_page_import_official_desc">先在官方 RikkaHub 中匯出備份，再在此選擇該檔案</string>
   <string name="backup_page_import_export">本地</string>
   <string name="backup_page_importing">正在恢復...</string>
+  <string name="backup_page_import_database">正在檢查資料庫...</string>
+  <string name="backup_page_import_extracting">正在解壓縮 %1$d / %2$d</string>
+  <string name="backup_page_import_reading">正在讀取備份檔案...</string>
   <string name="backup_page_loading_failed">載入備份檔案失敗: %s</string>
   <string name="backup_page_local_backup_export">導出為檔案</string>
   <string name="backup_page_local_backup_import">備份檔案導入</string>
@@ -195,6 +204,8 @@
   <string name="backup_page_restart_desc">應用需要重啟以使設置生效。</string>
   <string name="backup_page_restore">恢復</string>
   <string name="backup_page_restore_failed">恢復失敗: %s</string>
+  <string name="backup_page_restore_missing_database">這份備份裡沒有聊天記錄，請重新導出一份包含聊天記錄的備份。</string>
+  <string name="backup_page_restore_missing_settings">這份備份裡沒有設定。</string>
   <string name="backup_page_restore_now">恢復</string>
   <string name="backup_page_restore_success">恢復成功</string>
   <string name="backup_page_restoring">恢復中...</string>

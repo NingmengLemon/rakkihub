@@ -153,6 +153,7 @@
   <string name="back">뒤로</string>
   <string name="backup_page_backing_up">백업 중...</string>
   <string name="backup_page_backup_items">백업 항목</string>
+  <string name="backup_page_backup_items_hint">채팅 기록과 설정은 항상 포함됩니다. 첨부파일과 워크스페이스 파일은 선택 사항입니다.</string>
   <string name="backup_page_backup_now">지금 백업</string>
   <string name="backup_page_backup_success">백업 성공</string>
   <string name="backup_page_chat_records">채팅 기록</string>
@@ -165,9 +166,14 @@
   <string name="backup_page_exporting">내보내는 중...</string>
   <string name="backup_page_export_official">RikkaHub용으로 내보내기</string>
   <string name="backup_page_export_official_desc">공식 RikkaHub에서 복원할 수 있는 백업을 만듭니다</string>
+  <string name="backup_page_group_app">이 앱</string>
+  <string name="backup_page_group_official">공식 RikkaHub</string>
   <string name="backup_page_export_failed">내보내기 실패</string>
   <string name="backup_page_export_schema_diverged">공식 RikkaHub 호환 백업을 만들 수 없습니다. 이 앱의 데이터 구조가 변경되었습니다. 일반 내보내기를 사용하세요</string>
-  <string name="backup_page_export_packing">%1$d / %2$d 압축 중</string>
+  <string name="backup_page_export_preparing">준비 중...</string>
+  <string name="backup_page_export_database">데이터베이스 내보내는 중...</string>
+  <string name="backup_page_export_files">파일 압축 중 %1$d / %2$d</string>
+  <string name="backup_page_export_workspaces">워크스페이스 파일 압축 중 %1$d / %2$d</string>
   <string name="backup_page_saving">저장 중...</string>
   <string name="backup_page_files">파일</string>
   <string name="backup_page_workspaces">워크스페이스</string>
@@ -176,6 +182,9 @@
   <string name="backup_page_import_official_desc">먼저 공식 RikkaHub에서 백업을 내보낸 다음, 해당 파일을 여기에서 선택하세요</string>
   <string name="backup_page_import_export">로컬</string>
   <string name="backup_page_importing">가져오는 중...</string>
+  <string name="backup_page_import_database">데이터베이스 확인 중...</string>
+  <string name="backup_page_import_extracting">압축 해제 중 %1$d / %2$d</string>
+  <string name="backup_page_import_reading">백업 파일 읽는 중...</string>
   <string name="backup_page_loading_failed">백업 파일 로드 실패: %s</string>
   <string name="backup_page_local_backup_export">파일로 내보내기</string>
   <string name="backup_page_local_backup_import">파일에서 가져오기</string>
@@ -195,6 +204,8 @@
   <string name="backup_page_restart_desc">변경 사항을 적용하려면 앱을 다시 시작해야 합니다.</string>
   <string name="backup_page_restore">복원</string>
   <string name="backup_page_restore_failed">복원 실패: %s</string>
+  <string name="backup_page_restore_missing_database">이 백업에는 채팅 기록이 없습니다. 채팅 기록을 포함해 백업을 다시 내보내세요.</string>
+  <string name="backup_page_restore_missing_settings">이 백업에는 설정이 없습니다.</string>
   <string name="backup_page_restore_now">복원</string>
   <string name="backup_page_restore_success">복원 성공</string>
   <string name="backup_page_restoring">복원 중...</string>

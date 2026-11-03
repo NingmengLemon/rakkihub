@@ -94,8 +94,9 @@ internal class PendingRestore(
         val entries = paths.map { path ->
             RestoreEntry(path, install = true, hadOriginal = targetFile(path).exists())
         }.toMutableList()
-        // 附件替换只在数据库也一起换掉时做。只导附件的恢复会把 payload 叠到现有库上，那时
-        // 库还引用着 live 上的文件，删掉它们等于制造悬空引用。
+        // 附件替换只在数据库也一起换掉时做。只换附件的话，现有库还引用着 live 上的文件，
+        // 删掉它们等于制造悬空引用。导入现在必须带库（C40），这条判断只剩更早版本留下的
+        // pending 目录会走到。
         if (paths.contains("database/${databaseFile.name}")) {
             entries.addAll(buildRemovalEntries(paths))
             // The new database is standalone. Keep the old DB's sidecars with the old DB only.

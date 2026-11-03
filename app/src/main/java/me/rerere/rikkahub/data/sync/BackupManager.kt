@@ -47,15 +47,15 @@ import java.util.zip.ZipEntry
 import java.util.zip.ZipFile
 import java.util.zip.ZipOutputStream
 
-/** 打包进度：已写入的条目数与总条目数，含 settings.json 与数据库快照。 */
-data class BackupProgress(val done: Int, val total: Int) {
-    val fraction: Float
-        get() = if (total <= 0) 0f else (done.toFloat() / total).coerceIn(0f, 1f)
-}
-
 private const val TAG = "BackupManager"
 
-/** Shared archive format and restore lifecycle for local and WebDAV backups. */
+/**
+ * Shared archive format and restore lifecycle for local and WebDAV backups.
+ *
+ * 一份归档必须以「设置 + 数据库」为核心：库里的会话引用设置里的助手，附件名也由库里的文本列
+ * 引用。附件与工作区文件因此是可选的附带内容，从不单独导出或恢复（C40）。导入缺少其中任何
+ * 一项都会在解压之前被拒绝，现有数据不动。
+ */
 class BackupManager(
     private val context: Context,
     private val database: AppDatabase,
@@ -64,8 +64,10 @@ class BackupManager(
 ) {
     private val restoreMutex = Mutex()
 
+    /**
+     * @param onProgress 阶段与阶段内的条目数；数据库那一段没有可数的单位，只报阶段。
+     */
     suspend fun createBackup(
-        includeDatabase: Boolean,
         includeFiles: Boolean,
         includeWorkspaceFiles: Boolean = false,
         backupTarget: BackupTarget = BackupTarget.SELF,
@@ -75,33 +77,26 @@ class BackupManager(
         val archive = File.createTempFile("backup_${timestamp}_", ".zip", context.cacheDir)
         val staging = Files.createTempDirectory(context.cacheDir.toPath(), "backup-").toFile()
         try {
+            onProgress?.invoke(BackupProgress(BackupStage.PREPARING))
             val settings = settingsStore.awaitLoaded()
             // 官方兼容出口要能被官方客户端恢复。官方那个版本的 BackupItem 只有 DATABASE
             // 与 FILES，未知枚举值不像未知字段那样能被 ignoreUnknownKeys 吞掉，会让整份设置
             // 解码失败，所以这一项必须从 settings.json 里去掉，光不打包条目不够。
-            val encodedSettings = if (backupTarget == BackupTarget.OFFICIAL) {
-                settings.copy(
-                    webDavConfig = settings.webDavConfig.copy(
-                        items = settings.webDavConfig.items
-                            .filter { it != WebDavConfig.BackupItem.WORKSPACES },
-                    ),
-                )
-            } else {
-                settings
-            }
-            // 先把附件列出来，才能给出确定的总条目数；列表里只是路径，不占多少内存
+            val encodedSettings = settings.copy(
+                webDavConfig = settings.webDavConfig.copy(
+                    items = WebDavConfig.BackupItem.normalize(settings.webDavConfig.items)
+                        .filter {
+                            backupTarget != BackupTarget.OFFICIAL || it != WebDavConfig.BackupItem.WORKSPACES
+                        },
+                ),
+            )
+            // 先把附件列出来，才能给出每段确定的总条目数；列表里只是路径，不占多少内存
             val attachments = if (includeFiles) collectAttachments() else emptyList()
             // 官方兼容出口按官方那套归档格式产出，官方格式里没有工作区文件，带过去只会是死重量。
             val workspaceFiles = if (includeWorkspaceFiles && backupTarget == BackupTarget.SELF) {
                 collectWorkspaceFiles()
             } else {
                 emptyList()
-            }
-            val total = 1 + (if (includeDatabase) 1 else 0) + attachments.size + workspaceFiles.size
-            var done = 0
-            fun advance() {
-                done++
-                onProgress?.invoke(BackupProgress(done, total))
             }
 
             ZipOutputStream(FileOutputStream(archive)).use { zip ->
@@ -112,30 +107,22 @@ class BackupManager(
                     .let { if (backupTarget == BackupTarget.OFFICIAL) rewriteForOfficial(it) else it }
                 zip.write(settingsJson.toByteArray(Charsets.UTF_8))
                 zip.closeEntry()
-                advance()
-                if (includeDatabase) {
-                    val snapshot = File(staging, SQLiteConfiguration.DATABASE_NAME)
-                    DatabaseBackup.createSnapshot(database.openHelper.writableDatabase, snapshot)
-                    val databaseEntry = when (backupTarget) {
-                        BackupTarget.SELF -> snapshot
-                        BackupTarget.OFFICIAL -> OfficialDatabaseAdapter.adaptForOfficial(
-                            snapshot,
-                            attachmentPrefixRewrites = attachmentPrefixRewritesForOfficial(),
-                        )
-                    }
-                    addFile(zip, databaseEntry, DatabaseBackup.ARCHIVE_DATABASE)
-                    advance()
+
+                // 快照与（官方出口的）整库改写都没法按条目切分，这一段只报阶段
+                onProgress?.invoke(BackupProgress(BackupStage.DATABASE))
+                val snapshot = File(staging, SQLiteConfiguration.DATABASE_NAME)
+                DatabaseBackup.createSnapshot(database.openHelper.writableDatabase, snapshot)
+                val databaseEntry = when (backupTarget) {
+                    BackupTarget.SELF -> snapshot
+                    BackupTarget.OFFICIAL -> OfficialDatabaseAdapter.adaptForOfficial(
+                        snapshot,
+                        attachmentPrefixRewritesForOfficial(),
+                    )
                 }
-                for (attachment in attachments) {
-                    currentCoroutineContext().ensureActive()
-                    addFile(zip, attachment.file, attachment.archiveName)
-                    advance()
-                }
-                for (file in workspaceFiles) {
-                    currentCoroutineContext().ensureActive()
-                    addFile(zip, file.file, file.archiveName)
-                    advance()
-                }
+                addFile(zip, databaseEntry, DatabaseBackup.ARCHIVE_DATABASE)
+
+                writeEntries(zip, attachments, BackupStage.FILES, onProgress)
+                writeEntries(zip, workspaceFiles, BackupStage.WORKSPACES, onProgress)
             }
             archive
         } catch (e: Throwable) {
@@ -146,8 +133,8 @@ class BackupManager(
         }
     }
 
-    private suspend fun collectAttachments(): List<AttachmentEntry> {
-        val result = ArrayList<AttachmentEntry>()
+    private suspend fun collectAttachments(): List<ArchiveFile> {
+        val result = ArrayList<ArchiveFile>()
         for (folder in ATTACHMENT_FOLDERS) {
             val directory = File(context.filesDir, folder)
             val files = if (folder in NESTED_ATTACHMENT_FOLDERS) {
@@ -165,7 +152,7 @@ class BackupManager(
                 }
                 val relative = file.relativeTo(directory).invariantSeparatorsPath
                 PendingRestore.resolveInside(directory, relative)
-                result += AttachmentEntry(file = file, archiveName = "$folder/$relative")
+                result += ArchiveFile(file = file, archiveName = "$folder/$relative")
             }
         }
         return result
@@ -177,8 +164,8 @@ class BackupManager(
      * 归档里的名字与 `filesDir` 下的实际布局一致（`workspaces/<root>/files/<relative>`），
      * 恢复侧因此可以沿用同一条 `files/` 映射，不需要另开一套落盘规则。
      */
-    private suspend fun collectWorkspaceFiles(): List<AttachmentEntry> {
-        val result = ArrayList<AttachmentEntry>()
+    private suspend fun collectWorkspaceFiles(): List<ArchiveFile> {
+        val result = ArrayList<ArchiveFile>()
         val base = File(context.filesDir, WORKSPACE_FOLDER)
         for (workspace in database.workspaceDao().getAll()) {
             currentCoroutineContext().ensureActive()
@@ -191,7 +178,7 @@ class BackupManager(
                 currentCoroutineContext().ensureActive()
                 val relative = file.relativeTo(files).invariantSeparatorsPath
                 PendingRestore.resolveInside(files, relative)
-                result += AttachmentEntry(
+                result += ArchiveFile(
                     file = file,
                     archiveName = "$WORKSPACE_FOLDER/${workspace.root}/$WORKSPACE_FILES_DIR/$relative",
                 )
@@ -200,11 +187,37 @@ class BackupManager(
         return result
     }
 
+    /** 一段可数的条目：先报总数，之后每写完一个报一次。没有条目时这一段不出现。 */
+    private suspend fun writeEntries(
+        zip: ZipOutputStream,
+        entries: List<ArchiveFile>,
+        stage: BackupStage,
+        onProgress: ((BackupProgress) -> Unit)?,
+    ) {
+        if (entries.isEmpty()) return
+        onProgress?.invoke(BackupProgress(stage, 0, entries.size))
+        for ((index, entry) in entries.withIndex()) {
+            currentCoroutineContext().ensureActive()
+            addFile(zip, entry.file, entry.archiveName)
+            onProgress?.invoke(BackupProgress(stage, index + 1, entries.size))
+        }
+    }
+
+    /**
+     * 把归档暂存到 `pending`，下次启动时整体换上。
+     *
+     * 缺数据库或缺 settings.json 的归档在解压之前就被拒绝（[BackupRejectedException]），此时只
+     * 建了一个空的暂存目录，`finally` 会把它删掉，正在用的库、附件与设置都没有被改写。
+     *
+     * `upload/` 下的附件按内容寻址改名，同内容只留一份，并把库、设置与文件登记里的引用换过去
+     * （[UploadNames]）。归档里的名字来自产出方：官方是随机 UUID，本应用新写的已经是内容指纹，
+     * 后者算出来还是同一个名字，不会触发任何改写。
+     */
     suspend fun stageRestore(
         archive: File,
-        includeDatabase: Boolean,
         includeFiles: Boolean,
         includeWorkspaceFiles: Boolean = false,
+        onProgress: ((BackupProgress) -> Unit)? = null,
     ) =
         withContext(Dispatchers.IO) {
             restoreMutex.withLock {
@@ -214,102 +227,23 @@ class BackupManager(
                     val payload = File(staging, "payload")
                     val stagedDatabase = File(payload, "database/${SQLiteConfiguration.DATABASE_NAME}")
                     val stagedWal = File(stagedDatabase.path + "-wal")
-                    val seen = mutableSetOf<String>()
-                    var restoredEntries = 0
+                    val renamed = HashMap<String, String>()
                     ZipFile(archive).use { zip ->
-                        for (entry in zip.entries()) {
+                        val planned = planRestoreEntries(zip, includeFiles, includeWorkspaceFiles)
+                        onProgress?.invoke(BackupProgress(BackupStage.EXTRACTING, 0, planned.size))
+                        for ((index, plannedEntry) in planned.withIndex()) {
                             currentCoroutineContext().ensureActive()
-                            if (entry.isDirectory) continue
-                            // 工作区条目的形状无条件校验：即使这次没勾选工作区，也不接受指向
-                            // 根文件系统的条目，免得它被静默放过。
-                            if (entry.name.startsWith("$WORKSPACE_FOLDER/")) {
-                                require(isWorkspaceFile(entry.name))
-                            }
-                            val target = when (entry.name) {
-                                SETTINGS_ENTRY -> File(staging, SETTINGS_ENTRY)
-                                DatabaseBackup.ARCHIVE_DATABASE -> if (includeDatabase) stagedDatabase else null
-                                DatabaseBackup.WAL -> if (includeDatabase) stagedWal else null
-                                DatabaseBackup.SHM -> null // Rebuilt by SQLite; never restore shared-memory state.
-                                else -> if (includeFiles && isAttachment(entry.name)) {
-                                    PendingRestore.resolveInside(File(payload, "files"), entry.name)
-                                } else if (includeWorkspaceFiles && isWorkspaceFile(entry.name)) {
-                                    PendingRestore.resolveInside(File(payload, "files"), entry.name)
-                                } else {
-                                    null
-                                }
-                            } ?: continue
-                            require(seen.add(entry.name)) { "Duplicate backup entry: ${entry.name}" }
-                            check(target.parentFile!!.isDirectory || target.parentFile!!.mkdirs()) {
-                                "Cannot create backup staging directory"
-                            }
-                            zip.getInputStream(entry).use { input ->
-                                FileOutputStream(target).use { output ->
-                                    input.copyTo(output)
-                                    output.fd.sync()
-                                }
-                            }
-                            restoredEntries++
-                        }
-                    }
-                    require(restoredEntries > 0) { "No selected data found in the backup" }
-                    require(!stagedWal.exists() || stagedDatabase.exists()) { "Backup WAL has no matching database" }
-                    if (stagedDatabase.exists()) {
-                        // 先把源库的 WAL 合进主文件：转换要读它，而且旧 sidecar 留到替换之后
-                        // 会被下一次 normalize 的 checkpoint 合进新库，混进去的是旧页。
-                        DatabaseBackup.normalize(context, stagedDatabase)
-                        // 判定只看元数据，在读任何业务表之前完成。读不出来就交给迁移链，
-                        // 由 Room 自己报错，而不是在这里猜。
-                        OfficialDatabaseHeaders.read(stagedDatabase)?.let { header ->
-                            val filesUriPrefix = context.filesDir.toUri().toString().trimEnd('/') + "/"
-                            val plan = OfficialRestorePlanner.plan(
-                                version = header.version,
-                                identityHash = header.identityHash,
-                                ourVersion = OfficialDatabaseSchema.VERSION,
-                                ourIdentity = OfficialDatabaseSchema.IDENTITY_HASH,
-                                snapshots = OfficialSnapshots.BY_VERSION,
+                            extract(zip, plannedEntry, staging, payload, stagedDatabase, stagedWal, renamed)
+                            onProgress?.invoke(
+                                BackupProgress(BackupStage.EXTRACTING, index + 1, planned.size)
                             )
-                            // 同版本的库会直接走迁移链，而迁移链不改数据；如果里面还带着别的安装
-                            // 的附件路径（官方备份、或别的包名的我们），装进来之后图片就全断了。
-                            // 这种情况也交给转换器：它写文本列时会把路径重写成本机。
-                            val rewriteNeeded = plan == OfficialRestorePlan.Migrate &&
-                                OfficialForeignAttachmentPaths.hasForeign(stagedDatabase, filesUriPrefix)
-                            when {
-                                plan is OfficialRestorePlan.Reject -> error(plan.reason)
-                                plan is OfficialRestorePlan.Convert || rewriteNeeded ->
-                                    convertStagedDatabase(context, staging, stagedDatabase)
-                            }
                         }
-                        // Reject unsupported schemas before publishing; run supported old migrations on the copy.
-                        val room = AppDatabaseFactory.create(context, stagedDatabase.absolutePath)
-                        try {
-                            DatabaseBackup.checkpoint(room.openHelper.writableDatabase)
-                        } finally {
-                            room.close()
-                        }
-                        DatabaseBackup.removeSidecars(stagedDatabase)
                     }
-
+                    // 计划里保证这两个条目都在，解压时写不进去会直接抛，所以这里不再重复判定
                     val settingsFile = File(staging, SETTINGS_ENTRY)
-                    if (settingsFile.exists()) {
-                        // 头像与背景是 settings 里的绝对 file:// 路径，包名写死在路径里；不重写的话
-                        // 导入到改过包名的安装之后，它们会整体断链。数据库那边由写入层重写。
-                        val filesUriPrefix = context.filesDir.toUri().toString().trimEnd('/') + "/"
-                        val migrated = SettingsJsonMigrator.migrate(
-                            OfficialUrlRewriter.rewriteEmbedded(settingsFile.readText(), filesUriPrefix)
-                        )
-                        // 解码器会吞掉形状问题：空对象或别家的 JSON 也能解成一份全默认值的 Settings，
-                        // 然后静默覆盖用户的配置。所以解码之前先看关键项在不在、类型对不对。
-                        BackupSettingsShape.findProblem(migrated)?.let { problem ->
-                            error("Backup settings.json is not a settings file: $problem")
-                        }
-                        val settings = json.decodeFromString<Settings>(migrated)
-                        require(!settings.init) { "Backup contains uninitialized settings" }
-                        // Persist the migrated value once, including generated IDs, for restart/retry consistency.
-                        PendingRestore.writeDurably(
-                            settingsFile,
-                            json.encodeSettings(settings, json.launchCountOf(migrated))
-                        )
-                    }
+                    onProgress?.invoke(BackupProgress(BackupStage.DATABASE))
+                    stageDatabase(staging, stagedDatabase, renamed)
+                    stageSettings(settingsFile, renamed)
                     currentCoroutineContext().ensureActive()
                     restore.publish(staging)
                 } finally {
@@ -317,6 +251,170 @@ class BackupManager(
                 }
             }
         }
+
+    /**
+     * 先列出要落盘的条目并做拒绝判定，再开始写。
+     *
+     * 拒绝发生在第一个字节写入之前，所以「导入被拒」不会改动任何现有数据。工作区条目的形状
+     * 无条件校验：即使这次没勾选工作区，也不接受指向根文件系统的条目，免得它被静默放过。
+     */
+    private fun planRestoreEntries(
+        zip: ZipFile,
+        includeFiles: Boolean,
+        includeWorkspaceFiles: Boolean,
+    ): List<PlannedEntry> {
+        val planned = ArrayList<PlannedEntry>()
+        val seen = HashSet<String>()
+        for (entry in zip.entries()) {
+            if (entry.isDirectory) continue
+            val kind = when (entry.name) {
+                SETTINGS_ENTRY -> RestoreEntryKind.SETTINGS
+                DatabaseBackup.ARCHIVE_DATABASE -> RestoreEntryKind.DATABASE
+                DatabaseBackup.WAL -> RestoreEntryKind.WAL
+                DatabaseBackup.SHM -> RestoreEntryKind.SHM
+                else -> {
+                    if (entry.name.startsWith("$WORKSPACE_FOLDER/")) require(isWorkspaceFile(entry.name))
+                    when {
+                        includeFiles && isAttachment(entry.name) -> RestoreEntryKind.ATTACHMENT
+                        includeWorkspaceFiles && isWorkspaceFile(entry.name) -> RestoreEntryKind.WORKSPACE
+                        else -> null
+                    }
+                }
+            } ?: continue
+            require(seen.add(entry.name)) { "Duplicate backup entry: ${entry.name}" }
+            planned += PlannedEntry(entry, kind)
+        }
+        if (planned.none { it.kind == RestoreEntryKind.DATABASE }) {
+            throw BackupRejectedException(BackupRejectedException.Reason.MISSING_DATABASE)
+        }
+        if (planned.none { it.kind == RestoreEntryKind.SETTINGS }) {
+            throw BackupRejectedException(BackupRejectedException.Reason.MISSING_SETTINGS)
+        }
+        return planned
+    }
+
+    private fun extract(
+        zip: ZipFile,
+        planned: PlannedEntry,
+        staging: File,
+        payload: File,
+        stagedDatabase: File,
+        stagedWal: File,
+        renamed: MutableMap<String, String>,
+    ) {
+        val entry = planned.entry
+        when (planned.kind) {
+            RestoreEntryKind.SETTINGS -> copyEntry(zip, entry, File(staging, SETTINGS_ENTRY))
+            RestoreEntryKind.DATABASE -> copyEntry(zip, entry, stagedDatabase)
+            RestoreEntryKind.WAL -> copyEntry(zip, entry, stagedWal)
+            // 恢复方不重放 SHM：它由 SQLite 重建，带着旧内容过来只会添乱
+            RestoreEntryKind.SHM -> Unit
+
+            RestoreEntryKind.ATTACHMENT -> {
+                if (entry.name.startsWith("${FileFolders.UPLOAD}/")) {
+                    val name = entry.name.removePrefix("${FileFolders.UPLOAD}/")
+                    zip.getInputStream(entry).use { input ->
+                        val written = ImportedUploadFiles.write(
+                            directory = File(payload, "files/${FileFolders.UPLOAD}"),
+                            archiveName = name,
+                            input = input,
+                        )
+                        if (written != name) renamed[name] = written
+                    }
+                } else {
+                    copyEntry(zip, entry, PendingRestore.resolveInside(File(payload, "files"), entry.name))
+                }
+            }
+
+            RestoreEntryKind.WORKSPACE ->
+                copyEntry(zip, entry, PendingRestore.resolveInside(File(payload, "files"), entry.name))
+        }
+    }
+
+    private fun copyEntry(zip: ZipFile, entry: ZipEntry, target: File) {
+        check(target.parentFile!!.isDirectory || target.parentFile!!.mkdirs()) {
+            "Cannot create backup staging directory"
+        }
+        zip.getInputStream(entry).use { input ->
+            FileOutputStream(target).use { output ->
+                input.copyTo(output)
+                output.fd.sync()
+            }
+        }
+    }
+
+    /**
+     * 把暂存库变成当前版本，并把附件引用换到按内容命名的新文件上。
+     *
+     * 转换器写文本列时会把带别的安装路径的附件引用重写成当前安装的，所以两条路都要经过它：
+     * 版本/结构不一致的库，以及结构一致但带着外来路径的库。文件名改写在它之后做，因为改写要
+     * 作用在已经换成当前安装前缀的文本列上。
+     */
+    private suspend fun stageDatabase(staging: File, stagedDatabase: File, renamed: Map<String, String>) {
+        // 先把源库的 WAL 合进主文件：转换要读它，而且旧 sidecar 留到替换之后
+        // 会被下一次 normalize 的 checkpoint 合进新库，混进去的是旧页。
+        DatabaseBackup.normalize(context, stagedDatabase)
+        // 判定只看元数据，在读任何业务表之前完成。读不出来就交给迁移链，
+        // 由 Room 自己报错，而不是在这里猜。
+        OfficialDatabaseHeaders.read(stagedDatabase)?.let { header ->
+            val filesUriPrefix = currentFilesUriPrefix()
+            val plan = OfficialRestorePlanner.plan(
+                version = header.version,
+                identityHash = header.identityHash,
+                ourVersion = OfficialDatabaseSchema.VERSION,
+                ourIdentity = OfficialDatabaseSchema.IDENTITY_HASH,
+                snapshots = OfficialSnapshots.BY_VERSION,
+            )
+            // 同版本的库会直接走迁移链，而迁移链不改数据；如果里面还带着别的安装
+            // 的附件路径（官方备份、或别的包名的我们），装进来之后图片就全断了。
+            // 这种情况也交给转换器：它写文本列时会把路径重写成本机。
+            val rewriteNeeded = plan == OfficialRestorePlan.Migrate &&
+                OfficialForeignAttachmentPaths.hasForeign(stagedDatabase, filesUriPrefix)
+            when {
+                plan is OfficialRestorePlan.Reject -> error(plan.reason)
+                plan is OfficialRestorePlan.Convert || rewriteNeeded ->
+                    convertStagedDatabase(context, staging, stagedDatabase)
+            }
+        }
+        // Reject unsupported schemas before publishing; run supported old migrations on the copy.
+        val room = AppDatabaseFactory.create(context, stagedDatabase.absolutePath)
+        try {
+            val database = room.openHelper.writableDatabase
+            DatabaseBackup.checkpoint(database)
+            // 附件改名是在解压时按内容算出来的，必须在这份库被发布之前改掉引用
+            UploadNames.rewriteDatabase(database, renamed)
+            DatabaseBackup.checkpoint(database)
+        } finally {
+            room.close()
+        }
+        DatabaseBackup.removeSidecars(stagedDatabase)
+    }
+
+    /**
+     * settings 里的头像与背景是绝对 `file://` 路径，包名写死在路径里；导入到改过包名的安装
+     * 之后它们会整体断链。附件名也可能在解压时换过，两件事都要在这里落到 JSON 上。
+     */
+    private fun stageSettings(settingsFile: File, renamed: Map<String, String>) {
+        val filesUriPrefix = currentFilesUriPrefix()
+        val migrated = SettingsJsonMigrator.migrate(
+            ImportedUploadFiles.rewrite(
+                OfficialUrlRewriter.rewriteEmbedded(settingsFile.readText(), filesUriPrefix),
+                renamed,
+            )
+        )
+        // 解码器会吞掉形状问题：空对象或别家的 JSON 也能解成一份全默认值的 Settings，
+        // 然后静默覆盖用户的配置。所以解码之前先看关键项在不在、类型对不对。
+        BackupSettingsShape.findProblem(migrated)?.let { problem ->
+            error("Backup settings.json is not a settings file: $problem")
+        }
+        val settings = json.decodeFromString<Settings>(migrated)
+        require(!settings.init) { "Backup contains uninitialized settings" }
+        // Persist the migrated value once, including generated IDs, for restart/retry consistency.
+        PendingRestore.writeDurably(
+            settingsFile,
+            json.encodeSettings(settings, json.launchCountOf(migrated))
+        )
+    }
 
     /**
      * 当前安装的 files 目录 URI 前缀，以 `/` 结尾。
@@ -362,12 +460,16 @@ class BackupManager(
         check(stagedDatabase.delete()) { "Cannot replace staged database" }
         Files.move(converted.toPath(), stagedDatabase.toPath())
     }
+
     private fun isAttachment(name: String): Boolean {
         val folder = name.substringBefore('/')
         if (folder !in ATTACHMENT_FOLDERS || '/' !in name) return false
         val relative = name.substringAfter('/')
         require(relative.isNotBlank()) { "Invalid backup attachment: $name" }
         require(folder in NESTED_ATTACHMENT_FOLDERS || '/' !in relative) { "Invalid backup attachment: $name" }
+        // 反斜杠会跟着扩展名进到按内容命名出来的文件名里，写进 payload 之后要到 apply 阶段才被
+        // resolveInside 拒绝；那时界面已经报过导入成功，失败会推迟到下次启动。
+        require('\\' !in relative) { "Invalid backup attachment: $name" }
         return true
     }
 
@@ -392,7 +494,11 @@ class BackupManager(
         zip.closeEntry()
     }
 
-    private data class AttachmentEntry(val file: File, val archiveName: String)
+    private data class ArchiveFile(val file: File, val archiveName: String)
+
+    private enum class RestoreEntryKind { SETTINGS, DATABASE, WAL, SHM, ATTACHMENT, WORKSPACE }
+
+    private data class PlannedEntry(val entry: ZipEntry, val kind: RestoreEntryKind)
 
     companion object {
         // 归档里的顶层条目名。官方格式由 data/sync/official/OfficialBackupLayout 冻结，

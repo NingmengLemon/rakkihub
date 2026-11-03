@@ -6,6 +6,7 @@ import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
 import kotlinx.coroutines.runBlocking
 import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.jsonArray
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
@@ -59,6 +60,14 @@ class RestoreAppliedOutcomeTest {
         manager = BackupManager(context, liveDatabase, GlobalContext.get().get<SettingsStore>(), JsonInstant)
     }
 
+    /** `upload/` 下的附件导入时按内容改名，期望值要跟着换。 */
+    private fun stagedPath(attachment: JsonObject): String {
+        val path = attachment.getValue("path").jsonPrimitive.content
+        if (!path.startsWith("upload/")) return path
+        val hash = attachment.getValue("sha256").jsonPrimitive.content
+        return "upload/" + ImportedUploadFiles.contentName(hash, path.removePrefix("upload/"))
+    }
+
     @After fun tearDown() {
         liveDatabase.close()
         directory.deleteRecursively()
@@ -68,7 +77,8 @@ class RestoreAppliedOutcomeTest {
         assumeTrue("没有放整份备份样本，跳过", sampleZip.isFile && expectations.isFile)
         val expected = Json.parseToJsonElement(expectations.readText()).jsonObject
         val archivePaths = expected.getValue("attachments").jsonArray
-            .map { it.jsonObject.getValue("path").jsonPrimitive.content }
+            .map { it.jsonObject }
+            .map { stagedPath(it) }
             .toSet()
 
         // 先放一个归档里没有的文件，模拟「上次装的东西还留着」
@@ -76,7 +86,7 @@ class RestoreAppliedOutcomeTest {
         stale.parentFile?.mkdirs()
         stale.writeText("should be removed by restore")
 
-        manager.stageRestore(sampleZip, includeDatabase = true, includeFiles = true)
+        manager.stageRestore(sampleZip, includeFiles = true)
         // 设置存储是进程级单例，pending 里的 settings.json 会被写进这台设备的真实设置；
         // 样本的设置不属于它，先删掉。数据库与附件仍然从同一个 pending 目录装。
         val pendingSettings = File(

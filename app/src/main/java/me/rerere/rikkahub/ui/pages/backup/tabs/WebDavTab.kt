@@ -17,7 +17,7 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.input.VisualTransformation
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
-import me.rerere.ui.toast.ToastType
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.launch
 import me.rerere.hugeicons.HugeIcons
 import me.rerere.hugeicons.stroke.View
@@ -26,12 +26,15 @@ import me.rerere.rikkahub.R
 import me.rerere.rikkahub.data.datastore.WebDavConfig
 import me.rerere.rikkahub.ui.components.ui.CardGroup
 import me.rerere.rikkahub.ui.context.LocalToaster
+import me.rerere.rikkahub.ui.pages.backup.BackupOperation
 import me.rerere.rikkahub.ui.pages.backup.BackupVM
 import me.rerere.rikkahub.ui.pages.backup.components.BackupFileInfo
 import me.rerere.rikkahub.ui.pages.backup.components.BackupFilesSheet
 import me.rerere.rikkahub.ui.pages.backup.components.RemoteBackupLayout
 import me.rerere.rikkahub.ui.pages.backup.components.RemoteBackupStatus
 import me.rerere.rikkahub.ui.pages.backup.components.backupContentItem
+import me.rerere.rikkahub.ui.pages.backup.components.restoreErrorMessage
+import me.rerere.ui.toast.ToastType
 
 @Composable
 fun WebDavTab(
@@ -41,12 +44,14 @@ fun WebDavTab(
     val settings by vm.settings.collectAsStateWithLifecycle()
     val webDavConfig = settings.webDavConfig
     val backupItemsState by vm.webDavBackupItems.collectAsStateWithLifecycle()
+    val operation by vm.operation.collectAsStateWithLifecycle()
     val toaster = LocalToaster.current
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
     var showBackupFiles by remember { mutableStateOf(false) }
     var restoringItemId by remember { mutableStateOf<String?>(null) }
-    var isBackingUp by remember { mutableStateOf(false) }
+    val isBackingUp = operation == BackupOperation.WEBDAV_BACKUP
+    val busy = operation != null
 
     fun updateWebDavConfig(newConfig: WebDavConfig) {
         vm.updateSettings { it.copy(webDavConfig = newConfig) }
@@ -54,6 +59,7 @@ fun WebDavTab(
 
     RemoteBackupLayout(
         isBackingUp = isBackingUp,
+        enabled = !busy,
         onTestConnection = {
             scope.launch {
                 try {
@@ -75,23 +81,27 @@ fun WebDavTab(
             }
         },
         onBackup = {
-            scope.launch {
-                isBackingUp = true
-                runCatching {
-                    vm.backup()
-                    vm.loadBackupFileItems()
-                    toaster.show(
-                        context.getString(R.string.backup_page_backup_success),
-                        type = ToastType.Success
-                    )
-                }.onFailure {
-                    it.printStackTrace()
-                    toaster.show(
-                        it.message ?: context.getString(R.string.backup_page_unknown_error),
-                        type = ToastType.Error
-                    )
+            if (vm.claim(BackupOperation.WEBDAV_BACKUP)) {
+                scope.launch {
+                    try {
+                        vm.backup()
+                        vm.loadBackupFileItems()
+                        toaster.show(
+                            context.getString(R.string.backup_page_backup_success),
+                            type = ToastType.Success
+                        )
+                    } catch (e: CancellationException) {
+                        throw e
+                    } catch (e: Exception) {
+                        e.printStackTrace()
+                        toaster.show(
+                            e.message ?: context.getString(R.string.backup_page_unknown_error),
+                            type = ToastType.Error
+                        )
+                    } finally {
+                        vm.release(BackupOperation.WEBDAV_BACKUP)
+                    }
                 }
-                isBackingUp = false
             }
         },
     ) {
@@ -160,11 +170,17 @@ fun WebDavTab(
             }
         }
 
-        CardGroup {
+        CardGroup(
+            title = { Text(stringResource(R.string.backup_page_backup_items)) },
+        ) {
             backupContentItem(
-                options = WebDavConfig.BackupItem.entries,
-                selected = webDavConfig.items,
-                onChange = { updateWebDavConfig(webDavConfig.copy(items = it)) },
+                options = WebDavConfig.BackupItem.SELECTABLE,
+                selected = WebDavConfig.BackupItem.normalize(webDavConfig.items),
+                onChange = {
+                    updateWebDavConfig(
+                        webDavConfig.copy(items = WebDavConfig.BackupItem.normalize(it))
+                    )
+                },
             ) { item ->
                 when (item) {
                     WebDavConfig.BackupItem.DATABASE -> stringResource(R.string.backup_page_chat_records)
@@ -180,6 +196,7 @@ fun WebDavTab(
             title = stringResource(R.string.backup_page_webdav_backup_files),
             state = backupItemsState,
             restoringName = restoringItemId,
+            enabled = !busy,
             info = { BackupFileInfo(name = it.displayName, size = it.size, lastModified = it.lastModified) },
             onDelete = { item ->
                 scope.launch {
@@ -203,27 +220,27 @@ fun WebDavTab(
                 }
             },
             onRestore = { item ->
-                scope.launch {
-                    restoringItemId = item.displayName
-                    runCatching {
-                        vm.restore(item = item)
-                        toaster.show(
-                            context.getString(R.string.backup_page_restore_success),
-                            type = ToastType.Success
-                        )
-                        showBackupFiles = false
-                        onShowRestartDialog()
-                    }.onFailure { err ->
-                        err.printStackTrace()
-                        toaster.show(
-                            context.getString(
-                                R.string.backup_page_restore_failed,
-                                err.message ?: ""
-                            ),
-                            type = ToastType.Error
-                        )
+                if (vm.claim(BackupOperation.WEBDAV_RESTORE)) {
+                    scope.launch {
+                        restoringItemId = item.displayName
+                        try {
+                            vm.restore(item = item)
+                            toaster.show(
+                                context.getString(R.string.backup_page_restore_success),
+                                type = ToastType.Success
+                            )
+                            showBackupFiles = false
+                            onShowRestartDialog()
+                        } catch (e: CancellationException) {
+                            throw e
+                        } catch (err: Exception) {
+                            err.printStackTrace()
+                            toaster.show(restoreErrorMessage(context, err), type = ToastType.Error)
+                        } finally {
+                            restoringItemId = null
+                            vm.release(BackupOperation.WEBDAV_RESTORE)
+                        }
                     }
-                    restoringItemId = null
                 }
             },
             onDismiss = { showBackupFiles = false },

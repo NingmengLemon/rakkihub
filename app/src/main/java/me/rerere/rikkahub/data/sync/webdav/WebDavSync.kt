@@ -102,8 +102,12 @@ class WebDavSync(
         Log.i(TAG, "deleteBackupFile: Deleted ${item.displayName}")
     }
 
-    suspend fun restoreFromLocalFile(file: File, config: WebDavConfig) {
-        restoreFromBackupFile(file, config)
+    suspend fun restoreFromLocalFile(
+        file: File,
+        config: WebDavConfig,
+        onProgress: ((BackupProgress) -> Unit)? = null,
+    ) {
+        restoreFromBackupFile(file, config, onProgress)
     }
 
     suspend fun prepareBackupFile(
@@ -111,19 +115,22 @@ class WebDavSync(
         target: BackupTarget,
         onProgress: ((BackupProgress) -> Unit)? = null,
     ): File = backupManager.createBackup(
-        includeDatabase = WebDavConfig.BackupItem.DATABASE in config.items,
         includeFiles = WebDavConfig.BackupItem.FILES in config.items,
         includeWorkspaceFiles = WebDavConfig.BackupItem.WORKSPACES in config.items,
         backupTarget = target,
         onProgress = onProgress,
     )
 
-    private suspend fun restoreFromBackupFile(backupFile: File, config: WebDavConfig) {
+    private suspend fun restoreFromBackupFile(
+        backupFile: File,
+        config: WebDavConfig,
+        onProgress: ((BackupProgress) -> Unit)? = null,
+    ) {
         backupManager.stageRestore(
             archive = backupFile,
-            includeDatabase = WebDavConfig.BackupItem.DATABASE in config.items,
             includeFiles = WebDavConfig.BackupItem.FILES in config.items,
             includeWorkspaceFiles = WebDavConfig.BackupItem.WORKSPACES in config.items,
+            onProgress = onProgress,
         )
         // 本地导入与 WebDAV 导入都从这里进来。只在恢复成功之后留底：失败的恢复没有改动任何
         // 数据，不需要为它备份，留着只会堆积。放 noBackupFilesDir，filesDir 整个目录被 web

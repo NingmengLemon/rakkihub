@@ -153,6 +153,7 @@
   <string name="back">Back</string>
   <string name="backup_page_backing_up">Backing up...</string>
   <string name="backup_page_backup_items">Backup Items</string>
+  <string name="backup_page_backup_items_hint">Chat records and settings are always included. Attachments and workspace files are optional.</string>
   <string name="backup_page_backup_now">Backup Now</string>
   <string name="backup_page_backup_success">Backup successful</string>
   <string name="backup_page_chat_records">Chat Records</string>
@@ -165,9 +166,14 @@
   <string name="backup_page_exporting">Exporting...</string>
   <string name="backup_page_export_official">Export for RikkaHub</string>
   <string name="backup_page_export_official_desc">Write a backup the official RikkaHub can restore</string>
+  <string name="backup_page_group_app">This App</string>
+  <string name="backup_page_group_official">Official RikkaHub</string>
   <string name="backup_page_export_failed">Export failed</string>
   <string name="backup_page_export_schema_diverged">Unable to write an official-compatible backup: this build has changed its database shape. Use the normal export instead</string>
-  <string name="backup_page_export_packing">Packing %1$d / %2$d</string>
+  <string name="backup_page_export_preparing">Preparing...</string>
+  <string name="backup_page_export_database">Exporting the database...</string>
+  <string name="backup_page_export_files">Packing files %1$d / %2$d</string>
+  <string name="backup_page_export_workspaces">Packing workspace files %1$d / %2$d</string>
   <string name="backup_page_saving">Saving...</string>
   <string name="backup_page_files">Files</string>
   <string name="backup_page_workspaces">Workspaces</string>
@@ -176,6 +182,9 @@
   <string name="backup_page_import_official_desc">Export a backup from the official RikkaHub first, then pick that file here</string>
   <string name="backup_page_import_export">Local</string>
   <string name="backup_page_importing">Importing...</string>
+  <string name="backup_page_import_database">Checking the database...</string>
+  <string name="backup_page_import_extracting">Extracting %1$d / %2$d</string>
+  <string name="backup_page_import_reading">Reading the backup file...</string>
   <string name="backup_page_loading_failed">Failed to load backup files: %s</string>
   <string name="backup_page_local_backup_export">Export to File</string>
   <string name="backup_page_local_backup_import">Import from File</string>
@@ -195,6 +204,8 @@
   <string name="backup_page_restart_desc">The app needs to restart for the changes to take effect.</string>
   <string name="backup_page_restore">Restore</string>
   <string name="backup_page_restore_failed">Restore failed: %s</string>
+  <string name="backup_page_restore_missing_database">This backup has no chat records. Export a new backup with chat records included.</string>
+  <string name="backup_page_restore_missing_settings">This backup has no settings.</string>
   <string name="backup_page_restore_now">Restore</string>
   <string name="backup_page_restore_success">Restore successful</string>
   <string name="backup_page_restoring">Restoring...</string>

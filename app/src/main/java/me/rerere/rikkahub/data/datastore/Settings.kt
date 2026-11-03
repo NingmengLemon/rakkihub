@@ -204,6 +204,7 @@ data class WebDavConfig(
 ) {
     @Serializable
     enum class BackupItem {
+        /** 聊天记录与设置。始终包含，不出现在「备份内容」的选项里。 */
         DATABASE,
         FILES,
 
@@ -212,8 +213,21 @@ data class WebDavConfig(
         ;
 
         companion object {
+            /** 可以在界面上关掉的两项。 */
+            val SELECTABLE = listOf(FILES, WORKSPACES)
+
             /** 默认选择：工作区需要用户明确勾选，体积与必要性都不适合默认打包。 */
-            val DEFAULT_SELECTION = listOf(DATABASE, FILES)
+            val DEFAULT_SELECTION = normalize(listOf(FILES))
+
+            /**
+             * 归一成「聊天记录 + 选中的可选项」。
+             *
+             * 一份归档必须有数据库：附件名由库里的文本列引用，工作区文件也挂在库里的工作区行上
+             * （C40），只导出附件在恢复时对不上任何引用。旧的设置与旧备份里的 settings 可能带着
+             * 非法组合，所以读取与写入两侧都过一遍。
+             */
+            fun normalize(items: Collection<BackupItem>): List<BackupItem> =
+                listOf(DATABASE) + SELECTABLE.filter { it in items }
         }
     }
 }

@@ -36,7 +36,7 @@
 4. settings 按原流程迁移、解码、重新编码，`launchCount` 一并带进 pending 的 `settings.json`。
 5. `PendingRestore.publish(staging)`，重启时原子替换。
 
-payload 的布局沿用现有约定：`payload/database/rikka_hub`、`payload/files/<附件路径>`，`settings.json` 放在 staging 根。payload 为空时 `apply` 会写一份空 journal 然后返回 true，也就是「静默成功、什么都没装」，所以导入器必须确认至少写入了数据库或附件。
+payload 的布局沿用现有约定：`payload/database/rikka_hub`、`payload/files/<附件路径>`，`settings.json` 放在 staging 根。归档必须同时带数据库与 settings，缺条目在解压之前就被拒绝（C40），所以不会出现空 payload 的「静默成功」。
 
 ## 读取层
 
@@ -66,6 +66,12 @@ payload 的布局沿用现有约定：`payload/database/rikka_hub`、`payload/fi
 消息与设置里的附件引用多数仍是绝对 `file://` URI，包名在路径里。写入文本列前要把 `file:///data/user/<用户号>/<包名>/files/` 与 `file:///data/data/<包名>/files/` 这两种前缀换成当前应用的 files 目录（正则就是 `file:///data/(?:user/\d+|data)/[^/]+/files/`），否则导入到改过包名的应用后附件全部失配。官方备份、本 fork C36 之前的自家备份与设置都属于这种绝对形态；助手头像与用户头像在 `settings.json` 里，方向相同但重写发生在 settings 分支。只认这一种形状，不绑定包名；JSON 整段做字符串替换，不解析。整段替换的副作用是正文里引用的别的安装的 `file:///data/` 路径也会被一起改写，这是不解析 JSON 换来的。
 
 自家归档里新写或重存过的消息引用是相对形态（C36），这一步对它们不再需要。上文的探测只认绝对前缀，相对形态不会命中。
+
+## 按内容改名
+
+转换与迁移只管结构与安装前缀，文件名在归档里是什么就是什么。`stageRestore` 在库换成当前版本之后还有一次改写：`upload/` 下的附件在解压时已经按内容改名并去重（`ImportedUploadFiles`），这一步由 `UploadNames.rewriteDatabase` 把暂存库里的引用换成新名字，`managed_files.relative_path` 单独处理并先删掉合并后重复的行。表与文本列从 `sqlite_master` 与 `PRAGMA table_info` 现查，`message_fts*` 跳过；settings.json 走同一份名字映射。
+
+转换器不参与改名：它读的是归档里的原始文本，名字映射要等解压完成才知道。顺序因此是转换、迁移、改名、最后 settings。
 
 ## settings
 

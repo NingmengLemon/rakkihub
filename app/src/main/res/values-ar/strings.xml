@@ -175,6 +175,7 @@
   <string name="back">رجوع</string>
   <string name="backup_page_backing_up">جارٍ النسخ الاحتياطي...</string>
   <string name="backup_page_backup_items">عناصر النسخ الاحتياطي</string>
+  <string name="backup_page_backup_items_hint">تُضمَّن سجلات الدردشة والإعدادات دائمًا. المرفقات وملفات مساحات العمل اختيارية.</string>
   <string name="backup_page_backup_now">النسخ الاحتياطي الآن</string>
   <string name="backup_page_backup_success">تم النسخ الاحتياطي بنجاح</string>
   <string name="backup_page_chat_records">سجلات الدردشة</string>
@@ -187,9 +188,14 @@
   <string name="backup_page_exporting">جارٍ التصدير...</string>
   <string name="backup_page_export_official">تصدير إلى RikkaHub</string>
   <string name="backup_page_export_official_desc">إنشاء نسخة احتياطية يمكن لتطبيق RikkaHub الرسمي استعادتها</string>
+  <string name="backup_page_group_app">هذا التطبيق</string>
+  <string name="backup_page_group_official">RikkaHub الرسمي</string>
   <string name="backup_page_export_failed">فشل التصدير</string>
   <string name="backup_page_export_schema_diverged">تعذر إنشاء نسخة متوافقة مع RikkaHub الرسمي: تغيّر هيكل بيانات هذا التطبيق. استخدم التصدير العادي بدلاً من ذلك</string>
-  <string name="backup_page_export_packing">جارٍ التجميع %1$d / %2$d</string>
+  <string name="backup_page_export_preparing">جارٍ التحضير...</string>
+  <string name="backup_page_export_database">جارٍ تصدير قاعدة البيانات...</string>
+  <string name="backup_page_export_files">جارٍ تجميع الملفات %1$d / %2$d</string>
+  <string name="backup_page_export_workspaces">جارٍ تجميع ملفات مساحات العمل %1$d / %2$d</string>
   <string name="backup_page_saving">جارٍ الحفظ...</string>
   <string name="backup_page_files">الملفات</string>
   <string name="backup_page_workspaces">مساحات العمل</string>
@@ -199,6 +205,9 @@
   <string name="backup_page_import_export">محلي</string>
   <string name="backup_page_import_overwrite_confirm">سيؤدي استيراد نسخة احتياطية إلى الكتابة فوق بيانات التطبيق. هل تريد المتابعة؟</string>
   <string name="backup_page_importing">جارٍ الاستيراد...</string>
+  <string name="backup_page_import_database">جارٍ فحص قاعدة البيانات...</string>
+  <string name="backup_page_import_extracting">جارٍ الاستخراج %1$d / %2$d</string>
+  <string name="backup_page_import_reading">جارٍ قراءة ملف النسخة الاحتياطية...</string>
   <string name="backup_page_loading_failed">فشل تحميل ملفات النسخ الاحتياطي: %s</string>
   <string name="backup_page_local_backup_export">تصدير إلى ملف</string>
   <string name="backup_page_local_backup_import">استيراد من ملف</string>
@@ -218,6 +227,8 @@
   <string name="backup_page_restart_desc">يحتاج التطبيق إلى إعادة التشغيل لتصبح التغييرات سارية.</string>
   <string name="backup_page_restore">استعادة</string>
   <string name="backup_page_restore_failed">فشلت الاستعادة: %s</string>
+  <string name="backup_page_restore_missing_database">لا تحتوي هذه النسخة الاحتياطية على سجلات دردشة. صدّر نسخة جديدة تتضمن سجلات الدردشة.</string>
+  <string name="backup_page_restore_missing_settings">لا تحتوي هذه النسخة الاحتياطية على إعدادات.</string>
   <string name="backup_page_restore_now">استعادة</string>
   <string name="backup_page_restore_success">تمت الاستعادة بنجاح</string>
   <string name="backup_page_restoring">جارٍ الاستعادة...</string>
