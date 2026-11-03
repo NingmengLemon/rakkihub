@@ -739,6 +739,54 @@ class BackupManagerTest {
     }
 
     /**
+     * 改名成链：`a.png` 的内容算出 `H1.png`，而归档里真的有一个 `H1.png`，它自己还要改成
+     * `H2.png`。`managed_files.relative_path` 上有唯一索引，按顺序直接改会撞上。
+     */
+    @Test fun managedFileRenameChainsDoNotCollide() = runBlocking {
+        val first = "chain first".toByteArray()
+        val second = "chain second".toByteArray()
+        val firstName = sha256(first) + ".png"
+        val secondName = sha256(second) + ".png"
+        liveDatabase.openHelper.writableDatabase.execSQL(
+            "INSERT INTO managed_files " +
+                "(folder, relative_path, display_name, mime_type, size_bytes, created_at, updated_at) " +
+                "VALUES ('upload', 'upload/a.png', 'a.png', 'image/png', 1, 1, 1), " +
+                "('upload', ?, 'h.png', 'image/png', 1, 1, 1)",
+            arrayOf("upload/$firstName"),
+        )
+        val backup = manager.createBackup(includeFiles = false)
+        val archive = File(directory, "rename-chain.zip")
+        ZipOutputStream(archive.outputStream()).use { zip ->
+            ZipFile(backup).use { source ->
+                addEntry(zip, source, BackupManager.SETTINGS_ENTRY)
+                addEntry(zip, source, DatabaseBackup.ARCHIVE_DATABASE)
+            }
+            addBytes(zip, "upload/a.png", first)
+            addBytes(zip, "upload/$firstName", second)
+        }
+        backup.delete()
+
+        manager.stageRestore(archive, includeFiles = true)
+
+        val payload = File(context.noBackupFilesDir, "backup-restore/pending/payload/files/upload")
+        assertEquals(
+            listOf(firstName, secondName).sorted(),
+            payload.listFiles().orEmpty().map { it.name }.sorted(),
+        )
+        val staged = File(context.noBackupFilesDir, "backup-restore/pending/payload/database/rikka_hub")
+        SQLiteDatabase.openDatabase(staged.absolutePath, null, SQLiteDatabase.OPEN_READONLY).use { db ->
+            val paths = db.rawQuery("SELECT relative_path FROM managed_files", null).use { cursor ->
+                buildList { while (cursor.moveToNext()) add(cursor.getString(0)) }
+            }
+            assertEquals(
+                "链条两端的名字都要落到目标上",
+                listOf("upload/$firstName", "upload/$secondName").sorted(),
+                paths.sorted(),
+            )
+        }
+    }
+
+    /**
      * 缺数据库的归档在解压之前被拒绝。
      *
      * 官方导出时可以只勾附件，那种备份恢复不了：附件名由库里的文本列引用，只搬文件对不上任何
@@ -808,12 +856,14 @@ class BackupManagerTest {
         }
         valid.delete()
 
-        val error = runCatching { manager.stageRestore(archive, includeFiles = true) }.exceptionOrNull()
-
-        assertTrue("必须拒绝，实际是 $error", error is IllegalArgumentException)
-        assertFalse(File(context.noBackupFilesDir, "backup-restore/pending").exists())
-        val leftovers = File(context.noBackupFilesDir, "backup-restore").listFiles().orEmpty().toList()
-        assertTrue("拒绝后不应留下暂存目录，实际是 $leftovers", leftovers.isEmpty())
+        // 形状校验不看选择：勾不勾附件都要在计划阶段拒绝
+        for (includeFiles in listOf(true, false)) {
+            val error = runCatching { manager.stageRestore(archive, includeFiles = includeFiles) }.exceptionOrNull()
+            assertTrue("必须拒绝（勾选=$includeFiles），实际是 $error", error is IllegalArgumentException)
+            assertFalse(File(context.noBackupFilesDir, "backup-restore/pending").exists())
+            val leftovers = File(context.noBackupFilesDir, "backup-restore").listFiles().orEmpty().toList()
+            assertTrue("拒绝后不应留下暂存目录，实际是 $leftovers", leftovers.isEmpty())
+        }
         assertEquals("live", probe(liveDatabase))
     }
 
