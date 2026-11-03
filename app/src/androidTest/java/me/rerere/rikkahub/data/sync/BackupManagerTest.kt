@@ -812,6 +812,8 @@ class BackupManagerTest {
 
         assertTrue("必须拒绝，实际是 $error", error is IllegalArgumentException)
         assertFalse(File(context.noBackupFilesDir, "backup-restore/pending").exists())
+        val leftovers = File(context.noBackupFilesDir, "backup-restore").listFiles().orEmpty().toList()
+        assertTrue("拒绝后不应留下暂存目录，实际是 $leftovers", leftovers.isEmpty())
         assertEquals("live", probe(liveDatabase))
     }
 

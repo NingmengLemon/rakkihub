@@ -31,9 +31,10 @@ internal object OfficialBackupLayout {
     /**
      * 条目是否是一个合法的附件条目。
      *
-     * 判定与恢复侧 `BackupManager.isAttachment` 保持一致：必须落在附件目录下、带非空的
-     * 相对路径，且非嵌套目录下不允许再分子目录。非法形状返回 false 而不是抛异常，由调用
-     * 方决定是跳过还是报错。
+     * 形状判定与恢复侧 `BackupManager.isAttachment` 一致：必须落在附件目录下、带非空的
+     * 相对路径，且非嵌套目录下不允许再分子目录。文件名里的反斜杠这里不判，它属于路径
+     * 安全，由恢复侧在导入计划阶段单独拒绝。非法形状返回 false 而不是抛异常，由调用方
+     * 决定是跳过还是报错。
      */
     fun isAttachmentEntry(name: String): Boolean {
         val folder = name.substringBefore('/')

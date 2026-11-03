@@ -78,7 +78,7 @@ git log --oneline <上次查看点>..upstream/master
 
 - Room 改结构时同时写迁移。同一安装下，本 fork 旧构建产出的备份要靠迁移链升上来（换了包名、库里又带附件引用的，在源版本有快照时会被 C25 改走转换器）
 - 新增序列化字段必须带默认值，旧数据仍要能读出。典型载体是 `UIMessage`、`Conversation`、`Assistant` 这类模型，以及 DataStore 里的 `Settings`
-- 不改已有字段与 DataStore key 的含义。改含义不会让 schema 指纹变化，Room 照常打开并读出错的数据，任何基于 header 的判定都发现不了
+- 不改已有字段与 DataStore key 的含义。改含义不会让 schema 指纹变化，Room 照常打开并读出错的数据，任何基于 header 的判定都发现不了。判断口径：「含义」指这个值表示什么；某个列表项变成必然包含、读取时补回缺省项不算改含义，前提是旧值仍能正确解码、不丢数据。`webDavConfig.items` 的 `DATABASE` 属于这一类（C40）
 - 确实要改含义时，先建立写入侧的字段映射表，并配一条覆盖全部列的完整性测试。这张表现在没有，在它建起来之前这条就是禁止
 - 每次改完重跑验收样本
 
@@ -89,6 +89,8 @@ git log --oneline <上次查看点>..upstream/master
 ### 一个定制一个提交
 
 提交信息用 `custom` 作为 scope，例如 `feat(custom): ...`、`refactor(custom): ...`，便于检索。一项定制一个提交，同时在 [`checklist.md`](checklist.md) 里登记。
+
+例外：几项定制共用同一批实现（同一个函数签名、同一个 ViewModel 的状态、同一批文件的布局），拆开需要为同一批文件维护多个只存在于历史里的中间版本时，可以合成一个提交。正文逐项写清编号与合并原因，checklist 仍一项一行；能单独编译、单独回滚的项不适用这一条。
 
 审计全部定制：
 

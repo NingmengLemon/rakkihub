@@ -85,6 +85,8 @@ fun ImportExportTab(
             vm.release(kind)
             return@rememberLauncherForActivityResult
         }
+        // 进程在 picker 打开期间被回收时，重建的 VM 里没有这次操作的占用，这里补上
+        if (vm.operation.value == null) vm.claim(kind)
         scope.launch {
             try {
                 // 打包成临时文件，期间 exportProgress 给出打包进度
@@ -140,6 +142,8 @@ fun ImportExportTab(
             vm.release(kind)
             return@rememberLauncherForActivityResult
         }
+        // 进程在 picker 打开期间被回收时，重建的 VM 里没有这次操作的占用，这里补上
+        if (vm.operation.value == null) vm.claim(kind)
         scope.launch {
             try {
                 // 本应用备份与官方 RikkaHub 备份是同一个归档格式，恢复流程一致

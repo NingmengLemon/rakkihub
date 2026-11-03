@@ -8,6 +8,7 @@ import org.junit.Test
 import java.io.ByteArrayInputStream
 import java.io.File
 import java.nio.file.Files
+import java.security.MessageDigest
 
 class ImportedUploadFilesTest {
 
@@ -36,12 +37,16 @@ class ImportedUploadFilesTest {
             )
 
             assertEquals("同内容应当落到同一个名字", first, second)
+            assertEquals("名字要按内容算", "image".toByteArray().sha256() + ".png", first)
             assertEquals(listOf(first), directory.listFiles().orEmpty().map { it.name })
             assertEquals("image", File(directory, first).readText())
         } finally {
             directory.deleteRecursively()
         }
     }
+
+    private fun ByteArray.sha256(): String =
+        MessageDigest.getInstance("SHA-256").digest(this).joinToString("") { "%02x".format(it) }
 
     @Test
     fun differentContentLandsOnDifferentFiles() {

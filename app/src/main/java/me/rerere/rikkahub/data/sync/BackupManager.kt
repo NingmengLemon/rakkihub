@@ -273,6 +273,8 @@ class BackupManager(
                 DatabaseBackup.WAL -> RestoreEntryKind.WAL
                 DatabaseBackup.SHM -> RestoreEntryKind.SHM
                 else -> {
+                    // 附件与工作区条目的形状无条件校验：即使这次没勾选，也不接受越界或不合法的路径
+                    if (entry.name.substringBefore('/') in ATTACHMENT_FOLDERS) require(isAttachment(entry.name))
                     if (entry.name.startsWith("$WORKSPACE_FOLDER/")) require(isWorkspaceFile(entry.name))
                     when {
                         includeFiles && isAttachment(entry.name) -> RestoreEntryKind.ATTACHMENT

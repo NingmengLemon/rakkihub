@@ -114,13 +114,13 @@
 
 ### C10 新增从官方 RikkaHub 导入
 
-- 落点：`ImportExportTab`（新增「从官方 RikkaHub 导入」分组与 `ImportSource.OFFICIAL`，与本地导入共用同一个确认对话框与 `openDocumentLauncher`）；7 个 locale 新增 `backup_page_import_from_official` 与 `backup_page_import_official_desc`
+- 落点：`ImportExportTab`（官方 RikkaHub 分组里的「从官方 RikkaHub 导入」入口，操作类型用 `BackupOperation.IMPORT_OFFICIAL`，与本地导入共用同一个确认对话框与 `openDocumentLauncher`；分组本身见 C42）；7 个 locale 新增 `backup_page_import_from_official` 与 `backup_page_import_official_desc`
 - 理由：改包名后本应用与官方应用并存，需要一个明确的迁移入口
 - 合并注意：官方备份与本应用的归档格式相同（`settings.json` + `rikka_hub.db` + 附件目录），所以复用同一条 `stageRestore` 流程，入口只负责引导用户先在官方应用里导出备份。`JsonInstant` 开了 `ignoreUnknownKeys`，官方备份里的额外字段不会导致解码失败。本节只管导入方向；反过来的「导出官方兼容备份」是并列的第二个出口，由 C18 落地，现在遇到 schema 分叉会直接失败
 
 ### C11 导出备份显示进度
 
-- 落点：`BackupManager.createBackup` 的可选 `onProgress` 与 `BackupProgress`（阶段与阶段内条目数，见 C41）；`WebDavSync.prepareBackupFile` 透传；`BackupVM` 的 `exportProgress` 状态在 `finally` 里清空；`ImportExportTab` 的进度行：打包与写目标文件两段都显示，写目标文件那一段是不确定进度。`backup_page_saving` 保留，原来的 `backup_page_export_packing` 已被 C41 的分阶段文案取代。
+- 落点：`BackupManager.createBackup` 的可选 `onProgress` 与 `BackupProgress`（阶段与阶段内条目数，见 C41）；`WebDavSync.prepareBackupFile` 透传；`BackupVM` 的 `exportProgress` 状态在 `finally` 里清空；`ImportExportTab` 的进度行：打包与写目标文件两段都显示，写目标文件那一段是不确定进度。`backup_page_saving` 保留；打包各段用 C41 的分阶段文案（`backup_page_export_preparing` 等）。
 - 理由：附件多时导出要等很久，没有进度不知道卡在哪一步。
 - 合并注意：打包阶段先收集附件列表再写入，为的是给出每段确定的总数；代价是「列出」与「写入」之间文件消失的窗口从一个文件扩大到整个打包阶段，`PARTIAL_SUFFIX` 过滤与 `resolveInside` 校验都保留。进度模型改成阶段制之后，条目总数的算法在 C41 里。
 
@@ -162,7 +162,7 @@
 
 ### C18 新增官方兼容的导出出口
 
-- 落点：新增 `BackupTarget`（`SELF` / `OFFICIAL`）、`OfficialDatabaseCompatibility`（判定我们的库还在不在官方形状上，比较版本与 identity hash，配 `OfficialDatabaseCompatibilityTest`）、`OfficialDatabaseAdapter`（一致时把附件路径改写成官方安装的位置再交出，分叉时抛 `OfficialExportUnsupportedException`）；`BackupManager.createBackup` 与 `WebDavSync.prepareBackupFile` 加目标参数，`BackupVM.exportToFile` 透传，只有 `SELF` 会更新备份提醒的时间戳；`ImportExportTab` 的导出分组加第二个入口，与自家导出的区别在数据库与其中的路径，目标用 `rememberSaveable` 存，避免选择文件期间被回收后退回自家格式；8 个 locale 新增 `backup_page_export_official`、`backup_page_export_official_desc`、`backup_page_export_failed`、`backup_page_export_schema_diverged`；`BackupManagerTest` 补一条官方目标的 androidTest
+- 落点：新增 `BackupTarget`（`SELF` / `OFFICIAL`）、`OfficialDatabaseCompatibility`（判定我们的库还在不在官方形状上，比较版本与 identity hash，配 `OfficialDatabaseCompatibilityTest`）、`OfficialDatabaseAdapter`（一致时把附件路径改写成官方安装的位置再交出，分叉时抛 `OfficialExportUnsupportedException`）；`BackupManager.createBackup` 与 `WebDavSync.prepareBackupFile` 加目标参数，`BackupVM.exportToFile` 透传，只有 `SELF` 会更新备份提醒的时间戳；`ImportExportTab` 加第二个导出入口，落在官方 RikkaHub 分组里（C42），与自家导出的区别在数据库与其中的路径，目标用 `rememberSaveable` 存，避免选择文件期间被回收后退回自家格式；8 个 locale 新增 `backup_page_export_official`、`backup_page_export_official_desc`、`backup_page_export_failed`、`backup_page_export_schema_diverged`；`BackupManagerTest` 补一条官方目标的 androidTest
 - 理由：改结构之后自家备份官方读不了，需要一个能把数据交回官方的出口；它和自家导出并列，不是把现有导出改掉
 - 合并注意：当前双方 schema 一致，两个出口的差别只在本应用独占的选项与路径改写：适配层做「一致就把路径换成官方安装的位置、分叉就失败」，裁表裁列等真改结构时再补（路径改写见 C30）。失败是刻意的，静默产出官方打不开的备份要等到恢复时才发现；分叉走单独的提示文案，技术原因只进日志。导出失败时会尝试删掉选择位置时建出的空文档，尽量不留 0 字节文件（删除本身可能被 provider 拒绝，是 best-effort）。`settings.json` 不裁字段，官方解码器的 `ignoreUnknownKeys` 会忽略多余字段，这一点由 `OfficialSettingsCompatibilityTest` 钉住；但官方不认识的枚举值它吞不掉，所以官方出口会把工作区选项去掉（C29）。WebDAV 出口暂时只产出 `SELF` 格式。上游若改 `createBackup` 的签名或备份页的导出分组，第二个入口要跟着调整
 
@@ -296,7 +296,7 @@
 
 ### C40 导入时附件按内容寻址，归档必须有数据库与设置
 
-- 落点：`WebDavConfig.BackupItem` 加 `SELECTABLE`（只有 `FILES` 与 `WORKSPACES`）与 `normalize`（聊天记录始终在内，`DEFAULT_SELECTION` 由它生成）；`BackupManager.createBackup` 去掉 `includeDatabase`，始终写数据库快照，写进 settings.json 的 `items` 也先归一；`stageRestore` 同样去掉该参数，并改成先列条目再解压：`planRestoreEntries` 在第一个字节写入之前判定，缺 `rikka_hub.db` 抛 `BackupRejectedException(MISSING_DATABASE)`、缺 `settings.json` 抛 `MISSING_SETTINGS`；`upload/` 下的附件解压时按 SHA-256 改名并去重，新增 `ImportedUploadFiles`（`upload/` 条目直接走 C32 的 `ContentAddressedFiles.write`，名字用 `FileUtils.buildContentFileName`，指纹与命名不另写一套）与 `UploadNames.rewriteDatabase`（从 `sqlite_master` 与 `PRAGMA table_info` 现查表与文本列，逐行把 `files/upload/<名字>` 与 `file:upload/<名字>` 换成新名字，`message_fts` 与影子表跳过；`managed_files.relative_path` 单独处理，先按新路径分组、每组只留 id 最小的一行再改名，避免撞唯一索引），settings.json 的替换复用 `ImportedUploadFiles.rewrite`；新增 `BackupRejectedException` 与两条文案，`ImportExportTab`、`WebDavTab` 通过 `restoreErrorMessage` 选文案；两页的「备份内容」只列 `SELECTABLE`，WebDAV 的持久化取值在读写两侧都过 `normalize`。测试：JVM 的 `ImportedUploadFilesTest`（五条）与 `BackupItemTest`（三条）；androidTest 的改名去重用例与两条拒绝用例；`BackupManagerTest`、`OfficialBackupRestoreAcceptanceTest`、`RestoreAppliedOutcomeTest` 按新规则调整，后两者按「sha256 + 归档里的扩展名」算出 `upload/` 的期望落盘名。
+- 落点：`WebDavConfig.BackupItem` 加 `SELECTABLE`（只有 `FILES` 与 `WORKSPACES`）与 `normalize`（聊天记录始终在内，`DEFAULT_SELECTION` 由它生成）；`BackupManager.createBackup` 去掉 `includeDatabase`，始终写数据库快照，写进 settings.json 的 `items` 也先归一；`stageRestore` 同样去掉该参数，并改成先列条目再解压：`planRestoreEntries` 在第一个字节写入之前判定，缺 `rikka_hub.db` 抛 `BackupRejectedException(MISSING_DATABASE)`、缺 `settings.json` 抛 `MISSING_SETTINGS`；`upload/` 下的附件解压时按 SHA-256 改名并去重，新增 `ImportedUploadFiles`（`upload/` 条目直接走 C32 的 `ContentAddressedFiles.write`，名字用 `FileUtils.buildContentFileName`，指纹与命名不另写一套）与 `UploadNames.rewriteDatabase`（从 `sqlite_master` 与 `PRAGMA table_info` 现查表与文本列，逐行把 `files/upload/<名字>` 与 `file:upload/<名字>` 换成新名字，`message_fts` 与影子表跳过；`managed_files.relative_path` 单独处理，先按新路径分组、每组只留 id 最小的一行，再把要改的行分两步落盘（先挪到临时路径）避免改名成链时撞唯一索引），settings.json 的替换复用 `ImportedUploadFiles.rewrite`；新增 `BackupRejectedException` 与两条文案，`ImportExportTab`、`WebDavTab` 通过 `restoreErrorMessage` 选文案；两页的「备份内容」只列 `SELECTABLE`，WebDAV 的持久化取值在读写两侧都过 `normalize`。测试：JVM 的 `ImportedUploadFilesTest`（五条）与 `BackupItemTest`（三条）；androidTest 的改名去重用例与三条拒绝用例（缺库、缺设置、附件名带反斜杠）；`BackupManagerTest`、`OfficialBackupRestoreAcceptanceTest`、`RestoreAppliedOutcomeTest` 按新规则调整，后两者按「sha256 + 归档里的扩展名」算出 `upload/` 的期望落盘名。
 - 理由：官方给每次上传起随机 UUID 名，同一张图发几次就是几个文件；导入侧原来原样落盘，去重只作用于本应用的新写入。文件名由库里的文本列引用，改名必须连带改库、设置与文件登记，所以只有归档同时带数据库时才安全；只带附件的归档恢复出来对不上任何引用，应当在解压之前拒绝。设置与库是一对：库里的会话引用设置里的助手，缺一半会错配。
 - 合并注意：改名只做 `upload/`；`skills/`、`fonts/`、`media_creation/` 是自有目录，归档里的名字来自本应用的随机命名，改名要连带改工具结果里的引用，收益不值。扩展名取自归档里的文件名并转小写，导入侧拿不到可靠 MIME，同内容不同扩展名会落成两份。归档里附件条目的文件名带反斜杠时在计划阶段就拒绝，别留到 apply 才失败。`managed_files` 是唯一需要先去重的表（`relative_path` 有唯一索引）；`favorites.ref_key` 与 `workspaces.root` 也是唯一索引，但都不存附件路径。扫描跳过 `message_fts*`：索引里只有正文，恢复之后本来就要重建。顺序是转换、迁移、再改名、最后 settings，因为转换器先把安装前缀换成本机，改名作用在换过前缀的文本上。`PendingRestore.buildRemovalEntries` 的「只导附件」分支现在只剩更早版本留下的 pending 目录会走到。持久化的 `webDavConfig.items` 里每一项的含义没变，但聊天记录不能再关掉，旧值由 `normalize` 补上；`normalize` 幂等，解码与 DataStore key 都不动。相关记录同步在 [`backup/README.md`](backup/README.md)、[`backup/importer.md`](backup/importer.md) 与 [`backup/acceptance.md`](backup/acceptance.md)。
 

@@ -124,7 +124,17 @@ internal object UploadNames {
             .flatMap { group -> group.sortedBy { it.first }.drop(1) }
         val droppedIds = dropped.map { it.first }.toSet()
         dropped.forEach { database.execSQL("DELETE FROM `managed_files` WHERE id = ?", arrayOf(it.first)) }
-        rows.filter { it.first !in droppedIds && it.third != it.second }.forEach {
+        val moved = rows.filter { it.first !in droppedIds && it.third != it.second }
+        // 先挪到不可能与真实路径相撞的临时路径，再落到目标路径：改名可能成链
+        // （a.png 改成 H1.png，而 H1.png 自己还要改成 H2.png），直接改会撞唯一索引。
+        // 临时路径不以任何真实目录名开头，真实行都是 `<folder>/<名字>`，碰不到它。
+        moved.forEach {
+            database.execSQL(
+                "UPDATE `managed_files` SET `relative_path` = ? WHERE id = ?",
+                arrayOf<Any?>("__renaming__/${it.first}", it.first),
+            )
+        }
+        moved.forEach {
             database.execSQL(
                 "UPDATE `managed_files` SET `relative_path` = ? WHERE id = ?",
                 arrayOf<Any?>(it.third, it.first),
