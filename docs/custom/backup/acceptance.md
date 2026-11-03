@@ -121,10 +121,19 @@ v31 的样本推成 `rikkahub-sample-v31.db` 与 `backup-expectations-v31.json`�
 | 本 fork 旧构建 | v31（产出自 3.1.0 (193)，包名还是 `me.rerere.rikkahub`） | 表数据与内容摘要；settings 只手工核对过条数（经 migrate 与 decode 后不变），没有脚本或测试复现；附件未逐个比 |
 | 本应用自己导出 | `BackupManagerTest` 的常规恢复用例与 `foreignAttachmentPathsAreRewrittenOnSameVersionRestore`、`OfficialForeignAttachmentPathsTest`（探测判定） | 常规用例覆盖原路径，但没有插入引用，「引用都属于当前安装、恢复时不走转换器」这条恢复路径没有用例；探测判定由 `OfficialForeignAttachmentPathsTest` 覆盖（androidTest，不进 CI）。指向别的安装的旧绝对引用命中 C25，同版本也走转换器；新写或重存过的消息引用是相对形态，按当前安装解析；迁移链升级无样本或用例 |
 | 高版本库 | `BackupManagerTest` 的拒绝用例 | 验过 |
-| 缺条目拒绝 | `BackupManagerTest` 的 `archiveWithoutDatabaseIsRejectedBeforeStaging`、`archiveWithoutSettingsIsRejectedBeforeStaging` | 待设备重跑：判据是解压之前失败、不留 pending、现有库与附件不动 |
-| 导入改名与去重 | `ImportedUploadFilesTest`（JVM）与 `BackupManagerTest.importRenamesUploadsToContentNamesAndDropsDuplicates` | 待设备重跑：期望名由内容算出、同内容合并成一份、库与 `managed_files` 的引用一起换 |
+| 缺条目拒绝 | `BackupManagerTest` 的缺库、缺设置、附件名带反斜杠三条用例 | 2026-11-04 设备上验过：三条都在解压之前失败，不留暂存，现有库与附件不动 |
+| 导入改名与去重 | `ImportedUploadFilesTest`（JVM）、`BackupManagerTest` 的改名与成链用例、`OfficialBackupRestoreAcceptanceTest`、`RestoreAppliedOutcomeTest` | 2026-11-04 设备上验过：v32 样本的附件按内容命名且集合一致；5GB 样本的 8080 个 upload 条目落成 682 个唯一内容 |
 | 官方兼容出口 | `BackupManagerTest` 的两条路径改写用例，外加一条「官方出口归档再恢复回本应用」 | 绝对与相对路径改写验过；设备上导出并交给官方客户端恢复过一次（170 会话 / 676 节点 / 66 个节点带官方绝对引用 / 98 个 upload 文件，测试图片能显示）；schema 裁剪未实现 |
 | 本应用自己导出、换包名恢复 | 临时 `.crosscheck` 包名的构建 | 170 会话 / 676 节点；2 个节点带相对引用，按新安装解析；64 个节点带官方绝对引用，经 C25 改写；98 个 upload 文件；测试图片显示 |
+
+## 5GB 样本
+
+`rikkahub_backup_20261031_064835.zip`（官方 v31 格式，5.0GB，8080 个 `upload/` 条目），2026-11-04 在设备上整份导入：
+
+- 附件：8080 个条目按内容算出的名字集合与 live 的 `upload/` 完全一致，共 682 个文件、396MB。库里 657 个不同的引用名里有 645 个落在集合内；剩下 12 个旧 UUID 引用在归档里本来就没有对应文件，是恢复前就悬空的引用；37 个 live 文件没有被任何消息引用，来自归档里未被引用的内容。
+- 库：v31 转成当前版本后 1664 会话、11483 节点；`managed_files` 682 行。导入后首次启动重建全文索引，库文件 572MB。
+- 界面：消息里的图片与用户头像都能显示；在 1664 个会话里搜 `iOS` 能出结果。
+- 导出同一份数据：数据库段约 24 秒，682 个文件约 14 秒，产出 612MB 归档（684 个条目）。
 
 表数据这一层：v32 与 v31 各 14 张表全部通过。两层都验，读取层直接读原始备份，转换层把样本经转换器写成当前版本库再读。转换层只比对源版本也有的列，因为转换后是当前版本结构；另有一条断言确认转换结果里没有残留指向别的安装的附件路径。
 
@@ -134,4 +143,4 @@ v31 的附件没有逐个在设备上比：整包推上设备再解压不划算�
 
 每次改动 schema 或 `Settings` 结构之后重跑全部样本与设备验收。只编译通过不算数。
 
-C40 与 C41 落地后，`upload/` 的落盘名与设备上的数量都变了，安卓端用例与上面两节的结果要重跑一次；表里标「待设备重跑」的行就是这批。
+C40 与 C41 落地后的安卓端用例与 5GB 样本已在设备上跑过，结果见上表与「5GB 样本」。上面两节的设备结果仍是改名之前的数，附件的数量口径没变，只是被导入方的落盘名换成了内容指纹。
