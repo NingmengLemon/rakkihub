@@ -93,12 +93,13 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import me.rerere.ai.ui.UIMessage
-import me.rerere.ai.ui.contextLimitStart
 import me.rerere.rikkahub.R
 import me.rerere.rikkahub.data.datastore.Settings
 import me.rerere.rikkahub.data.datastore.getAssistantById
 import me.rerere.rikkahub.data.model.Conversation
 import me.rerere.rikkahub.data.model.MessageNode
+import me.rerere.rikkahub.data.model.contextLimitBoundaryIndex
+import me.rerere.rikkahub.data.model.getAssistantOf
 import me.rerere.rikkahub.data.model.withConversation
 import me.rerere.rikkahub.service.ChatError
 import me.rerere.rikkahub.ui.components.message.ChatMessage
@@ -326,13 +327,9 @@ private fun ChatListNormal(
             val latestCheckpointId = conversation.messageNodes
                 .lastOrNull { it.currentMessage.isContextCheckpoint }
                 ?.id
-            // 上下文消息数上限：按与请求相同的规则算出第一条会发送的消息，供只读边界线使用
-            val contextLimit = assistant?.contextMessageLimit ?: 0
-            val contextLimitStart = if (contextLimit > 0) {
-                conversation.currentMessages.contextLimitStart(contextLimit)
-            } else {
-                -1
-            }
+            // 上下文消息数上限：与请求一样从会话视角的助手取，只有真的发生条数截断才画线
+            val contextLimit = settings.getAssistantOf(conversation).contextMessageLimit
+            val contextLimitBoundary = conversation.contextLimitBoundaryIndex(contextLimit)
             LazyColumn(
                 state = state,
                 // 顶部留白放进 contentPadding，让消息可以滚动到透明标题栏下面
@@ -352,7 +349,7 @@ private fun ChatListNormal(
                 key = { index, item -> item.id },
             ) { index, node ->
                 Column {
-                    if (contextLimitStart > 0 && index == contextLimitStart) {
+                    if (contextLimitBoundary != null && index == contextLimitBoundary) {
                         ContextLimitBoundary(limit = contextLimit)
                     }
                     ListSelectableItem(
@@ -876,13 +873,22 @@ private fun ContextLimitBoundary(limit: Int) {
 @Composable
 private fun DashedLine(modifier: Modifier = Modifier) {
     val color = MaterialTheme.colorScheme.outlineVariant
+    val density = LocalDensity.current
+    val pathEffect = remember(density) {
+        PathEffect.dashPathEffect(
+            floatArrayOf(
+                with(density) { 6.dp.toPx() },
+                with(density) { 4.dp.toPx() },
+            )
+        )
+    }
     Canvas(modifier = modifier.height(1.dp)) {
         drawLine(
             color = color,
             start = Offset(0f, size.height / 2f),
             end = Offset(size.width, size.height / 2f),
             strokeWidth = 1.dp.toPx(),
-            pathEffect = PathEffect.dashPathEffect(floatArrayOf(6.dp.toPx(), 4.dp.toPx())),
+            pathEffect = pathEffect,
         )
     }
 }

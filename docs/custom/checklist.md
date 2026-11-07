@@ -343,6 +343,6 @@
 
 ### C47 上下文消息数上限的自动边界线
 
-- 落点：`ai/Message.kt` 新增 `contextLimitStart(limit)`，按与 `limitContext` 相同的取法（最后一个检查点之后、同一套滞回与 `alignContextStart` 对齐）算出第一条会发送的消息下标，`limitContext` 本身不动；`ChatList` 在 `contextMessageLimit > 0` 且起点大于 0 时，在第一条会发送的消息上方画一条只读虚线，文案 `chat_page_context_limit_boundary`（四份 locale），两端虚线、中间小字，和检查点卡片区分开；不落盘，不加设置。测试：`MessageContextLimitTest` 增加三条（起点与 `limitContext` 的尾部一致、检查点之后有截断时的起点、未截断时停在检查点之后）。
-- 理由：消息数上限只在组装请求时算，界面完全看不见；用户一直手动管理上下文，这条线能把自动被丢掉的那段标出来。它按滞回规则跳动、连续多轮不动，不破坏提示词缓存；生成中的回复节点可能让边界与该步请求差一条，可接受。
-- 合并注意：`contextLimitStart` 必须复用 `limitContext` 的取法，别另写一套条数逻辑；边界按消息下标定位，检查点卡片本身不算条数。上限为 0 或没有发生条数截断时不画。Web 端不显示这条线。
+- 落点：`ai/Message.kt` 新增 `contextLimitStart(limit)`，按与 `limitContext` 相同的取法（最后一个检查点之后、同一套滞回与 `alignContextStart` 对齐）算出第一条被保留的尾部消息下标（提供方之后还会按 `isValidToUpload` 过滤空消息），`limitContext` 本身不动；`Conversation.contextLimitBoundaryIndex(limit)` 在起点严格晚于检查点之后的窗口起点时返回下标，也就是真的发生了条数截断才返回非空；`ChatList` 用 `settings.getAssistantOf(conversation)`（与请求同一来源，助手被删也能退回当前助手）的 `contextMessageLimit` 取上限，在第一条被保留的消息上方画一条只读虚线，文案 `chat_page_context_limit_boundary`（四份 locale）说的是「请求窗口从这里开始」，因为线上方的检查点卡片（压缩摘要）仍会发送；不落盘，不加设置。测试：`MessageContextLimitTest` 五条（起点与 `limitContext` 的尾部一致、检查点之后有截断时的起点、未截断时停在检查点之后、检查点在末尾、按检查点之后算而不是按整个列表）与 `ConversationContextLimitTest` 四条（无上限或未截断时不返回下标、只有检查点边界不画线、无检查点截断时的起点、检查点之后的起点）。
+- 理由：消息数上限只在组装请求时算，界面完全看不见；用户一直手动管理上下文，这条线能把自动被丢掉的那段标出来。它按滞回规则跳动、连续多轮不动，不破坏提示词缓存；生成中的回复节点可能让边界与该步请求最多差一个步幅（约为上限的一半），可接受。
+- 合并注意：`contextLimitStart` 必须复用 `limitContext` 的取法，别另写一套条数逻辑；边界按消息下标定位，检查点卡片本身不算条数，也不能画在检查点上方（摘要会发送）。上限为 0 或没有发生条数截断时不画。重新生成时请求只取到被重新生成的那条之前，边界可能比该次请求多显示一段，和生成中的差异同类，可接受。Web 端不显示这条线。

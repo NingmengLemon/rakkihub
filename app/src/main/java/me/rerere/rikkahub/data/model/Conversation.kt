@@ -9,6 +9,7 @@ import me.rerere.ai.provider.Model
 import me.rerere.ai.ui.ModelSnapshot
 import me.rerere.ai.ui.UIMessage
 import me.rerere.ai.ui.UIMessagePart
+import me.rerere.ai.ui.contextLimitStart
 import me.rerere.ai.util.InstantSerializer
 import me.rerere.rikkahub.data.datastore.DEFAULT_ASSISTANT_ID
 import me.rerere.rikkahub.data.datastore.Settings
@@ -195,6 +196,18 @@ internal fun Conversation.contextWindowStart(): Int =
 
 /** 当前请求窗口的消息数，压缩与截断都用它算边界。 */
 internal fun Conversation.contextWindowSize(): Int = messageNodes.size - contextWindowStart()
+
+/**
+ * 上下文消息数上限真正发生条数截断时，发送窗口的起点下标；上限为 0 或尾部没有超过上限时返回 null。
+ *
+ * 起点必须严格晚于窗口起点：检查点之后的第一条可能本来就是边界，压缩摘要仍会发送，
+ * 那时候画线会把「按条数截断」误报成发生了。
+ */
+internal fun Conversation.contextLimitBoundaryIndex(limit: Int): Int? {
+    if (limit <= 0) return null
+    val start = currentMessages.contextLimitStart(limit)
+    return start.takeIf { it > contextWindowStart() }
+}
 
 /** 有工具调用在等待用户审批：这一轮还没结束，排队的消息要等审批完成后再发 */
 internal val Conversation.isAwaitingToolApproval: Boolean

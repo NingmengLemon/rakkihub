@@ -224,6 +224,26 @@ class MessageContextLimitTest {
         assertEquals(7, messages.contextLimitStart(10))
     }
 
+    /**
+     * 条数限制从检查点之后算，起点必须落在检查点之后，不能按整个列表的长度推
+     */
+    @Test
+    fun `contextLimitStart measures the limit after the checkpoint, not from the list start`() {
+        val messages = createTestMessages(20).withCheckpointsAt(3)
+
+        // 检查点之后有 16 条: limit=10 -> 保留最后 6 条；按整个列表推会得到 15
+        assertEquals(14, messages.contextLimitStart(10))
+        assertEquals(listOf(messages[3]) + messages.subList(14, 20), messages.limitContext(10))
+    }
+
+    @Test
+    fun `contextLimitStart is the list size when the last message is a checkpoint`() {
+        val messages = createTestMessages(5).withCheckpointsAt(4)
+
+        assertEquals(5, messages.contextLimitStart(10))
+        assertEquals(listOf(messages[4]), messages.limitContext(10))
+    }
+
     private fun List<UIMessage>.withCheckpointsAt(vararg indices: Int): List<UIMessage> =
         mapIndexed { index, message -> message.copy(isContextCheckpoint = index in indices) }
 

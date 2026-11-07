@@ -281,7 +281,7 @@
   <string name="chat_page_truncate_blocked_generating">Stop generating before truncating history</string>
   <string name="chat_page_truncate_conversation_changed">The conversation changed. Try again.</string>
   <string name="chat_page_checkpoint_superseded_hint">A newer checkpoint supersedes this one. It is kept for viewing and no longer marks the request boundary.</string>
-  <string name="chat_page_context_limit_boundary">Context message limit: %1$d; older messages are not sent</string>
+  <string name="chat_page_context_limit_boundary">Context message limit: %1$d; the request window starts here</string>
   <string name="chat_page_keep_recent_decrease">Decrease</string>
   <string name="chat_page_keep_recent_increase">Increase</string>
   <string name="chat_page_compressing">Compressing...</string>
