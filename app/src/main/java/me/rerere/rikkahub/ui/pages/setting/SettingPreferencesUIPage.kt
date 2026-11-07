@@ -188,6 +188,12 @@ fun SettingPreferencesUIPage(vm: SettingVM = koinViewModel()) {
                         supportingContent = { Text(stringResource(R.string.setting_display_page_show_token_usage_desc)) },
                         headlineContent = { Text(stringResource(R.string.setting_display_page_show_token_usage_title)) },
                     )
+                    switchItem(
+                        checked = displaySetting.autoDismissErrorCards,
+                        onCheckedChange = { updateDisplaySetting(displaySetting.copy(autoDismissErrorCards = it)) },
+                        supportingContent = { Text(stringResource(R.string.setting_display_page_auto_dismiss_errors_desc)) },
+                        headlineContent = { Text(stringResource(R.string.setting_display_page_auto_dismiss_errors_title)) },
+                    )
                 }
             }
 

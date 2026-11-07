@@ -222,7 +222,7 @@ fun ChatPage(id: Uuid, text: String?, files: List<Uri>, nodeId: Uuid? = null) {
                     bigScreen = true,
                     errors = errors,
                     onDismissError = { vm.dismissError(it) },
-                    onClearAllErrors = { vm.clearAllErrors() },
+                    onClearAllErrors = { vm.clearErrors() },
                 )
             }
         }
@@ -255,7 +255,7 @@ fun ChatPage(id: Uuid, text: String?, files: List<Uri>, nodeId: Uuid? = null) {
                     bigScreen = false,
                     errors = errors,
                     onDismissError = { vm.dismissError(it) },
-                    onClearAllErrors = { vm.clearAllErrors() },
+                    onClearAllErrors = { vm.clearErrors() },
                 )
             }
             BackHandler(drawerState.isOpen) {

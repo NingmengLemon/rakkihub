@@ -160,6 +160,8 @@ data class DisplaySetting(
     val showModelName: Boolean = true,
     val showDateTimeInMessage: Boolean = false,
     val showTokenUsage: Boolean = true,
+    // 错误卡片默认一直保留：网络之类的问题可能发生在用户离开时，自动消失会让人看不到原因
+    val autoDismissErrorCards: Boolean = false,
     val showThinkingContent: Boolean = true,
     val autoCloseThinking: Boolean = true,
     val updateCheckDisabledUntilEpochMillis: Long = 0L,

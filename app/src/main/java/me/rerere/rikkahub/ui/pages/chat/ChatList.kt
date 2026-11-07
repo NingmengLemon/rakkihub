@@ -443,6 +443,7 @@ private fun ChatListNormal(
                 errors = errors,
                 onDismissError = onDismissError,
                 onClearAllErrors = onClearAllErrors,
+                autoDismiss = settings.displaySetting.autoDismissErrorCards,
                 modifier = Modifier
                     .align(Alignment.BottomCenter)
                     .zIndex(5f)

@@ -10,9 +10,12 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -21,6 +24,7 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.withFrameNanos
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.ClipEntry
@@ -52,8 +56,21 @@ fun ErrorCardsDisplay(
     errors: List<ChatError>,
     onDismissError: (Uuid) -> Unit,
     onClearAllErrors: () -> Unit,
+    autoDismiss: Boolean,
     modifier: Modifier = Modifier,
 ) {
+    // 卡片不自动消失后可能攒下多条，限高滚动。最新一条变化时（来了新的一条，
+    // 或最新那条被关掉）滚到底一次；关掉中间的卡片、旋转这类高度变化不动滚动位置
+    val scrollState = rememberScrollState()
+    LaunchedEffect(errors.lastOrNull()?.id) {
+        if (errors.isEmpty()) return@LaunchedEffect
+        // 等这一帧的布局把新卡片量进去，再滚一次
+        withFrameNanos { }
+        // 首次布局前 maxValue 是 Int.MAX_VALUE，这时还没有可滚的距离
+        if (scrollState.maxValue != Int.MAX_VALUE) {
+            scrollState.scrollTo(scrollState.maxValue)
+        }
+    }
     AnimatedVisibility(
         visible = errors.isNotEmpty(),
         modifier = modifier.padding(horizontal = 16.dp, vertical = 8.dp),
@@ -63,8 +80,20 @@ fun ErrorCardsDisplay(
         Column(
             verticalArrangement = Arrangement.spacedBy(8.dp),
             horizontalAlignment = Alignment.End,
+            modifier = Modifier
+                .heightIn(max = 320.dp)
+                .verticalScroll(scrollState),
         ) {
-            // 清除全部按钮（当有多个错误时显示）
+            // 错误卡片列表
+            errors.forEach { error ->
+                ErrorCard(
+                    error = error,
+                    onDismiss = { onDismissError(error.id) },
+                    autoDismiss = autoDismiss,
+                )
+            }
+
+            // 清除全部按钮（当有多个错误时显示）；放在最后，滚到最新一条时它一定可见
             if (errors.size > 1) {
                 Surface(
                     onClick = onClearAllErrors,
@@ -90,14 +119,6 @@ fun ErrorCardsDisplay(
                     }
                 }
             }
-
-            // 错误卡片列表
-            errors.forEach { error ->
-                ErrorCard(
-                    error = error,
-                    onDismiss = { onDismissError(error.id) },
-                )
-            }
         }
     }
 }
@@ -106,6 +127,7 @@ fun ErrorCardsDisplay(
 fun ErrorCard(
     error: ChatError,
     onDismiss: () -> Unit,
+    autoDismiss: Boolean,
     modifier: Modifier = Modifier,
 ) {
     val clipboard = LocalClipboard.current
@@ -114,10 +136,12 @@ fun ErrorCard(
     val checkFastModelSettings = stringResource(R.string.chat_page_check_fast_model_settings)
     val linkColor = MaterialTheme.colorScheme.primary
 
-    // 5 秒后自动消失
-    LaunchedEffect(error.id) {
-        delay(5000)
-        onDismiss()
+    // 默认保留到手动关闭；开启自动消失时 5 秒后收起
+    LaunchedEffect(error.id, autoDismiss) {
+        if (autoDismiss) {
+            delay(5000)
+            onDismiss()
+        }
     }
 
     Surface(

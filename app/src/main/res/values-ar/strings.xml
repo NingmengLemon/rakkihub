@@ -709,6 +709,8 @@
   <string name="setting_display_page_show_thinking_content_title">إظهار محتوى التفكير</string>
   <string name="setting_display_page_show_token_usage_desc">عرض استخدام Token وعدد الرسائل</string>
   <string name="setting_display_page_show_token_usage_title">إظهار إحصاءات Token والسياق</string>
+  <string name="setting_display_page_auto_dismiss_errors_desc">عند الإيقاف تبقى بطاقات الخطأ حتى تغلقها يدويًا</string>
+  <string name="setting_display_page_auto_dismiss_errors_title">إخفاء بطاقات الخطأ تلقائيًا</string>
   <string name="setting_display_page_show_user_avatar_desc">تحديد ما إذا كان سيتم عرض صورة المستخدم الرمزية في رسائل الدردشة</string>
   <string name="setting_display_page_show_user_avatar_title">إظهار صورة المستخدم الرمزية</string>
   <string name="setting_display_page_skip_crop_image_desc">تخطي واجهة الاقتصاص بعد استيراد الصور أو التقاطها</string>

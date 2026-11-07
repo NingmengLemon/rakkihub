@@ -83,14 +83,41 @@ import kotlin.uuid.Uuid
 
 private const val TAG = "ChatService"
 
+// 同一个会话的错误卡片最多保留几条，超出的丢掉最旧的
+private const val MAX_RETAINED_ERRORS = 5
+
 data class ChatError(
     val id: Uuid = Uuid.random(),
     val title: String? = null,
     val error: Throwable,
-    val conversationId: Uuid? = null,
+    val conversationId: Uuid,
     val timestamp: Long = System.currentTimeMillis(),
     val solution: ChatErrorSolution? = null,
 )
+
+// 同一条错误：标题、会话、异常类型与消息都相同。每轮自动起标题、工具能力提醒、
+// 用户重复同一个操作都会把同一类失败再报一遍，卡片不自动消失后要合并成一条
+private fun ChatError.isSameFailureAs(other: ChatError): Boolean =
+    title == other.title &&
+        conversationId == other.conversationId &&
+        error.javaClass == other.error.javaClass &&
+        error.message == other.error.message
+
+/**
+ * 加入一条错误：同一个失败只留最新的一份，每个会话最多保留 [maxPerConversation] 条。
+ *
+ * 聊天页只显示当前会话的错误，所以上限也按会话算，别的会话的错误不会被挤掉。
+ */
+internal fun List<ChatError>.withNewError(
+    error: ChatError,
+    maxPerConversation: Int = MAX_RETAINED_ERRORS,
+): List<ChatError> {
+    val merged = filterNot { it.isSameFailureAs(error) } + error
+    val kept = merged.groupBy { it.conversationId }.values
+        .flatMap { it.takeLast(maxPerConversation) }
+        .mapTo(HashSet()) { it.id }
+    return merged.filter { it.id in kept }
+}
 
 enum class ChatErrorSolution {
     CheckFastModelSettings,
@@ -151,22 +178,27 @@ class ChatService(
 
     fun addError(
         error: Throwable,
-        conversationId: Uuid? = null,
+        conversationId: Uuid,
         title: String? = null,
         solution: ChatErrorSolution? = null,
     ) {
         if (error is CancellationException) return
-        _errors.update {
-            it + ChatError(title = title, error = error, conversationId = conversationId, solution = solution)
-        }
+        val chatError = ChatError(
+            title = title,
+            error = error,
+            conversationId = conversationId,
+            solution = solution,
+        )
+        _errors.update { current -> current.withNewError(chatError) }
     }
 
     fun dismissError(id: Uuid) {
         _errors.update { list -> list.filter { it.id != id } }
     }
 
-    fun clearAllErrors() {
-        _errors.value = emptyList()
+    // 只清当前会话的错误：别的会话可能也有没看过的卡片
+    fun clearErrors(conversationId: Uuid) {
+        _errors.update { list -> list.filterNot { it.conversationId == conversationId } }
     }
 
     fun cleanup() = runCatching { sessionManager.cleanup() }
@@ -985,6 +1017,8 @@ class ChatService(
         }
         // 会话的输入框内容也属于它。没落过库的新会话在仓库里查不到，所以删在这里
         chatDraftStore.delete(conversationId)
+        // 卡片不自动消失，被删会话留下的错误也要一起清掉
+        clearErrors(conversationId)
         sessionManager.removeIfIdle(session)
     }
 

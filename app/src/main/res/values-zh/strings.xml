@@ -629,6 +629,8 @@
   <string name="setting_display_page_show_thinking_content_title">显示思考内容</string>
   <string name="setting_display_page_show_token_usage_desc">显示token用量和消息数量</string>
   <string name="setting_display_page_show_token_usage_title">显示Token和上下文统计</string>
+  <string name="setting_display_page_auto_dismiss_errors_desc">关闭后错误卡片会一直保留，直到手动关闭</string>
+  <string name="setting_display_page_auto_dismiss_errors_title">错误卡片自动消失</string>
   <string name="setting_display_page_show_user_avatar_desc">是否在聊天消息中显示用户头像</string>
   <string name="setting_display_page_show_user_avatar_title">显示用户头像</string>
   <string name="setting_display_page_skip_crop_image_desc">导入图片或拍照后跳过裁剪界面</string>

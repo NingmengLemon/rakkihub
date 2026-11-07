@@ -20,6 +20,7 @@ import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.debounce
 import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
@@ -219,12 +220,14 @@ class ChatVM(
         settings.getChatModelOf(conversation)
     }.stateIn(viewModelScope, SharingStarted.Lazily, settings.value.getChatModelOf(conversation.value))
 
-    // 错误状态
+    // 错误状态：只留当前会话的错误，别的会话的错误不在这页显示
     val errors: StateFlow<List<ChatError>> = chatService.errors
+        .map { errors -> errors.filter { it.conversationId == _conversationId } }
+        .stateIn(viewModelScope, SharingStarted.Eagerly, emptyList())
 
     fun dismissError(id: Uuid) = chatService.dismissError(id)
 
-    fun clearAllErrors() = chatService.clearAllErrors()
+    fun clearErrors() = chatService.clearErrors(_conversationId)
 
     val messageQueue = chatService.getMessageQueueFlow(_conversationId)
 
@@ -296,7 +299,11 @@ class ChatVM(
     fun handleCompressContext(additionalPrompt: String, keepRecentMessages: Int): Job {
         return viewModelScope.launch {
             chatService.compressConversation(_conversationId, additionalPrompt, keepRecentMessages).onFailure {
-                chatService.addError(it, title = context.getString(R.string.error_title_compress_conversation))
+                chatService.addError(
+                    error = it,
+                    conversationId = _conversationId,
+                    title = context.getString(R.string.error_title_compress_conversation),
+                )
             }
         }
     }

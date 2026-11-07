@@ -631,6 +631,8 @@
   <string name="setting_display_page_show_thinking_content_title">Denkinhalt anzeigen</string>
   <string name="setting_display_page_show_token_usage_desc">Token-Nutzung und Nachrichtenanzahl anzeigen</string>
   <string name="setting_display_page_show_token_usage_title">Token- &amp; Kontext-Statistiken anzeigen</string>
+  <string name="setting_display_page_auto_dismiss_errors_desc">Ausgeschaltet bleiben Fehlerkarten sichtbar, bis du sie schließt</string>
+  <string name="setting_display_page_auto_dismiss_errors_title">Fehler automatisch ausblenden</string>
   <string name="setting_display_page_enable_message_generation_haptic_effect_desc">Haptisches Feedback aktivieren, während Nachrichten generiert werden</string>
   <string name="setting_display_page_enable_message_generation_haptic_effect_title">Haptisches Feedback bei der Nachrichtengenerierung</string>
   <string name="setting_display_page_font_size_preview">Um vier Uhr morgens sah ich, dass die Begonienblüten noch wach waren. Oft geht es mir so – allein in der stillen Nacht liege ich wach und denke: Wenn jetzt jemand an mich denkt, wäre das wunderbar.</string>
