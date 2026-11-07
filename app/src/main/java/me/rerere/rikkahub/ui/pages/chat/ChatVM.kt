@@ -308,6 +308,18 @@ class ChatVM(
         }
     }
 
+    fun handleTruncateHistory(keep: Int): Job {
+        return viewModelScope.launch {
+            chatService.truncateHistory(_conversationId, keep).onFailure {
+                chatService.addError(
+                    error = it,
+                    conversationId = _conversationId,
+                    title = context.getString(R.string.error_title_operation),
+                )
+            }
+        }
+    }
+
     suspend fun forkMessage(message: UIMessage): Conversation {
         return chatService.forkConversationAtMessage(_conversationId, message.id)
     }

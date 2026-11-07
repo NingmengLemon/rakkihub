@@ -51,6 +51,7 @@ import me.rerere.rikkahub.data.model.Assistant
 import me.rerere.rikkahub.data.model.Conversation
 import me.rerere.rikkahub.data.model.bindConfig
 import me.rerere.rikkahub.data.model.cancelInterruptedTools
+import me.rerere.rikkahub.data.model.contextWindowStart
 import me.rerere.rikkahub.data.model.deleteMessage
 import me.rerere.rikkahub.data.model.editMessage
 import me.rerere.rikkahub.data.model.fillModelSnapshots
@@ -59,6 +60,7 @@ import me.rerere.rikkahub.data.model.getAssistantOf
 import me.rerere.rikkahub.data.model.getChatModelOf
 import me.rerere.rikkahub.data.model.getStoredAssistantOf
 import me.rerere.rikkahub.data.model.insertContextCheckpoint
+import me.rerere.rikkahub.data.model.insertHistoryTruncation
 import me.rerere.rikkahub.data.model.isAwaitingToolApproval
 import me.rerere.rikkahub.data.model.localFileUrls
 import me.rerere.rikkahub.data.model.replaceUserRegexes
@@ -789,6 +791,36 @@ class ChatService(
                     afterNodeId = nodes[endIndex - 1].id,
                     summary = summary,
                 ) ?: throw IllegalStateException(context.getString(R.string.chat_page_compress_conversation_changed))
+                updated.copy(chatSuggestions = emptyList())
+            }
+            session.flush()
+        }
+    }
+
+    /**
+     * 把最近 [keep] 条消息之前的历史从后续请求里去掉，不调用模型。
+     *
+     * 边界插在倒数第 [keep] 条消息之前，是一条空的检查点消息，不会发给模型。
+     * 窗口按最后一个检查点之后的消息算，与 `limitContext` 的取法一致。
+     */
+    suspend fun truncateHistory(conversationId: Uuid, keep: Int): Result<Unit> = runCatching {
+        withLoadedSession<Unit>(conversationId) { session ->
+            check(!session.isGenerating) {
+                context.getString(R.string.chat_page_truncate_blocked_generating)
+            }
+            val nodes = session.state.value.messageNodes
+            val windowSize = nodes.size - session.state.value.contextWindowStart()
+            if (keep < 1) throw IllegalStateException(context.getString(R.string.chat_page_truncate_keep_at_least_one))
+            if (keep >= windowSize) {
+                throw IllegalStateException(context.getString(R.string.chat_page_truncate_nothing_to_cut))
+            }
+            val anchor = nodes[nodes.size - keep - 1]
+            session.update { latest ->
+                check(!session.isGenerating) {
+                    context.getString(R.string.chat_page_truncate_blocked_generating)
+                }
+                val updated = latest.insertHistoryTruncation(anchor.id)
+                    ?: throw IllegalStateException(context.getString(R.string.chat_page_compress_conversation_changed))
                 updated.copy(chatSuggestions = emptyList())
             }
             session.flush()

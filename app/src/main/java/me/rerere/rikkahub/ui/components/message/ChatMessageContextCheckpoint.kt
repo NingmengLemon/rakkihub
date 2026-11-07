@@ -39,6 +39,8 @@ import me.rerere.rikkahub.ui.components.richtext.MarkdownBlock
 /**
  * 压缩检查点：分隔线上方的消息仍可查看，但不再发送给模型，由这里的摘要代替。
  * 默认折叠，避免长摘要打断历史消息的阅读。
+ *
+ * 内容为空的检查点是历史截断标记：边界之上直接丢弃，没有摘要，也不显示编辑。
  */
 @Composable
 fun ChatMessageContextCheckpoint(
@@ -48,6 +50,7 @@ fun ChatMessageContextCheckpoint(
     modifier: Modifier = Modifier,
 ) {
     var expanded by rememberSaveable { mutableStateOf(false) }
+    val isTruncation = message.toText().isBlank()
 
     Column(
         modifier = modifier.fillMaxWidth(),
@@ -70,7 +73,13 @@ fun ChatMessageContextCheckpoint(
                 tint = MaterialTheme.colorScheme.onSurfaceVariant,
             )
             Text(
-                text = stringResource(R.string.chat_page_compress_checkpoint_title),
+                text = stringResource(
+                    if (isTruncation) {
+                        R.string.chat_page_truncate_checkpoint_title
+                    } else {
+                        R.string.chat_page_compress_checkpoint_title
+                    }
+                ),
                 style = MaterialTheme.typography.labelMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
@@ -98,17 +107,27 @@ fun ChatMessageContextCheckpoint(
                     verticalArrangement = Arrangement.spacedBy(8.dp),
                 ) {
                     Text(
-                        text = stringResource(R.string.chat_page_compress_checkpoint_hint),
+                        text = stringResource(
+                            if (isTruncation) {
+                                R.string.chat_page_truncate_checkpoint_hint
+                            } else {
+                                R.string.chat_page_compress_checkpoint_hint
+                            }
+                        ),
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
-                    MarkdownBlock(content = message.toText())
+                    if (!isTruncation) {
+                        MarkdownBlock(content = message.toText())
+                    }
                     Row(
                         modifier = Modifier.fillMaxWidth(),
                         horizontalArrangement = Arrangement.End,
                     ) {
-                        TextButton(onClick = onEdit) {
-                            Text(stringResource(R.string.edit))
+                        if (!isTruncation) {
+                            TextButton(onClick = onEdit) {
+                                Text(stringResource(R.string.edit))
+                            }
                         }
                         TextButton(onClick = onDelete) {
                             Text(

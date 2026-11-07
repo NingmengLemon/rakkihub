@@ -109,12 +109,13 @@ internal fun FilesPicker(
     state: ChatInputState,
     mcpManager: McpManager,
     onCompressContext: (additionalPrompt: String, keepRecentMessages: Int) -> Job,
+    onTruncateHistory: (keep: Int) -> Unit,
     onUpdateAssistant: (Assistant) -> Unit,
     onUpdateWorkspaceCwd: (String?) -> Unit,
     onUpdateSearchMode: (SearchMode) -> Unit,
     onUpdateSearchService: (Int) -> Unit,
-    showCompressDialog: Boolean,
-    onShowCompressDialogChange: (Boolean) -> Unit,
+    showContextDialog: Boolean,
+    onShowContextDialogChange: (Boolean) -> Unit,
     onDismiss: () -> Unit,
     onTakePic: () -> Unit,
     onPickImage: () -> Unit,
@@ -214,9 +215,8 @@ internal fun FilesPicker(
                 // 分段列表：各项按显示条件依次占位，首尾项才有大圆角
                 val showWorkspace = workspaces.isNotEmpty()
                 val showMcp = settings.mcpServers.isNotEmpty()
-                // 限制了上下文消息数就是滚动上下文，旧消息会自动移出，不需要压缩
-                val showCompress = assistant.contextMessageLimit <= 0
-                val itemCount = 2 + listOf(showWorkspace, showWorkspace && showCwd, showMcp, showCompress).count { it }
+                // 搜索、扩展、上下文管理三项始终在
+                val itemCount = 3 + listOf(showWorkspace, showWorkspace && showCwd, showMcp).count { it }
                 var itemIndex = 0
                 Column(
                     verticalArrangement = Arrangement.spacedBy(ListItemDefaults.SegmentedGap),
@@ -308,50 +308,48 @@ internal fun FilesPicker(
                         Text(stringResource(R.string.assistant_page_tab_extensions))
                     }
 
-                    // Compress History Button
-                    if (showCompress) {
-                        SegmentedListItem(
-                            onClick = { onShowCompressDialogChange(true) },
-                            shapes = ListItemDefaults.segmentedShapes(index = itemIndex++, count = itemCount),
-                            leadingContent = {
-                                Icon(
-                                    imageVector = HugeIcons.Package01,
-                                    contentDescription = null,
-                                )
-                            },
-                            trailingContent = {
-                                val contextTokens = remember(conversation.messageNodes) {
-                                    conversation.lastContextTokens()
-                                }
-                                val contextLength = chatModel?.contextLength?.takeIf { it > 0 }
-                                Row(
-                                    verticalAlignment = Alignment.CenterVertically,
-                                    horizontalArrangement = Arrangement.spacedBy(10.dp),
-                                ) {
-                                    Column(horizontalAlignment = Alignment.End) {
-                                        if (conversation.messageNodes.isNotEmpty()) {
-                                            Text(
-                                                text = stringResource(R.string.chat_page_message_count, conversation.messageNodes.size),
-                                                style = MaterialTheme.typography.labelMedium,
-                                                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                            )
-                                        }
-                                        if (contextTokens != null && contextLength != null) {
-                                            Text(
-                                                text = "${contextTokens.formatNumber()} / ${contextLength.formatNumber()}",
-                                                style = MaterialTheme.typography.labelSmall,
-                                                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                            )
-                                        }
+                    // 上下文管理（压缩 / 截断）
+                    SegmentedListItem(
+                        onClick = { onShowContextDialogChange(true) },
+                        shapes = ListItemDefaults.segmentedShapes(index = itemIndex++, count = itemCount),
+                        leadingContent = {
+                            Icon(
+                                imageVector = HugeIcons.Package01,
+                                contentDescription = null,
+                            )
+                        },
+                        trailingContent = {
+                            val contextTokens = remember(conversation.messageNodes) {
+                                conversation.lastContextTokens()
+                            }
+                            val contextLength = chatModel?.contextLength?.takeIf { it > 0 }
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(10.dp),
+                            ) {
+                                Column(horizontalAlignment = Alignment.End) {
+                                    if (conversation.messageNodes.isNotEmpty()) {
+                                        Text(
+                                            text = stringResource(R.string.chat_page_message_count, conversation.messageNodes.size),
+                                            style = MaterialTheme.typography.labelMedium,
+                                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                        )
                                     }
                                     if (contextTokens != null && contextLength != null) {
-                                        ContextUsageRing(fraction = contextTokens.toFloat() / contextLength)
+                                        Text(
+                                            text = "${contextTokens.formatNumber()} / ${contextLength.formatNumber()}",
+                                            style = MaterialTheme.typography.labelSmall,
+                                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                        )
                                     }
                                 }
-                            },
-                        ) {
-                            Text(stringResource(R.string.chat_page_compress_context))
-                        }
+                                if (contextTokens != null && contextLength != null) {
+                                    ContextUsageRing(fraction = contextTokens.toFloat() / contextLength)
+                                }
+                            }
+                        },
+                    ) {
+                        Text(stringResource(R.string.chat_page_manage_context))
                     }
                 }
             }
@@ -370,12 +368,17 @@ internal fun FilesPicker(
         )
     }
 
-    // Compress Context Dialog
-    if (showCompressDialog) {
-        CompressContextDialog(onDismiss = {
-            onShowCompressDialogChange(false)
-            onDismiss()
-        }, onConfirm = onCompressContext)
+    // 上下文管理对话框（压缩 / 截断）
+    if (showContextDialog) {
+        ContextManagementDialog(
+            conversation = conversation,
+            onDismiss = {
+                onShowContextDialogChange(false)
+                onDismiss()
+            },
+            onCompress = onCompressContext,
+            onTruncate = onTruncateHistory,
+        )
     }
 }
 

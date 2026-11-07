@@ -175,6 +175,27 @@ internal fun Conversation.insertContextCheckpoint(afterNodeId: Uuid, summary: St
     )
 }
 
+/**
+ * 在 [afterNodeId] 节点之后插入历史截断标记；该节点已不存在时返回 null。
+ *
+ * 标记是一条空的检查点消息：`limitContext` 从它开始取，空文本消息又会被
+ * [UIMessage.isValidToUpload] 过滤掉，所以它只当边界，不会发给模型，也不占 token。
+ * 空文本同时是它和压缩摘要的区别：压缩摘要不允许为空。
+ */
+internal fun Conversation.insertHistoryTruncation(afterNodeId: Uuid): Conversation? {
+    val index = messageNodes.indexOfFirst { it.id == afterNodeId }
+    if (index == -1) return null
+    val marker = UIMessage.user("").copy(isContextCheckpoint = true).toMessageNode()
+    return copy(
+        messageNodes =
+        messageNodes.subList(0, index + 1) + marker + messageNodes.subList(index + 1, messageNodes.size),
+    )
+}
+
+/** 最后一个检查点之后的第一条消息下标，也就是当前请求窗口的起点。 */
+internal fun Conversation.contextWindowStart(): Int =
+    messageNodes.indexOfLast { it.currentMessage.isContextCheckpoint } + 1
+
 /** 有工具调用在等待用户审批：这一轮还没结束，排队的消息要等审批完成后再发 */
 internal val Conversation.isAwaitingToolApproval: Boolean
     get() = currentMessages.any { message -> message.getTools().any { it.isPending } }

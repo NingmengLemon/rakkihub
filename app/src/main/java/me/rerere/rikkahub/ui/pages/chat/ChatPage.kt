@@ -482,10 +482,10 @@ private fun ChatFilesPickerSheet(
     attachmentPickerActions: ChatAttachmentPickerActions,
     onDismiss: () -> Unit,
 ) {
-    var showCompressDialog by remember { mutableStateOf(false) }
+    var showContextDialog by remember { mutableStateOf(false) }
 
     fun dismissAll() {
-        showCompressDialog = false
+        showContextDialog = false
         onDismiss()
     }
 
@@ -504,6 +504,7 @@ private fun ChatFilesPickerSheet(
             chatModel = chatModel,
             mcpManager = vm.mcpManager,
             onCompressContext = vm::handleCompressContext,
+            onTruncateHistory = vm::handleTruncateHistory,
             onUpdateAssistant = vm::updateAssistant,
             onUpdateWorkspaceCwd = vm::updateWorkspaceCwd,
             onUpdateSearchMode = { mode ->
@@ -515,8 +516,8 @@ private fun ChatFilesPickerSheet(
             onUpdateSearchService = { index ->
                 vm.updateSettings { it.copy(searchServiceSelected = index) }
             },
-            showCompressDialog = showCompressDialog,
-            onShowCompressDialogChange = { showCompressDialog = it },
+            showContextDialog = showContextDialog,
+            onShowContextDialogChange = { showContextDialog = it },
             onDismiss = { dismissAll() },
             onTakePic = attachmentPickerActions.onTakePicture,
             onPickImage = attachmentPickerActions.onPickImage,

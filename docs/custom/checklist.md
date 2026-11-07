@@ -53,6 +53,7 @@
 | C43 | 错误卡片默认保留到手动关闭 | 改造 |
 | C44 | 上下文压缩的提示词可编辑 | 新增 |
 | C45 | 文案范围收成四份 | 改造 |
+| C46 | 管理上下文：压缩与截断共用一个入口 | 改造 |
 
 ## 明细
 
@@ -332,3 +333,9 @@
 - 落点：删除 `app`、`search`、`oauth`、`ui` 四个模块的 `values-ar`、`values-de`、`values-ko-rKR`、`values-ru`（16 个目录）；`app/build.gradle.kts` 的 `localeFilters` 改成 `en`、`ja`、`zh`、`zh-rTW`；`tools/i18n/config.yml` 的 `languages` 只留 `values`、`values-zh`、`values-zh-rTW`、`values-ja`，`tools/i18n/README.md` 的示例同步；补上 `values-ja` 与 `values-zh-rTW` 缺的三条压缩上下文文案（`chat_page_compress_keep_recent`、它的描述、`chat_page_compress_not_enough_messages`）；把中文里译成「令牌 / 權杖 / 詞元」的地方统一回 `Token`（`chat_page_compress_context_desc`、`search_detail_max_tokens`、`search_detail_max_tokens_per_page`、`stats_page_cached_tokens`、`stats_page_input_tokens`、`stats_page_output_tokens`）；`docs/custom/locale.md` 按四份重写。
 - 理由：`tools/i18n` 用 Bun，本机跑不起来（没有 bun 与 `.env`），新文案只能手翻，8 份时每条要翻 7 次，四份只要 3 次；德、阿、韩、俄不在目标范围，繁中保留阅读习惯所以没删 `values-zh-rTW`。顺带清掉了上游自己没翻的三条压缩文案的缺条目债。
 - 合并注意：没有目录的语言回退到英文，繁中命中 `values-zh-rTW`。`localeFilters` 与资源目录要一起动：它是允许列表，不在列表里的语言资源不会打进 APK（包括 app 自己的），但仓库里留着的目录不会被它删掉。上游给被删语言补的翻译，移植时不用再抄；以后要恢复某个语言，从上游对应版本拷 `strings.xml` 再补本分支的 key。清单里历史条目写的「8 份 / 7 个 locale」指当时的份数，不改写。把 `tools/i18n` 重写成 Python 记在 [`roadmap.md`](roadmap.md) 的待办方向。
+
+### C46 管理上下文：压缩与截断共用一个入口
+
+- 落点：`FilesPicker` 的「压缩历史」入口改成「管理上下文」并永远显示（去掉 `contextMessageLimit <= 0` 的限制）；`CompressContextDialog` 换成 `ContextManagementDialog`，两个 tab「压缩」「截断」，两处「保留最近 N 条」都用数字输入框 + ±（压缩原来只有 ±）；新增 `ChatService.truncateHistory` 与 `ChatVM.handleTruncateHistory`，边界由 `Conversation.insertHistoryTruncation` 插入一条空的检查点消息（`isContextCheckpoint = true`，空文本会被 `isValidToUpload` 过滤，不发给模型）；窗口起点抽成 `Conversation.contextWindowStart()`，与 `limitContext` 的口径一致；`ChatMessageContextCheckpoint` 按空文本区分截断标记，只留删除（撤销）；截断面板实时显示窗口大小、保留条数与将丢弃的条数，第一条保留消息是 assistant 时给 `TriangleAlert` 警告（只提示，不阻止确认）；四份 locale 新增 17 条文案，删掉不再使用的 `chat_page_compress_context` 与 `chat_page_compress_context_title`。测试：`ConversationHistoryTruncationTest`（空标记的插入位置、不发给模型、`limitContext` 起点、窗口起点；锚点不存在时不插入；空检查点与摘要可区分）。
+- 理由：用户已经用正常对话让模型写好交接摘要时，再调一次模型压缩是多余的；截断零成本、零延迟，也允许用户自己挑边界。两个动作共用「保留最近 N 条」的概念，放在同一个入口更顺。空标记复用了检查点机制，没有新增序列化字段，官方兼容导出的消息 JSON 不变。
+- 合并注意：空文本是截断标记的唯一判据（压缩摘要不允许为空，`compressionSummaryOrNull` 会拒绝空串）；以后如果允许把检查点编辑成空白，语义会退化成截断，与它的效果一致。`limitContext` 只认最后一个检查点，连续截断两次时旧标记留在历史里但不再生效。`contextWindowStart` 同时给服务端与对话框用，别在两处各算一遍。Web 端会把空标记渲染成一张空的检查点卡片，要处理时再补 WebDto 字段与前端。
