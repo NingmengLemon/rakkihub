@@ -182,15 +182,12 @@ internal fun Conversation.insertContextCheckpoint(afterNodeId: Uuid, summary: St
  * [UIMessage.isValidToUpload] 过滤掉，所以它只当边界，不会发给模型，也不占 token。
  * 空文本同时是它和压缩摘要的区别：压缩摘要不允许为空。
  */
-internal fun Conversation.insertHistoryTruncation(afterNodeId: Uuid): Conversation? {
-    val index = messageNodes.indexOfFirst { it.id == afterNodeId }
-    if (index == -1) return null
-    val marker = UIMessage.user("").copy(isContextCheckpoint = true).toMessageNode()
-    return copy(
-        messageNodes =
-        messageNodes.subList(0, index + 1) + marker + messageNodes.subList(index + 1, messageNodes.size),
-    )
-}
+internal fun Conversation.insertHistoryTruncation(afterNodeId: Uuid): Conversation? =
+    insertContextCheckpoint(afterNodeId = afterNodeId, summary = "")
+
+/** 历史截断标记：内容为空的检查点消息。 */
+internal val UIMessage.isHistoryTruncationMarker: Boolean
+    get() = isContextCheckpoint && toText().isBlank()
 
 /** 最后一个检查点之后的第一条消息下标，也就是当前请求窗口的起点。 */
 internal fun Conversation.contextWindowStart(): Int =

@@ -75,6 +75,7 @@ import me.rerere.rikkahub.data.datastore.findProvider
 import me.rerere.rikkahub.data.db.entity.WorkspaceEntity
 import me.rerere.rikkahub.data.model.Assistant
 import me.rerere.rikkahub.data.model.Conversation
+import me.rerere.rikkahub.data.model.isHistoryTruncationMarker
 import me.rerere.rikkahub.data.model.lastContextTokens
 import me.rerere.rikkahub.data.repository.WorkspaceRepository
 import me.rerere.rikkahub.ui.components.ui.ExtensionSelector
@@ -330,7 +331,10 @@ internal fun FilesPicker(
                                 Column(horizontalAlignment = Alignment.End) {
                                     if (conversation.messageNodes.isNotEmpty()) {
                                         Text(
-                                            text = stringResource(R.string.chat_page_message_count, conversation.messageNodes.size),
+                                            text = stringResource(
+                                                R.string.chat_page_message_count,
+                                                conversation.messageNodes.count { !it.currentMessage.isHistoryTruncationMarker },
+                                            ),
                                             style = MaterialTheme.typography.labelMedium,
                                             color = MaterialTheme.colorScheme.onSurfaceVariant,
                                         )

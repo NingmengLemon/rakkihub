@@ -68,7 +68,7 @@ fun ContextManagementDialog(
     var currentJob by remember { mutableStateOf<Job?>(null) }
     val isLoading = currentJob?.isActive == true
 
-    // Monitor job completion
+    // 压缩结束后清掉任务：成功时关闭对话框，失败由聊天页的错误卡片提示
     LaunchedEffect(currentJob) {
         currentJob?.join()
         if (currentJob?.isCompleted == true && currentJob?.isCancelled == false) {
@@ -82,8 +82,8 @@ fun ContextManagementDialog(
     val truncateKeep = truncateInput.toIntOrNull()
     val truncateValid = truncateKeep != null && truncateKeep in 1 until windowSize
     val firstKeptRole = truncateKeep
-        ?.takeIf { it in 1..windowSize }
-        ?.let { nodes[nodes.size - it].role }
+        ?.takeIf { truncateValid }
+        ?.let { nodes[nodes.size - it].currentMessage.role }
     val assistantStart = firstKeptRole == MessageRole.ASSISTANT
 
     AlertDialog(
@@ -146,10 +146,12 @@ fun ContextManagementDialog(
                             assistantStart = assistantStart,
                             onInputChange = { truncateInput = it },
                             onMinus = {
-                                truncateInput = ((truncateKeep ?: 1) - 1).coerceAtLeast(1).toString()
+                                truncateKeep?.let {
+                                    truncateInput = (it - 1).coerceAtLeast(1).toString()
+                                }
                             },
                             onPlus = {
-                                truncateInput = ((truncateKeep ?: 1) + 1).toString()
+                                truncateInput = ((truncateKeep ?: 0) + 1).toString()
                             },
                             onShowAssistantWarning = { showAssistantWarning = true },
                         )

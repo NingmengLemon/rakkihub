@@ -16,7 +16,6 @@ import kotlin.time.toJavaInstant
 
 class TemplateTransformer(
     private val engine: PebbleEngine,
-    private val settingsStore: SettingsStore
 ) : InputMessageTransformer {
     override suspend fun transform(
         ctx: TransformerContext,
@@ -25,7 +24,7 @@ class TemplateTransformer(
         val template = engine.getTemplate(ctx.assistant.id.toString())
         val timeZone = TimeZone.currentSystemDefault()
         return messages.map { message ->
-            if (message.isSynthetic) return@map message
+            if (message.skipsInputTemplate()) return@map message
 
             // 使用消息本身的发送时间而不是当前时间, 保证多次请求时渲染结果稳定, 不破坏 prompt 缓存
             val createdAt = message.createdAt.toInstant(timeZone).toJavaInstant()
@@ -35,7 +34,8 @@ class TemplateTransformer(
                         is UIMessagePart.Text -> {
                             val result = StringWriter()
                             template.evaluate(
-                                result, mapOf(
+                                result,
+                                mapOf(
                                     "message" to part.text,
                                     "role" to message.role.name.lowercase(),
                                     "time" to createdAt.toLocalTime(),
@@ -54,6 +54,15 @@ class TemplateTransformer(
         }
     }
 }
+
+/**
+ * 合成消息和空检查点不参与模板改写。
+ *
+ * 空检查点是历史截断的边界，模板里的角色标签之类的字面文本会把它变成非空消息，
+ * 从而绕过 `isValidToUpload` 的过滤被发出去。
+ */
+internal fun UIMessage.skipsInputTemplate(): Boolean =
+    isSynthetic || (isContextCheckpoint && toText().isBlank())
 
 class AssistantTemplateLoader(private val settingsStore: SettingsStore) : Loader<String> {
     override fun getReader(cacheKey: String?): Reader? {

@@ -277,8 +277,9 @@
   <string name="chat_page_truncate_assistant_title">开头是助手消息</string>
   <string name="chat_page_truncate_assistant_desc">部分协议可能不支持以 assistant 消息开头的请求；可以多保留一条，把用户那条消息也留下。</string>
   <string name="chat_page_truncate_checkpoint_title">历史已截断</string>
-  <string name="chat_page_truncate_checkpoint_hint">此线以上的消息不再发送给模型；删除这条标记可以恢复。</string>
+  <string name="chat_page_truncate_checkpoint_hint">此线以上的消息不再发送给模型；删除这条标记会回到之前的边界。</string>
   <string name="chat_page_truncate_blocked_generating">请先停止生成，再截断历史</string>
+  <string name="chat_page_truncate_conversation_changed">对话已变更，请再试一次。</string>
   <string name="chat_page_keep_recent_decrease">减少</string>
   <string name="chat_page_keep_recent_increase">增加</string>
   <string name="chat_page_compressing">正在压缩...</string>

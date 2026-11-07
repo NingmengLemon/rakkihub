@@ -277,8 +277,9 @@
   <string name="chat_page_truncate_assistant_title">Starts with an assistant message</string>
   <string name="chat_page_truncate_assistant_desc">Some protocols may not accept a request that starts with an assistant message. Keep one more message so the user turn is included.</string>
   <string name="chat_page_truncate_checkpoint_title">History truncated</string>
-  <string name="chat_page_truncate_checkpoint_hint">Messages above this line are no longer sent to the model. Delete this marker to restore them.</string>
+  <string name="chat_page_truncate_checkpoint_hint">Messages above this line are no longer sent to the model. Delete this marker to restore the previous boundary.</string>
   <string name="chat_page_truncate_blocked_generating">Stop generating before truncating history</string>
+  <string name="chat_page_truncate_conversation_changed">The conversation changed. Try again.</string>
   <string name="chat_page_keep_recent_decrease">Decrease</string>
   <string name="chat_page_keep_recent_increase">Increase</string>
   <string name="chat_page_compressing">Compressing...</string>

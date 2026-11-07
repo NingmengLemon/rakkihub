@@ -15,6 +15,7 @@ import me.rerere.ai.ui.UIMessagePart
 import me.rerere.rikkahub.data.db.fts.MessageSearchResult
 import me.rerere.rikkahub.data.db.fts.MessageSearchSort
 import me.rerere.rikkahub.data.model.Conversation
+import me.rerere.rikkahub.data.model.isHistoryTruncationMarker
 import me.rerere.rikkahub.data.repository.ConversationRepository
 import me.rerere.rikkahub.utils.JsonInstantPretty
 import me.rerere.rikkahub.utils.toLocalDate
@@ -185,6 +186,8 @@ fun createMemoryConversationTools(
     ),
 )
 
-/** 当前分支上用户和助手的消息，位置编号以这个列表为准 */
+/** 当前分支上用户和助手的消息，位置编号以这个列表为准；截断标记不是对话内容，不列出来 */
 internal fun Conversation.dialogueMessages(): List<UIMessage> =
-    currentMessages.filter { it.role == MessageRole.USER || it.role == MessageRole.ASSISTANT }
+    currentMessages.filter {
+        (it.role == MessageRole.USER || it.role == MessageRole.ASSISTANT) && !it.isHistoryTruncationMarker
+    }

@@ -749,11 +749,11 @@ class ChatService(
 
             val conversation = session.state.value
             val nodes = conversation.messageNodes
-            val checkpointIndex = nodes.indexOfLast { it.currentMessage.isContextCheckpoint }
-            // 压缩范围是 (checkpointIndex, endIndex)，之后的节点原样保留
+            val windowStart = conversation.contextWindowStart()
+            // 压缩范围是 (windowStart, endIndex)，之后的节点原样保留
             val endIndex = nodes.size - keepRecentMessages.coerceAtLeast(0)
             // 上一个检查点之后没有可压缩的消息
-            if (endIndex <= checkpointIndex + 1) {
+            if (endIndex <= windowStart) {
                 throw IllegalStateException(
                     context.getString(
                         if (keepRecentMessages > 0) {
@@ -766,7 +766,7 @@ class ChatService(
             }
             // 未完成的工具调用没有结果，请求会被服务端拒绝；压到检查点之前也再不会执行。
             // 保留区里的不发给压缩请求，压缩后照常留在检查点之后，不用检查
-            check(nodes.subList(checkpointIndex + 1, endIndex).none { node ->
+            check(nodes.subList(windowStart, endIndex).none { node ->
                 node.currentMessage.getTools().any { it.isPending || it.canResumeExecution }
             }) { context.getString(R.string.chat_page_compress_handle_pending_tools) }
 
@@ -808,11 +808,17 @@ class ChatService(
             check(!session.isGenerating) {
                 context.getString(R.string.chat_page_truncate_blocked_generating)
             }
-            val nodes = session.state.value.messageNodes
-            val windowSize = nodes.size - session.state.value.contextWindowStart()
+            val conversation = session.state.value
+            val nodes = conversation.messageNodes
+            val windowSize = nodes.size - conversation.contextWindowStart()
             if (keep < 1) throw IllegalStateException(context.getString(R.string.chat_page_truncate_keep_at_least_one))
-            if (keep >= windowSize) {
+            if (windowSize < 2) {
                 throw IllegalStateException(context.getString(R.string.chat_page_truncate_nothing_to_cut))
+            }
+            if (keep >= windowSize) {
+                throw IllegalStateException(
+                    context.getString(R.string.chat_page_truncate_window_too_many, windowSize)
+                )
             }
             val anchor = nodes[nodes.size - keep - 1]
             session.update { latest ->
@@ -820,7 +826,7 @@ class ChatService(
                     context.getString(R.string.chat_page_truncate_blocked_generating)
                 }
                 val updated = latest.insertHistoryTruncation(anchor.id)
-                    ?: throw IllegalStateException(context.getString(R.string.chat_page_compress_conversation_changed))
+                    ?: throw IllegalStateException(context.getString(R.string.chat_page_truncate_conversation_changed))
                 updated.copy(chatSuggestions = emptyList())
             }
             session.flush()

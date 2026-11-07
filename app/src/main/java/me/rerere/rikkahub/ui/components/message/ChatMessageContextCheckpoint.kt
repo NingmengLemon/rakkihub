@@ -34,6 +34,7 @@ import me.rerere.hugeicons.stroke.ArrowDown01
 import me.rerere.hugeicons.stroke.ArrowUp01
 import me.rerere.hugeicons.stroke.Package01
 import me.rerere.rikkahub.R
+import me.rerere.rikkahub.data.model.isHistoryTruncationMarker
 import me.rerere.rikkahub.ui.components.richtext.MarkdownBlock
 
 /**
@@ -50,7 +51,7 @@ fun ChatMessageContextCheckpoint(
     modifier: Modifier = Modifier,
 ) {
     var expanded by rememberSaveable { mutableStateOf(false) }
-    val isTruncation = message.toText().isBlank()
+    val isTruncation = message.isHistoryTruncationMarker
 
     Column(
         modifier = modifier.fillMaxWidth(),

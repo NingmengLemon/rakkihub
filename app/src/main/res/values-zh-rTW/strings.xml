@@ -275,8 +275,9 @@
   <string name="chat_page_truncate_assistant_title">開頭是助理訊息</string>
   <string name="chat_page_truncate_assistant_desc">部分協定可能不支援以 assistant 訊息開頭的請求；可以多保留一則，把使用者那則訊息也留下。</string>
   <string name="chat_page_truncate_checkpoint_title">歷史已截斷</string>
-  <string name="chat_page_truncate_checkpoint_hint">此線以上的訊息不再傳送給模型；刪除這條標記可以恢復。</string>
+  <string name="chat_page_truncate_checkpoint_hint">此線以上的訊息不再傳送給模型；刪除這條標記會回到之前的邊界。</string>
   <string name="chat_page_truncate_blocked_generating">請先停止生成，再截斷歷史</string>
+  <string name="chat_page_truncate_conversation_changed">對話已變更，請再試一次。</string>
   <string name="chat_page_keep_recent_decrease">減少</string>
   <string name="chat_page_keep_recent_increase">增加</string>
   <string name="chat_page_compressing">正在壓縮...</string>
