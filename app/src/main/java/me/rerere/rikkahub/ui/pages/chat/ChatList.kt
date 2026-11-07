@@ -318,6 +318,10 @@ private fun ChatListNormal(
         }
 
         ChatFontProvider(displaySetting = settings.displaySetting) {
+            // 只有最后一个检查点参与请求边界，旧的检查点卡片只用于查看
+            val latestCheckpointId = conversation.messageNodes
+                .lastOrNull { it.currentMessage.isContextCheckpoint }
+                ?.id
             LazyColumn(
                 state = state,
                 // 顶部留白放进 contentPadding，让消息可以滚动到透明标题栏下面
@@ -385,6 +389,7 @@ private fun ChatListNormal(
                             onToolApproval = onToolApproval,
                             onToolAnswer = onToolAnswer,
                             lastMessage = index == lastMessageIndex,
+                            isLatestCheckpoint = node.id == latestCheckpointId,
                         )
                     }
                 }

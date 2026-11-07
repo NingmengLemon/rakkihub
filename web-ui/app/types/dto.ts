@@ -77,7 +77,7 @@ export interface MessageDto {
   /** 模型实际生成耗时（毫秒），不含首 token 延迟、工具执行和审批等待 */
   generationTimeMs?: number | null;
   translation?: string | null;
-  /** 压缩检查点：此消息是它之前全部历史的摘要，之前的消息不再发送给模型 */
+  /** 上下文检查点：之前的消息不再发送给模型；非空内容是摘要，空内容是历史截断边界 */
   isContextCheckpoint?: boolean;
 }
 

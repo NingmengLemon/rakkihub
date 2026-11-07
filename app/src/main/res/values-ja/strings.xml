@@ -278,6 +278,7 @@
   <string name="chat_page_truncate_checkpoint_hint">この線より上のメッセージはモデルに送信されません。このマーカーを削除すると前の境界に戻ります。</string>
   <string name="chat_page_truncate_blocked_generating">履歴を切り捨てる前に生成を停止してください</string>
   <string name="chat_page_truncate_conversation_changed">会話が変更されました。もう一度お試しください。</string>
+  <string name="chat_page_checkpoint_superseded_hint">より新しいチェックポイントに置き換えられています。表示用に残るだけで、リクエストの境界ではありません。</string>
   <string name="chat_page_keep_recent_decrease">減らす</string>
   <string name="chat_page_keep_recent_increase">増やす</string>
   <string name="chat_page_compressing">圧縮中…</string>

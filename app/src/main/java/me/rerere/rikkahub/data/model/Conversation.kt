@@ -164,7 +164,7 @@ fun Conversation.lastContextTokens(): Int? {
     return message.contextTokens()
 }
 
-/** 在 [afterNodeId] 节点之后插入压缩检查点；该节点已不存在时返回 null。 */
+/** 在 [afterNodeId] 节点之后插入检查点；摘要为空表示历史截断标记，非空表示压缩摘要。 */
 internal fun Conversation.insertContextCheckpoint(afterNodeId: Uuid, summary: String): Conversation? {
     val index = messageNodes.indexOfFirst { it.id == afterNodeId }
     if (index == -1) return null
@@ -192,6 +192,9 @@ internal val UIMessage.isHistoryTruncationMarker: Boolean
 /** 最后一个检查点之后的第一条消息下标，也就是当前请求窗口的起点。 */
 internal fun Conversation.contextWindowStart(): Int =
     messageNodes.indexOfLast { it.currentMessage.isContextCheckpoint } + 1
+
+/** 当前请求窗口的消息数，压缩与截断都用它算边界。 */
+internal fun Conversation.contextWindowSize(): Int = messageNodes.size - contextWindowStart()
 
 /** 有工具调用在等待用户审批：这一轮还没结束，排队的消息要等审批完成后再发 */
 internal val Conversation.isAwaitingToolApproval: Boolean

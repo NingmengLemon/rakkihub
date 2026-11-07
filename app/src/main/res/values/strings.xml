@@ -280,6 +280,7 @@
   <string name="chat_page_truncate_checkpoint_hint">Messages above this line are no longer sent to the model. Delete this marker to restore the previous boundary.</string>
   <string name="chat_page_truncate_blocked_generating">Stop generating before truncating history</string>
   <string name="chat_page_truncate_conversation_changed">The conversation changed. Try again.</string>
+  <string name="chat_page_checkpoint_superseded_hint">A newer checkpoint supersedes this one. It is kept for viewing and no longer marks the request boundary.</string>
   <string name="chat_page_keep_recent_decrease">Decrease</string>
   <string name="chat_page_keep_recent_increase">Increase</string>
   <string name="chat_page_compressing">Compressing...</string>

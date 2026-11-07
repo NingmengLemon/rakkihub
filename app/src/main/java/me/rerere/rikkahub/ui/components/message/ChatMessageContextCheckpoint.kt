@@ -49,9 +49,15 @@ fun ChatMessageContextCheckpoint(
     onEdit: () -> Unit,
     onDelete: () -> Unit,
     modifier: Modifier = Modifier,
+    isLatestCheckpoint: Boolean = true,
 ) {
     var expanded by rememberSaveable { mutableStateOf(false) }
     val isTruncation = message.isHistoryTruncationMarker
+    val hintRes = when {
+        !isLatestCheckpoint -> R.string.chat_page_checkpoint_superseded_hint
+        isTruncation -> R.string.chat_page_truncate_checkpoint_hint
+        else -> R.string.chat_page_compress_checkpoint_hint
+    }
 
     Column(
         modifier = modifier.fillMaxWidth(),
@@ -108,13 +114,7 @@ fun ChatMessageContextCheckpoint(
                     verticalArrangement = Arrangement.spacedBy(8.dp),
                 ) {
                     Text(
-                        text = stringResource(
-                            if (isTruncation) {
-                                R.string.chat_page_truncate_checkpoint_hint
-                            } else {
-                                R.string.chat_page_compress_checkpoint_hint
-                            }
-                        ),
+                        text = stringResource(hintRes),
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )

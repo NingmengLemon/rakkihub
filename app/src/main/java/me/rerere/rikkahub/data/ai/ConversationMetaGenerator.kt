@@ -10,6 +10,7 @@ import me.rerere.rikkahub.data.datastore.Settings
 import me.rerere.rikkahub.data.datastore.findModelById
 import me.rerere.rikkahub.data.datastore.findProvider
 import me.rerere.rikkahub.data.model.Conversation
+import me.rerere.rikkahub.data.model.isHistoryTruncationMarker
 import me.rerere.rikkahub.utils.applyPlaceholders
 import java.util.Locale
 
@@ -56,6 +57,7 @@ class ConversationMetaGenerator(
                     prompt.applyPlaceholders(
                         "locale" to Locale.getDefault().displayName,
                         "content" to conversation.currentMessages
+                            .filterNot { it.isHistoryTruncationMarker }
                             .takeLast(recentMessages).joinToString("\n\n") { it.summaryAsText(maxLength = 500) },
                     )
                 ),

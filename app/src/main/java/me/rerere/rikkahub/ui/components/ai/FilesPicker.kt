@@ -191,7 +191,7 @@ internal fun FilesPicker(
                 onBack = { page = FilesPickerPage.SEARCH },
             )
 
-            // 矮屏上放不下时可以滚动，避免底部的压缩对话等入口被挤出屏幕
+            // 矮屏上放不下时可以滚动，避免底部的上下文管理等入口被挤出屏幕
             FilesPickerPage.MAIN -> Column(
                 modifier = Modifier
                     .fillMaxWidth()

@@ -7,6 +7,7 @@ import kotlinx.datetime.toInstant
 import me.rerere.ai.ui.UIMessage
 import me.rerere.ai.ui.UIMessagePart
 import me.rerere.rikkahub.data.datastore.SettingsStore
+import me.rerere.rikkahub.data.model.isHistoryTruncationMarker
 import me.rerere.rikkahub.utils.toLocalDate
 import me.rerere.rikkahub.utils.toLocalTime
 import java.io.Reader
@@ -62,7 +63,7 @@ class TemplateTransformer(
  * 从而绕过 `isValidToUpload` 的过滤被发出去。
  */
 internal fun UIMessage.skipsInputTemplate(): Boolean =
-    isSynthetic || (isContextCheckpoint && toText().isBlank())
+    isSynthetic || isHistoryTruncationMarker
 
 class AssistantTemplateLoader(private val settingsStore: SettingsStore) : Loader<String> {
     override fun getReader(cacheKey: String?): Reader? {

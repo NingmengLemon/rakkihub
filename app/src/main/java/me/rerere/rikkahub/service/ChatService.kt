@@ -51,6 +51,7 @@ import me.rerere.rikkahub.data.model.Assistant
 import me.rerere.rikkahub.data.model.Conversation
 import me.rerere.rikkahub.data.model.bindConfig
 import me.rerere.rikkahub.data.model.cancelInterruptedTools
+import me.rerere.rikkahub.data.model.contextWindowSize
 import me.rerere.rikkahub.data.model.contextWindowStart
 import me.rerere.rikkahub.data.model.deleteMessage
 import me.rerere.rikkahub.data.model.editMessage
@@ -810,7 +811,7 @@ class ChatService(
             }
             val conversation = session.state.value
             val nodes = conversation.messageNodes
-            val windowSize = nodes.size - conversation.contextWindowStart()
+            val windowSize = conversation.contextWindowSize()
             if (keep < 1) throw IllegalStateException(context.getString(R.string.chat_page_truncate_keep_at_least_one))
             if (windowSize < 2) {
                 throw IllegalStateException(context.getString(R.string.chat_page_truncate_nothing_to_cut))

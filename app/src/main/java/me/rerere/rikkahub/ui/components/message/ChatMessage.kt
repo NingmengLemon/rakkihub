@@ -123,6 +123,7 @@ fun ChatMessage(
     onClearTranslation: (UIMessage) -> Unit = {},
     onToolApproval: ((toolCallId: String, approved: Boolean, reason: String) -> Unit)? = null,
     onToolAnswer: ((toolCallId: String, answer: String) -> Unit)? = null,
+    isLatestCheckpoint: Boolean = true,
 ) {
     val message = node.messages[node.selectIndex]
     if (message.isContextCheckpoint) {
@@ -131,6 +132,7 @@ fun ChatMessage(
             onEdit = onEdit,
             onDelete = onDelete,
             modifier = modifier,
+            isLatestCheckpoint = isLatestCheckpoint,
         )
         return
     }

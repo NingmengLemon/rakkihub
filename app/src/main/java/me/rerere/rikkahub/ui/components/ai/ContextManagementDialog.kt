@@ -43,7 +43,7 @@ import me.rerere.hugeicons.stroke.Remove01
 import me.rerere.hugeicons.stroke.TriangleAlert
 import me.rerere.rikkahub.R
 import me.rerere.rikkahub.data.model.Conversation
-import me.rerere.rikkahub.data.model.contextWindowStart
+import me.rerere.rikkahub.data.model.contextWindowSize
 
 private enum class ContextTab { COMPRESS, TRUNCATE }
 
@@ -78,7 +78,7 @@ fun ContextManagementDialog(
     }
 
     val nodes = conversation.messageNodes
-    val windowSize = (nodes.size - conversation.contextWindowStart()).coerceAtLeast(0)
+    val windowSize = conversation.contextWindowSize().coerceAtLeast(0)
     val truncateKeep = truncateInput.toIntOrNull()
     val truncateValid = truncateKeep != null && truncateKeep in 1 until windowSize
     val firstKeptRole = truncateKeep
@@ -303,7 +303,11 @@ private fun TruncationPane(
     Text(
         text = status,
         style = MaterialTheme.typography.bodySmall,
-        color = if (valid) MaterialTheme.colorScheme.onSurfaceVariant else MaterialTheme.colorScheme.error,
+        color = if (keep != null && !valid) {
+            MaterialTheme.colorScheme.error
+        } else {
+            MaterialTheme.colorScheme.onSurfaceVariant
+        },
     )
 }
 
