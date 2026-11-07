@@ -12,7 +12,7 @@ run `bun install --cwd tools/i18n` first if `tools/i18n/node_modules` is missing
 ## Workflow
 
 1. Confirm the target module (`app`, `ui`, `search`, `oauth`; defaults to `app`).
-2. Create/update strings with the CLI instead of editing every locale file by hand.
+2. Create/update strings with the CLI. If the tool cannot run here (missing Bun or `tools/i18n/.env`), edit the maintained locale files by hand and keep their key sets in sync.
 3. Prefer auto-translation unless the user asks to skip it.
 4. Verify the changes in the affected `values-*/strings.xml` files (`git diff`).
 5. Report the exact files changed and what was added/updated.
@@ -73,7 +73,8 @@ Run `bun tools/i18n/src/cli.ts <command> --help` for all options.
 
 1. Add `values-xx` to `languages` in `tools/i18n/config.yml`, with a `glossary` for core AI terms (prompt, provider, context, ...).
 2. Run `translate-missing -l values-xx`.
-3. Build resources (`./gradlew :app:processDebugResources`) to verify; `generateLocaleConfig` picks the locale up automatically.
+3. Add the locale to `localeFilters` in `app/build.gradle.kts`; it is an allowlist, so unlisted locales are not packaged even if their `values-*` directories exist.
+4. Build resources (`./gradlew :app:processDebugResources`) to verify; `generateLocaleConfig` picks the locale up automatically.
 
 ## Constraints
 

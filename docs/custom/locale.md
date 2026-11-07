@@ -6,7 +6,7 @@
 
 ## 增删文案
 
-删除或新增文案时四份同步。`tools/i18n` 用 Bun，本机暂时跑不起来（没有 bun，也没有 `.env`），所以当前是手翻，八份时代留下的缺条目债在砍完之后基本清掉了。把工具重写成 Python 记在 [`roadmap.md`](roadmap.md) 的待办方向里。
+删除或新增文案时四份同步。`tools/i18n` 用 Bun，本机暂时跑不起来（没有 bun，也没有 `.env`），当前是手翻；四份都不缺条目。把工具重写成 Python 记在 [`roadmap.md`](roadmap.md) 的待办方向里。
 
 `app` 之外的 `search`、`oauth`、`ui` 三个模块也各有自己的 `strings.xml` 与这四份 locale，新增或删除文案时一起改。
 
@@ -28,4 +28,4 @@ rg -n 'RikkaHub' app/src/main/res oauth/src/main/res -g '**/values*/strings.xml'
 ## 欠账
 
 - 本分支新增的很多文案直接写在 Compose 里、还没进 `strings.xml`，其中附件清理与扫描相关的一组属于欠账；这部分与语言无关。
-- 上游自己没翻的三条压缩上下文文案（`chat_page_compress_keep_recent`、它的描述、`chat_page_compress_not_enough_messages`）已补进 `values-ja` 与 `values-zh-rTW`，简中本来就有，现在四份不缺条目。
+- 上游自己没翻的三条压缩上下文文案（`chat_page_compress_keep_recent`、它的描述、`chat_page_compress_not_enough_messages`）已补进 `values-ja` 与 `values-zh-rTW`，四份都不缺条目。
