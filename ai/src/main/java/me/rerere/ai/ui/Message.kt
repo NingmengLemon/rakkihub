@@ -192,6 +192,21 @@ fun List<UIMessage>.limitContext(limit: Int): List<UIMessage> {
 }
 
 /**
+ * 按 [limit] 截断时，实际发送窗口在列表里的起点下标。
+ *
+ * 有检查点(压缩摘要或截断标记)时检查点本身仍会发送/作为边界，这里返回的是检查点之后
+ * 第一条会发送的消息；没有发生条数截断时返回检查点之后的第一条(无检查点则为 0)。
+ * 结果与 [limitContext] 的尾部保持一致，供界面画出同一条边界。
+ */
+fun List<UIMessage>.contextLimitStart(limit: Int): Int {
+    val tailStart = indexOfLast { it.isContextCheckpoint } + 1
+    if (limit <= 0) return tailStart
+    val tail = subList(tailStart, size)
+    if (tail.size <= limit) return tailStart
+    return size - tail.limitMessageCount(limit).size
+}
+
+/**
  * 按阶梯式(滞回)策略限制上下文消息数量
  *
  * 与每轮平移一条的滑动窗口不同, 截断点只在消息数越过 [limit] 时才前进一大步,

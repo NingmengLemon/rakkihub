@@ -281,6 +281,7 @@
   <string name="chat_page_truncate_blocked_generating">请先停止生成，再截断历史</string>
   <string name="chat_page_truncate_conversation_changed">对话已变更，请再试一次。</string>
   <string name="chat_page_checkpoint_superseded_hint">已被更新的检查点取代，只用于查看，不再作为请求的边界。</string>
+  <string name="chat_page_context_limit_boundary">上下文消息数上限 %1$d 条，更早的消息不再发送</string>
   <string name="chat_page_keep_recent_decrease">减少</string>
   <string name="chat_page_keep_recent_increase">增加</string>
   <string name="chat_page_compressing">正在压缩...</string>

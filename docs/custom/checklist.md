@@ -54,6 +54,7 @@
 | C44 | 上下文压缩的提示词可编辑 | 新增 |
 | C45 | 文案范围收成四份 | 改造 |
 | C46 | 管理上下文：压缩与截断共用一个入口 | 改造 |
+| C47 | 上下文消息数上限的自动边界线 | 改造 |
 
 ## 明细
 
@@ -339,3 +340,9 @@
 - 落点：`FilesPicker` 的「压缩历史」入口改成「管理上下文」并永远显示（去掉 `contextMessageLimit <= 0` 的限制）；`CompressContextDialog` 换成 `ContextManagementDialog`，两个 tab「压缩」「截断」，两处「保留最近 N 条」都用数字输入框 + ±（压缩原来只有 ±）；新增 `ChatService.truncateHistory` 与 `ChatVM.handleTruncateHistory`，边界由 `Conversation.insertHistoryTruncation` 插入一条空的检查点消息（`isContextCheckpoint = true`，空文本会被 `isValidToUpload` 过滤，不发给模型）；`TemplateTransformer` 跳过空检查点，否则模板里的角色标签之类的字面文本会把它变成非空消息发出去；窗口起点抽成 `Conversation.contextWindowStart()`，压缩、截断与对话框都按它算（`limitContext` 在 ai 模块里按同样的规则取最后一个检查点）；`ChatMessageContextCheckpoint` 按空文本区分截断标记，只留删除（撤销）；截断面板实时显示窗口大小、保留条数与将丢弃的条数，第一条保留消息是 assistant 时给 `TriangleAlert` 警告（只提示，不阻止确认）；四份 locale 新增 18 条文案，删掉不再使用的 `chat_page_compress_context` 与 `chat_page_compress_context_title`。测试：`ConversationHistoryTruncationTest`（空标记的插入位置、不发给模型、`limitContext` 起点、窗口起点；锚点不存在时不插入；空检查点与摘要可区分）与 `TemplateTransformerTest`（空检查点不参与模板改写，摘要照常参与）。
 - 理由：用户已经用正常对话让模型写好交接摘要时，再调一次模型压缩是多余的；截断零成本、零延迟，也允许用户自己挑边界。两个动作共用「保留最近 N 条」的概念，放在同一个入口更顺。空标记复用了检查点机制，没有新增序列化字段，官方兼容导出的消息 JSON 不变。
 - 合并注意：空文本是截断标记的唯一判据，这个不变式靠 `generateCompressionSummary` 里的 `ifBlank { error }` 兜底（`compressionSummaryOrNull` 本身只做 trim，单看它拦不住空串）；以后如果允许把检查点编辑成空白，语义会退化成截断，与它的效果一致。`limitContext` 只认最后一个检查点，连续截断两次时旧标记留在历史里但不再生效；在前一个压缩摘要之后做截断，那个摘要也不再是请求起点，所以删除标记的提示写的是「回到之前的边界」而不是「恢复全部历史」，旧检查点的卡片也会显示「已被更新的检查点取代」。`contextWindowStart`、`contextWindowSize` 同时给服务端与对话框用，别在两处各算一遍。Web 端已经有 `isContextCheckpoint`（WebDto），会把空标记渲染成一张空的摘要卡片并显示编辑；要处理时改 web-ui 的分支，Android 这边按空文本区分。
+
+### C47 上下文消息数上限的自动边界线
+
+- 落点：`ai/Message.kt` 新增 `contextLimitStart(limit)`，按与 `limitContext` 相同的取法（最后一个检查点之后、同一套滞回与 `alignContextStart` 对齐）算出第一条会发送的消息下标，`limitContext` 本身不动；`ChatList` 在 `contextMessageLimit > 0` 且起点大于 0 时，在第一条会发送的消息上方画一条只读虚线，文案 `chat_page_context_limit_boundary`（四份 locale），两端虚线、中间小字，和检查点卡片区分开；不落盘，不加设置。测试：`MessageContextLimitTest` 增加三条（起点与 `limitContext` 的尾部一致、检查点之后有截断时的起点、未截断时停在检查点之后）。
+- 理由：消息数上限只在组装请求时算，界面完全看不见；用户一直手动管理上下文，这条线能把自动被丢掉的那段标出来。它按滞回规则跳动、连续多轮不动，不破坏提示词缓存；生成中的回复节点可能让边界与该步请求差一条，可接受。
+- 合并注意：`contextLimitStart` 必须复用 `limitContext` 的取法，别另写一套条数逻辑；边界按消息下标定位，检查点卡片本身不算条数。上限为 0 或没有发生条数截断时不画。Web 端不显示这条线。

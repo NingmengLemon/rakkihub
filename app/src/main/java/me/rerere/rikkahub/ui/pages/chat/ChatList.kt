@@ -22,6 +22,7 @@ import androidx.compose.animation.slideOutHorizontally
 import androidx.compose.animation.slideOutVertically
 import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxScope
@@ -74,6 +75,8 @@ import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalScrollCaptureInProgress
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.graphics.PathEffect
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.SpanStyle
@@ -90,6 +93,7 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import me.rerere.ai.ui.UIMessage
+import me.rerere.ai.ui.contextLimitStart
 import me.rerere.rikkahub.R
 import me.rerere.rikkahub.data.datastore.Settings
 import me.rerere.rikkahub.data.datastore.getAssistantById
@@ -322,6 +326,13 @@ private fun ChatListNormal(
             val latestCheckpointId = conversation.messageNodes
                 .lastOrNull { it.currentMessage.isContextCheckpoint }
                 ?.id
+            // 上下文消息数上限：按与请求相同的规则算出第一条会发送的消息，供只读边界线使用
+            val contextLimit = assistant?.contextMessageLimit ?: 0
+            val contextLimitStart = if (contextLimit > 0) {
+                conversation.currentMessages.contextLimitStart(contextLimit)
+            } else {
+                -1
+            }
             LazyColumn(
                 state = state,
                 // 顶部留白放进 contentPadding，让消息可以滚动到透明标题栏下面
@@ -341,6 +352,9 @@ private fun ChatListNormal(
                 key = { index, item -> item.id },
             ) { index, node ->
                 Column {
+                    if (contextLimitStart > 0 && index == contextLimitStart) {
+                        ContextLimitBoundary(limit = contextLimit)
+                    }
                     ListSelectableItem(
                         key = node.id,
                         onSelectChange = {
@@ -832,5 +846,43 @@ private fun BoxScope.MessageJumper(
                 )
             }
         }
+    }
+}
+
+/**
+ * 上下文消息数上限的只读边界线。
+ *
+ * 位置与请求侧 `contextLimitStart` 一致；按滞回规则跳动，不落盘，关闭上限后消失。
+ */
+@Composable
+private fun ContextLimitBoundary(limit: Int) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(vertical = 4.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
+    ) {
+        DashedLine(modifier = Modifier.weight(1f))
+        Text(
+            text = stringResource(R.string.chat_page_context_limit_boundary, limit),
+            style = MaterialTheme.typography.labelSmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+        DashedLine(modifier = Modifier.weight(1f))
+    }
+}
+
+@Composable
+private fun DashedLine(modifier: Modifier = Modifier) {
+    val color = MaterialTheme.colorScheme.outlineVariant
+    Canvas(modifier = modifier.height(1.dp)) {
+        drawLine(
+            color = color,
+            start = Offset(0f, size.height / 2f),
+            end = Offset(size.width, size.height / 2f),
+            strokeWidth = 1.dp.toPx(),
+            pathEffect = PathEffect.dashPathEffect(floatArrayOf(6.dp.toPx(), 4.dp.toPx())),
+        )
     }
 }

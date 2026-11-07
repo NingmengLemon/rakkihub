@@ -191,6 +191,39 @@ class MessageContextLimitTest {
         assertEquals(messages.subList(24, 30), messages.limitContext(10))
     }
 
+    @Test
+    fun `contextLimitStart matches the first message limitContext keeps`() {
+        val all = createTestMessages(60)
+        for (limit in 0..12) {
+            for (size in 0..60) {
+                val messages = all.subList(0, size)
+                val expected = messages.limitContext(limit)
+                val start = messages.contextLimitStart(limit)
+                val actual = if (start >= messages.size) emptyList() else messages.subList(start, messages.size)
+                assertEquals("limit=$limit size=$size", expected, actual)
+            }
+        }
+    }
+
+    @Test
+    fun `contextLimitStart points to the first kept message after the checkpoint`() {
+        val messages = createTestMessages(20).withCheckpointsAt(4)
+        val result = messages.limitContext(10)
+        val start = messages.contextLimitStart(10)
+
+        assertEquals(listOf(messages[4]) + messages.subList(start, 20), result)
+        // 检查点之后有 15 条: limit=10 -> 保留最后 5 条
+        assertEquals(15, start)
+    }
+
+    @Test
+    fun `contextLimitStart stays after the checkpoint when nothing is truncated`() {
+        val messages = createTestMessages(10).withCheckpointsAt(6)
+
+        assertEquals(7, messages.contextLimitStart(0))
+        assertEquals(7, messages.contextLimitStart(10))
+    }
+
     private fun List<UIMessage>.withCheckpointsAt(vararg indices: Int): List<UIMessage> =
         mapIndexed { index, message -> message.copy(isContextCheckpoint = index in indices) }
 
