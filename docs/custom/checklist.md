@@ -52,6 +52,7 @@
 | C42 | 备份页按本应用与官方 RikkaHub 分组 | 改造 |
 | C43 | 错误卡片默认保留到手动关闭 | 改造 |
 | C44 | 上下文压缩的提示词可编辑 | 新增 |
+| C45 | 文案范围收成四份 | 改造 |
 
 ## 明细
 
@@ -325,3 +326,9 @@
 - 落点：压缩指令从 `CompressPrompt.kt` 里的硬编码文本改成 `Settings.compressPrompt`（默认 `DEFAULT_COMPRESS_PROMPT`），`buildCompressPrompt(prompt, additionalPrompt, locale)` 先用 `applyPlaceholders` 把 `{locale}` 换成系统语言，再追加本次的额外指令；`ChatService.compressConversation` 从设置里取模板；DataStore 侧新增 `SettingsStore.COMPRESS_PROMPT`（key `compress_prompt`）并登记到 `SETTINGS_FIELDS`，`SettingsFieldsTest` 的样本、盘上 key 集合与断言同步；`SettingModelPromptPage` 的 `PromptSlot` 增加 COMPRESS 一项（图标、变量说明、重置默认），模型设置页的「提示词」里自动多一条；压缩对话框在「额外指令」下面加一行提示基础指令的位置；8 份 locale 新增 `setting_model_page_prompt_compress`、`setting_model_page_compress_prompt_vars`、`chat_page_compress_prompt_hint` 三条文案。测试：`CompressPromptTest`（默认模板替换语言、追加额外指令、空白额外指令不追加）与 `SettingsFieldsTest`（字段契约、读写往返、盘上 key 集合）。
 - 理由：总结结构不合适时只能改源码，入口只有每次压缩时的「额外指令」，一次性而且不好找。压缩用的模型、请求组装与正常对话一致，模板本身是可以按使用习惯调的，和标题、翻译、OCR 的提示词放在同一处管理更合理。新增的设置字段带默认值，改完按约定重跑了验收样本：`data.sync` 包的 51 条设备用例（含官方样本表数据、整包恢复、applied outcome）全部通过。
 - 合并注意：`{locale}` 是唯一变量，默认模板与原来的硬编码内容等价（只把 Kotlin 插值换成占位符），旧设置解码时用默认值。模板不经过输入转换器（模板转换器会把花括号当模板语法），只在 `buildCompressPrompt` 里拼；压缩请求的前缀要与正常对话一致才能命中提示词缓存，所以模板只能作为末尾追加的那条 user 消息，不要塞进 `buildStep` 的转换链。`Settings` 新增字段必须同时登记到 `SETTINGS_FIELDS`，否则不会落盘：读写只走登记过的字段，`SettingsFieldsTest` 的第一条契约用例就是拦这个的。
+
+### C45 文案范围收成四份
+
+- 落点：删除 `app`、`search`、`oauth`、`ui` 四个模块的 `values-ar`、`values-de`、`values-ko-rKR`、`values-ru`（16 个目录）；`app/build.gradle.kts` 的 `localeFilters` 改成 `en`、`ja`、`zh`、`zh-rTW`；`tools/i18n/config.yml` 的 `languages` 只留 `values`、`values-zh`、`values-zh-rTW`、`values-ja`，`tools/i18n/README.md` 的示例同步；补上 `values-ja` 与 `values-zh-rTW` 缺的三条压缩上下文文案（`chat_page_compress_keep_recent`、它的描述、`chat_page_compress_not_enough_messages`）；`docs/custom/locale.md` 按四份重写。
+- 理由：`tools/i18n` 用 Bun，本机跑不起来（没有 bun 与 `.env`），新文案只能手翻，8 份时每条要翻 7 次，四份只要 3 次；德、阿、韩、俄不在目标范围，繁中保留阅读习惯所以没删 `values-zh-rTW`。顺带清掉了上游自己没翻的三条压缩文案的缺条目债。
+- 合并注意：没有目录的语言回退到英文，繁中命中 `values-zh-rTW`。`localeFilters` 与资源目录要一起动：AGP 只按 filter 裁剪依赖库带的语言资源，自己留在仓库里的目录不会因为 filter 变小而消失。上游给被删语言补的翻译，移植时不用再抄；以后要恢复某个语言，从上游对应版本拷 `strings.xml` 再补本分支的 key。清单里历史条目写的「8 份 / 7 个 locale」指当时的份数，不改写。把 `tools/i18n` 重写成 Python 记在 [`roadmap.md`](roadmap.md) 的待办方向。

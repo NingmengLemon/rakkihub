@@ -1,18 +1,20 @@
 # 文案与 locale
 
-共有 8 份资源目录：`values`、`values-ar`、`values-de`、`values-ja`、`values-ko-rKR`、`values-ru`、`values-zh`、`values-zh-rTW`。`app/build.gradle.kts` 的 `localeFilters` 列了 9 项（`en`、`ar`、`de`、`ja`、`ko`、`ko-rKR`、`ru`、`zh`、`zh-rTW`），`ko` 没有对应目录，但会作为独立的 locale 配置出现在 APK 里。加语言时两处一起改。
+共 4 份资源目录：`values`（英）、`values-zh`（简中）、`values-zh-rTW`（繁中）、`values-ja`（日）。`app/build.gradle.kts` 的 `localeFilters` 与之一致（`en`、`ja`、`zh`、`zh-rTW`），加语言时两处一起改；`tools/i18n/config.yml` 的 `languages` 也要同步。这个范围是 C45 砍定的，之前条目里写的份数按当时的仓库为准。
+
+没有目录的语言回退到英文（德、俄、韩、阿等）；繁中设备命中 `values-zh-rTW`。
 
 ## 增删文案
 
-删除或新增文案时八份都要同步，用 `tools/i18n` 处理。
+删除或新增文案时四份同步。`tools/i18n` 用 Bun，本机暂时跑不起来（没有 bun，也没有 `.env`），所以当前是手翻，八份时代留下的缺条目债在砍完之后基本清掉了。把工具重写成 Python 记在 [`roadmap.md`](roadmap.md) 的待办方向里。
 
-合并上游之后，先按 `values/strings.xml` 的 key 集合过滤其余七份，因为上游会给已删除的 key 补翻译，德语尤其明显。过滤后的判据是：除 `values-de` 与 `values-zh` 外，每份只剩「上游新增但还没翻译」的缺口。
+`app` 之外的 `search`、`oauth`、`ui` 三个模块也各有自己的 `strings.xml` 与这四份 locale，新增或删除文案时一起改。
 
-[`checklist.md`](checklist.md) 里写「7 个 locale」或具体份数的条目，指的是做那项定制时仓库里的份数，德语是上游 3.1.1 才加的；同步这类改动时按当前的 8 份处理。
+合并上游之后，先按 `values/strings.xml` 的 key 集合过滤其余三份，因为上游会给已删除的 key 补翻译。过滤后的判据是：其余三份只剩「上游新增但还没翻译」的缺口。
 
 ## 品牌改写
 
-品牌改写按 key 查不出来：C12 的 `app_name`、C14 的 `setting_page_web_server_desc` 与 `oauth` 的四条 `oauth_callback_*_hint`，在新增 locale 里会以官方品牌出现。合并后要逐条重放成 `RakkiHub`。
+品牌改写按 key 查不出来：C12 的 `app_name`、C14 的 `setting_page_web_server_desc` 与 `oauth` 的四条 `oauth_callback_*_hint`，在新补的文案里会以官方品牌出现，合并后要逐条重放成 `RakkiHub`。
 
 判据不靠数行数，而是排除掉有意保留的几条 key 之后必须为空：
 
@@ -25,6 +27,5 @@ rg -n 'RikkaHub' app/src/main/res oauth/src/main/res -g '**/values*/strings.xml'
 
 ## 欠账
 
-`values-de` 已经不缺条目，但本分支新增的很多文案直接写在 Compose 里、还没进 `strings.xml`，其中附件清理与扫描相关的一组属于欠账。
-
-反方向还有缺口：`values-ar`、`values-ja`、`values-ko-rKR`、`values-ru`、`values-zh-rTW` 各缺 3 条上游自己没翻的压缩上下文文案（`chat_page_compress_keep_recent` 及其描述、`chat_page_compress_not_enough_messages`），那属于上游范围。新加文案时八份一起补。
+- 本分支新增的很多文案直接写在 Compose 里、还没进 `strings.xml`，其中附件清理与扫描相关的一组属于欠账；这部分与语言无关。
+- 上游自己没翻的三条压缩上下文文案（`chat_page_compress_keep_recent`、它的描述、`chat_page_compress_not_enough_messages`）已补进 `values-ja` 与 `values-zh-rTW`，简中本来就有，现在四份不缺条目。

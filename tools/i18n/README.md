@@ -29,7 +29,7 @@ bun run i18n remove hello_world greeting                 # 从所有语言中删
 bun run i18n list --missing                              # 列出缺少译文的条目
 bun run i18n list --match 'memory'                       # 按 key 或英文原文搜索
 bun run i18n translate-missing --dry-run                 # 统计缺失条目
-bun run i18n translate-missing -l values-ar,values-ja    # 补全指定语言（多个值用逗号分隔）
+bun run i18n translate-missing -l values-zh,values-ja    # 补全指定语言（多个值用逗号分隔）
 bun run i18n retranslate -l values-ja --match '\bmemory\b'
 bun run i18n retranslate -l values-ja --key some_key,other_key
 bun run i18n unused                                      # 检测未引用的条目和多余的译文

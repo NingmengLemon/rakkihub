@@ -1291,6 +1291,9 @@ mDNSアドレス: .localホスト名を使用し、IPを知らなくても同じ
   <string name="chat_input_edit_reasoning">推論を編集</string>
   <string name="chat_input_reasoning_placeholder">推論内容</string>
   <string name="chat_page_compress_nothing_to_compress">前回の要約以降、圧縮する新しいメッセージはありません</string>
+  <string name="chat_page_compress_keep_recent">保持する最近のメッセージ数</string>
+  <string name="chat_page_compress_keep_recent_desc">これらのメッセージは圧縮されず、要約の後にそのまま残ります。0 を指定するとすべてを圧縮し、プロンプトキャッシュを最も活用できます。会話が長すぎて圧縮に失敗する場合は、多めに保持してください。</string>
+  <string name="chat_page_compress_not_enough_messages">圧縮できるメッセージが足りません。保持するメッセージ数を減らしてください</string>
   <string name="chat_page_compress_handle_pending_tools">圧縮する前に、保留中のツール呼び出しを処理してください</string>
   <string name="chat_page_compress_tool_call_response">モデルが要約を作成する代わりにツールを呼び出そうとしました。もう一度お試しください。</string>
   <string name="assistant_page_memory_auto_dream">自動で夢を見る</string>
