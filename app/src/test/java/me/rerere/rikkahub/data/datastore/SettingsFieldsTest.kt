@@ -9,6 +9,7 @@ import me.rerere.ai.provider.ProviderSetting
 import me.rerere.asr.ASRProviderSetting
 import me.rerere.mediagen.provider.MediaGenerationProviderSetting
 import me.rerere.rikkahub.data.ai.mcp.McpServerConfig
+import me.rerere.rikkahub.data.ai.prompts.DEFAULT_COMPRESS_PROMPT
 import me.rerere.rikkahub.data.model.Assistant
 import me.rerere.rikkahub.data.model.Lorebook
 import me.rerere.rikkahub.data.model.PromptInjection
@@ -57,6 +58,7 @@ class SettingsFieldsTest {
         assertEquals(9090, stored["web_server_port"])
         assertEquals(1.5f, stored["default_tts_playback_speed"])
         assertEquals("title", stored["title_prompt"])
+        assertEquals("compress", stored["compress_prompt"])
         assertEquals("00000000-0000-0000-0000-000000000001", stored["chat_model"])
         assertEquals("LOW", stored["fast_model_reasoning_level"])
         assertEquals("""[{"id":"00000000-0000-0000-0000-000000000007","name":"tag"}]""", stored["assistant_tags"])
@@ -77,6 +79,8 @@ class SettingsFieldsTest {
         assertEquals(null, settings.memoryModelId)
         assertEquals(true, settings.dynamicColor)
         assertEquals(8080, settings.webServerPort)
+        // 新增的提示词字段没落过盘时用默认模板
+        assertEquals(DEFAULT_COMPRESS_PROMPT, settings.compressPrompt)
     }
 
     @Test
@@ -136,6 +140,7 @@ private val SAMPLE = Settings(
     suggestionPrompt = "suggestion",
     ocrModelId = id(5),
     ocrPrompt = "ocr",
+    compressPrompt = "compress",
     assistantId = id(20),
     providers = listOf(ProviderSetting.OpenAI(id = id(31), name = "Provider")),
     assistants = listOf(Assistant(id = id(20), name = "Assistant")),
@@ -200,6 +205,7 @@ private val STORED_KEYS = setOf(
     "suggestion_prompt",
     "ocr_model",
     "ocr_prompt",
+    "compress_prompt",
     "providers",
     "select_assistant",
     "assistants",

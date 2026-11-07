@@ -51,6 +51,7 @@
 | C41 | 备份与恢复按阶段报进度，六个入口互斥 | 改造 |
 | C42 | 备份页按本应用与官方 RikkaHub 分组 | 改造 |
 | C43 | 错误卡片默认保留到手动关闭 | 改造 |
+| C44 | 上下文压缩的提示词可编辑 | 新增 |
 
 ## 明细
 
@@ -318,3 +319,9 @@
 - 落点：`DisplaySetting` 新增 `autoDismissErrorCards`（默认 `false`，即保留）；`ErrorCardsDisplay` 与 `ErrorCard` 增加 `autoDismiss` 参数，`LaunchedEffect` 只在开启时 `delay(5000)` 后关闭，`error.id` 与 `autoDismiss` 都进 key；`ChatList` 把 `settings.displaySetting.autoDismissErrorCards` 传进去；`SettingPreferencesUIPage` 的「显示 Token 和上下文统计」下方加一个开关；8 份 locale 新增 `setting_display_page_auto_dismiss_errors_title` 与 `_desc`。既然不再自动消失，同时把错误列表的会话口径补齐：`ChatError.conversationId` 与 `addError` 的入参都改成非空，`ChatVM.errors` 只放出当前会话的错误，压缩失败那处补上会话 id，删除会话时连带清掉它的错误；`ChatService.addError` 交给 `withNewError`（标题、会话、异常类型与消息都相同的算同一条，只留最新一份，每个会话各留 `MAX_RETAINED_ERRORS` 条），`clearErrors` 也只看当前会话，别的会话的卡片不会被清掉或挤掉；卡片栈限高 320dp 且可滚动，来了新错误滚到最新一条，「全部清除」移到最后。
 - 理由：错误卡片原来固定 5 秒后收起。网络中断常常发生在用户离开手机的时候，回来看不到错误卡片，只看到半截回复，无法判断是模型断了还是自己停的。默认保留，靠卡片右侧的关闭按钮或多条时的「全部清除」收起；想恢复旧行为可以在 UI 设置里打开。卡片常驻之后，原来被 5 秒掩盖的两个问题会暴露出来：错误是应用级状态、聊天页没有按会话过滤，以及每轮自动起标题、工具能力提醒、用户重复同一个操作都会把同一类失败再报一遍，所以一起处理。新增的设置字段带默认值，改完按约定重跑了验收样本：`data.sync` 包的 51 条设备用例（含官方样本表数据、整包恢复、applied outcome）全部通过。
 - 合并注意：默认值 `false` 与上游行为相反，上游改 `ErrorCard` 时要把 `autoDismiss` 参数一起合过来。会话过滤放在 `ChatVM` 而不是 `ChatList`：Web 端 SSE 与悬浮窗本来就是按 `conversationId` 过滤的，`ChatVM` 这一层补齐后聊天页与它们一致；`ChatError.conversationId` 非空，新加错误入口时不会再漏。滚动在最新一条变化时做一次（按 `errors.lastOrNull()?.id` 起效，等一帧布局完再滚），也就是来了新的一条或最新那条被关掉；关掉中间的卡片、旋转这类高度变化不再动滚动位置。这个开关只管聊天页的错误卡片，悬浮窗（`ChatFloatingContent`）用 `ChatError` 自己画状态徽标，不经过这里；`WorkspaceDetailPage` 里的 `ErrorCard(String)` 是另一个同名私有函数，不受影响。
+
+### C44 上下文压缩的提示词可编辑
+
+- 落点：压缩指令从 `CompressPrompt.kt` 里的硬编码文本改成 `Settings.compressPrompt`（默认 `DEFAULT_COMPRESS_PROMPT`），`buildCompressPrompt(prompt, additionalPrompt, locale)` 先用 `applyPlaceholders` 把 `{locale}` 换成系统语言，再追加本次的额外指令；`ChatService.compressConversation` 从设置里取模板；DataStore 侧新增 `SettingsStore.COMPRESS_PROMPT`（key `compress_prompt`）并登记到 `SETTINGS_FIELDS`，`SettingsFieldsTest` 的样本、盘上 key 集合与断言同步；`SettingModelPromptPage` 的 `PromptSlot` 增加 COMPRESS 一项（图标、变量说明、重置默认），模型设置页的「提示词」里自动多一条；压缩对话框在「额外指令」下面加一行提示基础指令的位置；8 份 locale 新增 `setting_model_page_prompt_compress`、`setting_model_page_compress_prompt_vars`、`chat_page_compress_prompt_hint` 三条文案。测试：`CompressPromptTest`（默认模板替换语言、追加额外指令、空白额外指令不追加）与 `SettingsFieldsTest`（字段契约、读写往返、盘上 key 集合）。
+- 理由：总结结构不合适时只能改源码，入口只有每次压缩时的「额外指令」，一次性而且不好找。压缩用的模型、请求组装与正常对话一致，模板本身是可以按使用习惯调的，和标题、翻译、OCR 的提示词放在同一处管理更合理。新增的设置字段带默认值，改完按约定重跑了验收样本：`data.sync` 包的 51 条设备用例（含官方样本表数据、整包恢复、applied outcome）全部通过。
+- 合并注意：`{locale}` 是唯一变量，默认模板与原来的硬编码内容等价（只把 Kotlin 插值换成占位符），旧设置解码时用默认值。模板不经过输入转换器（模板转换器会把花括号当模板语法），只在 `buildCompressPrompt` 里拼；压缩请求的前缀要与正常对话一致才能命中提示词缓存，所以模板只能作为末尾追加的那条 user 消息，不要塞进 `buildStep` 的转换链。`Settings` 新增字段必须同时登记到 `SETTINGS_FIELDS`，否则不会落盘：读写只走登记过的字段，`SettingsFieldsTest` 的第一条契约用例就是拦这个的。

@@ -262,6 +262,7 @@
   <string name="chat_page_compress_additional_prompt_hint">指定要保留或聚焦的內容</string>
   <string name="chat_page_compress_context">壓縮歷史</string>
   <string name="chat_page_compress_context_desc">將對話壓縮成摘要以節省 token</string>
+  <string name="chat_page_compress_prompt_hint">基礎指令可在「設定 → 預設模型與提示 → 提示詞」裡修改</string>
   <string name="chat_page_compress_context_title">壓縮對話紀錄</string>
   <string name="chat_page_compressing">正在壓縮...</string>
   <string name="chat_page_conversation_system_prompt">對話系統提示</string>
@@ -972,6 +973,8 @@
   <string name="setting_model_page_prompt_translation">翻譯</string>
   <string name="setting_model_page_prompt_title">標題生成</string>
   <string name="setting_model_page_prompt_ocr">OCR 辨識</string>
+  <string name="setting_model_page_prompt_compress">上下文壓縮</string>
+  <string name="setting_model_page_compress_prompt_vars">變數: 語言: {locale}</string>
   <string name="setting_display_page_bubble_opacity_title">氣泡透明度</string>
   <string name="setting_provider_page_include_history_reasoning">回傳歷史思考過程</string>
   <string name="setting_model_page_fast_model">快速模型</string>

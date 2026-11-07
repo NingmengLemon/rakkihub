@@ -344,6 +344,7 @@
   <string name="chat_page_compress_additional_prompt_hint">Gib an, was erhalten bleiben oder im Fokus stehen soll</string>
   <string name="chat_page_compress_context">Verlauf komprimieren</string>
   <string name="chat_page_compress_context_desc">Komprimiere die Unterhaltung zu einer Zusammenfassung, um Tokens zu sparen</string>
+  <string name="chat_page_compress_prompt_hint">Die Basis-Anweisung lässt sich unter „Einstellungen → Standardmodell und Prompt → Prompts“ ändern</string>
   <string name="chat_page_compress_context_title">Unterhaltungsverlauf komprimieren</string>
   <string name="chat_page_compressing">Wird komprimiert...</string>
   <string name="chat_page_conversation_system_prompt">Systemprompt der Unterhaltung</string>
@@ -1056,6 +1057,8 @@
   <string name="setting_model_page_prompt_translation">Übersetzung</string>
   <string name="setting_model_page_prompt_title">Titelgenerierung</string>
   <string name="setting_model_page_prompt_ocr">OCR-Erkennung</string>
+  <string name="setting_model_page_prompt_compress">Kontextkomprimierung</string>
+  <string name="setting_model_page_compress_prompt_vars">Variablen: Sprache: {locale}</string>
   <string name="setting_display_page_bubble_opacity_title">Blasendeckkraft</string>
   <string name="setting_provider_page_include_history_reasoning">Reasoning aus Verlauf einbeziehen</string>
   <string name="assistant_page_gradient_background">Farbverlaufshintergrund</string>

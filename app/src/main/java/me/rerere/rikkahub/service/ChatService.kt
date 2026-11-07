@@ -769,11 +769,13 @@ class ChatService(
             }) { context.getString(R.string.chat_page_compress_handle_pending_tools) }
 
             // 必须和对话用同一个模型、同一套请求组装，才能命中提示词缓存
-            val turn = requestFactory.createContext(settingsStore.awaitLoaded(), conversation)
+            val settings = settingsStore.awaitLoaded()
+            val turn = requestFactory.createContext(settings, conversation)
             val summary = requestFactory.generateCompressionSummary(
                 turn = turn,
                 messages = conversation.currentMessages.take(endIndex),
                 compressPrompt = buildCompressPrompt(
+                    template = settings.compressPrompt,
                     additionalPrompt = additionalPrompt,
                     locale = Locale.getDefault().displayName,
                 ),

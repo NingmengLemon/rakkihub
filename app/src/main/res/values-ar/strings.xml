@@ -297,6 +297,7 @@
   <string name="chat_page_compress_additional_prompt_hint">حدد ما يجب الحفاظ عليه أو التركيز عليه</string>
   <string name="chat_page_compress_context">ضغط السجل</string>
   <string name="chat_page_compress_context_desc">ضغط المحادثة إلى ملخص لتوفير Token</string>
+  <string name="chat_page_compress_prompt_hint">يمكن تعديل التعليمات الأساسية من «الإعدادات → النموذج والمطالبة الافتراضيان → المطالبات»</string>
   <string name="chat_page_compress_context_title">ضغط سجل المحادثة</string>
   <string name="chat_page_compressing">جارٍ الضغط...</string>
   <string name="chat_page_conversation_system_prompt">مطالبة نظام المحادثة</string>
@@ -789,6 +790,8 @@
   <string name="setting_model_page_ocr_prompt_vars">المتغيرات: بيانات الصورة: {images}</string>
   <string name="setting_model_page_prompt">المطالبة</string>
   <string name="setting_model_page_prompt_ocr">التعرف الضوئي على الحروف</string>
+  <string name="setting_model_page_prompt_compress">ضغط السياق</string>
+  <string name="setting_model_page_compress_prompt_vars">المتغيرات: اللغة: {locale}</string>
   <string name="setting_model_page_prompt_title">توليد العنوان</string>
   <string name="setting_model_page_prompt_translation">الترجمة</string>
   <string name="setting_model_page_reset_to_default">إعادة التعيين إلى الافتراضي</string>

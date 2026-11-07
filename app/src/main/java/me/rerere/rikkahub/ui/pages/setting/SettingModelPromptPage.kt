@@ -35,9 +35,11 @@ import me.rerere.ai.core.ReasoningLevel
 import me.rerere.hugeicons.HugeIcons
 import me.rerere.hugeicons.stroke.ArrowRight01
 import me.rerere.hugeicons.stroke.Heading
+import me.rerere.hugeicons.stroke.Package01
 import me.rerere.hugeicons.stroke.ScanText
 import me.rerere.hugeicons.stroke.Translate
 import me.rerere.rikkahub.R
+import me.rerere.rikkahub.data.ai.prompts.DEFAULT_COMPRESS_PROMPT
 import me.rerere.rikkahub.data.ai.prompts.DEFAULT_OCR_PROMPT
 import me.rerere.rikkahub.data.ai.prompts.DEFAULT_TITLE_PROMPT
 import me.rerere.rikkahub.data.ai.prompts.DEFAULT_TRANSLATION_PROMPT
@@ -138,6 +140,14 @@ private enum class PromptSlot(
         default = DEFAULT_TITLE_PROMPT,
         get = { it.titlePrompt },
         set = { settings, value -> settings.copy(titlePrompt = value) },
+    ),
+    COMPRESS(
+        icon = HugeIcons.Package01,
+        title = R.string.setting_model_page_prompt_compress,
+        variables = R.string.setting_model_page_compress_prompt_vars,
+        default = DEFAULT_COMPRESS_PROMPT,
+        get = { it.compressPrompt },
+        set = { settings, value -> settings.copy(compressPrompt = value) },
     ),
     OCR(
         icon = HugeIcons.ScanText,

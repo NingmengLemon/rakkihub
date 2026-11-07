@@ -264,6 +264,7 @@
   <string name="chat_page_compress_additional_prompt_hint">指定要保留或关注的内容</string>
   <string name="chat_page_compress_context">压缩历史</string>
   <string name="chat_page_compress_context_desc">将对话压缩为摘要以节省令牌</string>
+  <string name="chat_page_compress_prompt_hint">基础指令可在「设置 → 默认模型和提示词 → 提示词」里修改</string>
   <string name="chat_page_compress_context_title">压缩对话历史</string>
   <string name="chat_page_compressing">正在压缩...</string>
   <string name="chat_page_conversation_system_prompt">对话系统提示</string>
@@ -987,6 +988,8 @@ mDNS 地址：使用 .local 主机名，同一网络中的其他设备可通过�
   <string name="setting_model_page_prompt_translation">翻译</string>
   <string name="setting_model_page_prompt_title">标题生成</string>
   <string name="setting_model_page_prompt_ocr">OCR识别</string>
+  <string name="setting_model_page_prompt_compress">上下文压缩</string>
+  <string name="setting_model_page_compress_prompt_vars">变量: 语言: {locale}</string>
   <string name="setting_display_page_bubble_opacity_title">气泡不透明度</string>
   <string name="setting_provider_page_include_history_reasoning">回传历史思考过程</string>
   <string name="setting_model_page_fast_model">快速模型</string>

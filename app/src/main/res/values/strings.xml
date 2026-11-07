@@ -264,6 +264,7 @@
   <string name="chat_page_compress_additional_prompt_hint">Specify what to preserve or focus on</string>
   <string name="chat_page_compress_context">Compress History</string>
   <string name="chat_page_compress_context_desc">Compress the conversation into a summary to save tokens</string>
+  <string name="chat_page_compress_prompt_hint">The base instructions can be edited in Settings → Default Model and Prompt → Prompts</string>
   <string name="chat_page_compress_context_title">Compress Conversation History</string>
   <string name="chat_page_compressing">Compressing...</string>
   <string name="chat_page_conversation_system_prompt">Conversation System Prompt</string>
@@ -1005,6 +1006,8 @@
   <string name="setting_model_page_prompt_translation">Translation</string>
   <string name="setting_model_page_prompt_title">Title Generation</string>
   <string name="setting_model_page_prompt_ocr">OCR Recognition</string>
+  <string name="setting_model_page_prompt_compress">Context Compression</string>
+  <string name="setting_model_page_compress_prompt_vars">Variables: Language: {locale}</string>
   <string name="setting_display_page_bubble_opacity_title">Bubble Opacity</string>
   <string name="setting_provider_page_include_history_reasoning">Include History Reasoning</string>
   <string name="assistant_page_gradient_background">Gradient Background</string>

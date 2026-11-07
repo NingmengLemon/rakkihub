@@ -97,6 +97,12 @@ fun CompressContextDialog(
                         maxLines = 4,
                     )
 
+                    Text(
+                        text = stringResource(R.string.chat_page_compress_prompt_hint),
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+
                     Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
                         Row(
                             modifier = Modifier.fillMaxWidth(),

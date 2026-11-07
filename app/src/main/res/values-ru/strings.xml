@@ -262,6 +262,7 @@
   <string name="chat_page_compress_additional_prompt_hint">Укажите, что сохранить или на чём сосредоточиться</string>
   <string name="chat_page_compress_context">Сжать историю</string>
   <string name="chat_page_compress_context_desc">Сжать переписку в краткое резюме, чтобы сэкономить токены</string>
+  <string name="chat_page_compress_prompt_hint">Основную инструкцию можно изменить в «Настройки → Модель и промпт по умолчанию → Промпты»</string>
   <string name="chat_page_compress_context_title">Сжать историю чата</string>
   <string name="chat_page_compressing">Сжатие...</string>
   <string name="chat_page_conversation_system_prompt">Системный запрос для беседы</string>
@@ -974,6 +975,8 @@
   <string name="setting_model_page_prompt_translation">Перевод</string>
   <string name="setting_model_page_prompt_title">Генерация заголовка</string>
   <string name="setting_model_page_prompt_ocr">OCR распознавание</string>
+  <string name="setting_model_page_prompt_compress">Сжатие контекста</string>
+  <string name="setting_model_page_compress_prompt_vars">Переменные: язык: {locale}</string>
   <string name="setting_display_page_bubble_opacity_title">Прозрачность пузырьков</string>
   <string name="setting_provider_page_include_history_reasoning">Отправлять историю рассуждений</string>
   <string name="setting_model_page_fast_model">Быстрая модель</string>
