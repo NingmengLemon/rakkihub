@@ -9,23 +9,22 @@
 | 功能 | 默认值 | 设置字段 | 界面入口 |
 | --- | --- | --- | --- |
 | 标题生成 | `DEFAULT_TITLE_PROMPT`（`data/ai/prompts/TitleSummary.kt`） | `titlePrompt` | 默认模型和提示词 → 提示词 |
-| 翻译 | `DEFAULT_TRANSLATION_PROMPT`（`prompts/Translation.kt`） | `translatePrompt` | 同上 |
-| OCR | `DEFAULT_OCR_PROMPT`（`prompts/OcrPrompt.kt`） | `ocrPrompt` | 同上 |
-| 上下文压缩 | `DEFAULT_COMPRESS_PROMPT`（`prompts/CompressPrompt.kt`） | `compressPrompt` | 同上（C44） |
-| 聊天建议 | `DEFAULT_SUGGESTION_PROMPT`（`data/datastore/Settings.kt`） | `suggestionPrompt` | 没有入口 |
-| 记忆整理 | `prompts/MemoryPrompts.kt` 现拼 | 无 | 无 |
-| 学习模式 | `prompts/LearningMode.kt` | 无 | 无 |
-| 工具说明 | 各工具的 `systemPrompt`（`data/ai/tools/`） | 无 | 无 |
+| 翻译 | `DEFAULT_TRANSLATION_PROMPT`（`data/ai/prompts/Translation.kt`） | `translatePrompt` | 同上 |
+| OCR | `DEFAULT_OCR_PROMPT`（`data/ai/prompts/OcrPrompt.kt`） | `ocrPrompt` | 同上 |
+| 上下文压缩 | `DEFAULT_COMPRESS_PROMPT`（`data/ai/prompts/CompressPrompt.kt`） | `compressPrompt` | 同上（C44） |
+| 聊天建议 | `DEFAULT_SUGGESTION_PROMPT`（`data/datastore/Settings.kt`），C6 已移除生成，只为解码旧设置保留 | `suggestionPrompt` | 无（功能已移除） |
+| 记忆整理 | `data/ai/prompts/MemoryPrompts.kt` 现拼 | 无 | 无 |
+| 学习模式 | `data/ai/prompts/LearningMode.kt` | 无 | 无 |
+| 工具说明 | `SkillsTools` 的 `systemPrompt`，其余工具用各自的 `description`（`data/ai/tools/`） | 无 | 无 |
 
 已知缺口：
 
-- `suggestionPrompt` 在设置里能改但没有 UI 入口。
 - 记忆整理、学习模式、工具说明这类写死在代码里，改需要动源码。
 - 标题、翻译、OCR 三份默认值没有统一的验收方式，改完只能靠人看输出。
 
 ## 重写计划
 
-顺序：先压缩（已有可编辑入口，改动只需要换默认值并补测试），再标题、翻译、OCR，最后决定建议/记忆/学习模式要不要开放。
+顺序：先压缩（已有可编辑入口，改动只需要换默认值并补测试），再标题、翻译、OCR，之后决定记忆整理、学习模式要不要开放。`suggestionPrompt` 是 C6 移除建议功能后留下的旧字段，只为解码旧设置，不在重写范围内。
 
 每一项的交付物一致：
 
@@ -56,6 +55,7 @@
 - Cline：<https://github.com/cline/cline/blob/main/sdk/packages/core/src/extensions/context/summarize-conversation.ts>
 - Roo Code：<https://github.com/RooCodeInc/Roo-Code/blob/main/src/core/condense/index.ts>
 - OpenCode：<https://github.com/sst/opencode/blob/dev/packages/core/src/session/compaction.ts>
+- Kilo Code：<https://github.com/Kilo-Org/kilocode/blob/main/packages/opencode/src/agent/prompt/compaction.txt>
 - OpenHands：<https://github.com/OpenHands/software-agent-sdk/tree/main/openhands-sdk/openhands/sdk/context/condenser/prompts>
 - Aider：<https://github.com/Aider-AI/aider/blob/main/aider/prompts.py>
 - Codex CLI：<https://github.com/openai/codex/blob/main/codex-rs/prompts/templates/compact/prompt.md>
@@ -63,6 +63,7 @@
 - Continue：<https://github.com/continuedev/continue/blob/main/core/util/conversationCompaction.ts>
 - Goose：<https://github.com/block/goose/blob/main/crates/goose-context-management/src/prompts/compaction.md>
 - SWE-agent：<https://github.com/SWE-agent/SWE-agent/blob/main/sweagent/agent/history_processors.py>
+- Cursor：闭源，只有行为观察（<https://forum.cursor.com/t/customizing-how-cursor-summarizes-context/160865>）
 
 ## 压缩提示词草稿
 
@@ -136,4 +137,4 @@ Rules:
 - 草稿的结构是否再裁并几段。
 - 默认模板是否继续用英文（其他提示词的默认值都是英文）。
 - 代码侧框定语加不加。
-- 建议（suggestion）、记忆整理、学习模式、工具说明这四类要不要开放编辑。
+- 记忆整理、学习模式、工具说明这三类要不要开放编辑。

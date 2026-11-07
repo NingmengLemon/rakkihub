@@ -1,5 +1,5 @@
 import { expect, test } from "bun:test";
-import { loadConfig } from "../src/config";
+import { loadConfig, type LanguageConfig } from "../src/config";
 import { Translator } from "../src/translator";
 
 test("glossary is appended to the prompt", () => {
@@ -8,12 +8,23 @@ test("glossary is appended to the prompt", () => {
   const entries = new Map([["system_prompt", "System Prompt"]]);
   const lang = (code: string) => config.targets.find((l) => l.code === code)!;
 
-  const arabic = translator.buildPrompt(entries, lang("values-ar"));
-  expect(arabic).toContain("Glossary for Arabic");
-  expect(arabic).toContain("مطالبة");
-  expect(arabic).toContain('"system_prompt": "System Prompt"');
+  const simplified = translator.buildPrompt(entries, lang("values-zh"));
+  expect(simplified).toContain("Glossary for Chinese (Simplified)");
+  expect(simplified).toContain("提示词");
+  expect(simplified).toContain('"system_prompt": "System Prompt"');
 
-  expect(translator.buildPrompt(entries, lang("values-zh"))).toContain("提示词");
-  // 未配置术语表的语言不追加术语段
-  expect(translator.buildPrompt(entries, lang("values-ru"))).not.toContain("Glossary");
+  expect(translator.buildPrompt(entries, lang("values-ja"))).toContain("Glossary for Japanese");
+});
+
+test("languages without a glossary get no glossary section", () => {
+  const translator = new Translator(loadConfig());
+  const entries = new Map([["system_prompt", "System Prompt"]]);
+  const noGlossary: LanguageConfig = {
+    code: "values-test",
+    name: "Test",
+    is_source: false,
+    glossary: {},
+  };
+
+  expect(translator.buildPrompt(entries, noGlossary)).not.toContain("Glossary");
 });

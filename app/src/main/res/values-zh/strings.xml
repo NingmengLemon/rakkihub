@@ -263,7 +263,7 @@
   <string name="chat_page_compress_additional_prompt">附加说明（可选）</string>
   <string name="chat_page_compress_additional_prompt_hint">指定要保留或关注的内容</string>
   <string name="chat_page_compress_context">压缩历史</string>
-  <string name="chat_page_compress_context_desc">将对话压缩为摘要以节省令牌</string>
+  <string name="chat_page_compress_context_desc">将对话压缩为摘要以节省 Token</string>
   <string name="chat_page_compress_prompt_hint">基础指令可在「设置 → 默认模型和提示词 → 提示词」里修改</string>
   <string name="chat_page_compress_context_title">压缩对话历史</string>
   <string name="chat_page_compressing">正在压缩...</string>
@@ -534,7 +534,7 @@
   <string name="search_detail_depth">深度</string>
   <string name="search_detail_engines">引擎</string>
   <string name="search_detail_language">语言</string>
-  <string name="search_detail_max_tokens">最大令牌数</string>
+  <string name="search_detail_max_tokens">最大Token数</string>
   <string name="search_detail_max_tokens_per_page">每页最大 Tokens</string>
   <string name="search_detail_model">型号</string>
   <string name="search_detail_name">名称</string>

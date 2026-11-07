@@ -60,9 +60,9 @@ to the translation prompt. To fix inconsistent terms:
 2. Preview affected entries, then retranslate them:
 
 ```bash
-bun tools/i18n/src/cli.ts retranslate -l values-ar --match '\bprompts?\b' --dry-run
-bun tools/i18n/src/cli.ts retranslate -l values-ar --match '\bprompts?\b'
-bun tools/i18n/src/cli.ts retranslate -l values-ar -m app --key some_key,other_key
+bun tools/i18n/src/cli.ts retranslate -l values-zh-rTW --match '\bprompts?\b' --dry-run
+bun tools/i18n/src/cli.ts retranslate -l values-zh-rTW --match '\bprompts?\b'
+bun tools/i18n/src/cli.ts retranslate -l values-zh-rTW -m app --key some_key,other_key
 ```
 
 `retranslate` only overwrites entries that already exist in the target language; `--match` is a case-insensitive

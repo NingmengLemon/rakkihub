@@ -9,7 +9,8 @@
 | `README.md` | 分支模型、上游同步流程、定制原则 |
 | [`checklist.md`](checklist.md) | 定制清单：索引与逐项的落点、理由、合并注意 |
 | [`build.md`](build.md) | 构建、测试、格式检查、设备上的 androidTest |
-| [`locale.md`](locale.md) | 8 份 locale 的增删文案与品牌改写 |
+| [`locale.md`](locale.md) | 四份 locale 的增删文案与品牌改写 |
+| [`prompts.md`](prompts.md) | 各功能默认提示词的现状、重写计划与压缩提示词草稿 |
 | [`backup/`](backup/README.md) | 官方备份的导入与导出：恢复链路、导入器、验收 |
 | [`roadmap.md`](roadmap.md) | 定位、阶段划分、独立更新、分发与合规 |
 

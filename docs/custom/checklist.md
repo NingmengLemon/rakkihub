@@ -129,7 +129,7 @@
 
 ### C12 改包名与应用名
 
-- 落点：`app/build.gradle.kts`（`applicationId` 改为 `top.lemoneko.rakkihub`）、`AndroidManifest.xml`（shortcut deep link 的 scheme 从 `rikkahub` 改为 `rakkihub`）、`res/xml/shortcuts.xml`（`android:data` 同步）、7 个 locale 的 `app_name` 改为 `RakkiHub`（德语是上游 3.1.1 才加的，见 [`locale.md`](locale.md)）、`ExampleInstrumentedTest`（不再写死旧包名，改与 `BuildConfig.APPLICATION_ID` 比对）
+- 落点：`app/build.gradle.kts`（`applicationId` 改为 `top.lemoneko.rakkihub`）、`AndroidManifest.xml`（shortcut deep link 的 scheme 从 `rikkahub` 改为 `rakkihub`）、`res/xml/shortcuts.xml`（`android:data` 同步）、7 个 locale 的 `app_name` 改为 `RakkiHub`（德语是上游 3.1.1 才加的）、`ExampleInstrumentedTest`（不再写死旧包名，改与 `BuildConfig.APPLICATION_ID` 比对）
 - 理由：自主 fork 阶段要与官方应用并存，安装标识与私有数据目录必须独立
 - 合并注意：`namespace` 保持 `me.rerere.rikkahub` 不动，类名、R 类与 `shortcuts.xml` 的 `targetClass` 都不受影响；`applicationIdSuffix = ".debug"` 保留，debug 包名是 `top.lemoneko.rakkihub.debug`；`${applicationId}` 拼的 authorities 与 `BuildConfig.APPLICATION_ID` 自动跟随
 
@@ -329,6 +329,6 @@
 
 ### C45 文案范围收成四份
 
-- 落点：删除 `app`、`search`、`oauth`、`ui` 四个模块的 `values-ar`、`values-de`、`values-ko-rKR`、`values-ru`（16 个目录）；`app/build.gradle.kts` 的 `localeFilters` 改成 `en`、`ja`、`zh`、`zh-rTW`；`tools/i18n/config.yml` 的 `languages` 只留 `values`、`values-zh`、`values-zh-rTW`、`values-ja`，`tools/i18n/README.md` 的示例同步；补上 `values-ja` 与 `values-zh-rTW` 缺的三条压缩上下文文案（`chat_page_compress_keep_recent`、它的描述、`chat_page_compress_not_enough_messages`）；`docs/custom/locale.md` 按四份重写。
+- 落点：删除 `app`、`search`、`oauth`、`ui` 四个模块的 `values-ar`、`values-de`、`values-ko-rKR`、`values-ru`（16 个目录）；`app/build.gradle.kts` 的 `localeFilters` 改成 `en`、`ja`、`zh`、`zh-rTW`；`tools/i18n/config.yml` 的 `languages` 只留 `values`、`values-zh`、`values-zh-rTW`、`values-ja`，`tools/i18n/README.md` 的示例同步；补上 `values-ja` 与 `values-zh-rTW` 缺的三条压缩上下文文案（`chat_page_compress_keep_recent`、它的描述、`chat_page_compress_not_enough_messages`）；把中文里译成「令牌 / 權杖 / 詞元」的地方统一回 `Token`（`chat_page_compress_context_desc`、`search_detail_max_tokens`、`search_detail_max_tokens_per_page`、`stats_page_cached_tokens`、`stats_page_input_tokens`、`stats_page_output_tokens`）；`docs/custom/locale.md` 按四份重写。
 - 理由：`tools/i18n` 用 Bun，本机跑不起来（没有 bun 与 `.env`），新文案只能手翻，8 份时每条要翻 7 次，四份只要 3 次；德、阿、韩、俄不在目标范围，繁中保留阅读习惯所以没删 `values-zh-rTW`。顺带清掉了上游自己没翻的三条压缩文案的缺条目债。
-- 合并注意：没有目录的语言回退到英文，繁中命中 `values-zh-rTW`。`localeFilters` 与资源目录要一起动：AGP 只按 filter 裁剪依赖库带的语言资源，自己留在仓库里的目录不会因为 filter 变小而消失。上游给被删语言补的翻译，移植时不用再抄；以后要恢复某个语言，从上游对应版本拷 `strings.xml` 再补本分支的 key。清单里历史条目写的「8 份 / 7 个 locale」指当时的份数，不改写。把 `tools/i18n` 重写成 Python 记在 [`roadmap.md`](roadmap.md) 的待办方向。
+- 合并注意：没有目录的语言回退到英文，繁中命中 `values-zh-rTW`。`localeFilters` 与资源目录要一起动：它是允许列表，不在列表里的语言资源不会打进 APK（包括 app 自己的），但仓库里留着的目录不会被它删掉。上游给被删语言补的翻译，移植时不用再抄；以后要恢复某个语言，从上游对应版本拷 `strings.xml` 再补本分支的 key。清单里历史条目写的「8 份 / 7 个 locale」指当时的份数，不改写。把 `tools/i18n` 重写成 Python 记在 [`roadmap.md`](roadmap.md) 的待办方向。
