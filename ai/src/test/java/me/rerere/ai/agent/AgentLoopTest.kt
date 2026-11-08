@@ -24,6 +24,8 @@ import me.rerere.ai.ui.StreamChunk
 import me.rerere.ai.ui.ToolApprovalState
 import me.rerere.ai.ui.UIMessage
 import me.rerere.ai.ui.UIMessagePart
+import me.rerere.ai.util.LlmFailure
+import me.rerere.ai.util.LlmFailureCode
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNotNull
@@ -31,6 +33,7 @@ import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
 import java.io.IOException
+import kotlin.time.Duration
 
 class AgentLoopTest {
     private val model = Model(modelId = "test-model")
@@ -86,6 +89,31 @@ class AgentLoopTest {
         // 第一步还没有内容的助手消息不能发给模型
         assertEquals(listOf(MessageRole.USER), hooks.prepared.single().map { it.role })
         assertEquals(setOf(finished.message.id), events.messageIds())
+    }
+
+    @Test
+    fun `empty reply is retried as a typed failure`() = runTest {
+        provider.stream { finish() }
+        provider.stream {
+            text("hello")
+            finish()
+        }
+
+        val events = runToEnd(
+            request(
+                retry = RetryPolicy.NETWORK.copy(
+                    initialDelay = Duration.ZERO,
+                    jitterRatio = 0.0,
+                )
+            )
+        )
+
+        val finished = events.finished()
+        assertEquals(AgentFinishReason.Completed, finished.reason)
+        assertEquals(listOf("hello"), finished.message.texts())
+        assertEquals(2, provider.requests.size)
+        val retry = events.filterIsInstance<AgentEvent.Retrying>().single()
+        assertEquals(LlmFailureCode.EMPTY_RESPONSE, (retry.attempt.cause as LlmFailure).code)
     }
 
     @Test

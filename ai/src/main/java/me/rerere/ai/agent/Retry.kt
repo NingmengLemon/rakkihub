@@ -4,24 +4,46 @@ import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.ensureActive
+import me.rerere.ai.util.LlmFailure
+import me.rerere.ai.util.LlmFailureCode
 import java.io.IOException
+import kotlin.random.Random
 import kotlin.time.Duration
+import kotlin.time.Duration.Companion.milliseconds
 import kotlin.time.Duration.Companion.seconds
 
 /**
- * 请求模型失败时的重试策略：最多重试 [maxRetries] 次，等待时间从 [initialDelay] 开始每次翻倍。
+ * 请求模型失败时的重试策略：最多重试 [maxRetries] 次，等待时间从 [initialDelay] 开始每次翻倍，
+ * 叠加 [jitterRatio] 抖动并限制在 [maxDelay] 内；服务端给出 `Retry-After` 时优先使用。
  *
- * 默认只重试 [IOException]，也就是连不上、超时、读到一半断开这类网络故障。
+ * 默认重试网络故障（[IOException]）和可恢复的 [LlmFailureCode]；鉴权、配额、请求非法和
+ * context overflow 不在默认重试范围内。
  */
 data class RetryPolicy(
     val maxRetries: Int,
     val initialDelay: Duration = 1.seconds,
-    val retryOn: (Throwable) -> Boolean = { it is IOException },
+    val maxDelay: Duration = 10.seconds,
+    val jitterRatio: Double = 0.1,
+    val retryableCodes: Set<LlmFailureCode> = DEFAULT_RETRYABLE_CODES,
+    val retryOn: ((Throwable) -> Boolean)? = null,
 ) {
+    fun shouldRetry(error: Throwable): Boolean {
+        retryOn?.let { return it(error) }
+        return error is IOException || (error is LlmFailure && error.code in retryableCodes)
+    }
+
     companion object {
+        private val DEFAULT_RETRYABLE_CODES = setOf(
+            LlmFailureCode.RATE_LIMIT,
+            LlmFailureCode.SERVER,
+            LlmFailureCode.TIMEOUT,
+            LlmFailureCode.TRANSPORT,
+            LlmFailureCode.EMPTY_RESPONSE,
+        )
+
         val NONE = RetryPolicy(maxRetries = 0)
 
-        /** 网络自动重试：最多 3 次，间隔 1s、2s、4s */
+        /** 网络自动重试：最多 3 次，基础间隔 1s、2s、4s，带 10% 抖动 */
         val NETWORK = RetryPolicy(maxRetries = 3)
     }
 }
@@ -50,13 +72,23 @@ suspend fun <T> withRetry(
             // 用户主动停止生成时，底层连接也可能以 IOException("canceled") 收尾；
             // 先检查协程状态，确保取消不会被当作网络波动重新拉起。
             currentCoroutineContext().ensureActive()
-            if (error is CancellationException || retries >= policy.maxRetries || !policy.retryOn(error)) {
+            if (error is CancellationException || retries >= policy.maxRetries || !policy.shouldRetry(error)) {
                 throw error
             }
             retries++
-            val backoff = policy.initialDelay * (1 shl (retries - 1))
+            val backoff = retryDelay(error, policy, retries)
             onRetry(RetryAttempt(error, retries, policy.maxRetries, backoff))
             delay(backoff)
         }
     }
+}
+
+private fun retryDelay(error: Throwable, policy: RetryPolicy, retry: Int): Duration {
+    val serverDelay = (error as? LlmFailure)?.retryAfterMs?.takeIf { it > 0 }?.milliseconds
+    if (serverDelay != null) return serverDelay.coerceAtMost(policy.maxDelay)
+
+    val base = policy.initialDelay * (1 shl (retry - 1))
+    val jitter = policy.jitterRatio.coerceIn(0.0, 1.0)
+    val factor = if (jitter == 0.0) 1.0 else 1.0 + Random.nextDouble(-jitter, jitter)
+    return (base * factor).coerceAtMost(policy.maxDelay).coerceAtLeast(Duration.ZERO)
 }

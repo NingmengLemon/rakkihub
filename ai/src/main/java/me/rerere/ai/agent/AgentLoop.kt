@@ -14,6 +14,8 @@ import me.rerere.ai.ui.ToolApprovalState
 import me.rerere.ai.ui.UIMessage
 import me.rerere.ai.ui.UIMessagePart
 import me.rerere.ai.ui.finishReasoning
+import me.rerere.ai.util.LlmFailure
+import me.rerere.ai.util.LlmFailureCode
 import me.rerere.ai.util.json
 import kotlin.time.Clock
 import kotlin.time.Duration
@@ -125,7 +127,11 @@ internal class AgentLoop(
                         throw StreamChunkHandlingException(e)
                     }
                 }
-                attempt.withStepStats(base, firstChunk?.elapsedNow() ?: Duration.ZERO)
+                val generated = attempt.withStepStats(base, firstChunk?.elapsedNow() ?: Duration.ZERO)
+                if (!generated.hasGeneratedContent(from = base.parts.size)) {
+                    throw LlmFailure("Model returned an empty response", LlmFailureCode.EMPTY_RESPONSE)
+                }
+                generated
             }
         } catch (e: StreamChunkHandlingException) {
             throw e.cause
@@ -141,7 +147,11 @@ internal class AgentLoop(
         var requestMark = TimeSource.Monotonic.markNow()
         val result = withRetry(request.retry, onRetry = { events.emit(AgentEvent.Retrying(it)) }) {
             requestMark = TimeSource.Monotonic.markNow()
-            request.provider.generateText(request.providerSetting, messages, params)
+            val result = request.provider.generateText(request.providerSetting, messages, params)
+            if (!result.message.hasGeneratedContent()) {
+                throw LlmFailure("Model returned an empty response", LlmFailureCode.EMPTY_RESPONSE)
+            }
+            result
         }
         val requestTime = requestMark.elapsedNow()
         // 和流式一样只追加 part，不并进之前步骤的文本或推理里，否则 newPartsFrom 之后就不全是这一步的内容了。
@@ -218,6 +228,14 @@ internal class AgentLoop(
 
     private suspend fun finish(reason: AgentFinishReason) {
         events.emit(AgentEvent.Finished(checkNotNull(message), reason))
+    }
+}
+
+private fun UIMessage.hasGeneratedContent(from: Int = 0): Boolean = parts.drop(from).any { part ->
+    when (part) {
+        is UIMessagePart.Text -> part.text.isNotBlank()
+        is UIMessagePart.Reasoning -> part.reasoning.isNotBlank()
+        else -> true
     }
 }
 

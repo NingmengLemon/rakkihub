@@ -173,7 +173,7 @@
 | `speech/` | C5 删掉了全部运行时实现，只留两个序列化类与它们的序列化测试 | 不看 |
 | `mediagen/` | C1 保留模块以维持数据兼容，界面不使用 | 不主动看，改到 `MediaGenerationProviderSetting` 这类持久化类型时复核 |
 
-`ai/` 下有七处改动：C3 删掉了 `ai/util/Request.kt` 里给 aihubmix.com 加 `APP-Code` 请求头的分支；C52 把 `ClaudeProvider` 的缓存断点收敛到官方标准；C53 把 Claude 缓存策略改成按 provider 切换，默认保留上游原来的 4 个断点；C47 在 `ai/ui/Message.kt` 新增了只读的 `contextLimitStart`，不改 `limitContext`；C51 在 `ai/ui/Message.kt` 新增了序列化字段 `isCompressionPrompt`，用于标记压缩提示词；C58 在 `ai/ui/Message.kt` 新增了 `status`、`isModelVisible`、`filterModelVisible` 和 `mergeAdjacentUserMessages`；C59 让五个 `StreamChunkDecoder` 在未见终止事件时抛 `IOException`，并在五个 provider 接线点的 `onClosed` 里 `close(e)`。C35 的 `filterByKeywords` 与上游 `5ad19405` 逐字一致，不算分叉。移植上游对这些文件的改动时保留这七处。
+`ai/` 下有八处改动：C3 删掉了 `ai/util/Request.kt` 里给 aihubmix.com 加 `APP-Code` 请求头的分支；C52 把 `ClaudeProvider` 的缓存断点收敛到官方标准；C53 把 Claude 缓存策略改成按 provider 切换，默认保留上游原来的 4 个断点；C47 在 `ai/ui/Message.kt` 新增了只读的 `contextLimitStart`，不改 `limitContext`；C51 在 `ai/ui/Message.kt` 新增了序列化字段 `isCompressionPrompt`，用于标记压缩提示词；C58 在 `ai/ui/Message.kt` 新增了 `status`、`isModelVisible`、`filterModelVisible` 和 `mergeAdjacentUserMessages`；C59 让五个 `StreamChunkDecoder` 在未见终止事件时抛 `IOException`，并在五个 provider 接线点的 `onClosed` 里 `close(e)`；C61 在 `ErrorParser.kt` 增加 `LlmFailureCode`/`HttpException` 错误码和 `Retry-After`，`RetryPolicy` 按码表、jitter 和 `maxDelay` 重试，`AgentLoop` 把空回复转成 `EMPTY_RESPONSE`。C35 的 `filterByKeywords` 与上游 `5ad19405` 逐字一致，不算分叉。移植上游对这些文件的改动时保留这八处。
 
 上游从 3.0.0 起把多步生成循环放进 `ai/`（`ai/src/main/java/me/rerere/ai/agent/AgentLoop.kt`），3.1.1 又把工具执行计时与 models.dev 的模型能力数据放进去。现在还值得看 `ai/` 吗，取决于它是不是一块能单独参考的区域：如果它继续吸收 `app/` 侧的耦合，读改动的成本会变高。
 
@@ -291,6 +291,7 @@
 | C58 失败与中断回复状态 | L3 | 无（消息状态与请求过滤） |
 | C59 截断流识别与停止结算 | L3 | 无（provider 流终止与停止收尾） |
 | C60 审批期间冻结 turn 上下文 | L3 | 无（审批 turn 上下文） |
+| C61 结构化失败与重试策略 | L3 | 无（错误分类与重试） |
 
 ### 依赖链
 
@@ -324,7 +325,7 @@ DSH 对照版本 `dsh-v0.2.1-rc.5`（`b830ec950f`）。结论：DSH 也不做逐
 RikkaHub 现状：
 
 - 重试单位是 step，`withRetry` 失败后回到 `stepStart`，前面的 step 和工具结果保留；单步回复看起来就是整条重来。DSH 也是这个语义，不是 RikkaHub 独有。
-- 只重试 `IOException`。流式请求的空 body HTTP 错误现在由 `onFailure` 包成 `IOException`，会按策略重试；带 body 的流式错误大多仍是 `HttpException`（Google 是普通 `Exception`），不重试。非流式 `generateText` 的非 2xx 仍是普通 `Exception`，不会重试；空回复也不会重试。固定 3 次，1s/2s/4s，无 jitter，无 `Retry-After`；开关是全局的。
+- C61 把失败归一化为 `HttpException`/`LlmFailure`：流式和非流式的 2xx 之外的响应都带 HTTP status、错误码和 `Retry-After`；默认只重试 `RATE_LIMIT`、`SERVER`、`TIMEOUT`、`TRANSPORT`、`EMPTY_RESPONSE`，鉴权、配额、非法请求和 context overflow 不重试。空回复现在按 `EMPTY_RESPONSE` 重试一次；固定最多 3 次，基础间隔 1s/2s/4s，10% jitter，`Retry-After` 会被 `maxDelay` 截断；开关仍是全局的。`retryOn` 保留为自定义逃生口。
 - C58 已给失败和用户停止的回复加 `FAILED`/`INTERRUPTED` 状态；请求组装、标题生成、记忆整理和 `read_conversations` 都过滤 `FAILED`，失败半截不会再作为普通回复进入下一轮。多步工具调用在中途失败时仍按整条消息隔离。
 - 失败后待执行工具在下次发送时补成 `cancelled by user`，不区分用户停止和网络失败。
 - UI 有失败/中断标记，但没有重试 attempt 行和倒计时；错误卡片没有重试按钮；`usage_record` 每次尝试一行，但没有成功/失败状态。
@@ -360,8 +361,8 @@ RikkaHub 现状：
 P1 分批：P1a 截断 SSE 与停止结算，P1b 审批分支与配置快照，P1c idle watchdog、稳定错误码重试、overflow 兜底。
 
 1. P0 失败 attempt 隔离已由 C58 完成；多步工具调用的 per-step 细化随工具恢复一起做。
-2. P1a 截断 SSE 与停止结算已由 C59 完成；P1b 审批分支与配置快照已由 C60 完成；下一步做 P1c。
-3. P1c 做 idle watchdog、稳定错误码重试、overflow 兜底。
+2. P1a 截断 SSE 与停止结算已由 C59 完成；P1b 审批分支与配置快照已由 C60 完成。
+3. P1c 的稳定错误码重试已由 C61 完成；下一步做 idle watchdog 和 overflow 兜底。
 4. P2 按工具恢复、进程死亡与 C50、队列、上下文压缩、scratch 分批处理。
 
 范围说明：C59 已逐行核对五个 decoder 的终止判定和五个 provider 接线点的 `onClosed`，并用 `:ai:testDebugUnitTest` 全量验证；工具并发没有展开，当前 RikkaHub 按顺序执行，未发现正确性问题，只是并发效率较低。

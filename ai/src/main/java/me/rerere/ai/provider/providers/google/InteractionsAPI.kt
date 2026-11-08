@@ -54,6 +54,8 @@ import me.rerere.ai.util.mergeCustomBody
 import me.rerere.ai.util.mergeCustomHeaders
 import me.rerere.ai.util.parseErrorDetail
 import me.rerere.ai.util.stringSafe
+import me.rerere.ai.util.toHttpException
+import me.rerere.ai.util.withResponse
 import me.rerere.common.http.await
 import me.rerere.common.http.jsonArrayOrNull
 import me.rerere.common.http.jsonObjectOrNull
@@ -91,10 +93,11 @@ internal class InteractionsAPI(
 
         // await() waits for the response headers; reading the body can still block.
         client.newCall(request).await().use { response ->
+            val bodyStr = response.body.string()
             if (!response.isSuccessful) {
-                throw Exception("Failed to get response: ${response.code} ${response.body.string()}")
+                throw response.toHttpException(bodyStr)
             }
-            val bodyJson = json.parseToJsonElement(response.body.string()).jsonObject
+            val bodyJson = json.parseToJsonElement(bodyStr).jsonObject
             parseInteraction(bodyJson, fallbackModel = params.model.modelId)
         }
     }
@@ -143,9 +146,9 @@ internal class InteractionsAPI(
                 val bodyRaw = response?.body?.stringSafe()
                 try {
                     if (!bodyRaw.isNullOrBlank()) {
-                        exception = json.parseToJsonElement(bodyRaw).parseErrorDetail()
+                        exception = json.parseToJsonElement(bodyRaw).parseErrorDetail().withResponse(response)
                     } else if (t == null && response != null) {
-                        exception = java.io.IOException("Interactions request failed: ${response.code}")
+                        exception = response.toHttpException()
                     }
                 } catch (e: Throwable) {
                     Log.w(TAG, "onFailure: failed to parse from $bodyRaw")

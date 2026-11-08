@@ -63,8 +63,11 @@ import me.rerere.ai.util.encodeBase64
 import me.rerere.ai.util.json
 import me.rerere.ai.util.mergeCustomBody
 import me.rerere.ai.util.mergeCustomHeaders
+import me.rerere.ai.util.parseErrorDetail
 import me.rerere.ai.util.removeElements
 import me.rerere.ai.util.stringSafe
+import me.rerere.ai.util.toHttpException
+import me.rerere.ai.util.withResponse
 import me.rerere.common.http.await
 import me.rerere.common.http.jsonPrimitiveOrNull
 import me.rerere.common.http.sse.newEventSource
@@ -208,11 +211,10 @@ class GoogleProvider(private val client: OkHttpClient, context: Context? = null)
         )
 
         val response = client.newCall(request).await()
-        if (!response.isSuccessful) {
-            throw Exception("Failed to get response: ${response.code} ${response.body?.string()}")
-        }
-
         val bodyStr = response.body?.string() ?: ""
+        if (!response.isSuccessful) {
+            throw response.toHttpException(bodyStr)
+        }
         val bodyJson = json.parseToJsonElement(bodyStr).jsonObject
 
         val candidate = bodyJson["candidates"]?.jsonArray?.firstOrNull()?.jsonObject
@@ -310,17 +312,10 @@ class GoogleProvider(private val client: OkHttpClient, context: Context? = null)
                 try {
                     if (t == null && response != null) {
                         val bodyStr = response.body.stringSafe()
-                        if (!bodyStr.isNullOrEmpty()) {
-                            val bodyElement = json.parseToJsonElement(bodyStr)
-                            println(bodyElement)
-                            if (bodyElement is JsonObject) {
-                                exception = Exception(
-                                    bodyElement["error"]?.jsonObject?.get("message")?.jsonPrimitive?.content
-                                        ?: "unknown"
-                                )
-                            }
+                        exception = if (!bodyStr.isNullOrEmpty()) {
+                            json.parseToJsonElement(bodyStr).parseErrorDetail().withResponse(response)
                         } else {
-                            exception = java.io.IOException("Google request failed: ${response.code}")
+                            response.toHttpException()
                         }
                     }
                 } catch (e: Throwable) {

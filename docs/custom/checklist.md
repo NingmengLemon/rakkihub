@@ -68,6 +68,7 @@
 | C58 | 失败与中断回复状态 | 改造 |
 | C59 | 截断流识别与停止结算 | 改造 |
 | C60 | 审批期间冻结 turn 上下文 | 改造 |
+| C61 | 结构化失败与重试策略 | 改造 |
 
 ## 明细
 
@@ -449,3 +450,10 @@
 - 理由：审批恢复原来重新 `createContext`，审批期间改模型/provider 会把工具结果和工具 schema 发给新配置；切走后 `isAwaitingToolApproval` 变 false，pending 调用成孤儿，下一次 `withoutUnresumableToolCalls` 会整条删除消息。冻结后配置改动从下一轮生效。regenerate 如果先截断再发现被挡住，会留下半成功历史；用显式 `resumeApproval` 取代“末条消息有没有可恢复工具”的猜测，也避免审批恢复在非末条消息上误判。
 - 合并注意：冻结只存内存，进程死亡或会话重建后丢失，审批恢复退化为当时的配置。`runTurn` 在 `createAgent` 之前失败时 frozen 已经被消费，批准状态已经写进消息，审批 UI 不再出现；下一次发送的 `finishInterruptedPendingTools` 会把这条已批准工具写成 `cancelled by user`，不是“用当前配置重跑”，这个边界不要当成可重试审批。分支切换被拒绝时 `ChatVM` 只记日志，Web 路由返回 409；如果要做可见提示，需要在 ChatVM 加文案。审批期间改配置不报错，只影响下一轮；这是与“直接拒绝”不同的取舍。`canRegenerate()` 同时拒绝“有 job 在跑时重新生成更早消息”，这是有意从原来的接管改成拒绝，避免审批恢复被新 job 顶掉。本批同时补了 C59 的 `[DONE]` 用例，登记在 C59，不算 C60 改 `ai/`。
 - 测试：`ConversationSessionTest` 覆盖 `replace` 清空 frozen approval turn；`ConversationSession.canRegenerate()` 由同一测试类覆盖正常、待审批和冻结三种结果；`:app:testGithubDebugUnitTest` 687 条里只有已知 Windows 7 失败，`:ai:testDebugUnitTest` 全量通过；`assembleGithubDebug` 通过。手动验收：多工具部分审批、批准、拒绝、回答各走一遍；审批中改模型/provider 再批，工具结果仍发给原配置；审批中切分支被拒；审批中 regenerate 被拒且历史不变；停止（审批态 App 和浮窗都没有停止按钮，只有 Web `/stop` 可验证）后 frozen 清空且 pending 工具收尾。
+
+### C61 结构化失败与重试策略
+
+- 落点：`ErrorParser.kt` 新增 `LlmFailureCode`、`LlmFailure`，`HttpException` 带上 code、HTTP status 和 `Retry-After`；`toHttpException`、`withResponse` 负责从响应归一化。五个聊天 provider 接线点（Claude、ChatCompletions、Responses、Google generateContent、Interactions）的非流式非 2xx 改抛 `HttpException`，流式 `onFailure` 的解析错误附加响应状态，空响应体也保留状态。`RetryPolicy` 改为按错误码允许列表重试，支持 `maxDelay`、10% jitter 和 `Retry-After`；`AgentLoop` 在流式和非流式路径把空回复包成 `EMPTY_RESPONSE`，进入同一重试循环。
+- 理由：原来只按 `IOException` 判断，HTTP 429/5xx 的 JSON 错误大多不重试；空回复直接以完成状态落库；重试固定 1s/2s/4s，没有 jitter，也不看服务端 `Retry-After`。
+- 合并注意：默认只重试 `RATE_LIMIT`、`SERVER`、`TIMEOUT`、`TRANSPORT`、`EMPTY_RESPONSE`；`AUTH`、`QUOTA`、`INVALID_REQUEST`、`CONTEXT_WINDOW_EXCEEDED` 不重试。`RetryPolicy` 的 `retryOn` 仍是可选的逃生口，自定义策略优先于码表。`Retry-After` 会被 `maxDelay` 截断，不做“服务端要求超过上限就放弃”的区分；jitter 固定 10%，测试用 `jitterRatio = 0`。空回复判定只把空白 Text/Reasoning 当空，Tool、图片、文档等 part 都算有内容；这会让某些本来静默成功的空回复变成重试后错误，是预期行为。C3 的 `ai/` 小改动原则下，这是第八处分叉。
+- 测试：`RetryTest` 覆盖码表、`Retry-After` 截断、jitter 归零后的固定间隔和取消；`ErrorParserTest` 覆盖 401/402/429/5xx/400 context 分类与 `Retry-After` 解析；`AgentLoopTest` 覆盖空回复重试一次后成功；`:ai:testDebugUnitTest` 全量通过；`:app:assembleGithubDebug` 通过。`:app:testGithubDebugUnitTest` 仍为已知 Windows 7 失败，本轮没有改 app。

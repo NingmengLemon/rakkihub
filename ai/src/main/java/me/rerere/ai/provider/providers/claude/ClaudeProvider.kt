@@ -70,6 +70,8 @@ import me.rerere.ai.util.mergeCustomBody
 import me.rerere.ai.util.mergeCustomHeaders
 import me.rerere.ai.util.parseErrorDetail
 import me.rerere.ai.util.stringSafe
+import me.rerere.ai.util.toHttpException
+import me.rerere.ai.util.withResponse
 import me.rerere.common.http.await
 import me.rerere.common.http.jsonPrimitiveOrNull
 import me.rerere.common.http.sse.newEventSource
@@ -310,11 +312,10 @@ class ClaudeProvider(private val client: OkHttpClient, context: Context? = null)
         Log.i(TAG, "generateText: ${json.encodeToString(requestBody)}")
 
         val response = client.newCall(request).await()
-        if (!response.isSuccessful) {
-            throw Exception("Failed to get response: ${response.code} ${response.body?.string()}")
-        }
-
         val bodyStr = response.body?.string() ?: ""
+        if (!response.isSuccessful) {
+            throw response.toHttpException(bodyStr)
+        }
         val bodyJson = json.parseToJsonElement(bodyStr).jsonObject
 
         // 从 JsonObject 中提取必要的信息
@@ -402,13 +403,13 @@ class ClaudeProvider(private val client: OkHttpClient, context: Context? = null)
                     if (!bodyRaw.isNullOrBlank()) {
                         val bodyElement = Json.parseToJsonElement(bodyRaw)
                         Log.i(TAG, "Error response: $bodyElement")
-                        exception = bodyElement.parseErrorDetail()
+                        exception = bodyElement.parseErrorDetail().withResponse(response)
                     }
                 } catch (e: Throwable) {
                     Log.w(TAG, "onFailure: failed to parse from $bodyRaw")
                     e.printStackTrace()
                 } finally {
-                    close(exception ?: java.io.IOException("Claude stream failed"))
+                    close(exception ?: response?.toHttpException() ?: java.io.IOException("Claude stream failed"))
                 }
             }
 

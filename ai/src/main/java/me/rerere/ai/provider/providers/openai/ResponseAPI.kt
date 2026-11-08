@@ -59,6 +59,8 @@ import me.rerere.ai.util.mergeCustomBody
 import me.rerere.ai.util.mergeCustomHeaders
 import me.rerere.ai.util.parseErrorDetail
 import me.rerere.ai.util.stringSafe
+import me.rerere.ai.util.toHttpException
+import me.rerere.ai.util.withResponse
 import me.rerere.common.http.await
 import me.rerere.common.http.jsonObjectOrNull
 import me.rerere.common.http.jsonPrimitiveOrNull
@@ -136,11 +138,11 @@ class ResponseAPI(
 
         // await() waits for the response headers; reading the body can still block.
         client.newCall(request).await().use { response ->
+            val bodyStr = response.body.string()
             if (!response.isSuccessful) {
-                throw Exception("Failed to get response: ${response.code} ${response.body.string()}")
+                throw response.toHttpException(bodyStr)
             }
 
-            val bodyStr = response.body.string()
             Log.i(TAG, "generateText: $bodyStr")
             val bodyJson = json.parseToJsonElement(bodyStr).jsonObject
             parseResponseOutput(bodyJson)
@@ -204,14 +206,17 @@ class ResponseAPI(
                     if (!bodyRaw.isNullOrBlank()) {
                         val bodyElement = Json.parseToJsonElement(bodyRaw)
                         println(bodyElement)
-                        exception = bodyElement.parseErrorDetail()
+                        exception = bodyElement.parseErrorDetail().withResponse(response)
                         Log.i(TAG, "onFailure: $exception")
                     }
                 } catch (e: Throwable) {
                     Log.w(TAG, "onFailure: failed to parse from $bodyRaw")
                     e.printStackTrace()
                 } finally {
-                    close(exception ?: java.io.IOException("OpenAI Responses stream failed"))
+                    close(
+                        exception ?: response?.toHttpException()
+                            ?: java.io.IOException("OpenAI Responses stream failed")
+                    )
                 }
             }
 
