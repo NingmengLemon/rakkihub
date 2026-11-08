@@ -312,5 +312,31 @@
 - 统一重写各功能的默认提示词。现状、调研结论与压缩提示词草稿在 [`prompts.md`](prompts.md)，先做压缩，再按同一套方法过标题、翻译、OCR。
 - 压缩交互的改进：面板里临时换模型（换的时候这次请求去掉 `cache_control`）、思考强度单独可配、压缩请求的实时状态（tok/s、思考/输出阶段；流式已由 C51 完成）。
 - 把 `tools/i18n` 从 Bun 重写成 Python：现在本机跑不起来（没有 bun 和 `.env`），新文案只能手翻；重写后接回同一套 config，保留缺条目与未使用条目的检查。
-- 自动重试按状态码判定：provider 的错误带上状态码，408、429、5xx 加入重试，其余 4xx 不重试，并读取 `Retry-After` 或 SSE 的 retry 提示；当前只重试 `IOException`，429、5xx 直接失败，SSE 的 `retryMillis` 解析后没有使用。
-- 统计区分失败尝试：`usage_record` 现在每次尝试都记一行，无法看出是成功请求还是失败重试；考虑加 attempt 状态，或只把成功请求计入缓存命中率，失败尝试仍保留用量成本。
+
+### 重试、失败尝试与用量
+
+DSH 对照版本 `dsh-v0.2.1-rc.5`（`b830ec950f`）。结论：DSH 也不做逐 token 续传，重试单位是 agent step；失败 attempt 以 `assistant/attempt` 落日志但不进入模型历史，成功才写 `assistant/message`；用户主动停止且已有内容时写 `interrupted: true` 的 `assistant/message`。重试策略由 provider 拥有，默认对 `EMPTY_RESPONSE`、`RATE_LIMIT`、`SERVER`、`TIMEOUT`、`TRANSPORT` 最多重试 5 次，也就是最多 6 次请求；退避从 500ms 到 10s，10% 对称抖动，读取 `Retry-After`；每次重试先落 `llm/retry` 再等待。参考文件：`packages/llm/llm-retry`、`packages/llm/llm/src/retry-policy.ts`、`packages/core/agent-loop/src/agent.ts`、`packages/core/session/README.md`、`packages/llm/llm-deepseek/src/transport.ts`。
+
+RikkaHub 现状：
+
+- 重试单位是 step，`withRetry` 失败后回到 `stepStart`，前面的 step 和工具结果保留；单步回复看起来就是整条重来。DSH 也是这个语义，不是 RikkaHub 独有。
+- 只重试 `IOException`。HTTP 429、5xx、空回复不会重试；固定 3 次，1s/2s/4s，无 jitter，无 `Retry-After`；开关是全局的。
+- 重试耗尽或关闭自动重试时，最后一次预览会作为普通 assistant 消息落库，下一轮请求会带上它；没有 failed/interrupted 标记。用户主动停止同样没有标记。
+- 失败后待执行工具在下次发送时补成 `cancelled by user`，不区分用户停止和网络失败。
+- UI 只有 processingStatus 一行；错误卡片没有重试按钮；`usage_record` 每次尝试一行，但没有成功/失败状态。
+
+待办：
+
+- P0 失败 attempt 与成功消息分开。给 `UIMessage` 加状态（`COMPLETE`、`INTERRUPTED`、`FAILED`，旧消息默认 `COMPLETE`），或给节点加单独的 failed attempt 记录。失败时标记 `FAILED`，UI 保留半截文本与失败标记，但组装请求时过滤掉；用户主动停止标记 `INTERRUPTED`，允许进入历史，因为用户已经看到；重试成功只留成功消息。失败或取消的工具调用用各自语义的 tool result，不要统一写 `cancelled by user`。验收：中途失败后下一次请求不包含失败半截；用户停止的半截进入历史；失败 attempt 的工具不会重新执行；连发两条 user 消息时 provider 不报错，必要时合并。这一条优先于统计。
+- P1 稳定错误码与可配置策略。provider 非 2xx、传输异常、空回复统一成带 `code`、`status`、`retryAfterMs` 的失败类型，覆盖 `AUTH`、`QUOTA`、`RATE_LIMIT`、`SERVER`、`TIMEOUT`、`TRANSPORT`、`EMPTY_RESPONSE`、`CONTEXT_WINDOW_EXCEEDED`、`INVALID_REQUEST`、`UNKNOWN`。策略至少 normal mode：`maxRetries`、`retryableCodes`、`initialDelay`、`maxDelay`、`jitter`；默认只重试瞬时错误，读取 `Retry-After` 并设上限。保留 step 级重试，不做 prefill 续写。验收：429、5xx、空回复可重试；400、401、403、额度、上下文超限不重试；用户停止可取消等待；重试不重复工具副作用；重试请求与前缀缓存兼容。
+- P2 重试状态 UI。attempt 行或卡片显示编号、失败原因、等待时间和倒计时；失败消息有标记；错误卡片提供重试本步。不要在重试时静默清空半截内容，至少保留可见的失败 attempt。
+- P3 用量区分成功与失败 attempt。`usage_record` 加 outcome、attempt、retryId 或等价字段，统计页不把失败尝试计入缓存命中率，但保留成本；消息卡片继续只显示成功 attempt 的 usage。验收：旧数据默认成功或未知，迁移可回滚。
+
+### 下一步 DSH 对照检查
+
+- 工具失败与取消恢复：DSH 的 `TOOL_NOT_STARTED`、`TOOL_OUTCOME_UNKNOWN` 与 RikkaHub 的 `withoutUnresumableToolCalls`、`cancelInterruptedTools` 对照，重点看有副作用的工具会不会被盲目重试。
+- 流空闲与超时：DSH 有 `streamIdleTimeoutMs`，默认 5 分钟，超时归类为 `TIMEOUT`；RikkaHub 只有 OkHttp 的 10 分钟 readTimeout，没有 idle watchdog，检查长时间无 chunk 的卡死和重试时机。
+- 进程死亡与后台恢复：DSH 用事件日志保存 attempt 和 retry；RikkaHub 有 C50 定期保存，检查生成或退避中被杀后会不会留下无标记半截、错误状态丢失。
+- 审批、队列与 turn 边界：DSH 用 step、turn 和 `agent/request-error`；RikkaHub 用 messageQueue、pending tool 和审批状态，检查审批中切换模型、停止、删除会话的行为。
+- 上下文溢出：DSH 由 compaction 监听 `agent/request-error` 恢复；RikkaHub 是主动压缩和截断，检查 provider 仍返回 context overflow 时有没有兜底。
+- 工具并发与屏障：DSH 分 exclusive 与 parallel-safe；RikkaHub 目前按顺序执行，检查是否有可并行工具、副作用顺序和取消时已经开始执行的工具。
