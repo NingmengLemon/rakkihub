@@ -15,7 +15,6 @@ import me.rerere.rikkahub.ui.pages.extensions.workspace.WorkspaceTerminalSession
 import me.rerere.rikkahub.utils.EmojiData
 import me.rerere.rikkahub.utils.EmojiUtils
 import me.rerere.rikkahub.utils.JsonInstant
-import me.rerere.rikkahub.utils.SoundEffectPlayer
 import me.rerere.rikkahub.web.WebServerManager
 import org.koin.dsl.module
 
@@ -36,10 +35,6 @@ val appModule = module {
 
     single<EmojiData> {
         EmojiUtils.loadEmoji(get())
-    }
-
-    single {
-        SoundEffectPlayer(get())
     }
 
     single {

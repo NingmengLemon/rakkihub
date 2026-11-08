@@ -61,6 +61,7 @@
 | C51 | 压缩走可见生成轮次 | 改造 |
 | C52 | Claude 缓存断点按官方标准收敛 | 改造 |
 | C53 | Claude 缓存断点按提供商切换 | 改造 |
+| C54 | 移除关于页图标点击彩蛋并清理相关死代码 | 移除 |
 
 ## 明细
 
@@ -393,3 +394,10 @@
 - 理由：上游原来的激进策略用了很久，只在个别中转补断点时遇到一次 Found 5；默认保留激进能继续拿到更多缓存断点，遇到 400 的 provider 手动切标准即可。标准是官方推荐的两断点组合，给中转补断点留余量。策略是 provider 级，不是助手级，切换后同一 provider 的所有 Claude 请求生效。
 - 合并注意：新字段带默认值，旧设置反序列化为 AGGRESSIVE，升级后与 C52 之前的行为一致；STANDARD 是 C52 的结果，AGGRESSIVE 是上游 `d2e52106` 的原始组合；两个模式都保留顶层自动缓存，STANDARD 只有在没有 system 时才给 tools 断点；改上游 ClaudeProvider 时按这个分叉合。
 - 测试：`ClaudePromptCacheRequestTest` 标准策略 7 条加激进策略 6 条（默认激进 4 断点、三条 user 时只标中间一条、无 system 时 3 断点、无 system 且无 tools 时 2 断点、只有一条 user 时 3 断点、1h TTL 在四个断点），共 13 条；`ClaudeRequestMessageTest` 7 条、`ClaudeServerToolTest` 10 条仍过。
+
+### C54 移除关于页图标点击彩蛋并清理相关死代码
+
+- 落点：`SettingAboutPage` 删掉 logo 点击的 emoji 喷射、音效、形状变形、按下缩放和坐标跟踪（去掉 `EmojiBurstHost`、`SoundEffectPlayer`、`logoMorphShape`、`graphicsLayer`/`onGloballyPositioned`），保留静态的 `rememberAppLogoLayers` 绘制并加 `clipToBounds`（图层按 108dp 画进 136dp 盒子，不裁会溢出），版本号长按进 Debug 保留；同时删掉 `utils/SoundEffectPlayer.kt`、Koin 绑定、`res/raw/bingbingbing.mp3`/`gangguan.mp3`，以及没有调用方的 `ui/easteregg/EmojiBurst.kt`；`AppLogo.kt` 的 `logoMorphShape` 保留给浮动窗口。
+- 理由：关于页只需要静态图标和版本信息；删掉彩蛋后音效播放器、raw 音效和 EmojiBurst 都没有调用方，按 C5 的约定一并清掉。
+- 合并注意：`EmojiBurst.kt` 是上游 `ui/` 的文件，删它是为了清死代码；上游改 `SettingAboutPage` 时按这个删。关于页图标仍复用 `R.mipmap.ic_launcher`；静态图标用方形裁剪，没有无障碍描述，属于装饰图。
+- 测试：编译通过；点击 logo 不再有喷射、音效和变形；版本号长按仍进 Debug；浅色模式下没有深色背景溢出。
