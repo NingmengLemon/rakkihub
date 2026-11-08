@@ -1,0 +1,20 @@
+{
+  // 定制文档按整段写，不折行；README 用居中 HTML；表格用紧凑竖线，不强制对齐
+  "config": {
+    "MD013": false,
+    "MD033": false,
+    "MD041": false,
+    "MD060": false
+  },
+  "globs": [
+    "docs/**/*.md",
+    "AGENTS.md",
+    "README.md",
+    "terminal/README.md"
+  ],
+  "ignores": [
+    "**/node_modules/**",
+    "**/build/**",
+    ".agents/**"
+  ]
+}

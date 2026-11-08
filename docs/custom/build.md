@@ -2,11 +2,12 @@
 
 ## 前提
 
-以下三项不在仓库内，缺任何一项都会在特定任务上失败：
+以下四项不在仓库内，缺任何一项都会在特定任务上失败：
 
 - JDK 必须是 HotSpot。默认 `JAVA_HOME` 指向 OpenJ9 的 JDK 21，KSP 会抛 `NoClassDefFoundError: jdk.jfr.Event`。改用 `E:\WorkBench\Java\jdk-23.0.2`
 - `local.properties` 提供 release 签名（被 gitignore）
 - `material3/material-color-utilities` 是 submodule，未初始化时 `:material3:compileDebugKotlin` 报 `Unresolved reference 'dynamiccolor'`
+- 文档检查用 `markdownlint-cli2`（v0.23.0 / markdownlint v0.41.0），本机全局安装，不在仓库依赖里
 
 ## 构建
 
@@ -50,6 +51,16 @@ CI 的 checks workflow 在 Linux 上跑 app、ai、workspace 的 JVM 测试，�
 CI 的 checks workflow 在 push 时先把 `origin/main` 指到本次推送之前的提交（`github.event.before`）再跑，所以检查的是刚推上去的改动；PR 用基线的 `origin/main`；手动触发没有可靠的基点，跳过格式检查，只跑测试。首次推送、强推之后基点不可达时同样跳过并打 notice。
 
 基点只管本批，历史文件里与定制无关的格式违规不会因为跑一次 `spotlessCheck` 全部冒出来，改到哪个文件才检查哪个。已知的四处（`SettingsNormalization.kt`、`MessageQueue.kt`、`PermissionTypes.kt`、`SettingVM.kt`）仍在，某次改动碰到其中一个时，整个文件会被检查，顺手把它修干净就好，不必为它们单独跑一轮。
+
+## 文档检查
+
+在仓库根目录运行 `markdownlint-cli2`（v0.23.0 / markdownlint v0.41.0），它会自动发现根目录的 `.markdownlint-cli2.jsonc`；从 `docs/` 子目录跑不会向上找配置：
+
+```powershell
+markdownlint-cli2
+```
+
+`globs` 覆盖 `docs/**/*.md`、`AGENTS.md`、`README.md`、`terminal/README.md`，忽略 `.agents/`、构建目录和 `node_modules`。关掉的规则是 `MD013`（长行）、`MD033`（README 的内联 HTML）、`MD041`（README 首行是 HTML）、`MD060`（参考文档的 CJK 表格按字符宽度对齐，默认风格过不了，暂不强制表格竖线风格）；其余结构规则保持开启。新增或修改文档后跑一次，应该 0 error。
 
 ## 设备上的 androidTest
 

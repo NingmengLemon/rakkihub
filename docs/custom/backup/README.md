@@ -12,7 +12,7 @@
 
 备份是一个自包含 zip，不需要云端：
 
-```
+```text
 settings.json                              整个 Settings 的序列化，额外带 launchCount
 rikka_hub.db                               VACUUM INTO 出来的标准 SQLite 快照
 upload/ skills/ fonts/ media_creation/     附件，可选择不备份
@@ -52,7 +52,7 @@ workspaces/<root>/files/                   工作区文件区，默认不打包�
 
 分流放在 `stageRestore` 处理暂存库的地方：本地导入与 WebDAV 导入最终都汇到这里，判定发生在读任何业务表之前，只碰两处元数据（`user_version` 与 `room_master_table` 的 schema 指纹）。判定本身抽在 `OfficialRestorePlanner`，是纯函数，可以直接跑 JVM 测试。
 
-```
+```text
 ourVersion：编译进应用的当前 Room 版本
 ourIdentity：编译进应用的 schema 指纹
 

@@ -16,7 +16,7 @@
 
 ## 完整生成链路
 
-```
+```text
 用户发送消息
     │
     ▼
@@ -141,12 +141,12 @@ onSuccess
 
 1. **Search Tools**（`createSearchTools`）— 当 `settings.enableWebSearch = true` 时
 2. **Local Tools**（`localTools.getTools(assistant.localTools)`）— 按助手配置启用：
-  - `JavascriptEngine`：执行 JS 代码片段
-  - `TimeInfo`：获取当前时间
-  - `Clipboard`：读写剪贴板
-  - `Tts`：文字转语音
-  - `AskUser`：向用户提问（需审批）
-  - `ScreenTime`：获取屏幕使用时间
+   - `JavascriptEngine`：执行 JS 代码片段
+   - `TimeInfo`：获取当前时间
+   - `Clipboard`：读写剪贴板
+   - `Tts`：文字转语音
+   - `AskUser`：向用户提问（需审批）
+   - `ScreenTime`：获取屏幕使用时间
 3. **Conversation Tools**（`createConversationTools`）— `enableRecentChatsReference = true` 时，查询历史对话
 4. **Workspace Tools**（`createWorkspaceToolsIfReady`）— Workspace Shell 就绪时注入，含 `workspace_shell`
 5. **Skill Tools**（`createSkillTools`）— 助手启用的 Skill 列表
@@ -155,7 +155,7 @@ onSuccess
 
 ### 工具审批状态机
 
-```
+```text
 Auto（默认）
     │ toolDef.needsApproval() == true
     ▼
@@ -206,7 +206,7 @@ Live Update 通知内容根据当前生成状态动态更新：
 
 ## 关键文件路径
 
-```
+```text
 app/src/main/java/me/rerere/rikkahub/
 ├── service/
 │   ├── ChatService.kt              # 编排入口

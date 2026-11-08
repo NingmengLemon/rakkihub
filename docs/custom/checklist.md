@@ -63,6 +63,7 @@
 | C53 | Claude 缓存断点按提供商切换 | 改造 |
 | C54 | 移除关于页图标点击彩蛋并清理相关死代码 | 移除 |
 | C55 | 关于页独立图标 | 改造 |
+| C56 | 文档 lint 配置 | 改造 |
 
 ## 明细
 
@@ -409,3 +410,10 @@
 - 理由：关于页想用自己的图标，同时不动应用 launcher。
 - 合并注意：上游改 `SettingAboutPage` 时按这个；换图直接替换 `about_logo.webp`；C54 的彩蛋移除保持不变。
 - 测试：编译通过；关于页显示新图标，launcher 与浮动窗口仍用原图标。
+
+### C56 文档 lint 配置
+
+- 落点：根目录 `.markdownlint-cli2.jsonc`，范围 `docs/**/*.md`、`AGENTS.md`、`README.md`、`terminal/README.md`，忽略 `.agents/`、构建目录和 `node_modules`，关掉 `MD013`/`MD033`/`MD041`/`MD060`；`docs/custom/build.md` 加「文档检查」；`docs/references/chat-generation-pipeline.md` 修列表缩进和代码块语言；`docs/custom/backup/README.md` 补代码块语言。
+- 理由：文档一直没有 lint 入口，列表缩进、代码块语言这类结构问题只能靠平时看；用本机已装的 markdownlint-cli2，配置适配仓库的长行、README 的居中 HTML 和紧凑表格。
+- 合并注意：这是本地检查，CI 没有跑；规则列表在配置和 `build.md` 两处，改规则时同步。MD060 关掉是因为参考文档的 CJK 表格按字符宽度对齐，默认风格过不了，别按 ASCII 宽度重排；其余结构规则保持开启。markdownlint-cli2 不在仓库依赖里，换机器要自己装。
+- 测试：仓库根目录 `markdownlint-cli2` 14 个文件 0 error；参考文档和备份文档的修改只动空白与代码块语言，内容未变。
