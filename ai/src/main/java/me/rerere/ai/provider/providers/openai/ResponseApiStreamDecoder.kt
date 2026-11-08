@@ -22,30 +22,21 @@ import me.rerere.common.http.jsonObjectOrNull
 
 internal class ResponseApiStreamDecoder : StreamChunkDecoder {
     private val state = ResponseStreamState()
-    private var terminal = false
 
     override fun accept(event: SseEvent): DecodeResult {
         if (state.finished) return DecodeResult(completed = true)
-        if (event.data == "[DONE]") {
-            terminal = true
-            return DecodeResult(state.finish(), completed = true)
-        }
+        if (event.data == "[DONE]") return DecodeResult(state.finish(), completed = true)
 
         val payload = json.parseToJsonElement(event.data).jsonObject
         val eventType = payload["type"]?.jsonPrimitive?.contentOrNull
         val chunks = parseEvent(payload)
-        val completed = eventType == "response.completed" || eventType == "response.incomplete" ||
-            event.event == "response.completed" || event.event == "response.incomplete"
-        if (completed) terminal = true
+        val completed = eventType == "response.completed" || eventType == "response.incomplete"
         return DecodeResult(chunks, completed)
     }
 
     override fun onClosed(): List<StreamChunk> {
         if (state.finished) return emptyList()
-        if (!terminal) {
-            throw java.io.IOException("OpenAI Responses stream closed before completion")
-        }
-        return state.finish()
+        throw java.io.IOException("OpenAI Responses stream closed before completion")
     }
 
     private fun parseEvent(payload: JsonObject): List<StreamChunk> {

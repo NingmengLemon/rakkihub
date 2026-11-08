@@ -320,7 +320,7 @@ class GoogleProvider(private val client: OkHttpClient, context: Context? = null)
                                 )
                             }
                         } else {
-                            exception = Exception("Unknown error: ${response.code}")
+                            exception = java.io.IOException("Google request failed: ${response.code}")
                         }
                     }
                 } catch (e: Throwable) {

@@ -173,7 +173,7 @@
 | `speech/` | C5 删掉了全部运行时实现，只留两个序列化类与它们的序列化测试 | 不看 |
 | `mediagen/` | C1 保留模块以维持数据兼容，界面不使用 | 不主动看，改到 `MediaGenerationProviderSetting` 这类持久化类型时复核 |
 
-`ai/` 下有七处改动：C3 删掉了 `ai/util/Request.kt` 里给 aihubmix.com 加 `APP-Code` 请求头的分支；C52 把 `ClaudeProvider` 的缓存断点收敛到官方标准；C53 把 Claude 缓存策略改成按 provider 切换，默认保留上游原来的 4 个断点；C47 在 `ai/ui/Message.kt` 新增了只读的 `contextLimitStart`，不改 `limitContext`；C51 在 `ai/ui/Message.kt` 新增了序列化字段 `isCompressionPrompt`，用于标记压缩提示词；C58 在 `ai/ui/Message.kt` 新增了 `status`、`isModelVisible`、`filterModelVisible` 和 `mergeAdjacentUserMessages`；C59 让五个 `StreamChunkDecoder` 在未见终止事件时抛 `IOException`，并在五个 provider 的 `onClosed` 里 `close(e)`。C35 的 `filterByKeywords` 与上游 `5ad19405` 逐字一致，不算分叉。移植上游对这些文件的改动时保留这七处。
+`ai/` 下有七处改动：C3 删掉了 `ai/util/Request.kt` 里给 aihubmix.com 加 `APP-Code` 请求头的分支；C52 把 `ClaudeProvider` 的缓存断点收敛到官方标准；C53 把 Claude 缓存策略改成按 provider 切换，默认保留上游原来的 4 个断点；C47 在 `ai/ui/Message.kt` 新增了只读的 `contextLimitStart`，不改 `limitContext`；C51 在 `ai/ui/Message.kt` 新增了序列化字段 `isCompressionPrompt`，用于标记压缩提示词；C58 在 `ai/ui/Message.kt` 新增了 `status`、`isModelVisible`、`filterModelVisible` 和 `mergeAdjacentUserMessages`；C59 让五个 `StreamChunkDecoder` 在未见终止事件时抛 `IOException`，并在五个 provider 接线点的 `onClosed` 里 `close(e)`。C35 的 `filterByKeywords` 与上游 `5ad19405` 逐字一致，不算分叉。移植上游对这些文件的改动时保留这七处。
 
 上游从 3.0.0 起把多步生成循环放进 `ai/`（`ai/src/main/java/me/rerere/ai/agent/AgentLoop.kt`），3.1.1 又把工具执行计时与 models.dev 的模型能力数据放进去。现在还值得看 `ai/` 吗，取决于它是不是一块能单独参考的区域：如果它继续吸收 `app/` 侧的耦合，读改动的成本会变高。
 
@@ -341,8 +341,8 @@ RikkaHub 现状：
 
 | 优先级 | 领域 | 现状与风险 | 建议 |
 | --- | --- | --- | --- |
-| P1 | 截断的 SSE 被当成正常完成（C59 已修） | Claude 的 `onClosed` 无条件补 `Finish`，没有 `message_stop` 的半截流会被提交为完整回复，不走重试；`onFailure` 中 `t == null` 且 body 为空时 `close(null)` 也会静默成功。OpenAI/Google 的 `onClosed` 同样无条件调用 `decoder.finish()`，终止标记未逐行核对。`ClaudeProvider.kt:394-417`、`ClaudeStreamDecoder.kt:153-163`、`ChatCompletionsStreamDecoder.kt:86-92`、`GoogleStreamDecoder.kt:57-63`。 | decoder 记录是否见过终止事件；`onClosed` 未见时抛 `IOException`，复用现有重试。 |
-| P1 | 停止的 pending 结算不保证执行（C59 已修） | `stopGeneration` 先 pause/cancelJobs，再 join，join 后才 `finishInterruptedPendingTools`，不在 `NonCancellable`。页面退出导致 join 取消时，pending 工具不结算，`isAwaitingToolApproval` 可能挡住发送、编辑和删除。`ChatService.kt:1481-1490`、`ChatVM.kt:386-390`。 | 结算放进 `withContext(NonCancellable)` 的 `settleTurn()`，紧跟 cancelJobs；发送前那次保留为崩溃补偿。 |
+| P1 | 截断的 SSE 被当成正常完成（C59 已修） | C59 前 Claude 的 `onClosed` 无条件补 `Finish`，没有 `message_stop` 的半截流会被提交为完整回复；OpenAI/Google 的 `onClosed` 同样无条件调用 `decoder.finish()`。C59 起五个 decoder 未见终止事件时抛 `IOException`，provider `onClosed` 转成 `close(e)`，`onFailure` 空 body 不再静默正常关闭。`ClaudeProvider.kt`、`ClaudeStreamDecoder.kt`、`ChatCompletionsAPI.kt`、`ChatCompletionsStreamDecoder.kt`、`ResponseAPI.kt`、`ResponseApiStreamDecoder.kt`、`GoogleProvider.kt`、`GoogleStreamDecoder.kt`、`InteractionsAPI.kt`、`InteractionsStreamDecoder.kt`。 | 已按此实现；严格判定对不发终止事件的中转会变成可重试错误，按 provider 加宽松条件而不是全局关掉。 |
+| P1 | 停止的 pending 结算不保证执行（C59 已修） | C59 前 `stopGeneration` 先 pause/cancelJobs，再 join，join 后才 `finishInterruptedPendingTools`，不在 `NonCancellable`；页面退出导致 join 取消时 pending 工具不结算。C59 起 join 与工具收尾放进 `withContext(NonCancellable)`，发送前的 `finishInterruptedPendingTools` 仍保留作崩溃补偿。`ChatService.kt:1481-1493`、`ChatVM.kt:386-390`。 | 已按此实现；NonCancellable 只包 join 和工具收尾，不包 UI 状态。 |
 | P1 | 分支切换绕过审批门禁 | `selectMessageNode` 只挡压缩，不挡审批；切走分支后 `isAwaitingToolApproval` 变 false，队列可派发，pending 调用留在未选中分支，下一次 `withoutUnresumableToolCalls` 会整条删除该 assistant 消息。`ChatService.kt:1429-1453`、`Conversation.kt:252-253,264-272`。 | 审批期间禁止切分支，或把待审批状态提升为 session 级 turn 状态。 |
 | P1 | 审批恢复重新解析配置 | 审批期间 `setChatModel` 没有门禁；`handleToolApproval` 恢复时重新 `runTurn`/`createContext`，工具结果和工具 schema 会落到新模型/provider，不是产生 pending call 的那份配置。`ChatService.kt:560,581,623,631,1073-1090`、`ChatVM.kt:266-270`。 | 把本轮 `ChatTurnContext` 冻结进 session 供审批恢复复用；或审批期间拒绝改配置并提示下一轮生效。 |
 | P1 | 没有流内 idle watchdog | 只有 OkHttp/Ktor 的 10 分钟 per-read timeout；无 chunk 无心跳会卡 10 分钟，有 SSE 心跳时 read timeout 被不断重置，可能永久停在生成中。`DataSourceModule.kt:186-191,274-283`、`AgentLoop.kt:110-129`。 | 在 chunk 收集层加相邻 chunk 间隔超时，90 到 120 秒，抛专用异常；readTimeout 保留作外层兜底。 |
@@ -356,9 +356,11 @@ RikkaHub 现状：
 
 修复顺序：
 
+P1 分批：P1a 截断 SSE 与停止结算，P1b 审批分支与配置快照，P1c idle watchdog、稳定错误码重试、overflow 兜底。
+
 1. P0 失败 attempt 隔离已由 C58 完成；多步工具调用的 per-step 细化随工具恢复一起做。
 2. P1a 截断 SSE 与停止结算已由 C59 完成；下一步做 P1b 审批分支与配置快照。
 3. 然后做 P1c 的 idle watchdog、稳定错误码重试、overflow 兜底。
 4. P2 按工具恢复、进程死亡与 C50、队列、上下文压缩、scratch 分批处理。
 
-范围说明：Claude 的 SSE 实现已逐行核对；OpenAI/Google 只核到 `onClosed` 无条件 `finish()`，终止标记未逐行核对。工具并发没有展开，当前 RikkaHub 按顺序执行，未发现正确性问题，只是并发效率较低。
+范围说明：C59 已逐行核对五个 decoder 的终止判定和五个 provider 接线点的 `onClosed`，并用 `:ai:testDebugUnitTest` 全量验证；工具并发没有展开，当前 RikkaHub 按顺序执行，未发现正确性问题，只是并发效率较低。

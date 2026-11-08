@@ -145,7 +145,7 @@ internal class InteractionsAPI(
                     if (!bodyRaw.isNullOrBlank()) {
                         exception = json.parseToJsonElement(bodyRaw).parseErrorDetail()
                     } else if (t == null && response != null) {
-                        exception = Exception("Unknown error: ${response.code}")
+                        exception = java.io.IOException("Interactions request failed: ${response.code}")
                     }
                 } catch (e: Throwable) {
                     Log.w(TAG, "onFailure: failed to parse from $bodyRaw")
