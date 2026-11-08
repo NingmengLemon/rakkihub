@@ -55,6 +55,7 @@ class ConversationHistoryTruncationTest {
         val source = Conversation(
             assistantId = Uuid.random(),
             messageNodes = users + compressionPairNodes(),
+            chatSuggestions = listOf("stale"),
         )
 
         val result = (source.planHistoryTruncation(1) as HistoryTruncation.Ready).conversation
@@ -64,6 +65,7 @@ class ConversationHistoryTruncationTest {
         assertEquals(listOf("message 1"), result.messageNodes.drop(2).map { it.currentMessage.toText() })
         assertEquals(1, result.contextWindowSize())
         assertTrue(result.messageNodes.none { it.currentMessage.isCompressionPrompt })
+        assertTrue(result.chatSuggestions.isEmpty())
     }
 
     @Test
@@ -72,6 +74,7 @@ class ConversationHistoryTruncationTest {
         val source = Conversation(
             assistantId = Uuid.random(),
             messageNodes = users + compressionPairNodes(),
+            chatSuggestions = listOf("stale"),
         )
 
         val result = (source.planHistoryTruncation(2) as HistoryTruncation.Ready).conversation

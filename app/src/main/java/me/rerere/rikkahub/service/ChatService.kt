@@ -57,7 +57,6 @@ import me.rerere.rikkahub.data.model.MessageNode
 import me.rerere.rikkahub.data.model.applyCompressionResult
 import me.rerere.rikkahub.data.model.bindConfig
 import me.rerere.rikkahub.data.model.cancelInterruptedTools
-import me.rerere.rikkahub.data.model.contextWindowSize
 import me.rerere.rikkahub.data.model.contextWindowStart
 import me.rerere.rikkahub.data.model.deleteMessage
 import me.rerere.rikkahub.data.model.editMessage
@@ -66,7 +65,6 @@ import me.rerere.rikkahub.data.model.fork
 import me.rerere.rikkahub.data.model.getAssistantOf
 import me.rerere.rikkahub.data.model.getChatModelOf
 import me.rerere.rikkahub.data.model.getStoredAssistantOf
-import me.rerere.rikkahub.data.model.insertHistoryTruncation
 import me.rerere.rikkahub.data.model.isAwaitingToolApproval
 import me.rerere.rikkahub.data.model.isTruncatedCompressionFinish
 import me.rerere.rikkahub.data.model.localFileUrls

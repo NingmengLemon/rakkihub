@@ -215,6 +215,7 @@ internal sealed interface HistoryTruncation {
  * 由调用方决定错误文案，避免把 UI 文案塞进模型层。
  */
 internal fun Conversation.planHistoryTruncation(keep: Int): HistoryTruncation {
+    require(keep >= 1) { "keep must be >= 1" }
     val cleaned = removeCompressionPairs() ?: this
     val windowSize = cleaned.contextWindowSize()
     if (windowSize < 2) return HistoryTruncation.NothingToCut

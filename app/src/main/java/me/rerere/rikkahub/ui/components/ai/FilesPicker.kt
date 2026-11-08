@@ -321,13 +321,15 @@ internal fun FilesPicker(
                             )
                         },
                         trailingContent = {
-                            val contextTokens = remember(conversation.messageNodes) {
-                                conversation.lastContextTokens()
+                            // 压缩 scratch 对是请求之外的临时节点，token 和消息数都按清理后的节点算
+                            val cleanedConversation = remember(conversation) {
+                                conversation.removeCompressionPairs() ?: conversation
                             }
-                            // 压缩 scratch 对是请求之外的临时节点，不计入消息数
-                            val messageCount = remember(conversation) {
-                                (conversation.removeCompressionPairs() ?: conversation)
-                                    .messageNodes
+                            val contextTokens = remember(cleanedConversation.messageNodes) {
+                                cleanedConversation.lastContextTokens()
+                            }
+                            val messageCount = remember(cleanedConversation) {
+                                cleanedConversation.messageNodes
                                     .count { !it.currentMessage.isHistoryTruncationMarker }
                             }
                             val contextLength = chatModel?.contextLength?.takeIf { it > 0 }
