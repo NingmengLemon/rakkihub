@@ -65,6 +65,7 @@
 | C55 | 关于页独立图标 | 改造 |
 | C56 | 文档 lint 配置 | 改造 |
 | C57 | 请求日志开关持久化 | 改造 |
+| C58 | 失败与中断回复状态 | 改造 |
 
 ## 明细
 
@@ -425,3 +426,10 @@
 - 理由：请求日志开关原来只在 `Logging` 的内存里，重启回到关闭，容易忘记打开；日志本身仍是内存环形缓冲，重启清空。
 - 合并注意：用 SharedPreferences 而不是 Settings/DataStore，这是调试开关，不进应用内备份（Android 12+ 的 Auto Backup 可能带上这个布尔值）；不要把日志内容一起持久化，体积和隐私都不合适。日志开关在 `common` 的 `Logging` 对象里，持久化留在 app 侧。
 - 测试：编译通过；手动验收：开关打开后重启仍为开启，日志列表清空。
+
+### C58 失败与中断回复状态
+
+- 落点：`UIMessage` 增加 `status`，取值为 `COMPLETE`、`INTERRUPTED`、`FAILED`，默认 `COMPLETE`；`ChatService.runTurn` 在模型请求失败时标 `FAILED`，用户停止时标 `INTERRUPTED`，由 `finishGeneration` 一起落库；`ChatRequestFactory.buildStep` 组装请求前用 `filterModelVisible()` 过滤 `FAILED`；`ChatMessageAssistantAvatar` 在模型名旁显示失败/中断标签；新增四份 locale 的 `chat_message_status_failed`、`chat_message_status_interrupted`。
+- 理由：失败或停止的半截回复原来作为普通 assistant 消息保存，下一次请求会把它当成完整回复带上。失败 attempt 只应给用户看，不应进入模型历史；用户主动停止的内容用户已经看过，可以继续参与后续对话，但需要和正常完成区分。
+- 合并注意：`status` 是带默认值的序列化字段，旧消息、旧备份和官方兼容导出里的旧 JSON 解码为 `COMPLETE`；这是 `ai/ui/Message.kt` 的分叉，移植上游 `UIMessage` 改动时保留字段以及 `isModelVisible`、`filterModelVisible`。目前按整条消息标记，多步工具调用在中途失败时会整条隔离；后续若做 per-step attempt，需要在本条之外细化。`withoutUnresumableToolCalls` 和 `cancelInterruptedTools` 的工具语义仍归 P2 待办，不在 C58 范围内。
+- 测试：`UIMessageSerializationTest` 覆盖状态序列化、旧 JSON 默认 `COMPLETE`、过滤只去掉 `FAILED`；`ConversationMessagesTest` 覆盖状态只改目标消息、无变化返回 null；`assembleGithubDebug` 通过。

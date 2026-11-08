@@ -233,6 +233,8 @@
   <string name="chat_input_file_read_failed">檔案讀取失敗：%s</string>
   <string name="chat_message_add_favorite">加入最愛</string>
   <string name="chat_message_remove_favorite">移除最愛</string>
+  <string name="chat_message_status_interrupted">已中斷</string>
+  <string name="chat_message_status_failed">生成失敗</string>
   <string name="chat_message_tool_approve">核准</string>
   <string name="chat_message_tool_ask_questions">詢問 %d 個問題</string>
   <string name="chat_message_tool_call_generic">調用工具 %1$s</string>

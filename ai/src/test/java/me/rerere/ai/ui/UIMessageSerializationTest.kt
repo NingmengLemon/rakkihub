@@ -59,4 +59,35 @@ class UIMessageSerializationTest {
 
         assertNull(Json.decodeFromString<UIMessage>(legacy).snapshotModel())
     }
+
+    @Test
+    fun `message status survives serialization`() {
+        val failed = UIMessage.assistant("partial").copy(status = MessageStatus.FAILED)
+
+        val decoded = Json.decodeFromString<UIMessage>(Json.encodeToString(failed))
+
+        assertEquals(MessageStatus.FAILED, decoded.status)
+    }
+
+    @Test
+    fun `messages stored before status existed decode as complete`() {
+        val legacy = """{"id":"00000000-0000-0000-0000-000000000001","role":"assistant","parts":[]}"""
+
+        assertEquals(MessageStatus.COMPLETE, Json.decodeFromString<UIMessage>(legacy).status)
+    }
+
+    @Test
+    fun `only failed messages are hidden from the model`() {
+        val messages = listOf(
+            UIMessage.user("question"),
+            UIMessage.assistant("failed").copy(status = MessageStatus.FAILED),
+            UIMessage.assistant("stopped").copy(status = MessageStatus.INTERRUPTED),
+            UIMessage.assistant("complete"),
+        )
+
+        assertEquals(
+            listOf(messages[0].id, messages[2].id, messages[3].id),
+            messages.filterModelVisible().map { it.id },
+        )
+    }
 }

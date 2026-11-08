@@ -235,6 +235,8 @@
   <string name="chat_input_file_read_failed">Failed to read file: %s</string>
   <string name="chat_message_add_favorite">Add Favorite</string>
   <string name="chat_message_remove_favorite">Remove Favorite</string>
+  <string name="chat_message_status_interrupted">Interrupted</string>
+  <string name="chat_message_status_failed">Generation failed</string>
   <string name="chat_message_tool_approve">Approve</string>
   <string name="chat_message_tool_ask_questions">Ask %d questions</string>
   <string name="chat_message_tool_call_generic">Called tool %1$s</string>

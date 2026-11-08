@@ -233,6 +233,8 @@
   <string name="chat_input_file_read_failed">ファイルの読み取りに失敗しました: %s</string>
   <string name="chat_message_add_favorite">お気に入りに追加</string>
   <string name="chat_message_remove_favorite">お気に入りから削除</string>
+  <string name="chat_message_status_interrupted">中断</string>
+  <string name="chat_message_status_failed">生成失敗</string>
   <string name="chat_message_tool_approve">承認</string>
   <string name="chat_message_tool_ask_questions">%d 件の質問</string>
   <string name="chat_message_tool_call_generic">ツール %1$s を呼び出しました</string>

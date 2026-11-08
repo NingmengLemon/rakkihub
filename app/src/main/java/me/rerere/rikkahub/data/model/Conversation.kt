@@ -6,6 +6,7 @@ import kotlinx.serialization.Serializable
 import kotlinx.serialization.Transient
 import me.rerere.ai.core.MessageRole
 import me.rerere.ai.provider.Model
+import me.rerere.ai.ui.MessageStatus
 import me.rerere.ai.ui.ModelSnapshot
 import me.rerere.ai.ui.UIMessage
 import me.rerere.ai.ui.UIMessagePart
@@ -270,6 +271,24 @@ internal fun Conversation.withoutUnresumableToolCalls(untilNode: Int = messageNo
         node.copy(messages = messages, selectIndex = (node.selectIndex - 1).coerceIn(messages.indices))
     }
     return if (nodes == messageNodes) this else copy(messageNodes = nodes)
+}
+
+/** 修改指定消息的状态；消息不存在或状态没变时返回 null */
+internal fun Conversation.updateMessageStatus(messageId: Uuid, status: MessageStatus): Conversation? {
+    var changed = false
+    val nodes = messageNodes.map { node ->
+        if (node.messages.none { it.id == messageId }) return@map node
+        val messages = node.messages.map { message ->
+            if (message.id == messageId && message.status != status) {
+                changed = true
+                message.copy(status = status)
+            } else {
+                message
+            }
+        }
+        if (messages == node.messages) node else node.copy(messages = messages)
+    }
+    return if (changed) copy(messageNodes = nodes) else null
 }
 
 fun UIMessage.toMessageNode(): MessageNode {

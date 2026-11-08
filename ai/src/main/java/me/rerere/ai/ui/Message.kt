@@ -3,6 +3,7 @@ package me.rerere.ai.ui
 import kotlinx.datetime.LocalDateTime
 import kotlinx.datetime.TimeZone
 import kotlinx.datetime.toLocalDateTime
+import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.Transient
 import me.rerere.ai.core.MessageRole
@@ -12,6 +13,24 @@ import me.rerere.ai.util.json
 import kotlin.math.roundToInt
 import kotlin.time.Clock
 import kotlin.uuid.Uuid
+
+/**
+ * 一条助手回复的完成状态。旧数据没有这个字段，反序列化为 [COMPLETE]。
+ *
+ * [FAILED] 的回复只保留给用户查看，不进入下一次模型请求；[INTERRUPTED] 是用户主动停止，
+ * 内容已经展示给用户，可以继续参与后续对话。
+ */
+@Serializable
+enum class MessageStatus {
+    @SerialName("complete")
+    COMPLETE,
+
+    @SerialName("interrupted")
+    INTERRUPTED,
+
+    @SerialName("failed")
+    FAILED,
+}
 
 // 公共消息抽象, 具体的Provider实现会转换为API接口需要的DTO
 @Serializable
@@ -23,6 +42,8 @@ data class UIMessage(
     val createdAt: LocalDateTime = Clock.System.now()
         .toLocalDateTime(TimeZone.currentSystemDefault()),
     val finishedAt: LocalDateTime? = null,
+    // 生成失败或用户停止的回复不等同于正常完成，见 MessageStatus
+    val status: MessageStatus = MessageStatus.COMPLETE,
     val modelId: Uuid? = null,
     // 模型名称的快照：modelId 指向的模型被删除后，靠它继续显示这条消息由谁生成
     val modelSnapshot: ModelSnapshot? = null,
@@ -73,6 +94,9 @@ data class UIMessage(
         }
     }
 
+    /** 失败的回复只给用户看，不参与下一次模型请求 */
+    val isModelVisible: Boolean get() = status != MessageStatus.FAILED
+
     inline fun <reified P : UIMessagePart> hasPart(): Boolean {
         return parts.any {
             it is P
@@ -121,6 +145,9 @@ data class UIMessage(
         )
     }
 }
+
+/** 过滤掉只用于展示的失败回复；其余消息保持原顺序 */
+fun List<UIMessage>.filterModelVisible(): List<UIMessage> = filter { it.isModelVisible }
 
 /**
  * 消息上保存的模型名称快照, 对应 [Model.modelId] 与 [Model.displayName]

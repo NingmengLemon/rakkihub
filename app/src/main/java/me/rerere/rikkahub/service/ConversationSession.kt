@@ -13,11 +13,13 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
+import me.rerere.ai.ui.MessageStatus
 import me.rerere.ai.ui.UIMessagePart
 import me.rerere.ai.ui.finishReasoning
 import me.rerere.rikkahub.data.model.Conversation
 import me.rerere.rikkahub.data.model.MessageNode
 import me.rerere.rikkahub.data.model.selectBranch
+import me.rerere.rikkahub.data.model.updateMessageStatus
 import java.time.Instant
 import java.util.concurrent.atomic.AtomicInteger
 import kotlin.uuid.Uuid
@@ -375,6 +377,13 @@ class ConversationSession(
         generationStartedAt.value = null
         _compressionActive.value = false
         isClosing = false
+    }
+
+    /** 把本轮回复标记为失败或中断；只改内存，随后由 [finishGeneration] 落库。 */
+    internal fun markReplyStatus(status: MessageStatus) {
+        if (!isInitialized) return
+        val messageId = replyMessageId.value ?: return
+        tryUpdate { it.updateMessageStatus(messageId, status) }
     }
 
     // 失败和取消也必须保存已收到的内容，且保存完成前不能释放生成任务。

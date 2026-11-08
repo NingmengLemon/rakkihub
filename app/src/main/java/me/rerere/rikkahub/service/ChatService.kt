@@ -27,6 +27,7 @@ import me.rerere.ai.agent.runAgent
 import me.rerere.ai.core.MessageRole
 import me.rerere.ai.provider.BuiltInTools
 import me.rerere.ai.provider.ModelAbility
+import me.rerere.ai.ui.MessageStatus
 import me.rerere.ai.ui.ToolApprovalState
 import me.rerere.ai.ui.UIMessage
 import me.rerere.ai.ui.UIMessagePart
@@ -630,6 +631,7 @@ class ChatService(
             val (request, hooks) = requestFactory.createAgent(turn, history, session.processingStatus)
             val turnIncarnation = session.incarnation
             var finishReason: AgentFinishReason? = null
+            var settlementStatus = MessageStatus.COMPLETE
             var touchedUpdateAt = false
             supervisorScope {
                 val saver = launch(Dispatchers.IO) {
@@ -677,11 +679,24 @@ class ChatService(
                             }
                         }
                     }
+                } catch (e: Throwable) {
+                    settlementStatus = if (e is CancellationException) {
+                        MessageStatus.INTERRUPTED
+                    } else {
+                        MessageStatus.FAILED
+                    }
+                    throw e
                 } finally {
                     withContext(NonCancellable) {
                         // 先停掉 saver 并等它退出，再全量落库；反过来会在写锁上互相等待
                         saver.cancelAndJoin()
                         session.processingStatus.value = null
+                        if (settlementStatus == MessageStatus.COMPLETE && finishReason == null) {
+                            settlementStatus = MessageStatus.FAILED
+                        }
+                        if (settlementStatus != MessageStatus.COMPLETE) {
+                            session.markReplyStatus(settlementStatus)
+                        }
                         // 可能被取消了，或者意外结束，兜底保存
                         val finished = session.finishGeneration()
                         // 生成结束：取消 Live Update 通知，后台时发送完成通知

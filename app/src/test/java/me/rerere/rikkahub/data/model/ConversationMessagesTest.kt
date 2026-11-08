@@ -1,6 +1,7 @@
 package me.rerere.rikkahub.data.model
 
 import me.rerere.ai.core.MessageRole
+import me.rerere.ai.ui.MessageStatus
 import me.rerere.ai.ui.ToolApprovalState
 import me.rerere.ai.ui.UIMessage
 import me.rerere.ai.ui.UIMessagePart
@@ -126,10 +127,34 @@ class ConversationMessagesTest {
 
     @Test
     fun `nothing to cancel returns null`() {
-        val conversation = conversationOf(UIMessage.user("hi").toMessageNode(), UIMessage.assistant("done").toMessageNode())
+        val conversation =
+            conversationOf(UIMessage.user("hi").toMessageNode(), UIMessage.assistant("done").toMessageNode())
 
         assertNull(conversation.cancelInterruptedTools())
         assertNull(Conversation.ofId(Uuid.random()).cancelInterruptedTools())
+    }
+
+    @Test
+    fun `updating status changes only the matching message`() {
+        val failed = UIMessage.assistant("partial")
+        val other = UIMessage.assistant("other")
+        val conversation = conversationOf(
+            MessageNode(messages = listOf(failed, other), selectIndex = 0),
+        )
+
+        val updated = conversation.updateMessageStatus(failed.id, MessageStatus.FAILED)!!
+
+        assertEquals(MessageStatus.FAILED, updated.messageNodes.single().messages[0].status)
+        assertEquals(MessageStatus.COMPLETE, updated.messageNodes.single().messages[1].status)
+    }
+
+    @Test
+    fun `updating status returns null when nothing changes`() {
+        val message = UIMessage.assistant("done")
+        val conversation = conversationOf(message.toMessageNode())
+
+        assertNull(conversation.updateMessageStatus(Uuid.random(), MessageStatus.FAILED))
+        assertNull(conversation.updateMessageStatus(message.id, MessageStatus.COMPLETE))
     }
 
     private fun conversationOf(vararg nodes: MessageNode) =

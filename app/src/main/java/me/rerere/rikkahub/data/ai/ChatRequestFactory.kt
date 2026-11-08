@@ -19,6 +19,7 @@ import me.rerere.ai.provider.TextGenerationParams
 import me.rerere.ai.ui.StreamChunk
 import me.rerere.ai.ui.StreamChunkHandler
 import me.rerere.ai.ui.UIMessage
+import me.rerere.ai.ui.filterModelVisible
 import me.rerere.ai.ui.limitContext
 import me.rerere.rikkahub.R
 import me.rerere.rikkahub.data.ai.prompts.buildMemoryPrompt
@@ -218,6 +219,7 @@ class ChatRequestFactory(
         processingStatus: MutableStateFlow<String?> = MutableStateFlow(null),
     ): StepRequest {
         val assistant = turn.assistant
+        val visibleMessages = messages.filterModelVisible()
         val requestMessages = buildList {
             val system = buildString {
                 val effectiveSystemPrompt =
@@ -238,13 +240,13 @@ class ChatRequestFactory(
                 // 工具prompt
                 turn.tools.forEach { tool ->
                     appendLine()
-                    append(tool.systemPrompt(turn.model, messages))
+                    append(tool.systemPrompt(turn.model, visibleMessages))
                 }
             }
             if (system.isNotBlank()) {
                 add(UIMessage.system(prompt = system).copy(isSynthetic = true))
             }
-            addAll(messages.limitContext(assistant.contextMessageLimit))
+            addAll(visibleMessages.limitContext(assistant.contextMessageLimit))
         }.transforms(
             transformers = inputTransformers,
             context = context,

@@ -13,6 +13,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import me.rerere.ai.core.MessageRole
 import me.rerere.ai.provider.Model
+import me.rerere.ai.ui.MessageStatus
 import me.rerere.ai.ui.UIMessage
 import me.rerere.ai.ui.isEmptyUIMessage
 import me.rerere.rikkahub.R
@@ -89,6 +90,7 @@ fun ChatMessageAssistantAvatar(
                             maxLines = 1,
                         )
                     }
+                    MessageStatusLabel(message.status)
                 }
             } else if (model != null) {
                 if (showIcon) {
@@ -111,8 +113,31 @@ fun ChatMessageAssistantAvatar(
                             overflow = TextOverflow.Ellipsis,
                         )
                     }
+                    MessageStatusLabel(message.status)
                 }
             }
         }
     }
+}
+
+@Composable
+private fun MessageStatusLabel(status: MessageStatus) {
+    if (status == MessageStatus.COMPLETE) return
+    val text = stringResource(
+        if (status == MessageStatus.FAILED) {
+            R.string.chat_message_status_failed
+        } else {
+            R.string.chat_message_status_interrupted
+        }
+    )
+    Text(
+        text = text,
+        style = MaterialTheme.typography.labelSmall,
+        color = if (status == MessageStatus.FAILED) {
+            MaterialTheme.colorScheme.error
+        } else {
+            MaterialTheme.colorScheme.tertiary
+        },
+        maxLines = 1,
+    )
 }
