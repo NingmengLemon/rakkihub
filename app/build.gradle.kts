@@ -12,6 +12,33 @@ plugins {
     alias(libs.plugins.baselineprofile)
 }
 
+// 版本号随提交自动滚动：崩溃日志和安装包只看得到 versionCode/versionName，
+// 之前所有构建都停在 3.1.1/194，分不清是哪次提交。
+// git 命令执行失败（例如不在仓库里）时退回上游值；git 可执行文件不存在会在
+// 配置阶段失败，配置缓存无法把进程启动失败当作可回退的输入值。
+// 配置缓存会跟踪 providers.exec 的输出，提交变化时自动失效，不会读到旧值。
+val gitCommitCount: Int? = runCatching {
+    providers.exec {
+        commandLine("git", "rev-list", "--count", "HEAD")
+        isIgnoreExitValue = true
+    }.standardOutput.asText.get().trim().toIntOrNull()
+}.getOrNull()
+val gitShortSha: String? = runCatching {
+    providers.exec {
+        commandLine("git", "rev-parse", "--short=7", "HEAD")
+        isIgnoreExitValue = true
+    }.standardOutput.asText.get().trim()
+}.getOrNull()?.takeIf { it.isNotEmpty() }
+
+val upstreamVersionCode = 194
+val upstreamVersionName = "3.1.1"
+val customVersionCode = upstreamVersionCode + (gitCommitCount ?: 0)
+val customVersionName = buildString {
+    append(upstreamVersionName).append("-custom")
+    gitCommitCount?.let { append(".").append(it) }
+    gitShortSha?.let { append("+").append(it) }
+}
+
 android {
     namespace = "me.rerere.rikkahub"
     compileSdk {
@@ -24,8 +51,8 @@ android {
         applicationId = "top.lemoneko.rakkihub"
         minSdk = 26
         targetSdk = 37
-        versionCode = 194
-        versionName = "3.1.1"
+        versionCode = customVersionCode
+        versionName = customVersionName
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
 

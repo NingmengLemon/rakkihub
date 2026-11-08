@@ -19,6 +19,10 @@ $env:JAVA_HOME='E:\WorkBench\Java\jdk-23.0.2'; $env:PATH="$env:JAVA_HOME\bin;$en
 
 产物位于 `app/build/outputs/apk/github/debug/` 与 `app/build/outputs/apk/github/release/`，各有 universal 与分 ABI 三种。debug 的 applicationId 是 `top.lemoneko.rakkihub.debug`，release 是 `top.lemoneko.rakkihub`，两者与官方版的 `me.rerere.rikkahub` 都不同，可以同时安装。只有包名相同才需要签名一致，所以 release 自签名在这里不构成与官方版共存的障碍。
 
+## 版本号
+
+`versionCode` 与 `versionName` 由 `app/build.gradle.kts` 从 git 推导：`versionCode = 194 + 提交数`，`versionName = 3.1.1-custom.<提交数>+<短 SHA>`。提交数取 `git rev-list --count HEAD`，不加 dirty 后缀。git 命令执行失败（例如不在仓库里）时退回 `194` / `3.1.1-custom`；git 可执行文件本身不存在时会在配置阶段失败，配置缓存无法把进程启动失败当作可回退的输入值，这是构建环境的要求。Gradle 的配置缓存会跟踪这个外部命令的输出，换提交后会重新配置，不会拿旧值。本地浅克隆（depth-1）会把提交数算成 1，versionCode 退到 195，需要完整历史；上游改版本时同步脚本里的 `upstreamVersionCode` / `upstreamVersionName` 两个常量，以及这里的前缀说明。
+
 ## 测试
 
 ```powershell
