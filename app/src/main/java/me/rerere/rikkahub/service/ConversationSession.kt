@@ -79,6 +79,16 @@ class ConversationSession(
     var existsInDatabase = false
         private set
 
+    // 压缩轮次进行中：区别于普通生成，普通生成允许切分支，压缩期间不允许
+    private val _compressionActive = MutableStateFlow(false)
+    val compressionActive: StateFlow<Boolean> = _compressionActive.asStateFlow()
+
+    internal val isCompressing: Boolean get() = _compressionActive.value
+
+    internal fun setCompressionActive(active: Boolean) {
+        _compressionActive.value = active
+    }
+
     // 每次 [replace] 加一：跨挂起点的操作据此发现会话已经被删除或整条换掉，不再把结果写进去
     @Volatile
     var incarnation = 0
@@ -122,6 +132,26 @@ class ConversationSession(
         require(updated.id == id)
         _state.value = updated
         return updated
+    }
+
+    /**
+     * 在写锁内校验 incarnation，对最新状态做一次变换并立即整份落库；会话被替换或还没加载时返回 null。
+     * 压缩成功后的「插检查点 + 删提示词/回复」用它保证一次写完。
+     */
+    internal suspend fun flushWith(
+        expectedIncarnation: Int,
+        transform: (Conversation) -> Conversation,
+    ): Conversation? {
+        return writeMutex.withLock {
+            if (!isInitialized || incarnation != expectedIncarnation) return@withLock null
+            update(transform)
+            val current = update(store.prepareWrite())
+            store.write(previous = lastWritten.takeIf { existsInDatabase }, current = current)
+            lastWritten = current
+            existsInDatabase = true
+            rebuildPersistedCounts(current)
+            current
+        }
     }
 
     /**
@@ -339,6 +369,7 @@ class ConversationSession(
         processingStatus.value = null
         replyMessageId.value = null
         generationStartedAt.value = null
+        _compressionActive.value = false
     }
 
     // 失败和取消也必须保存已收到的内容，且保存完成前不能释放生成任务。

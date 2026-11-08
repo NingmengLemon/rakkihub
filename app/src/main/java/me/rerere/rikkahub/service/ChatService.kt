@@ -50,8 +50,10 @@ import me.rerere.rikkahub.data.event.AppEventBus
 import me.rerere.rikkahub.data.files.ChatDraftStore
 import me.rerere.rikkahub.data.files.FilesManager
 import me.rerere.rikkahub.data.model.Assistant
+import me.rerere.rikkahub.data.model.CompressionPlanResult
 import me.rerere.rikkahub.data.model.Conversation
 import me.rerere.rikkahub.data.model.MessageNode
+import me.rerere.rikkahub.data.model.applyCompressionResult
 import me.rerere.rikkahub.data.model.bindConfig
 import me.rerere.rikkahub.data.model.cancelInterruptedTools
 import me.rerere.rikkahub.data.model.contextWindowSize
@@ -63,10 +65,12 @@ import me.rerere.rikkahub.data.model.fork
 import me.rerere.rikkahub.data.model.getAssistantOf
 import me.rerere.rikkahub.data.model.getChatModelOf
 import me.rerere.rikkahub.data.model.getStoredAssistantOf
-import me.rerere.rikkahub.data.model.insertContextCheckpoint
 import me.rerere.rikkahub.data.model.insertHistoryTruncation
 import me.rerere.rikkahub.data.model.isAwaitingToolApproval
 import me.rerere.rikkahub.data.model.localFileUrls
+import me.rerere.rikkahub.data.model.planCompression
+import me.rerere.rikkahub.data.model.removeCompressionPair
+import me.rerere.rikkahub.data.model.removeCompressionPairs
 import me.rerere.rikkahub.data.model.replaceUserRegexes
 import me.rerere.rikkahub.data.model.toMessageNode
 import me.rerere.rikkahub.data.model.withAssistantUpdate
@@ -430,10 +434,11 @@ class ChatService(
                 val assistant = settingsStore.awaitLoaded().getStoredAssistantOf(session.state.value)
                 val processedContent = queued.parts.replaceUserRegexes(assistant)
 
-                // 添加消息到列表
-                session.update {
-                    it.copy(
-                        messageNodes = it.messageNodes + UIMessage(
+                // 添加消息到列表；上一轮压缩失败留下的提示词/回复对先清掉，不能当成普通历史
+                session.update { latest ->
+                    val cleaned = latest.removeCompressionPairs() ?: latest
+                    cleaned.copy(
+                        messageNodes = cleaned.messageNodes + UIMessage(
                             role = MessageRole.USER,
                             parts = processedContent,
                         ).toMessageNode(),
@@ -471,6 +476,7 @@ class ChatService(
     fun regenerateAtMessage(conversationId: Uuid, messageId: Uuid) {
         val session = sessionManager.getOrCreate(conversationId)
         synchronized(session) {
+            if (session.isCompressing) return
             val previousJob = session.getJob()
             val job = launchGenerationJob(conversationId = conversationId) {
                 try {
@@ -512,6 +518,8 @@ class ChatService(
     ) {
         val session = sessionManager.getOrCreate(conversationId)
         synchronized(session) {
+            // 压缩期间不接受工具审批，避免把压缩轮次的 assistant 节点当成可继续的回复
+            if (session.isCompressing) return
             val previousJob = session.getJob()
 
             val hasOtherPendingTools = session.state.value.currentMessages.any { message ->
@@ -758,6 +766,7 @@ class ChatService(
         force: Boolean = false
     ): Unit = withContext(Dispatchers.IO) {
         withLoadedSession<Unit>(conversationId) { session ->
+            if (session.isCompressing) return@withLoadedSession
             val incarnation = session.incarnation
             val conversation = session.state.value
             if (!force && conversation.title.isNotBlank()) return@withLoadedSession
@@ -790,69 +799,216 @@ class ChatService(
     // ---- 压缩对话历史 ----
 
     /**
-     * 把上一个检查点之后的消息压缩成摘要检查点。
-     *
-     * [keepRecentMessages] 为 0 时压缩全部消息，请求和上一轮对话前缀一致，缓存命中最好；
-     * 大于 0 时最近的这些消息不参与压缩、留在检查点之后，对话已经超出模型上下文、整段发不出去时用来缩小压缩请求。
+     * 启动一次可见的压缩轮次，返回 appScope 里的 job 供 UI 显示和停止。
+     * 门禁失败返回 Result.failure，调用方按现有文案提示，不抛异常。
      */
-    suspend fun compressConversation(
+    fun startCompression(
         conversationId: Uuid,
         additionalPrompt: String,
         keepRecentMessages: Int = 0,
-    ): Result<Unit> = runCatching {
-        withLoadedSession<Unit>(conversationId) { session ->
-            // 生成中的回复还没写完，压缩不到它，检查点也不能插到它前面
-            check(!session.isGenerating) { context.getString(R.string.chat_page_compress_blocked_generating) }
-
-            val conversation = session.state.value
-            val nodes = conversation.messageNodes
-            val windowStart = conversation.contextWindowStart()
-            // 压缩范围是 (windowStart, endIndex)，之后的节点原样保留
-            val endIndex = nodes.size - keepRecentMessages.coerceAtLeast(0)
-            // 上一个检查点之后没有可压缩的消息
-            if (endIndex <= windowStart) {
-                throw IllegalStateException(
-                    context.getString(
-                        if (keepRecentMessages > 0) {
-                            R.string.chat_page_compress_not_enough_messages
-                        } else {
-                            R.string.chat_page_compress_nothing_to_compress
-                        }
-                    )
+    ): Result<Job> {
+        val session = sessionManager.getOrCreate(conversationId)
+        synchronized(session) {
+            if (
+                session.getJob() != null ||
+                session.state.value.isAwaitingToolApproval ||
+                session.isCompressing
+            ) {
+                return Result.failure(
+                    IllegalStateException(context.getString(R.string.chat_page_compress_blocked_generating))
                 )
             }
-            // 未完成的工具调用没有结果，请求会被服务端拒绝；压到检查点之前也再不会执行。
-            // 保留区里的不发给压缩请求，压缩后照常留在检查点之后，不用检查
-            check(nodes.subList(windowStart, endIndex).none { node ->
-                node.currentMessage.getTools().any { it.isPending || it.canResumeExecution }
-            }) { context.getString(R.string.chat_page_compress_handle_pending_tools) }
-
-            // 必须和对话用同一个模型、同一套请求组装，才能命中提示词缓存
-            val settings = settingsStore.awaitLoaded()
-            val turn = requestFactory.createContext(settings, conversation)
-            val summary = requestFactory.generateCompressionSummary(
-                turn = turn,
-                messages = conversation.currentMessages.take(endIndex),
-                compressPrompt = buildCompressPrompt(
-                    template = settings.compressPrompt,
-                    additionalPrompt = additionalPrompt,
-                    locale = Locale.getDefault().displayName,
-                ),
-            )
-
-            // 原消息原样保留，摘要插在压缩范围的最后一条消息之后。摘要生成期间对话可能已变化，
-            // 因此按节点定位插入到最新状态。
-            session.update { latest ->
-                check(!session.isGenerating) { context.getString(R.string.chat_page_compress_blocked_generating) }
-                val updated = latest.insertContextCheckpoint(
-                    afterNodeId = nodes[endIndex - 1].id,
-                    summary = summary,
-                ) ?: throw IllegalStateException(context.getString(R.string.chat_page_compress_conversation_changed))
-                updated.copy(chatSuggestions = emptyList())
+            session.setCompressionActive(true)
+            val job = launchGenerationJob(
+                conversationId = conversationId,
+                keepAliveInBackground = false,
+            ) {
+                runCompressionTurn(session, additionalPrompt, keepRecentMessages)
             }
-            session.flush()
+            job.invokeOnCompletion { session.setCompressionActive(false) }
+            session.setJob(job)
+            return Result.success(job)
         }
     }
+
+    /**
+     * 压缩轮次：提示词和摘要作为临时节点出现在会话里，成功后插检查点并删掉这两个节点；
+     * 失败或取消不截断，保留现场等用户重试或删除。
+     */
+    private suspend fun runCompressionTurn(
+        session: ConversationSession,
+        additionalPrompt: String,
+        keepRecentMessages: Int,
+    ) {
+        val incarnation = session.incarnation
+        try {
+            ensureInitialized(session)
+            val settings = settingsStore.awaitLoaded()
+            val conversation = session.state.value
+            val plan = when (
+                val result = conversation.planCompression(
+                    windowStart = conversation.contextWindowStart(),
+                    keepRecent = keepRecentMessages,
+                )
+            ) {
+                CompressionPlanResult.NothingToCompress -> {
+                    notifyCompression(
+                        context.getString(
+                            if (keepRecentMessages > 0) {
+                                R.string.chat_page_compress_not_enough_messages
+                            } else {
+                                R.string.chat_page_compress_nothing_to_compress
+                            }
+                        ),
+                        session.id,
+                    )
+                    return
+                }
+
+                CompressionPlanResult.PendingTools -> {
+                    notifyCompression(
+                        context.getString(R.string.chat_page_compress_handle_pending_tools),
+                        session.id,
+                    )
+                    return
+                }
+
+                is CompressionPlanResult.Ready -> result.plan
+            }
+
+            val turn = requestFactory.createContext(settings, conversation)
+            val compressPrompt = buildCompressPrompt(
+                template = settings.compressPrompt,
+                additionalPrompt = additionalPrompt,
+                locale = Locale.getDefault().displayName,
+            )
+            val prompt = UIMessage.user(compressPrompt).copy(isCompressionPrompt = true)
+            val reply = UIMessage(
+                role = MessageRole.ASSISTANT,
+                parts = emptyList(),
+                modelId = turn.model.id,
+            )
+
+            // 旧失败对先清掉，再插提示词和空回复；saver 从 tick 0 就有稳定目标
+            session.update { latest ->
+                val cleaned = latest.removeCompressionPairs() ?: latest
+                cleaned.copy(
+                    messageNodes = cleaned.messageNodes +
+                        prompt.toMessageNode() +
+                        reply.toMessageNode(),
+                    chatSuggestions = emptyList(),
+                )
+            }
+            session.flush()
+            session.replyMessageId.value = reply.id
+            val replyNodeId = session.state.value.getMessageNodeByMessageId(reply.id)?.id
+                ?: throw IllegalStateException(
+                    context.getString(R.string.chat_page_compress_conversation_changed)
+                )
+            val turnIncarnation = session.incarnation
+            var succeeded = false
+
+            supervisorScope {
+                val saver = launch(Dispatchers.IO) {
+                    MessageSaveLoop(
+                        estimateChars = {
+                            estimateNodeChars(
+                                session.state.value.messageNodes.firstOrNull { it.id == replyNodeId }
+                            )
+                        },
+                        save = { session.persistMessageNode(replyNodeId, turnIncarnation) },
+                        onError = { Log.w(TAG, "compression save failed", it) },
+                        onTooLarge = {
+                            Log.w(TAG, "compression save skipped: node too large ($it chars)")
+                        },
+                    ).run()
+                }
+                try {
+                    val result = requestFactory.streamCompressionSummary(
+                        turn = turn,
+                        messages = plan.messagesToSend,
+                        compressPrompt = compressPrompt,
+                        baseMessage = reply,
+                        onUpdate = { updated ->
+                            session.update { it.upsertMessage(replyNodeId, updated) }
+                        },
+                    )
+                    if (isTruncatedFinishReason(result.finishReason)) {
+                        error(context.getString(R.string.chat_page_compress_truncated))
+                    }
+                    session.flushWith(turnIncarnation) { latest ->
+                        val applied = latest.applyCompressionResult(
+                            anchorNodeId = plan.anchorNodeId,
+                            promptMessageId = prompt.id,
+                            summary = result.summary,
+                        ) ?: throw IllegalStateException(
+                            context.getString(R.string.chat_page_compress_conversation_changed)
+                        )
+                        applied.copy(chatSuggestions = emptyList(), updateAt = Instant.now())
+                    } ?: throw IllegalStateException(
+                        context.getString(R.string.chat_page_compress_conversation_changed)
+                    )
+                    succeeded = true
+                } finally {
+                    withContext(NonCancellable) {
+                        // 先停 saver 并等它退出，再全量收尾；反过来会在写锁上互相等待
+                        saver.cancelAndJoin()
+                        session.processingStatus.value = null
+                        session.replyMessageId.value = null
+                        if (!succeeded) {
+                            // 失败/取消：结束 reasoning 并把提示词和部分回复落库
+                            session.finishGeneration()
+                        }
+                    }
+                }
+            }
+        } catch (e: CancellationException) {
+            if (session.incarnation == incarnation) {
+                notifyCompression(
+                    context.getString(R.string.chat_page_compress_cancelled),
+                    session.id,
+                )
+            }
+            throw e
+        } catch (e: Exception) {
+            addError(
+                error = e,
+                conversationId = session.id,
+                title = context.getString(R.string.error_title_compress_conversation),
+            )
+            throw e
+        } finally {
+            session.setCompressionActive(false)
+        }
+    }
+
+    private fun notifyCompression(message: String, conversationId: Uuid) {
+        addError(
+            error = IllegalStateException(message),
+            conversationId = conversationId,
+            title = context.getString(R.string.error_title_compress_conversation),
+        )
+    }
+
+    /** 删除失败的压缩提示词/回复对，一次 update 一次 flush，避免两次全量写之间留下半个 pair */
+    suspend fun deleteCompressionPair(conversationId: Uuid, promptMessageId: Uuid) {
+        withLoadedSession<Unit>(conversationId) { session ->
+            if (session.isCompressing) return@withLoadedSession
+            session.update { latest ->
+                latest.removeCompressionPair(promptMessageId) ?: latest
+            }
+            session.flush()
+            dispatchNextQueuedMessage(conversationId)
+        }
+    }
+
+    private fun isTruncatedFinishReason(reason: String?): Boolean =
+        reason?.lowercase() in setOf(
+            "length",
+            "max_tokens",
+            "max_output_tokens",
+            "max_completion_tokens",
+        )
 
     /**
      * 把最近 [keep] 条消息之前的历史从后续请求里去掉，不调用模型。
@@ -1259,6 +1415,10 @@ class ChatService(
         selectIndex: Int
     ) {
         withLoadedSession<Unit>(conversationId) { session ->
+            // 压缩期间锚点虽然不变，但摘要会和切换后的分支内容不一致，直接拒绝
+            if (session.isCompressing) {
+                throw ConflictException("Compression in progress")
+            }
             val conversation = session.state.value
             val targetNode = conversation.messageNodes.firstOrNull { it.id == nodeId }
                 ?: throw NotFoundException("Message node not found")

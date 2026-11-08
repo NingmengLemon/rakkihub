@@ -960,4 +960,34 @@ class ConversationSessionTest {
         assertNull(session.persistMessageNode(reply.id, session.incarnation))
         assertTrue(store.persistedNodes.isEmpty())
     }
+
+    @Test
+    fun `flush with writes the transform and advances the clean snapshot`() = runBlocking {
+        val id = Uuid.random()
+        val loaded = Conversation.ofId(id).copy(messageNodes = listOf(MessageNode.of(UIMessage.user("hi"))))
+        val store = FakeConversationStore(loaded)
+        val session = ConversationSession(id, Conversation.ofId(id), this, store, {})
+        session.initialize(load = { store.persisted })
+
+        val result = session.flushWith(session.incarnation) { it.copy(title = "renamed") }
+
+        assertEquals("renamed", result?.title)
+        assertEquals(1, store.writes.size)
+        session.flush()
+        assertEquals(1, store.writes.size)
+    }
+
+    @Test
+    fun `flush with ignores a replaced incarnation`() = runBlocking {
+        val id = Uuid.random()
+        val loaded = Conversation.ofId(id)
+        val store = FakeConversationStore(loaded)
+        val session = ConversationSession(id, Conversation.ofId(id), this, store, {})
+        session.initialize(load = { store.persisted })
+
+        val result = session.flushWith(session.incarnation + 1) { it.copy(title = "renamed") }
+
+        assertNull(result)
+        assertTrue(store.writes.isEmpty())
+    }
 }

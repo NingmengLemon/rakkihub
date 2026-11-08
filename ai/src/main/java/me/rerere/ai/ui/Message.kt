@@ -36,6 +36,8 @@ data class UIMessage(
     val translation: String? = null,
     // 上下文检查点：组装请求时从最后一个检查点开始取；非空内容是之前历史的摘要，空内容是历史截断的边界
     val isContextCheckpoint: Boolean = false,
+    // 可见压缩轮次的提示词；只在 Android 压缩卡里特殊渲染，其它渲染方按普通消息处理
+    val isCompressionPrompt: Boolean = false,
     // 请求期间生成的内部消息；该标记仅在内存中使用
     @Transient
     val isSynthetic: Boolean = false,

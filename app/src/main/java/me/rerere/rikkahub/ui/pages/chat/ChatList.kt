@@ -102,7 +102,9 @@ import me.rerere.rikkahub.data.model.contextLimitBoundaryIndex
 import me.rerere.rikkahub.data.model.getAssistantOf
 import me.rerere.rikkahub.data.model.withConversation
 import me.rerere.rikkahub.service.ChatError
+import me.rerere.ai.core.MessageRole
 import me.rerere.rikkahub.ui.components.message.ChatMessage
+import me.rerere.rikkahub.ui.components.message.CompressionCard
 import me.rerere.rikkahub.ui.components.ui.ErrorCardsDisplay
 import me.rerere.rikkahub.ui.hooks.ImeLazyListAutoScroller
 import me.rerere.rikkahub.ui.theme.ChatFontProvider
@@ -141,6 +143,9 @@ fun ChatList(
     onToolAnswer: ((toolCallId: String, answer: String) -> Unit)? = null,
     onToggleFavorite: ((MessageNode) -> Unit)? = null,
     onConversationSystemPromptChange: ((String?) -> Unit)? = null,
+    onStopCompression: () -> Unit = {},
+    onRetryCompression: (Uuid) -> Unit = {},
+    onDeleteCompression: (Uuid) -> Unit = {},
 ) {
     AnimatedContent(
         targetState = previewMode,
@@ -182,6 +187,9 @@ fun ChatList(
                 onToolAnswer = onToolAnswer,
                 onToggleFavorite = onToggleFavorite,
                 onConversationSystemPromptChange = onConversationSystemPromptChange,
+                onStopCompression = onStopCompression,
+                onRetryCompression = onRetryCompression,
+                onDeleteCompression = onDeleteCompression,
             )
         }
     }
@@ -230,6 +238,9 @@ private fun ChatListNormal(
     onToolAnswer: ((toolCallId: String, answer: String) -> Unit)? = null,
     onToggleFavorite: ((MessageNode) -> Unit)? = null,
     onConversationSystemPromptChange: ((String?) -> Unit)? = null,
+    onStopCompression: () -> Unit = {},
+    onRetryCompression: (Uuid) -> Unit = {},
+    onDeleteCompression: (Uuid) -> Unit = {},
 ) {
     val scope = rememberCoroutineScope()
     val loadingState by rememberUpdatedState(loading)
@@ -330,6 +341,17 @@ private fun ChatListNormal(
             // 上下文消息数上限：与请求一样从会话视角的助手取，只有真的发生条数截断才画线
             val contextLimit = settings.getAssistantOf(conversation).contextMessageLimit
             val contextLimitBoundary = conversation.contextLimitBoundaryIndex(contextLimit)
+            // 压缩提示词和紧随的回复合成一张卡；流式期间回复是最后一条
+            val compressionPromptNode = conversation.messageNodes
+                .lastOrNull { it.currentMessage.isCompressionPrompt }
+            val compressionReplyNode = compressionPromptNode?.let { prompt ->
+                val promptIndex = conversation.messageNodes.indexOf(prompt)
+                conversation.messageNodes.getOrNull(promptIndex + 1)?.takeIf { node ->
+                    node.messages.any { it.role == MessageRole.ASSISTANT }
+                }
+            }
+            val compressionStreaming =
+                loading && compressionReplyNode == conversation.messageNodes.lastOrNull()
             LazyColumn(
                 state = state,
                 // 顶部留白放进 contentPadding，让消息可以滚动到透明标题栏下面
@@ -352,7 +374,20 @@ private fun ChatListNormal(
                     if (contextLimitBoundary != null && index == contextLimitBoundary) {
                         ContextLimitBoundary(limit = contextLimit)
                     }
-                    ListSelectableItem(
+                    if (node.id == compressionReplyNode?.id) {
+                        // 回复节点由压缩卡承载，不单独渲染
+                    } else if (node.id == compressionPromptNode?.id) {
+                        CompressionCard(
+                            prompt = node.currentMessage,
+                            reply = compressionReplyNode?.currentMessage,
+                            streaming = compressionStreaming,
+                            failed = !compressionStreaming,
+                            onStop = onStopCompression,
+                            onRetry = { onRetryCompression(node.currentMessage.id) },
+                            onDelete = { onDeleteCompression(node.currentMessage.id) },
+                        )
+                    } else {
+                        ListSelectableItem(
                         key = node.id,
                         onSelectChange = {
                             if (!selectedItems.contains(node.id)) {
@@ -402,6 +437,7 @@ private fun ChatListNormal(
                             lastMessage = index == lastMessageIndex,
                             isLatestCheckpoint = node.id == latestCheckpointId,
                         )
+                    }
                     }
                 }
             }

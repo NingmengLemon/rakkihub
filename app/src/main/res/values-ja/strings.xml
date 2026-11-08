@@ -1256,6 +1256,17 @@ mDNSアドレス: .localホスト名を使用し、IPを知らなくても同じ
   <string name="chat_page_compress_checkpoint_hint">この行より上のメッセージはモデルに送信されなくなり、代わりにこの要約が使用されます。要約を削除すると、履歴全体が再び送信されます。</string>
   <string name="chat_page_compress_blocked_generating">コンテキストを圧縮する前に生成を停止してください</string>
   <string name="chat_page_stop_generation_first">先に生成を停止してください</string>
+  <string name="chat_page_compress_cancelled">圧縮はキャンセルされました。履歴は切り詰めていません</string>
+  <string name="chat_page_compression_title">圧縮コンテキスト</string>
+  <string name="chat_page_compression_failed">圧縮に失敗しました</string>
+  <string name="chat_page_compression_failed_hint">履歴は切り詰めていません</string>
+  <string name="chat_page_compression_prompt">プロンプト</string>
+  <string name="chat_page_compression_summary">要約</string>
+  <string name="chat_page_compression_retry">再試行</string>
+  <string name="chat_page_compression_delete">削除</string>
+  <string name="chat_page_compression_expand">表示</string>
+  <string name="chat_page_compression_collapse">隠す</string>
+  <string name="chat_page_compress_truncated">圧縮の要約が途中で切れました。履歴は切り詰めていません</string>
   <string name="chat_page_compress_conversation_changed">圧縮中に会話が変更されました。もう一度お試しください。</string>
   <string name="sketch">スケッチ</string>
   <string name="sketch_draw_on_image">画像に描画</string>

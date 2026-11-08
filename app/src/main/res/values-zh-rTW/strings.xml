@@ -1254,6 +1254,17 @@
   <string name="chat_page_compress_checkpoint_hint">此線以上的訊息將不再傳送給模型；此摘要會取代它們。刪除摘要即可再次傳送完整歷史記錄。</string>
   <string name="chat_page_compress_blocked_generating">請先停止生成，再壓縮上下文</string>
   <string name="chat_page_stop_generation_first">請先停止生成</string>
+  <string name="chat_page_compress_cancelled">壓縮已取消，歷史未截斷</string>
+  <string name="chat_page_compression_title">壓縮上下文</string>
+  <string name="chat_page_compression_failed">壓縮失敗</string>
+  <string name="chat_page_compression_failed_hint">歷史未截斷</string>
+  <string name="chat_page_compression_prompt">提示詞</string>
+  <string name="chat_page_compression_summary">摘要</string>
+  <string name="chat_page_compression_retry">重試</string>
+  <string name="chat_page_compression_delete">刪除</string>
+  <string name="chat_page_compression_expand">展開</string>
+  <string name="chat_page_compression_collapse">收合</string>
+  <string name="chat_page_compress_truncated">壓縮摘要被截斷，歷史未截斷</string>
   <string name="chat_page_compress_conversation_changed">對話在壓縮期間已變更。請再試一次。</string>
   <string name="sketch">草圖</string>
   <string name="sketch_draw_on_image">在圖片上繪圖</string>

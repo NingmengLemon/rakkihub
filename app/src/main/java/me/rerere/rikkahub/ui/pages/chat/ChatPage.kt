@@ -293,6 +293,8 @@ private fun ChatPageContent(
     var previewMode by rememberSaveable { mutableStateOf(false) }
     val hazeState = rememberHazeState()
     var showFilesSheet by remember { mutableStateOf(false) }
+    // 压缩失败卡片的「重试」先删失败对，再带着这个标记重新打开管理上下文对话框
+    var openContextDialogOnOpen by remember { mutableStateOf(false) }
     val attachmentPickerActions = rememberChatAttachmentPickerActions(
         inputState = inputState,
         setting = setting,
@@ -477,6 +479,15 @@ private fun ChatPageContent(
                 onConversationSystemPromptChange = { newPrompt ->
                     vm.updateConversationSystemPrompt(newPrompt)
                 },
+                onStopCompression = { vm.stopGeneration() },
+                onRetryCompression = { promptId ->
+                    vm.deleteCompressionPair(promptId)
+                    openContextDialogOnOpen = true
+                    showFilesSheet = true
+                },
+                onDeleteCompression = { promptId ->
+                    vm.deleteCompressionPair(promptId)
+                },
             )
         }
 
@@ -488,7 +499,11 @@ private fun ChatPageContent(
                 chatModel = currentChatModel,
                 vm = vm,
                 attachmentPickerActions = attachmentPickerActions,
-                onDismiss = { showFilesSheet = false },
+                openContextDialog = openContextDialogOnOpen,
+                onDismiss = {
+                    showFilesSheet = false
+                    openContextDialogOnOpen = false
+                },
             )
         }
     }
@@ -502,9 +517,10 @@ private fun ChatFilesPickerSheet(
     chatModel: Model?,
     vm: ChatVM,
     attachmentPickerActions: ChatAttachmentPickerActions,
+    openContextDialog: Boolean,
     onDismiss: () -> Unit,
 ) {
-    var showContextDialog by remember { mutableStateOf(false) }
+    var showContextDialog by remember { mutableStateOf(openContextDialog) }
 
     fun dismissAll() {
         showContextDialog = false

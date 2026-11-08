@@ -56,7 +56,7 @@ private enum class ContextTab { COMPRESS, TRUNCATE }
 fun ContextManagementDialog(
     conversation: Conversation,
     onDismiss: () -> Unit,
-    onCompress: (additionalPrompt: String, keepRecentMessages: Int) -> Job,
+    onCompress: (additionalPrompt: String, keepRecentMessages: Int) -> Unit,
     onTruncate: (keep: Int) -> Unit,
 ) {
     var tab by rememberSaveable { mutableStateOf(ContextTab.COMPRESS) }
@@ -65,17 +65,6 @@ fun ContextManagementDialog(
     var keepRecentMessages by rememberSaveable { mutableIntStateOf(0) }
     var truncateInput by rememberSaveable { mutableStateOf("") }
     var showAssistantWarning by remember { mutableStateOf(false) }
-    var currentJob by remember { mutableStateOf<Job?>(null) }
-    val isLoading = currentJob?.isActive == true
-
-    // 压缩结束后清掉任务：成功时关闭对话框，失败由聊天页的错误卡片提示
-    LaunchedEffect(currentJob) {
-        currentJob?.join()
-        if (currentJob?.isCompleted == true && currentJob?.isCancelled == false) {
-            onDismiss()
-        }
-        currentJob = null
-    }
 
     val nodes = conversation.messageNodes
     val windowSize = conversation.contextWindowSize().coerceAtLeast(0)
@@ -87,11 +76,7 @@ fun ContextManagementDialog(
     val assistantStart = firstKeptRole == MessageRole.ASSISTANT
 
     AlertDialog(
-        onDismissRequest = {
-            if (!isLoading) {
-                onDismiss()
-            }
-        },
+        onDismissRequest = onDismiss,
         title = {
             Text(stringResource(R.string.chat_page_manage_context))
         },
@@ -104,7 +89,7 @@ fun ContextManagementDialog(
                     ContextTab.entries.forEachIndexed { index, item ->
                         SegmentedButton(
                             selected = tab == item,
-                            onClick = { if (!isLoading) tab = item },
+                            onClick = { tab = item },
                             shape = SegmentedButtonDefaults.itemShape(index, ContextTab.entries.size),
                         ) {
                             Text(
@@ -119,89 +104,67 @@ fun ContextManagementDialog(
                     }
                 }
 
-                if (isLoading) {
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.Center,
-                        verticalAlignment = Alignment.CenterVertically,
-                    ) {
-                        ContainedLoadingIndicator(modifier = Modifier.size(32.dp))
-                        Spacer(modifier = Modifier.width(12.dp))
-                        Text(stringResource(R.string.chat_page_compressing))
-                    }
-                } else {
-                    when (tab) {
-                        ContextTab.COMPRESS -> CompressionPane(
-                            additionalPrompt = additionalPrompt,
-                            onAdditionalPromptChange = { additionalPrompt = it },
-                            keepRecentMessages = keepRecentMessages,
-                            onKeepRecentChange = { keepRecentMessages = it },
-                        )
+                when (tab) {
+                    ContextTab.COMPRESS -> CompressionPane(
+                        additionalPrompt = additionalPrompt,
+                        onAdditionalPromptChange = { additionalPrompt = it },
+                        keepRecentMessages = keepRecentMessages,
+                        onKeepRecentChange = { keepRecentMessages = it },
+                    )
 
-                        ContextTab.TRUNCATE -> TruncationPane(
-                            windowSize = windowSize,
-                            input = truncateInput,
-                            keep = truncateKeep,
-                            valid = truncateValid,
-                            assistantStart = assistantStart,
-                            onInputChange = { truncateInput = it },
-                            onMinus = {
-                                truncateKeep?.let {
-                                    truncateInput = (it - 1).coerceAtLeast(1).toString()
-                                }
-                            },
-                            onPlus = {
-                                truncateInput = ((truncateKeep ?: 0) + 1).toString()
-                            },
-                            onShowAssistantWarning = { showAssistantWarning = true },
-                        )
-                    }
-                }
-            }
-        },
-        confirmButton = {
-            if (isLoading) {
-                TextButton(onClick = {
-                    currentJob?.cancel()
-                    currentJob = null
-                }) {
-                    Text(stringResource(R.string.cancel))
-                }
-            } else {
-                TextButton(
-                    onClick = {
-                        when (tab) {
-                            ContextTab.COMPRESS -> {
-                                currentJob = onCompress(additionalPrompt, keepRecentMessages)
+                    ContextTab.TRUNCATE -> TruncationPane(
+                        windowSize = windowSize,
+                        input = truncateInput,
+                        keep = truncateKeep,
+                        valid = truncateValid,
+                        assistantStart = assistantStart,
+                        onInputChange = { truncateInput = it },
+                        onMinus = {
+                            truncateKeep?.let {
+                                truncateInput = (it - 1).coerceAtLeast(1).toString()
                             }
-
-                            ContextTab.TRUNCATE -> {
-                                val keep = truncateKeep
-                                if (keep != null && truncateValid) {
-                                    onTruncate(keep)
-                                    onDismiss()
-                                }
-                            }
-                        }
-                    },
-                    enabled = tab == ContextTab.COMPRESS || truncateValid,
-                ) {
-                    Text(
-                        stringResource(
-                            when (tab) {
-                                ContextTab.COMPRESS -> R.string.confirm
-                                ContextTab.TRUNCATE -> R.string.chat_page_truncate_confirm
-                            }
-                        )
+                        },
+                        onPlus = {
+                            truncateInput = ((truncateKeep ?: 0) + 1).toString()
+                        },
+                        onShowAssistantWarning = { showAssistantWarning = true },
                     )
                 }
             }
         },
+        confirmButton = {
+            TextButton(
+                onClick = {
+                    when (tab) {
+                        ContextTab.COMPRESS -> {
+                            onCompress(additionalPrompt, keepRecentMessages)
+                            onDismiss()
+                        }
+
+                        ContextTab.TRUNCATE -> {
+                            val keep = truncateKeep
+                            if (keep != null && truncateValid) {
+                                onTruncate(keep)
+                                onDismiss()
+                            }
+                        }
+                    }
+                },
+                enabled = tab == ContextTab.COMPRESS || truncateValid,
+            ) {
+                Text(
+                    stringResource(
+                        when (tab) {
+                            ContextTab.COMPRESS -> R.string.confirm
+                            ContextTab.TRUNCATE -> R.string.chat_page_truncate_confirm
+                        }
+                    )
+                )
+            }
+        },
         dismissButton = {
-            if (!isLoading) {
-                TextButton(onClick = onDismiss) {
-                    Text(stringResource(R.string.cancel))
-                }
+            TextButton(onClick = onDismiss) {
+                Text(stringResource(R.string.cancel))
             }
         },
     )

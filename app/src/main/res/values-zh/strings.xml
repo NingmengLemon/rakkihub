@@ -1256,6 +1256,17 @@ mDNS 地址：使用 .local 主机名，同一网络中的其他设备可通过�
   <string name="chat_page_compress_checkpoint_hint">分隔线以上的消息不再发送给模型，由这份摘要代替。删除摘要即可恢复发送完整历史。</string>
   <string name="chat_page_compress_blocked_generating">请先停止生成再压缩上下文</string>
   <string name="chat_page_stop_generation_first">请先停止生成</string>
+  <string name="chat_page_compress_cancelled">压缩已取消，历史未截断</string>
+  <string name="chat_page_compression_title">压缩上下文</string>
+  <string name="chat_page_compression_failed">压缩失败</string>
+  <string name="chat_page_compression_failed_hint">历史未截断</string>
+  <string name="chat_page_compression_prompt">提示词</string>
+  <string name="chat_page_compression_summary">摘要</string>
+  <string name="chat_page_compression_retry">重试</string>
+  <string name="chat_page_compression_delete">删除</string>
+  <string name="chat_page_compression_expand">展开</string>
+  <string name="chat_page_compression_collapse">收起</string>
+  <string name="chat_page_compress_truncated">压缩摘要被截断，历史未截断</string>
   <string name="chat_page_compress_conversation_changed">对话在压缩期间发生变化，请重试</string>
   <string name="sketch">草图</string>
   <string name="sketch_draw_on_image">在图片上绘制</string>

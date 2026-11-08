@@ -14,6 +14,8 @@ import me.rerere.ai.provider.Model
 import me.rerere.ai.provider.ProviderManager
 import me.rerere.ai.provider.ProviderSetting
 import me.rerere.ai.provider.TextGenerationParams
+import me.rerere.ai.ui.StreamChunk
+import me.rerere.ai.ui.StreamChunkHandler
 import me.rerere.ai.ui.UIMessage
 import me.rerere.ai.ui.limitContext
 import me.rerere.rikkahub.R
@@ -161,36 +163,47 @@ class ChatRequestFactory(
     }
 
     /**
-     * 生成压缩摘要。
-     *
-     * 请求按正常对话组装（系统提示词、工具定义、参数和 sessionId 都相同），只在末尾追加压缩指令，
-     * 前缀与上一轮对话一致，可以命中提示词缓存，模型也能看到工具调用和结果。
-     * 工具定义必须保留：它属于请求前缀，去掉或改动 tool_choice 都会让缓存失效。
+     * 可见压缩轮次的流式请求。前缀与正常对话完全一致（系统提示词、工具定义、参数都不改），
+     * 提示词作为最后一条 user 消息追加；每次回调都带着同一条 assistant 消息（保留传进来的 id），
+     * 重试时从初始消息重置，避免分支或半截内容叠加。
      */
-    suspend fun generateCompressionSummary(
+    internal suspend fun streamCompressionSummary(
         turn: ChatTurnContext,
         messages: List<UIMessage>,
         compressPrompt: String,
-    ): String {
+        baseMessage: UIMessage,
+        onUpdate: suspend (UIMessage) -> Unit,
+    ): CompressionStreamResult {
         val (requestMessages, params) = buildStep(turn, messages)
-        // 压缩指令不经过输入转换器，模板转换器会把其中的花括号当成模板语法
-        val result = withRetry(
+        val initial = baseMessage.copy(modelId = params.model.id)
+        var current = initial
+        var finishReason: String? = null
+        withRetry(
             policy = turn.settings.retryPolicy(),
-            onRetry = { Log.w(TAG, "Compression request failed, retrying in ${it.delay}", it.cause) },
+            onRetry = { Log.w(TAG, "Compression stream failed, retrying in ${it.delay}", it.cause) },
         ) {
+            current = initial
+            finishReason = null
+            val handler = StreamChunkHandler(params.model)
             usageRecorder.wrap(
                 providerManager.getProviderByType(turn.providerSetting),
                 UsageTag(UsageSource.COMPRESSION, turn.assistant.id, turn.conversationId),
-            ).generateText(
+            ).streamText(
                 providerSetting = turn.providerSetting,
                 messages = requestMessages + UIMessage.user(compressPrompt),
-                // 助手的输出上限是给聊天回复定的，结构化摘要写不完会被截断；max_tokens 不属于请求前缀，改了不影响缓存
                 params = params.copy(maxTokens = null),
-            )
+            ).collect { chunk ->
+                if (chunk is StreamChunk.Finish) finishReason = chunk.finishReason
+                current = handler.handle(listOf(current), chunk).last()
+                onUpdate(current)
+            }
         }
-        val summary = result.message.compressionSummaryOrNull()
+        val summary = current.compressionSummaryOrNull()
             ?: error(context.getString(R.string.chat_page_compress_tool_call_response))
-        return summary.ifBlank { error("Failed to generate compressed summary") }
+        return CompressionStreamResult(
+            summary = summary.ifBlank { error("Failed to generate compressed summary") },
+            finishReason = finishReason,
+        )
     }
 
     /** 一步请求实际发出的消息和参数；正常对话和压缩共用，二者的请求前缀必须一致才能命中提示词缓存 */
@@ -300,3 +313,9 @@ internal fun backgroundTextGenerationParams(
 
 internal fun Settings.retryPolicy() =
     if (networkSetting.enableAutoRetry) RetryPolicy.NETWORK else RetryPolicy.NONE
+
+/** 压缩流式请求的结果；finishReason 是提供商原始字符串，调用方据此判断是否被截断 */
+internal data class CompressionStreamResult(
+    val summary: String,
+    val finishReason: String?,
+)

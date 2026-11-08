@@ -1,5 +1,6 @@
 package me.rerere.rikkahub.data.model
 
+import me.rerere.ai.core.MessageRole
 import me.rerere.ai.ui.ToolApprovalState
 import me.rerere.ai.ui.UIMessage
 import me.rerere.ai.ui.UIMessagePart
@@ -25,6 +26,56 @@ internal fun Conversation.deleteMessage(messageId: Uuid): Conversation? {
 }
 
 /**
+ * 删掉一个未完成的压缩对：带 [UIMessage.isCompressionPrompt] 标记的提示词节点，以及紧随其后的
+ * assistant 回复节点。回复可能已经被 withoutUnresumableToolCalls 删掉，或者下一个节点不是 assistant，
+ * 这时只删提示词。提示词不存在时返回 null。
+ */
+internal fun Conversation.removeCompressionPair(promptMessageId: Uuid): Conversation? {
+    val promptIndex = messageNodes.indexOfFirst { node ->
+        node.messages.any { it.id == promptMessageId && it.isCompressionPrompt }
+    }
+    if (promptIndex == -1) return null
+    val replyIndex = (promptIndex + 1).takeIf { index ->
+        index < messageNodes.size && messageNodes[index].messages.any { it.role == MessageRole.ASSISTANT }
+    }
+    return copy(
+        messageNodes = messageNodes.filterIndexed { index, _ ->
+            index != promptIndex && index != replyIndex
+        }
+    )
+}
+
+/** 清理所有未完成的压缩对；没有可清理的返回 null */
+internal fun Conversation.removeCompressionPairs(): Conversation? {
+    var result: Conversation? = null
+    var conversation = this
+    while (true) {
+        val promptId = conversation.messageNodes
+            .firstOrNull { node -> node.messages.any { it.isCompressionPrompt } }
+            ?.messages
+            ?.first { it.isCompressionPrompt }
+            ?.id
+            ?: break
+        conversation = conversation.removeCompressionPair(promptId) ?: break
+        result = conversation
+    }
+    return result
+}
+
+/**
+ * 成功压缩：按锚点插检查点，再删掉提示词/回复对；锚点不存在返回 null。
+ * 提示词已被删掉时仍返回插好检查点的结果，回复节点留给后续清理。
+ */
+internal fun Conversation.applyCompressionResult(
+    anchorNodeId: Uuid,
+    promptMessageId: Uuid,
+    summary: String,
+): Conversation? {
+    val withCheckpoint = insertContextCheckpoint(afterNodeId = anchorNodeId, summary = summary) ?: return null
+    return withCheckpoint.removeCompressionPair(promptMessageId) ?: withCheckpoint
+}
+
+/**
  * 用 [parts] 替换消息的内容，作为原节点的新分支；压缩检查点原地改写。消息不存在时原样返回。
  */
 internal fun Conversation.editMessage(messageId: Uuid, parts: List<UIMessagePart>): Conversation {
@@ -40,6 +91,8 @@ internal fun Conversation.editMessage(messageId: Uuid, parts: List<UIMessagePart
             // 编辑的是原消息的内容，来源仍是生成它的模型
             modelId = original.modelId,
             modelSnapshot = original.modelSnapshot,
+            // 失败压缩的提示词被编辑后仍要能被 scratch 清理认出来
+            isCompressionPrompt = original.isCompressionPrompt,
         )
     }
     return upsertMessage(node.id, edited)
