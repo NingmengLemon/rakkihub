@@ -25,7 +25,7 @@ class MessageSaveLoopTest {
     fun `interval follows the encoded content size`() {
         assertEquals(5_000L, MessageSavePolicy.intervalMs(100 * 1024))
         assertEquals(5_000L, MessageSavePolicy.intervalMs(200_000))
-        // 280KB 内容进 15 秒档；按字符算的旧实现要到 256K 字符才换档
+        // 280KB 内容进 15 秒档；与按字符实现的差异由下面的 tier selection 用例覆盖
         assertEquals(15_000L, MessageSavePolicy.intervalMs(280_000))
         assertEquals(15_000L, MessageSavePolicy.intervalMs(1024 * 1024))
         assertEquals(30_000L, MessageSavePolicy.intervalMs(3 * 1024 * 1024))
