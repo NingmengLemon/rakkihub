@@ -1263,6 +1263,7 @@ mDNSアドレス: .localホスト名を使用し、IPを知らなくても同じ
   <string name="chat_page_compress_checkpoint_hint">この行より上のメッセージはモデルに送信されなくなり、代わりにこの要約が使用されます。要約を削除すると、履歴全体が再び送信されます。</string>
   <string name="chat_page_compress_blocked_generating">コンテキストを圧縮する前に生成を停止してください</string>
   <string name="chat_page_stop_generation_first">先に生成を停止してください</string>
+  <string name="chat_page_resolve_tool_approval_first">保留中のツール承認を先に処理してください</string>
   <string name="chat_page_compress_cancelled">圧縮はキャンセルされました。履歴は切り詰めていません</string>
   <string name="chat_page_compression_title">圧縮コンテキスト</string>
   <string name="chat_page_compression_failed">圧縮に失敗しました</string>

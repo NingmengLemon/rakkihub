@@ -1261,6 +1261,7 @@
   <string name="chat_page_compress_checkpoint_hint">此線以上的訊息將不再傳送給模型；此摘要會取代它們。刪除摘要即可再次傳送完整歷史記錄。</string>
   <string name="chat_page_compress_blocked_generating">請先停止生成，再壓縮上下文</string>
   <string name="chat_page_stop_generation_first">請先停止生成</string>
+  <string name="chat_page_resolve_tool_approval_first">請先處理待核准的工具調用</string>
   <string name="chat_page_compress_cancelled">壓縮已取消，歷史未截斷</string>
   <string name="chat_page_compression_title">壓縮上下文</string>
   <string name="chat_page_compression_failed">壓縮失敗</string>

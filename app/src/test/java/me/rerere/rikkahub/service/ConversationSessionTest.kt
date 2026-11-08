@@ -20,6 +20,7 @@ import me.rerere.ai.core.MessageRole
 import me.rerere.ai.provider.Model
 import me.rerere.ai.provider.ProviderSetting
 import me.rerere.ai.ui.MessageStatus
+import me.rerere.ai.ui.ToolApprovalState
 import me.rerere.ai.ui.UIMessage
 import me.rerere.ai.ui.UIMessagePart
 import me.rerere.rikkahub.data.ai.ChatTurnContext
@@ -1016,20 +1017,51 @@ class ConversationSessionTest {
         val id = Uuid.random()
         val session = ConversationSession(id, Conversation.ofId(id), this, FakeConversationStore(), {})
         session.initialize(load = { null }, create = { Conversation.ofId(id) })
-        session.pendingApprovalTurn = ChatTurnContext(
-            settings = Settings.dummy(),
-            assistant = Assistant(),
-            model = Model(modelId = "test-model"),
-            providerSetting = ProviderSetting.Claude(),
-            conversationId = id,
-            conversationSystemPrompt = null,
-            workspaceCwd = null,
-            memories = emptyList(),
-            tools = emptyList(),
-        )
+        session.pendingApprovalTurn = approvalTurn(id)
 
         session.replace(Conversation.ofId(id), existsInDatabase = false) {}
 
         assertNull(session.pendingApprovalTurn)
     }
+
+    @Test
+    fun `regenerate is blocked by pending approval and a frozen turn`() = runBlocking {
+        val id = Uuid.random()
+        val session = ConversationSession(id, Conversation.ofId(id), this, FakeConversationStore(), {})
+        session.initialize(load = { null }, create = { Conversation.ofId(id) })
+        assertTrue(session.canRegenerate())
+
+        session.update {
+            it.updateCurrentMessages(listOf(
+                UIMessage(
+                    role = MessageRole.ASSISTANT,
+                    parts = listOf(
+                        UIMessagePart.Tool(
+                            toolCallId = "pending-tool",
+                            toolName = "workspace_shell",
+                            input = "{}",
+                            approvalState = ToolApprovalState.Pending,
+                        )
+                    ),
+                )
+            ))
+        }
+        assertFalse(session.canRegenerate())
+
+        session.update { it.updateCurrentMessages(listOf(UIMessage.assistant("plain"))) }
+        session.pendingApprovalTurn = approvalTurn(id)
+        assertFalse(session.canRegenerate())
+    }
+
+    private fun approvalTurn(id: Uuid) = ChatTurnContext(
+        settings = Settings.dummy(),
+        assistant = Assistant(),
+        model = Model(modelId = "test-model"),
+        providerSetting = ProviderSetting.Claude(),
+        conversationId = id,
+        conversationSystemPrompt = null,
+        workspaceCwd = null,
+        memories = emptyList(),
+        tools = emptyList(),
+    )
 }

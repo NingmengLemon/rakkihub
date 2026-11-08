@@ -479,6 +479,21 @@ class ChatService(
         val session = sessionManager.getOrCreate(conversationId)
         synchronized(session) {
             if (session.isCompressing) return
+            if (!session.canRegenerate()) {
+                val waitingApproval = session.state.value.isAwaitingToolApproval ||
+                    session.pendingApprovalTurn != null
+                val message = if (waitingApproval) {
+                    R.string.chat_page_resolve_tool_approval_first
+                } else {
+                    R.string.chat_page_stop_generation_first
+                }
+                addError(
+                    error = ConflictException(context.getString(message)),
+                    conversationId = conversationId,
+                    title = context.getString(R.string.error_title_regenerate_message),
+                )
+                return
+            }
             val previousJob = session.getJob()
             val job = launchGenerationJob(conversationId = conversationId) {
                 try {
@@ -557,7 +572,7 @@ class ChatService(
 
                         // Only continue generation when all pending tools are handled
                         if (!updated.isAwaitingToolApproval) {
-                            runTurn(session)
+                            runTurn(session, resumeApproval = true)
                         }
                     }
                 } catch (e: Exception) {
@@ -578,7 +593,11 @@ class ChatService(
      * 发送的最后一条是助手消息时从它继续（比如审批之后），回复写回那条消息。
      * 失败时报告错误、暂停消息队列并返回 [TurnResult.Failed]；取消时直接抛出。
      */
-    private suspend fun runTurn(session: ConversationSession, regenerateNodeId: Uuid? = null): TurnResult {
+    private suspend fun runTurn(
+        session: ConversationSession,
+        regenerateNodeId: Uuid? = null,
+        resumeApproval: Boolean = false,
+    ): TurnResult {
         val conversationId = session.id
         // 先清理上一轮状态；确定历史后，仅为真正的续写恢复消息 ID。
         session.replyMessageId.value = null
@@ -620,18 +639,10 @@ class ChatService(
             // 它会挂起也可能失败，期间或失败后不能还指着上一轮的回复
             session.replyMessageId.value = history.lastOrNull()?.takeIf { it.role == MessageRole.ASSISTANT }?.id
 
-            // 审批恢复沿用产生 pending call 的那份上下文，配置变化从下一轮开始。
-            // 只有末条 assistant 上还有可恢复的工具时才认这份上下文，避免 regenerate 或脏状态误用。
-            val canResumeApproval = history.lastOrNull()
-                ?.getTools()
-                ?.any { !it.isExecuted && it.canResumeExecution } == true
-            val frozenTurn = session.pendingApprovalTurn.takeIf {
-                regenerateNodeId == null && canResumeApproval
-            }
-            if (session.pendingApprovalTurn != null && frozenTurn == null) {
-                if (!canResumeApproval) session.pendingApprovalTurn = null
-                throw ConflictException("Tool approval pending")
-            }
+            // 只有 handleToolApproval 知道这是审批恢复；别的入口不能用冻结上下文。
+            // 审批恢复沿用产生 pending call 的那份配置，配置变化从下一轮开始。
+            val frozenTurn = session.pendingApprovalTurn.takeIf { resumeApproval }
+            if (!resumeApproval) session.pendingApprovalTurn = null
             val turn = frozenTurn ?: requestFactory.createContext(settings, conversation)
             if (frozenTurn != null) session.pendingApprovalTurn = null
             senderName = if (turn.assistant.useAssistantAvatar) {
@@ -1506,11 +1517,13 @@ class ChatService(
             session.messageQueue.pause()
             session.cancelJobs()
         }
-        if (jobs.isEmpty()) return
+        val shouldSettle = jobs.isNotEmpty() ||
+            session.state.value.isAwaitingToolApproval ||
+            session.pendingApprovalTurn != null
         withContext(NonCancellable) {
             jobs.forEach { it.join() }
             session.pendingApprovalTurn = null
-            if (session.isInitialized) finishInterruptedPendingTools(session)
+            if (shouldSettle && session.isInitialized) finishInterruptedPendingTools(session)
         }
     }
 }

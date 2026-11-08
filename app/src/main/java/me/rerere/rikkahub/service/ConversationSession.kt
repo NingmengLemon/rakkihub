@@ -19,6 +19,7 @@ import me.rerere.ai.ui.finishReasoning
 import me.rerere.rikkahub.data.ai.ChatTurnContext
 import me.rerere.rikkahub.data.model.Conversation
 import me.rerere.rikkahub.data.model.MessageNode
+import me.rerere.rikkahub.data.model.isAwaitingToolApproval
 import me.rerere.rikkahub.data.model.selectBranch
 import me.rerere.rikkahub.data.model.updateMessageStatus
 import java.time.Instant
@@ -381,6 +382,10 @@ class ConversationSession(
         isClosing = false
     }
 
+    /** 生成中、审批中或审批恢复中都不允许重新生成，避免截断一半后才发现被冻结挡住。 */
+    internal fun canRegenerate(): Boolean =
+        getJob() == null && !state.value.isAwaitingToolApproval && pendingApprovalTurn == null
+
     /** 把本轮回复标记为失败或中断；只改内存，随后由 [finishGeneration] 落库。 */
     internal fun markReplyStatus(status: MessageStatus) {
         if (!isInitialized) return
@@ -416,7 +421,7 @@ class ConversationSession(
     // 生成期间那个节点还可能被切到别的分支，只能按 id 找
     val replyMessageId = MutableStateFlow<Uuid?>(null)
 
-    // 等待工具审批期间冻结的本轮上下文，审批通过后继续用同一份 provider、模型和工具定义
+    // 等待工具审批期间冻结的本轮上下文，审批结果写入后继续用同一份 provider、模型和工具定义
     @Volatile
     internal var pendingApprovalTurn: ChatTurnContext? = null
 

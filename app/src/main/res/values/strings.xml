@@ -1261,6 +1261,7 @@
   <string name="chat_page_compress_checkpoint_hint">Messages above this line are no longer sent to the model; this summary replaces them. Delete the summary to send the full history again.</string>
   <string name="chat_page_compress_blocked_generating">Stop the generation before compressing the context</string>
   <string name="chat_page_stop_generation_first">Stop the generation first</string>
+  <string name="chat_page_resolve_tool_approval_first">Resolve the pending tool approval first</string>
   <string name="chat_page_compress_cancelled">Compression cancelled; history was not truncated</string>
   <string name="chat_page_compression_title">Compressed context</string>
   <string name="chat_page_compression_failed">Compression failed</string>
