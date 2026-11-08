@@ -1,6 +1,9 @@
 package me.rerere.rikkahub.data.model
 
+import me.rerere.ai.core.MessageRole
+import me.rerere.ai.ui.ToolApprovalState
 import me.rerere.ai.ui.UIMessage
+import me.rerere.ai.ui.UIMessagePart
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
@@ -86,4 +89,60 @@ class CompressionPlanTest {
         assertFalse(isTruncatedCompressionFinish("stop"))
         assertFalse(isTruncatedCompressionFinish(null))
     }
+
+    @Test
+    fun `plan rejects a pending tool in the range`() {
+        val conversation = conversation(
+            listOf(
+                MessageNode.of(UIMessage.user("a")),
+                toolNode(ToolApprovalState.Pending),
+                MessageNode.of(UIMessage.user("c")),
+            )
+        )
+
+        assertTrue(
+            conversation.planCompression(windowStart = 0, keepRecent = 1) is CompressionPlanResult.PendingTools
+        )
+    }
+
+    @Test
+    fun `plan rejects a resumable approved tool in the range`() {
+        val conversation = conversation(
+            listOf(
+                MessageNode.of(UIMessage.user("a")),
+                toolNode(ToolApprovalState.Approved),
+                MessageNode.of(UIMessage.user("c")),
+            )
+        )
+
+        assertTrue(
+            conversation.planCompression(windowStart = 0, keepRecent = 1) is CompressionPlanResult.PendingTools
+        )
+    }
+
+    @Test
+    fun `pending tool only in the kept tail leaves the plan ready`() {
+        val a = MessageNode.of(UIMessage.user("a"))
+        val b = MessageNode.of(UIMessage.user("b"))
+        val conversation = conversation(listOf(a, b, toolNode(ToolApprovalState.Pending)))
+
+        val plan = (conversation.planCompression(windowStart = 0, keepRecent = 1) as CompressionPlanResult.Ready).plan
+
+        assertEquals(listOf("a", "b"), plan.messagesToSend.map { it.toText() })
+        assertEquals(b.id, plan.anchorNodeId)
+    }
+
+    private fun toolNode(state: ToolApprovalState) = MessageNode.of(
+        UIMessage(
+            role = MessageRole.ASSISTANT,
+            parts = listOf(
+                UIMessagePart.Tool(
+                    toolCallId = Uuid.random().toString(),
+                    toolName = "test",
+                    input = "{}",
+                    approvalState = state,
+                )
+            ),
+        )
+    )
 }

@@ -48,4 +48,45 @@ class ConversationHistoryTruncationTest {
         assertFalse(summary.toText().isBlank())
         assertTrue(marker.toText().isBlank())
     }
+
+    @Test
+    fun `truncation clears the compression pair before placing the marker`() {
+        val users = List(2) { UIMessage.user("message $it").toMessageNode() }
+        val source = Conversation(
+            assistantId = Uuid.random(),
+            messageNodes = users + compressionPairNodes(),
+        )
+
+        val cleaned = source.removeCompressionPairs()!!
+        val anchor = cleaned.messageNodes[cleaned.messageNodes.size - 2]
+        val result = cleaned.insertHistoryTruncation(anchor.id)!!
+
+        assertEquals(listOf("message 0"), result.messageNodes.take(1).map { it.currentMessage.toText() })
+        assertTrue(result.messageNodes[1].currentMessage.isHistoryTruncationMarker)
+        assertEquals(listOf("message 1"), result.messageNodes.drop(2).map { it.currentMessage.toText() })
+        assertEquals(1, result.contextWindowSize())
+        assertTrue(result.messageNodes.none { it.currentMessage.isCompressionPrompt })
+    }
+
+    @Test
+    fun `truncation keep count ignores the compression pair`() {
+        val users = List(6) { UIMessage.user("message $it").toMessageNode() }
+        val source = Conversation(
+            assistantId = Uuid.random(),
+            messageNodes = users + compressionPairNodes(),
+        )
+
+        val cleaned = source.removeCompressionPairs()!!
+        val keep = 2
+        val anchor = cleaned.messageNodes[cleaned.messageNodes.size - keep - 1]
+        val result = cleaned.insertHistoryTruncation(anchor.id)!!
+
+        assertEquals(2, result.contextWindowSize())
+        assertEquals("message 5", result.messageNodes.last().currentMessage.toText())
+    }
+
+    private fun compressionPairNodes() = listOf(
+        UIMessage.user("compress").copy(isCompressionPrompt = true).toMessageNode(),
+        UIMessage.assistant("summary").toMessageNode(),
+    )
 }

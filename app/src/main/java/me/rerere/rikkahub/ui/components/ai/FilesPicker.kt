@@ -77,6 +77,7 @@ import me.rerere.rikkahub.data.model.Assistant
 import me.rerere.rikkahub.data.model.Conversation
 import me.rerere.rikkahub.data.model.isHistoryTruncationMarker
 import me.rerere.rikkahub.data.model.lastContextTokens
+import me.rerere.rikkahub.data.model.removeCompressionPairs
 import me.rerere.rikkahub.data.repository.WorkspaceRepository
 import me.rerere.rikkahub.ui.components.ui.ExtensionSelector
 import me.rerere.rikkahub.ui.context.LocalNavController
@@ -323,17 +324,23 @@ internal fun FilesPicker(
                             val contextTokens = remember(conversation.messageNodes) {
                                 conversation.lastContextTokens()
                             }
+                            // 压缩 scratch 对是请求之外的临时节点，不计入消息数
+                            val messageCount = remember(conversation) {
+                                (conversation.removeCompressionPairs() ?: conversation)
+                                    .messageNodes
+                                    .count { !it.currentMessage.isHistoryTruncationMarker }
+                            }
                             val contextLength = chatModel?.contextLength?.takeIf { it > 0 }
                             Row(
                                 verticalAlignment = Alignment.CenterVertically,
                                 horizontalArrangement = Arrangement.spacedBy(10.dp),
                             ) {
                                 Column(horizontalAlignment = Alignment.End) {
-                                    if (conversation.messageNodes.isNotEmpty()) {
+                                    if (messageCount > 0) {
                                         Text(
                                             text = stringResource(
                                                 R.string.chat_page_message_count,
-                                                conversation.messageNodes.count { !it.currentMessage.isHistoryTruncationMarker },
+                                                messageCount,
                                             ),
                                             style = MaterialTheme.typography.labelMedium,
                                             color = MaterialTheme.colorScheme.onSurfaceVariant,

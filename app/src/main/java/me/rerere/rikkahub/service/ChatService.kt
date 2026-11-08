@@ -1032,24 +1032,24 @@ class ChatService(
             check(!session.isGenerating) {
                 context.getString(R.string.chat_page_truncate_blocked_generating)
             }
-            val conversation = session.state.value
-            val nodes = conversation.messageNodes
-            val windowSize = conversation.contextWindowSize()
             if (keep < 1) throw IllegalStateException(context.getString(R.string.chat_page_truncate_keep_at_least_one))
-            if (windowSize < 2) {
-                throw IllegalStateException(context.getString(R.string.chat_page_truncate_nothing_to_cut))
-            }
-            if (keep >= windowSize) {
-                throw IllegalStateException(
-                    context.getString(R.string.chat_page_truncate_window_too_many, windowSize)
-                )
-            }
-            val anchor = nodes[nodes.size - keep - 1]
             session.update { latest ->
                 check(!session.isGenerating) {
                     context.getString(R.string.chat_page_truncate_blocked_generating)
                 }
-                val updated = latest.insertHistoryTruncation(anchor.id)
+                // 失败/停止的压缩会留下 scratch 对，它不在请求里；先清掉再按剩余节点算窗口和锚点
+                val conversation = latest.removeCompressionPairs() ?: latest
+                val windowSize = conversation.contextWindowSize()
+                if (windowSize < 2) {
+                    throw IllegalStateException(context.getString(R.string.chat_page_truncate_nothing_to_cut))
+                }
+                if (keep >= windowSize) {
+                    throw IllegalStateException(
+                        context.getString(R.string.chat_page_truncate_window_too_many, windowSize)
+                    )
+                }
+                val anchor = conversation.messageNodes[conversation.messageNodes.size - keep - 1]
+                val updated = conversation.insertHistoryTruncation(anchor.id)
                     ?: throw IllegalStateException(context.getString(R.string.chat_page_truncate_conversation_changed))
                 updated.copy(chatSuggestions = emptyList())
             }
