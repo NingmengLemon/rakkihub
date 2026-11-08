@@ -12,6 +12,7 @@ import me.rerere.ai.core.MessageRole
 import me.rerere.ai.core.Tool
 import me.rerere.ai.ui.UIMessage
 import me.rerere.ai.ui.UIMessagePart
+import me.rerere.ai.ui.filterModelVisible
 import me.rerere.rikkahub.data.db.fts.MessageSearchResult
 import me.rerere.rikkahub.data.db.fts.MessageSearchSort
 import me.rerere.rikkahub.data.model.Conversation
@@ -186,8 +187,8 @@ fun createMemoryConversationTools(
     ),
 )
 
-/** 当前分支上用户和助手的消息，位置编号以这个列表为准；截断标记不是对话内容，不列出来 */
+/** 当前分支上用户和助手的消息，位置编号以这个列表为准；截断标记和失败回复不列出来 */
 internal fun Conversation.dialogueMessages(): List<UIMessage> =
     currentMessages.filter {
         (it.role == MessageRole.USER || it.role == MessageRole.ASSISTANT) && !it.isHistoryTruncationMarker
-    }
+    }.filterModelVisible()

@@ -17,6 +17,7 @@ import kotlinx.coroutines.test.runCurrent
 import kotlinx.coroutines.test.runTest
 import kotlinx.coroutines.withContext
 import me.rerere.ai.core.MessageRole
+import me.rerere.ai.ui.MessageStatus
 import me.rerere.ai.ui.UIMessage
 import me.rerere.ai.ui.UIMessagePart
 import me.rerere.rikkahub.data.model.Conversation
@@ -989,5 +990,19 @@ class ConversationSessionTest {
 
         assertNull(result)
         assertTrue(store.writes.isEmpty())
+    }
+
+    @Test
+    fun `mark reply status updates only the current reply`() = runBlocking {
+        val id = Uuid.random()
+        val session = ConversationSession(id, Conversation.ofId(id), this, FakeConversationStore(), {})
+        session.initialize(load = { null }, create = { Conversation.ofId(id) })
+        session.update { it.updateCurrentMessages(listOf(UIMessage.assistant("partial"))) }
+        val reply = session.state.value.currentMessages.single()
+        session.replyMessageId.value = reply.id
+
+        session.markReplyStatus(MessageStatus.FAILED)
+
+        assertEquals(MessageStatus.FAILED, session.state.value.currentMessages.single().status)
     }
 }

@@ -150,6 +150,29 @@ data class UIMessage(
 fun List<UIMessage>.filterModelVisible(): List<UIMessage> = filter { it.isModelVisible }
 
 /**
+ * 合并相邻的 user 消息。
+ *
+ * 过滤掉失败的 assistant 回复后，前后两条用户消息会变成相邻；部分 provider 要求 user 和
+ * assistant 交替，这里在发请求前把它们合成一条。只用于请求列表，不影响会话里显示的消息。
+ */
+fun List<UIMessage>.mergeAdjacentUserMessages(): List<UIMessage> {
+    if (size < 2) return this
+    val merged = ArrayList<UIMessage>(size)
+    for (message in this) {
+        val previous = merged.lastOrNull()
+        if (message.role == MessageRole.USER && previous?.role == MessageRole.USER) {
+            merged[merged.lastIndex] = previous.copy(
+                parts = previous.parts + message.parts,
+                annotations = previous.annotations + message.annotations,
+            )
+        } else {
+            merged.add(message)
+        }
+    }
+    return merged
+}
+
+/**
  * 消息上保存的模型名称快照, 对应 [Model.modelId] 与 [Model.displayName]
  */
 @Serializable

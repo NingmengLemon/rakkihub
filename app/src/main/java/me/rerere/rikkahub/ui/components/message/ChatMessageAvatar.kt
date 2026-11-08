@@ -122,16 +122,13 @@ fun ChatMessageAssistantAvatar(
 
 @Composable
 private fun MessageStatusLabel(status: MessageStatus) {
-    if (status == MessageStatus.COMPLETE) return
-    val text = stringResource(
-        if (status == MessageStatus.FAILED) {
-            R.string.chat_message_status_failed
-        } else {
-            R.string.chat_message_status_interrupted
-        }
-    )
+    val textRes = when (status) {
+        MessageStatus.COMPLETE -> return
+        MessageStatus.FAILED -> R.string.chat_message_status_failed
+        MessageStatus.INTERRUPTED -> R.string.chat_message_status_interrupted
+    }
     Text(
-        text = text,
+        text = stringResource(textRes),
         style = MaterialTheme.typography.labelSmall,
         color = if (status == MessageStatus.FAILED) {
             MaterialTheme.colorScheme.error

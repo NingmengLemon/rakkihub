@@ -21,6 +21,7 @@ import me.rerere.ai.ui.StreamChunkHandler
 import me.rerere.ai.ui.UIMessage
 import me.rerere.ai.ui.filterModelVisible
 import me.rerere.ai.ui.limitContext
+import me.rerere.ai.ui.mergeAdjacentUserMessages
 import me.rerere.rikkahub.R
 import me.rerere.rikkahub.data.ai.prompts.buildMemoryPrompt
 import me.rerere.rikkahub.data.ai.tools.ChatToolFactory
@@ -255,7 +256,7 @@ class ChatRequestFactory(
             settings = turn.settings,
             processingStatus = processingStatus,
             workspaceCwd = turn.workspaceCwd,
-        )
+        ).mergeAdjacentUserMessages()
         val params = TextGenerationParams(
             model = turn.model,
             temperature = assistant.temperature,

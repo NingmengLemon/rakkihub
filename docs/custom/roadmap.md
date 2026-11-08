@@ -173,7 +173,7 @@
 | `speech/` | C5 删掉了全部运行时实现，只留两个序列化类与它们的序列化测试 | 不看 |
 | `mediagen/` | C1 保留模块以维持数据兼容，界面不使用 | 不主动看，改到 `MediaGenerationProviderSetting` 这类持久化类型时复核 |
 
-`ai/` 下有五处改动：C3 删掉了 `ai/util/Request.kt` 里给 aihubmix.com 加 `APP-Code` 请求头的分支；C52 把 `ClaudeProvider` 的缓存断点收敛到官方标准；C53 把 Claude 缓存策略改成按 provider 切换，默认保留上游原来的 4 个断点；C47 在 `ai/ui/Message.kt` 新增了只读的 `contextLimitStart`，不改 `limitContext`；C51 在 `ai/ui/Message.kt` 新增了序列化字段 `isCompressionPrompt`，用于标记压缩提示词。C35 的 `filterByKeywords` 与上游 `5ad19405` 逐字一致，不算分叉。移植上游对这些文件的改动时保留这五处。
+`ai/` 下有六处改动：C3 删掉了 `ai/util/Request.kt` 里给 aihubmix.com 加 `APP-Code` 请求头的分支；C52 把 `ClaudeProvider` 的缓存断点收敛到官方标准；C53 把 Claude 缓存策略改成按 provider 切换，默认保留上游原来的 4 个断点；C47 在 `ai/ui/Message.kt` 新增了只读的 `contextLimitStart`，不改 `limitContext`；C51 在 `ai/ui/Message.kt` 新增了序列化字段 `isCompressionPrompt`，用于标记压缩提示词；C58 在 `ai/ui/Message.kt` 新增了 `status`、`isModelVisible`、`filterModelVisible` 和 `mergeAdjacentUserMessages`。C35 的 `filterByKeywords` 与上游 `5ad19405` 逐字一致，不算分叉。移植上游对这些文件的改动时保留这六处。
 
 上游从 3.0.0 起把多步生成循环放进 `ai/`（`ai/src/main/java/me/rerere/ai/agent/AgentLoop.kt`），3.1.1 又把工具执行计时与 models.dev 的模型能力数据放进去。现在还值得看 `ai/` 吗，取决于它是不是一块能单独参考的区域：如果它继续吸收 `app/` 侧的耦合，读改动的成本会变高。
 
@@ -322,13 +322,13 @@ RikkaHub 现状：
 
 - 重试单位是 step，`withRetry` 失败后回到 `stepStart`，前面的 step 和工具结果保留；单步回复看起来就是整条重来。DSH 也是这个语义，不是 RikkaHub 独有。
 - 只重试 `IOException`。HTTP 429、5xx、空回复不会重试；固定 3 次，1s/2s/4s，无 jitter，无 `Retry-After`；开关是全局的。
-- 重试耗尽或关闭自动重试时，最后一次预览会作为普通 assistant 消息落库，下一轮请求会带上它；没有 failed/interrupted 标记。用户主动停止同样没有标记。
+- C58 已给失败和用户停止的回复加 `FAILED`/`INTERRUPTED` 状态；请求组装、标题生成、记忆整理和 `read_conversations` 都过滤 `FAILED`，失败半截不会再作为普通回复进入下一轮。多步工具调用在中途失败时仍按整条消息隔离。
 - 失败后待执行工具在下次发送时补成 `cancelled by user`，不区分用户停止和网络失败。
-- UI 只有 processingStatus 一行；错误卡片没有重试按钮；`usage_record` 每次尝试一行，但没有成功/失败状态。
+- UI 有失败/中断标记，但没有重试 attempt 行和倒计时；错误卡片没有重试按钮；`usage_record` 每次尝试一行，但没有成功/失败状态。
 
 待办：
 
-- P0 失败 attempt 与成功消息分开。给 `UIMessage` 加状态（`COMPLETE`、`INTERRUPTED`、`FAILED`，旧消息默认 `COMPLETE`），或给节点加单独的 failed attempt 记录。失败时标记 `FAILED`，UI 保留半截文本与失败标记，但组装请求时过滤掉；用户主动停止标记 `INTERRUPTED`，允许进入历史，因为用户已经看到；重试成功只留成功消息。失败或取消的工具调用用各自语义的 tool result，不要统一写 `cancelled by user`。验收：中途失败后下一次请求不包含失败半截；用户停止的半截进入历史；失败 attempt 的工具不会重新执行；连发两条 user 消息时 provider 不报错，必要时合并。这一条优先于统计。
+- P0 失败 attempt 与成功消息分开：C58 已实现 `UIMessage.status` 标记、`FAILED` 消息从请求/标题/记忆/`read_conversations` 过滤、相邻 user 合并和 UI 失败/中断标签。剩余：多步工具调用在中途失败时目前整条隔离，per-step attempt 细化、失败/取消工具语义（`TOOL_NOT_STARTED`、`TOOL_OUTCOME_UNKNOWN`）仍归 P2。
 - P1 稳定错误码与可配置策略。provider 非 2xx、传输异常、空回复统一成带 `code`、`status`、`retryAfterMs` 的失败类型，覆盖 `AUTH`、`QUOTA`、`RATE_LIMIT`、`SERVER`、`TIMEOUT`、`TRANSPORT`、`EMPTY_RESPONSE`、`CONTEXT_WINDOW_EXCEEDED`、`INVALID_REQUEST`、`UNKNOWN`。策略至少 normal mode：`maxRetries`、`retryableCodes`、`initialDelay`、`maxDelay`、`jitter`；默认只重试瞬时错误，读取 `Retry-After` 并设上限。保留 step 级重试，不做 prefill 续写。验收：429、5xx、空回复可重试；400、401、403、额度、上下文超限不重试；用户停止可取消等待；重试不重复工具副作用；重试请求与前缀缓存兼容。
 - P2 重试状态 UI。attempt 行或卡片显示编号、失败原因、等待时间和倒计时；失败消息有标记；错误卡片提供重试本步。不要在重试时静默清空半截内容，至少保留可见的失败 attempt。
 - P3 用量区分成功与失败 attempt。`usage_record` 加 outcome、attempt、retryId 或等价字段，统计页不把失败尝试计入缓存命中率，但保留成本；消息卡片继续只显示成功 attempt 的 usage。验收：旧数据默认成功或未知，迁移可回滚。
@@ -340,7 +340,7 @@ RikkaHub 现状：
 | 优先级 | 领域 | 现状与风险 | 建议 |
 | --- | --- | --- | --- |
 | P1 | 截断的 SSE 被当成正常完成 | Claude 的 `onClosed` 无条件补 `Finish`，没有 `message_stop` 的半截流会被提交为完整回复，不走重试；`onFailure` 中 `t == null` 且 body 为空时 `close(null)` 也会静默成功。OpenAI/Google 的 `onClosed` 同样无条件调用 `decoder.finish()`，终止标记未逐行核对。`ClaudeProvider.kt:394-417`、`ClaudeStreamDecoder.kt:153-163`、`ChatCompletionsStreamDecoder.kt:86-92`、`GoogleStreamDecoder.kt:57-63`。 | decoder 记录是否见过终止事件；`onClosed` 未见时抛 `IOException`，复用现有重试。 |
-| P1 | 停止的 pending 结算不保证执行 | `stopGeneration` 先 pause/cancelJobs，再 join，join 后才 `finishInterruptedPendingTools`，不在 `NonCancellable`。页面退出导致 join 取消时，pending 工具不结算，`isAwaitingToolApproval` 可能挡住发送、编辑和删除。`ChatService.kt:1472-1481`、`ChatVM.kt:386-390`。 | 结算放进 `withContext(NonCancellable)` 的 `settleTurn()`，紧跟 cancelJobs；发送前那次保留为崩溃补偿。 |
+| P1 | 停止的 pending 结算不保证执行 | `stopGeneration` 先 pause/cancelJobs，再 join，join 后才 `finishInterruptedPendingTools`，不在 `NonCancellable`。页面退出导致 join 取消时，pending 工具不结算，`isAwaitingToolApproval` 可能挡住发送、编辑和删除。`ChatService.kt:1487-1496`、`ChatVM.kt:386-390`。 | 结算放进 `withContext(NonCancellable)` 的 `settleTurn()`，紧跟 cancelJobs；发送前那次保留为崩溃补偿。 |
 | P1 | 分支切换绕过审批门禁 | `selectMessageNode` 只挡压缩，不挡审批；切走分支后 `isAwaitingToolApproval` 变 false，队列可派发，pending 调用留在未选中分支，下一次 `withoutUnresumableToolCalls` 会整条删除该 assistant 消息。`ChatService.kt:1420-1444`、`Conversation.kt:252-253,263-273`。 | 审批期间禁止切分支，或把待审批状态提升为 session 级 turn 状态。 |
 | P1 | 审批恢复重新解析配置 | 审批期间 `setChatModel` 没有门禁；`handleToolApproval` 恢复时重新 `runTurn`/`createContext`，工具结果和工具 schema 会落到新模型/provider，不是产生 pending call 的那份配置。`ChatService.kt:559,587,630,1064-1081`、`ChatVM.kt:266-270`。 | 把本轮 `ChatTurnContext` 冻结进 session 供审批恢复复用；或审批期间拒绝改配置并提示下一轮生效。 |
 | P1 | 没有流内 idle watchdog | 只有 OkHttp/Ktor 的 10 分钟 per-read timeout；无 chunk 无心跳会卡 10 分钟，有 SSE 心跳时 read timeout 被不断重置，可能永久停在生成中。`DataSourceModule.kt:186-191,274-283`、`AgentLoop.kt:110-129`。 | 在 chunk 收集层加相邻 chunk 间隔超时，90 到 120 秒，抛专用异常；readTimeout 保留作外层兜底。 |
@@ -354,8 +354,8 @@ RikkaHub 现状：
 
 修复顺序：
 
-1. 先做 P0 失败 attempt 隔离，见上一节。
-2. 再做 P1 里最独立的三个：截断 SSE、停止结算、审批分支与配置快照。
+1. P0 失败 attempt 隔离已由 C58 完成；多步工具调用的 per-step 细化随工具恢复一起做。
+2. 现在做 P1 里最独立的三个：截断 SSE、停止结算、审批分支与配置快照。
 3. 然后做 P1 的 idle watchdog、稳定错误码重试、overflow 兜底。
 4. P2 按工具恢复、进程死亡与 C50、队列、上下文压缩、scratch 分批处理。
 

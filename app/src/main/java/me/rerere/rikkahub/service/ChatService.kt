@@ -631,7 +631,7 @@ class ChatService(
             val (request, hooks) = requestFactory.createAgent(turn, history, session.processingStatus)
             val turnIncarnation = session.incarnation
             var finishReason: AgentFinishReason? = null
-            var settlementStatus = MessageStatus.COMPLETE
+            var failure: Throwable? = null
             var touchedUpdateAt = false
             supervisorScope {
                 val saver = launch(Dispatchers.IO) {
@@ -680,20 +680,14 @@ class ChatService(
                         }
                     }
                 } catch (e: Throwable) {
-                    settlementStatus = if (e is CancellationException) {
-                        MessageStatus.INTERRUPTED
-                    } else {
-                        MessageStatus.FAILED
-                    }
+                    failure = e
                     throw e
                 } finally {
                     withContext(NonCancellable) {
                         // 先停掉 saver 并等它退出，再全量落库；反过来会在写锁上互相等待
                         saver.cancelAndJoin()
                         session.processingStatus.value = null
-                        if (settlementStatus == MessageStatus.COMPLETE && finishReason == null) {
-                            settlementStatus = MessageStatus.FAILED
-                        }
+                        val settlementStatus = resolveSettlementStatus(failure, finishReason)
                         if (settlementStatus != MessageStatus.COMPLETE) {
                             session.markReplyStatus(settlementStatus)
                         }
