@@ -91,6 +91,10 @@ interface ConversationDAO {
     @Update
     suspend fun update(conversation: ConversationEntity)
 
+    // 只刷新会话的 update_at，生成期间的定期保存用
+    @Query("UPDATE conversationentity SET update_at = :updateAt WHERE id = :conversationId")
+    suspend fun updateUpdateAt(conversationId: String, updateAt: Long): Int
+
     @Delete
     suspend fun delete(conversation: ConversationEntity)
 

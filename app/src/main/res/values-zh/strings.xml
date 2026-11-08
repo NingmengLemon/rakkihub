@@ -1255,6 +1255,7 @@ mDNS 地址：使用 .local 主机名，同一网络中的其他设备可通过�
   <string name="chat_page_compress_checkpoint_title">以上内容已压缩为摘要</string>
   <string name="chat_page_compress_checkpoint_hint">分隔线以上的消息不再发送给模型，由这份摘要代替。删除摘要即可恢复发送完整历史。</string>
   <string name="chat_page_compress_blocked_generating">请先停止生成再压缩上下文</string>
+  <string name="chat_page_stop_generation_first">请先停止生成</string>
   <string name="chat_page_compress_conversation_changed">对话在压缩期间发生变化，请重试</string>
   <string name="sketch">草图</string>
   <string name="sketch_draw_on_image">在图片上绘制</string>

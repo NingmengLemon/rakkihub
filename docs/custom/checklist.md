@@ -57,6 +57,7 @@
 | C47 | 上下文消息数上限的自动边界线 | 改造 |
 | C48 | 版本号随提交自动滚动 | 改造 |
 | C49 | 分支切换只写 select_index | 改造 |
+| C50 | 生成中定期保存回复节点 | 改造 |
 
 ## 明细
 
@@ -357,6 +358,13 @@
 
 ### C49 分支切换只写 select_index
 
-- 落点：`MessageNodeDAO.updateSelectIndex(conversationId, nodeId, selectIndex)` 带 `conversation_id` 条件并返回受影响行数；`ConversationRepository.updateMessageSelectIndex`；`ConversationStore.updateNodeSelectIndex`；`ConversationSession.selectMessageNode(nodeId, selectIndex, expectedIncarnation)` 在写锁内只改内存，且只有上次落库的节点快照（`lastWritten`）确实包含目标下标时才写列，否则留给下一次全量 `flush` 把消息和下标一起写；`ChatService.selectMessageNode` 改走它，保留 `dispatchNextQueuedMessage`；载入时把 `selectIndex` 夹紧到消息下标范围（`loadMessageNodes` 与 `conversationEntityToConversation` 两处）。测试：`ConversationSessionTest` 新增两条（快照包含下标时只写列、随后 `flush` 不重写；快照分支数不足时只改内存、下一次 `flush` 把消息和下标一起写）。
+- 落点：`MessageNodeDAO.updateSelectIndex(conversationId, nodeId, selectIndex)` 带 `conversation_id` 条件并返回受影响行数；`ConversationRepository.updateMessageSelectIndex`；`ConversationStore.updateNodeSelectIndex`；`ConversationSession.selectMessageNode(nodeId, selectIndex, expectedIncarnation)` 在写锁内只改内存，且只有最近一次成功写入后的持久化计数（`lastPersistedCounts`）显示该节点已有这个下标时才写列，否则留给下一次全量 `flush` 把消息和下标一起写；`ChatService.selectMessageNode` 改走它，保留 `dispatchNextQueuedMessage`；载入时把 `selectIndex` 夹紧到消息下标范围（`loadMessageNodes` 与 `conversationEntityToConversation` 两处）。测试：`ConversationSessionTest` 新增两条（持久化计数包含下标时只写列、随后 `flush` 不重写；计数不足时只改内存、下一次 `flush` 把消息和下标一起写）。
 - 理由：分支切换原来走 `mutate` → 全量 `flush` → 删除并重插所有 `message_node`，会把巨长回复重新编码，OOM 就发生在这次编码上；切换分支实际只改一个整数列。守卫防止「节点行还是旧的分支数量」时写进越界下标（重新生成较早回复、Web 路由都能触发），否则下次加载 `currentMessage` 会抛异常。
-- 合并注意：写列的前提是 `lastWritten` 的节点消息包含该下标；内存里有新分支但还没落库时只改内存，下一次全量写补上。写列成功后只在 `lastWritten === before` 时推进 `lastWritten`，避免把并发的未落库修改误标成已写。载入 clamp 是坏数据兜底。Web 路由共用同一个 `ChatService.selectMessageNode`。生成中定期落库（待编号）另立。
+- 合并注意：写列的前提是 `lastPersistedCounts[nodeId]` 大于目标下标（C50 之后由单节点写和全量写共同维护）；内存里有新分支但还没落库时只改内存，下一次全量写补上。写列成功后只在 `lastWritten === before` 时推进 `lastWritten`，避免把并发的未落库修改误标成已写。载入 clamp 是坏数据兜底。Web 路由共用同一个 `ChatService.selectMessageNode`。生成中定期落库见 C50。
+
+### C50 生成中定期保存回复节点
+
+- 落点：`MessageSaveLoop` + `MessageSavePolicy`（5/15/30 秒档、64KB 增长、60 秒兜底、堆守卫 `max(16MB, 4×估算)`）；`ConversationSession.persistMessageNode` 在写锁内按追加规则写单个 `message_node`（新节点必须在末尾且前缀 id 一致，已有节点下标必须一致），副本先 `finishReasoning`，含递归 base64 图片则跳过，不推进 `lastWritten`，成功后更新 `lastPersistedCounts`；`lastPersistedCounts` 在载入、全量 flush、replace 时重建，C49 的 select_index 守卫改用它；`touchUpdateAt` 每轮第一次成功保存时同步内存与 `update_at` 列；`ConversationRepository.upsertMessageNode` 与 `ConversationDAO.updateUpdateAt`；`ChatService.runTurn` 用 `supervisorScope` 起 saver，生成结束的 `finally` 里 `NonCancellable { saver.cancelAndJoin(); finishGeneration() }`；`withoutUnresumableToolCalls` 造成节点结构变化时先 `flush()`；翻译流式只改内存，结束后单节点写一次，清除翻译也走单节点写；编辑、分叉、删除在 `job != null || isAwaitingToolApproval` 时抛 `ConflictException`（Web 409），Android 页面预挡、VM 捕获。
+- 理由：原来只在发送、审批、turn 结束和手动修改时全量落库；长回复生成期间崩溃会整条消失。定期保存只编码当前节点，配合 C49 把长回复的保存成本从「每次整条会话」降到「当前节点」。
+- 合并注意：追加规则避免写到错误的节点下标；漂移或堆不足时跳过，交给最终全量 flush。单节点写不推进 `lastWritten`，全量 flush 仍是最终校正。保存的内容可能缺少 `onGenerationFinish` 的最终转换，`modelSnapshot` 可能为空，均接受。base64 检查是 saver 私有的递归 helper，不改 `UIMessage.hasBase64Part` 的顶层语义。写失败后退避 10 秒，取消异常必须重抛。残余风险：待审批期间的压缩/截断、生成中删除会话仍会走全量编码；Web UI 在生成中禁用按钮并提示 409 是后续项。
+- 测试：`ConversationSessionTest` 32 条（C49 守卫改持久化计数、新节点追加、漂移跳过、base64 跳过）；`MessageSaveLoopTest` 6 条（档位、增长、最长 60 秒、堆守卫、失败退避、虚拟时间循环）。设备验收待做：巨长回复生成中杀进程后重启能看到已保存的部分。

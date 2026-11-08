@@ -766,4 +766,85 @@ class ConversationSessionTest {
         assertEquals(2, writtenNode.messages.size)
         assertEquals(1, writtenNode.selectIndex)
     }
+
+    @Test
+    fun `periodic save appends a new reply node without advancing lastWritten`() = runBlocking {
+        val id = Uuid.random()
+        val userNode = MessageNode.of(UIMessage.user("hi"))
+        val loaded = Conversation.ofId(id).copy(messageNodes = listOf(userNode))
+        val store = FakeConversationStore(loaded)
+        val session = ConversationSession(id, Conversation.ofId(id), this, store, {})
+        session.initialize(load = { store.persisted })
+        val reply = MessageNode.of(UIMessage.assistant("growing"))
+        session.update { it.copy(messageNodes = it.messageNodes + reply) }
+
+        assertNotNull(session.persistMessageNode(reply.id, session.incarnation))
+
+        assertEquals(setOf(reply.id), store.persistedNodes.keys)
+        // 单节点写不推进 lastWritten，下一次全量 flush 仍会做完整校正
+        assertTrue(store.writes.isEmpty())
+        session.flush()
+        assertEquals(1, store.writes.size)
+    }
+
+    @Test
+    fun `periodic save skips a node that is not in the append position`() = runBlocking {
+        val id = Uuid.random()
+        val existing = MessageNode.of(UIMessage.user("a"))
+        val loaded = Conversation.ofId(id).copy(messageNodes = listOf(existing))
+        val store = FakeConversationStore(loaded)
+        val session = ConversationSession(id, Conversation.ofId(id), this, store, {})
+        session.initialize(load = { store.persisted })
+        // 在末尾之前插入节点会让已有节点的下标漂移
+        session.update {
+            it.copy(messageNodes = listOf(MessageNode.of(UIMessage.user("x"))) + it.messageNodes)
+        }
+        assertNull(session.persistMessageNode(existing.id, session.incarnation))
+        assertTrue(store.persistedNodes.isEmpty())
+
+        // 新节点不在末尾时也不是合法追加
+        val b = MessageNode.of(UIMessage.user("b"))
+        val c = MessageNode.of(UIMessage.user("c"))
+        session.update { it.copy(messageNodes = it.messageNodes + b + c) }
+        assertNull(session.persistMessageNode(c.id, session.incarnation))
+    }
+
+    @Test
+    fun `periodic save updates the persisted count used by branch selection`() = runBlocking {
+        val id = Uuid.random()
+        val loaded = Conversation.ofId(id).copy(messageNodes = listOf(MessageNode.of(UIMessage.user("hi"))))
+        val store = FakeConversationStore(loaded)
+        val session = ConversationSession(id, Conversation.ofId(id), this, store, {})
+        session.initialize(load = { store.persisted })
+        val reply = MessageNode.of(UIMessage.assistant("first"))
+        session.update { it.copy(messageNodes = it.messageNodes + reply) }
+        assertNotNull(session.persistMessageNode(reply.id, session.incarnation))
+        // 生成中的第二个分支只在内存里，库里的节点还是 1 条
+        session.update { it.upsertMessage(reply.id, UIMessage.assistant("second")) }
+        session.update { it.selectBranch(reply.id, 0) }
+
+        assertTrue(session.selectMessageNode(reply.id, 1, session.incarnation))
+
+        assertEquals(1, session.state.value.messageNodes.last().selectIndex)
+        assertTrue(store.selectIndexUpdates.isEmpty())
+    }
+
+    @Test
+    fun `periodic save skips a node with base64 images`() = runBlocking {
+        val id = Uuid.random()
+        val loaded = Conversation.ofId(id).copy(messageNodes = listOf(MessageNode.of(UIMessage.user("hi"))))
+        val store = FakeConversationStore(loaded)
+        val session = ConversationSession(id, Conversation.ofId(id), this, store, {})
+        session.initialize(load = { store.persisted })
+        val reply = MessageNode.of(
+            UIMessage(
+                role = MessageRole.ASSISTANT,
+                parts = listOf(UIMessagePart.Image("data:image/png;base64,AAAA")),
+            )
+        )
+        session.update { it.copy(messageNodes = it.messageNodes + reply) }
+
+        assertNull(session.persistMessageNode(reply.id, session.incarnation))
+        assertTrue(store.persistedNodes.isEmpty())
+    }
 }

@@ -13,8 +13,10 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
+import me.rerere.ai.ui.UIMessagePart
 import me.rerere.ai.ui.finishReasoning
 import me.rerere.rikkahub.data.model.Conversation
+import me.rerere.rikkahub.data.model.MessageNode
 import me.rerere.rikkahub.data.model.selectBranch
 import java.time.Instant
 import java.util.concurrent.atomic.AtomicInteger
@@ -36,6 +38,12 @@ interface ConversationStore {
 
     /** 只写一个节点的 select_index，避免重新编码消息；返回受影响行数 */
     suspend fun updateNodeSelectIndex(conversationId: Uuid, nodeId: Uuid, selectIndex: Int): Int
+
+    /** 只写一个消息节点，返回落库 JSON 的字符数 */
+    suspend fun persistNode(conversationId: Uuid, nodeIndex: Int, node: MessageNode): Long
+
+    /** 只刷新会话的 update_at，返回受影响行数 */
+    suspend fun touchConversationUpdateAt(conversationId: Uuid, updateAt: Instant): Int
 }
 
 /**
@@ -62,6 +70,10 @@ class ConversationSession(
 
     // 上次落库、加载或新建时的状态，内存还是这个实例就说明没有要落库的修改；只在 writeMutex 内修改
     private var lastWritten: Conversation = initial
+
+    // 最近一次成功写入后，库里每个节点实际的消息数；只在 writeMutex 内读写。
+    // 分支切换的 select_index 守卫只信这张表，避免依赖内存或 lastWritten 的旧分支数量。
+    private val persistedMessageCounts = mutableMapOf<Uuid, Int>()
 
     @Volatile
     var existsInDatabase = false
@@ -90,6 +102,7 @@ class ConversationSession(
             writeMutex.withLock {
                 lastWritten = conversation
                 existsInDatabase = loaded != null
+                rebuildPersistedCounts(conversation)
             }
             synchronized(this) {
                 _state.value = conversation
@@ -128,6 +141,7 @@ class ConversationSession(
             store.write(previous = lastWritten.takeIf { existsInDatabase }, current = current)
             lastWritten = current
             existsInDatabase = true
+            rebuildPersistedCounts(current)
             current
         }
     }
@@ -194,8 +208,8 @@ class ConversationSession(
                 if (selectIndex !in node.messages.indices || node.selectIndex == selectIndex) {
                     return@synchronized null
                 }
-                val persisted = lastWritten.messageNodes.firstOrNull { it.id == nodeId }
-                val canWriteColumn = existsInDatabase && persisted != null && selectIndex < persisted.messages.size
+                val canWriteColumn = existsInDatabase &&
+                    selectIndex < (persistedMessageCounts[nodeId] ?: 0)
                 val updated = before.selectBranch(nodeId, selectIndex)
                 _state.value = updated
                 Triple(before, updated, canWriteColumn)
@@ -211,6 +225,84 @@ class ConversationSession(
             }
             true
         }
+    }
+
+    /**
+     * 只写当前回复节点，供生成期间的定期保存使用。
+     *
+     * 允许两种情况：节点在上次落库的状态里且下标一致（重新生成分支）；节点不在、当前下标等于
+     * 上次落库的节点数且前面的节点 id 序列一致（正常的末尾追加）。其它结构性漂移一律跳过，
+     * 等下一次全量 [flush] 校正。
+     *
+     * 保存副本先 [finishReasoning]；含 base64 图片的节点跳过，避免落库一份要等生成结束才转换的行。
+     * 不推进 [lastWritten]，只更新该节点的持久化计数。
+     *
+     * @param expectedIncarnation 调用方在 turn 开始时记录的 [incarnation]
+     * @return 落库 JSON 的字符数；跳过返回 null
+     */
+    internal suspend fun persistMessageNode(nodeId: Uuid, expectedIncarnation: Int): Long? {
+        return writeMutex.withLock {
+            if (!isInitialized || incarnation != expectedIncarnation || !existsInDatabase) {
+                return@withLock null
+            }
+            val target = synchronized(this) {
+                val conversation = _state.value
+                val index = conversation.messageNodes.indexOfFirst { it.id == nodeId }
+                if (index == -1) return@synchronized null
+                val writtenIndex = lastWritten.messageNodes.indexOfFirst { it.id == nodeId }
+                val allowed = if (writtenIndex >= 0) {
+                    writtenIndex == index
+                } else {
+                    index == lastWritten.messageNodes.size &&
+                        conversation.messageNodes.take(index).map { it.id } ==
+                        lastWritten.messageNodes.map { it.id }
+                }
+                if (!allowed) return@synchronized null
+                val node = conversation.messageNodes[index]
+                val copy = node.copy(messages = node.messages.map { it.finishReasoning() })
+                if (copy.messages.any { message -> message.parts.any { it.isBase64Image() } }) {
+                    return@synchronized null
+                }
+                index to copy
+            } ?: return@withLock null
+            val (index, node) = target
+            val storedChars = store.persistNode(id, index, node)
+            persistedMessageCounts[nodeId] = node.messages.size
+            storedChars
+        }
+    }
+
+    private fun rebuildPersistedCounts(conversation: Conversation) {
+        persistedMessageCounts.clear()
+        conversation.messageNodes.forEach { persistedMessageCounts[it.id] = it.messages.size }
+    }
+
+    /**
+     * 刷新会话的 update_at：内存和列一起改，只在内存与库仍一致时推进 [lastWritten]。
+     * 生成期间每轮第一次单节点写成功后调用一次。
+     */
+    internal suspend fun touchUpdateAt(expectedIncarnation: Int): Boolean {
+        return writeMutex.withLock {
+            if (!isInitialized || incarnation != expectedIncarnation || !existsInDatabase) {
+                return@withLock false
+            }
+            val (before, updated) = synchronized(this) {
+                val before = _state.value
+                val updated = before.copy(updateAt = Instant.now())
+                _state.value = updated
+                before to updated
+            }
+            val affected = store.touchConversationUpdateAt(id, updated.updateAt)
+            if (affected > 0 && lastWritten === before) lastWritten = updated
+            affected > 0
+        }
+    }
+
+    /** 定期保存专用：递归检查工具输出里的 base64 图片，不改 UIMessage.hasBase64Part 的顶层语义 */
+    private fun UIMessagePart.isBase64Image(): Boolean = when (this) {
+        is UIMessagePart.Image -> url.startsWith("data:")
+        is UIMessagePart.Tool -> output.any { it.isBase64Image() }
+        else -> false
     }
 
     /**
@@ -237,6 +329,11 @@ class ConversationSession(
                 }
                 lastWritten = conversation
                 this.existsInDatabase = existsInDatabase
+                if (existsInDatabase) {
+                    rebuildPersistedCounts(conversation)
+                } else {
+                    persistedMessageCounts.clear()
+                }
             }
         }
         processingStatus.value = null

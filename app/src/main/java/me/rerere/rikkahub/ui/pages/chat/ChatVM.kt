@@ -292,7 +292,11 @@ class ChatVM(
         if (parts.isEmptyInputMessage()) return
 
         viewModelScope.launch {
-            chatService.editMessage(_conversationId, messageId, parts)
+            try {
+                chatService.editMessage(_conversationId, messageId, parts)
+            } catch (e: ApiException) {
+                showStopGeneratingFirstError()
+            }
         }
     }
 
@@ -320,14 +324,31 @@ class ChatVM(
         }
     }
 
-    suspend fun forkMessage(message: UIMessage): Conversation {
-        return chatService.forkConversationAtMessage(_conversationId, message.id)
+    suspend fun forkMessage(message: UIMessage): Conversation? {
+        return try {
+            chatService.forkConversationAtMessage(_conversationId, message.id)
+        } catch (e: ApiException) {
+            showStopGeneratingFirstError()
+            null
+        }
     }
 
     fun deleteMessage(message: UIMessage) {
         viewModelScope.launch {
-            chatService.deleteMessage(_conversationId, message)
+            try {
+                chatService.deleteMessage(_conversationId, message)
+            } catch (e: ApiException) {
+                showStopGeneratingFirstError()
+            }
         }
+    }
+
+    fun showStopGeneratingFirstError() {
+        chatService.addError(
+            error = IllegalStateException(context.getString(R.string.chat_page_stop_generation_first)),
+            conversationId = _conversationId,
+            title = context.getString(R.string.error_title_operation)
+        )
     }
 
     fun showDeleteBlockedWhileGeneratingError() {

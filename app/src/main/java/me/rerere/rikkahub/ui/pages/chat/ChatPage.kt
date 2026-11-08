@@ -69,6 +69,7 @@ import me.rerere.rikkahub.data.datastore.findProvider
 import me.rerere.rikkahub.data.files.FilesManager
 import me.rerere.rikkahub.data.model.Assistant
 import me.rerere.rikkahub.data.model.Conversation
+import me.rerere.rikkahub.data.model.isAwaitingToolApproval
 import me.rerere.rikkahub.data.repository.WorkspaceRepository
 import me.rerere.rikkahub.service.ChatError
 import me.rerere.rikkahub.ui.components.ai.ChatAttachmentPickerActions
@@ -286,6 +287,8 @@ private fun ChatPageContent(
     val scope = rememberCoroutineScope()
     val toaster = LocalToaster.current
     val workspaceRepository: WorkspaceRepository = koinInject()
+    // 结构性编辑（编辑、分叉、删除）在生成中或等待审批时都拒绝
+    val isBusy = loadingJob != null || conversation.isAwaitingToolApproval
 
     var previewMode by rememberSaveable { mutableStateOf(false) }
     val hazeState = rememberHazeState()
@@ -361,32 +364,42 @@ private fun ChatPageContent(
                             return@ChatInput
                         }
                         if (inputState.isEditing()) {
-                            vm.handleMessageEdit(
-                                parts = inputState.getContents(),
-                                messageId = inputState.editingMessage!!,
-                            )
+                            if (isBusy) {
+                                vm.showStopGeneratingFirstError()
+                            } else {
+                                vm.handleMessageEdit(
+                                    parts = inputState.getContents(),
+                                    messageId = inputState.editingMessage!!,
+                                )
+                                inputState.clearInput()
+                            }
                         } else {
                             vm.handleMessageSend(inputState.getContents())
                             scope.launch {
                                 delay(100.milliseconds)
                                 chatListState.requestScrollToItem(conversation.currentMessages.size + 5)
                             }
+                            inputState.clearInput()
                         }
-                        inputState.clearInput()
                     },
                     onLongSendClick = {
                         if (inputState.isEditing()) {
-                            vm.handleMessageEdit(
-                                parts = inputState.getContents(),
-                                messageId = inputState.editingMessage!!,
-                            )
+                            if (isBusy) {
+                                vm.showStopGeneratingFirstError()
+                            } else {
+                                vm.handleMessageEdit(
+                                    parts = inputState.getContents(),
+                                    messageId = inputState.editingMessage!!,
+                                )
+                                inputState.clearInput()
+                            }
                         } else {
                             vm.handleMessageSend(content = inputState.getContents(), answer = false)
                             scope.launch {
                                 chatListState.requestScrollToItem(conversation.currentMessages.size + 5)
                             }
+                            inputState.clearInput()
                         }
-                        inputState.clearInput()
                     },
                     onUpdateChatModel = vm::setChatModel,
                     onUpdateAssistant = vm::updateAssistant,
@@ -413,16 +426,25 @@ private fun ChatPageContent(
                     vm.regenerateAtMessage(it)
                 },
                 onEdit = {
-                    vm.beginEditingMessage(messageId = it.id, parts = it.parts)
+                    if (isBusy) {
+                        vm.showStopGeneratingFirstError()
+                    } else {
+                        vm.beginEditingMessage(messageId = it.id, parts = it.parts)
+                    }
                 },
                 onForkMessage = {
-                    scope.launch {
-                        val fork = vm.forkMessage(message = it)
-                        navigateToChatPage(navController, chatId = fork.id)
+                    if (isBusy) {
+                        vm.showStopGeneratingFirstError()
+                    } else {
+                        scope.launch {
+                            vm.forkMessage(message = it)?.let { fork ->
+                                navigateToChatPage(navController, chatId = fork.id)
+                            }
+                        }
                     }
                 },
                 onDelete = {
-                    if (loadingJob != null) {
+                    if (isBusy) {
                         vm.showDeleteBlockedWhileGeneratingError()
                     } else {
                         vm.deleteMessage(it)

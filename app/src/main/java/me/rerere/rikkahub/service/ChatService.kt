@@ -9,6 +9,7 @@ import kotlinx.coroutines.CoroutineStart
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.NonCancellable
+import kotlinx.coroutines.cancelAndJoin
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -17,6 +18,7 @@ import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.flowOn
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.supervisorScope
 import kotlinx.coroutines.withContext
 import me.rerere.ai.agent.AgentEvent
 import me.rerere.ai.agent.AgentFinishReason
@@ -49,6 +51,7 @@ import me.rerere.rikkahub.data.files.ChatDraftStore
 import me.rerere.rikkahub.data.files.FilesManager
 import me.rerere.rikkahub.data.model.Assistant
 import me.rerere.rikkahub.data.model.Conversation
+import me.rerere.rikkahub.data.model.MessageNode
 import me.rerere.rikkahub.data.model.bindConfig
 import me.rerere.rikkahub.data.model.cancelInterruptedTools
 import me.rerere.rikkahub.data.model.contextWindowSize
@@ -75,11 +78,13 @@ import me.rerere.rikkahub.data.model.withoutUnresumableToolCalls
 import me.rerere.rikkahub.data.repository.ConversationRepository
 import me.rerere.rikkahub.data.repository.FolderRepository
 import me.rerere.rikkahub.web.BadRequestException
+import me.rerere.rikkahub.web.ConflictException
 import me.rerere.rikkahub.web.NotFoundException
 import java.net.ConnectException
 import java.net.NoRouteToHostException
 import java.net.SocketTimeoutException
 import java.net.UnknownHostException
+import java.time.Instant
 import java.util.Locale
 import kotlin.uuid.Uuid
 
@@ -168,6 +173,19 @@ class ChatService(
                 conversationId = conversationId.toString(),
                 nodeId = nodeId.toString(),
                 selectIndex = selectIndex,
+            )
+
+        override suspend fun persistNode(conversationId: Uuid, nodeIndex: Int, node: MessageNode): Long =
+            conversationRepo.upsertMessageNode(
+                conversationId = conversationId.toString(),
+                nodeIndex = nodeIndex,
+                node = node,
+            )
+
+        override suspend fun touchConversationUpdateAt(conversationId: Uuid, updateAt: Instant): Int =
+            conversationRepo.touchConversationUpdateAt(
+                conversationId = conversationId.toString(),
+                updateAt = updateAt.toEpochMilli(),
             )
     }
 
@@ -550,12 +568,19 @@ class ChatService(
             val settings = settingsStore.awaitLoaded()
             // 清掉已存储的建议；没法继续执行的工具调用发给模型会被拒绝，先去掉。
             // 重新生成时只清理要发给模型的节点，被重新生成的节点保持原样，旧回复留作分支
-            val conversation = session.update { latest ->
+            val beforeCleanup = session.state.value.messageNodes
+            var conversation = session.update { latest ->
                 val untilNode = regenerateNodeId
                     ?.let { nodeId -> latest.messageNodes.indexOfFirst { it.id == nodeId } }
                     ?.takeIf { it != -1 }
                     ?: latest.messageNodes.size
                 latest.copy(chatSuggestions = emptyList()).withoutUnresumableToolCalls(untilNode)
+            }
+            // 清理可能删掉节点或消息；先把库和持久化计数对齐，定期保存的追加规则才有依据
+            val structureChanged = beforeCleanup.map { it.id } != conversation.messageNodes.map { it.id } ||
+                beforeCleanup.map { it.messages.size } != conversation.messageNodes.map { it.messages.size }
+            if (structureChanged) {
+                conversation = session.flush()
             }
 
             val nodes = conversation.messageNodes
@@ -584,47 +609,68 @@ class ChatService(
             warnIfToolsUnavailable(turn, conversationId)
 
             val (request, hooks) = requestFactory.createAgent(turn, history, session.processingStatus)
+            val turnIncarnation = session.incarnation
             var finishReason: AgentFinishReason? = null
-            try {
-                runAgent(request, hooks).flowOn(Dispatchers.IO).collect { event ->
-                    when (event) {
-                        is AgentEvent.MessageUpdated -> {
-                            // 生成过程中只有网络重试的提示会留着，收到新内容说明重试已经成功
-                            session.processingStatus.value = null
-                            session.update { it.upsertMessage(replyNodeId, event.message) }
-                            session.replyMessageId.value = event.message.id
-                            // 通知等边缘副作用由 ChatNotificationManager 消费；
-                            // tryEmit 不挂起，事件丢失只影响单次通知更新，不能反压生成链
-                            appEventBus.tryEmit(
-                                AppEvent.ChatGenerationUpdate(conversationId, event.message, senderName)
-                            )
-                        }
+            var touchedUpdateAt = false
+            supervisorScope {
+                val saver = launch(Dispatchers.IO) {
+                    MessageSaveLoop(
+                        estimateChars = {
+                            estimateNodeChars(session.state.value.messageNodes.firstOrNull { it.id == replyNodeId })
+                        },
+                        save = {
+                            session.persistMessageNode(replyNodeId, turnIncarnation)?.also {
+                                if (!touchedUpdateAt) {
+                                    touchedUpdateAt = session.touchUpdateAt(turnIncarnation)
+                                }
+                            }
+                        },
+                        onError = { Log.w(TAG, "periodic message save failed", it) },
+                    ).run()
+                }
+                try {
+                    runAgent(request, hooks).flowOn(Dispatchers.IO).collect { event ->
+                        when (event) {
+                            is AgentEvent.MessageUpdated -> {
+                                // 生成过程中只有网络重试的提示会留着，收到新内容说明重试已经成功
+                                session.processingStatus.value = null
+                                session.update { it.upsertMessage(replyNodeId, event.message) }
+                                session.replyMessageId.value = event.message.id
+                                // 通知等边缘副作用由 ChatNotificationManager 消费；
+                                // tryEmit 不挂起，事件丢失只影响单次通知更新，不能反压生成链
+                                appEventBus.tryEmit(
+                                    AppEvent.ChatGenerationUpdate(conversationId, event.message, senderName)
+                                )
+                            }
 
-                        is AgentEvent.Retrying -> {
-                            logRetry(event.attempt)
-                            session.processingStatus.value = retryStatus(event.attempt)
-                        }
+                            is AgentEvent.Retrying -> {
+                                logRetry(event.attempt)
+                                session.processingStatus.value = retryStatus(event.attempt)
+                            }
 
-                        is AgentEvent.Finished -> {
-                            Log.i(TAG, "runTurn: finished (${event.reason})")
-                            finishReason = event.reason
+                            is AgentEvent.Finished -> {
+                                Log.i(TAG, "runTurn: finished (${event.reason})")
+                                finishReason = event.reason
+                            }
                         }
                     }
-                }
-            } finally {
-                withContext(NonCancellable) {
-                    session.processingStatus.value = null
-                    // 可能被取消了，或者意外结束，兜底保存
-                    val finished = session.finishGeneration()
-                    // 生成结束：取消 Live Update 通知，后台时发送完成通知
-                    appEventBus.emit(
-                        AppEvent.ChatGenerationEnded(
-                            conversationId = conversationId,
-                            senderName = senderName,
-                            contentPreview = finished.currentMessages.lastOrNull()
-                                ?.toText()?.take(50)?.trim() ?: "",
+                } finally {
+                    withContext(NonCancellable) {
+                        // 先停掉 saver 并等它退出，再全量落库；反过来会在写锁上互相等待
+                        saver.cancelAndJoin()
+                        session.processingStatus.value = null
+                        // 可能被取消了，或者意外结束，兜底保存
+                        val finished = session.finishGeneration()
+                        // 生成结束：取消 Live Update 通知，后台时发送完成通知
+                        appEventBus.emit(
+                            AppEvent.ChatGenerationEnded(
+                                conversationId = conversationId,
+                                senderName = senderName,
+                                contentPreview = finished.currentMessages.lastOrNull()
+                                    ?.toText()?.take(50)?.trim() ?: "",
+                            )
                         )
-                    )
+                    }
                 }
             }
 
@@ -1104,6 +1150,7 @@ class ChatService(
             sessionManager.withSession<Unit>(conversationId) { session ->
                 try {
                     ensureInitialized(session)
+                    val incarnation = session.incarnation
                     val settings = settingsStore.awaitLoaded()
 
                     val messageText = message.parts.filterIsInstance<UIMessagePart.Text>()
@@ -1125,11 +1172,19 @@ class ChatService(
                         session.update { it.withTranslation(message.id, translatedText) }
                     }.collect { /* Final translation already handled in onStreamUpdate */ }
 
-                    session.flush()
+                    // 翻译期间只改内存，结束后对所在节点写一次，避免全量编码整条会话
+                    session.state.value.getMessageNodeByMessageId(message.id)?.let { node ->
+                        session.persistMessageNode(node.id, incarnation)
+                    }
                 } catch (e: Exception) {
                     if (e is CancellationException) throw e
                     // Clear translation field on error
-                    if (session.isInitialized) session.update { it.withTranslation(message.id, null) }
+                    if (session.isInitialized) {
+                        session.update { it.withTranslation(message.id, null) }
+                        session.state.value.getMessageNodeByMessageId(message.id)?.let { node ->
+                            session.persistMessageNode(node.id, session.incarnation)
+                        }
+                    }
                     addError(e, conversationId, title = context.getString(R.string.error_title_translate_message))
                 }
             }
@@ -1137,10 +1192,25 @@ class ChatService(
     }
 
     suspend fun clearTranslationField(conversationId: Uuid, messageId: Uuid) {
-        mutate(conversationId) { it.withTranslation(messageId, null) }
+        withLoadedSession<Unit>(conversationId) { session ->
+            val nodeId = session.state.value.getMessageNodeByMessageId(messageId)?.id
+            val incarnation = session.incarnation
+            session.update { it.withTranslation(messageId, null) }
+            if (nodeId != null) {
+                session.persistMessageNode(nodeId, incarnation)
+            }
+            dispatchNextQueuedMessage(conversationId)
+        }
     }
 
     // ---- 消息操作 ----
+
+    /** 结构性编辑在生成中或等待工具审批时拒绝，避免和正在增长的回复节点交错 */
+    private fun ConversationSession.ensureNotGenerating() {
+        if (getJob() != null || state.value.isAwaitingToolApproval) {
+            throw ConflictException("Conversation is generating")
+        }
+    }
 
     suspend fun editMessage(
         conversationId: Uuid,
@@ -1148,6 +1218,7 @@ class ChatService(
         parts: List<UIMessagePart>
     ) {
         if (parts.isEmptyInputMessage()) return
+        withLoadedSession<Unit>(conversationId) { it.ensureNotGenerating() }
         val settings = settingsStore.awaitLoaded()
 
         mutate(conversationId) { conversation ->
@@ -1159,7 +1230,10 @@ class ChatService(
         conversationId: Uuid,
         messageId: Uuid
     ): Conversation {
-        val source = withLoadedSession(conversationId) { it.state.value }
+        val source = withLoadedSession(conversationId) { session ->
+            session.ensureNotGenerating()
+            session.state.value
+        }
         val existingTitles = conversationRepo.getTitlesOfAssistant(source.assistantId)
         // fork 会把这条消息之前的本地附件各复制一份，内容寻址写入带 fsync，放到 IO 上做
         val fork = withContext(Dispatchers.IO) {
@@ -1208,6 +1282,7 @@ class ChatService(
         messageId: Uuid,
         failIfMissing: Boolean = true,
     ) {
+        withLoadedSession<Unit>(conversationId) { it.ensureNotGenerating() }
         mutate(conversationId) { conversation ->
             conversation.deleteMessage(messageId)
                 ?: if (failIfMissing) throw NotFoundException("Message not found") else conversation

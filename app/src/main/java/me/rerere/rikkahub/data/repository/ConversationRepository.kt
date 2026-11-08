@@ -374,6 +374,10 @@ class ConversationRepository(
     suspend fun updateMessageSelectIndex(conversationId: String, nodeId: String, selectIndex: Int): Int =
         messageNodeDAO.updateSelectIndex(conversationId, nodeId, selectIndex)
 
+    /** 只刷新会话的 update_at，返回受影响行数。 */
+    suspend fun touchConversationUpdateAt(conversationId: String, updateAt: Long): Int =
+        conversationDAO.updateUpdateAt(conversationId, updateAt)
+
     suspend fun searchMessages(
         keyword: String,
         sort: MessageSearchSort = MessageSearchSort.RELEVANCE,
@@ -571,20 +575,29 @@ class ConversationRepository(
     }
 
     private suspend fun saveMessageNodes(conversationId: String, nodes: List<MessageNode>) {
-        val entities = nodes.mapIndexed { index, node ->
-            MessageNodeEntity(
-                id = node.id.toString(),
-                conversationId = conversationId,
-                nodeIndex = index,
-                messages = AttachmentUrlStorage.toStoredJson(
-                    JsonInstant.encodeToString(node.messages),
-                    attachmentFilesDirUri,
-                ),
-                selectIndex = node.selectIndex
-            )
-        }
-        messageNodeDAO.insertAll(entities)
+        messageNodeDAO.insertAll(
+            nodes.mapIndexed { index, node -> node.toMessageNodeEntity(conversationId, index) }
+        )
     }
+
+    /** 只写一个消息节点，供生成期间的定期保存使用；返回落库 JSON 的字符数。 */
+    suspend fun upsertMessageNode(conversationId: String, nodeIndex: Int, node: MessageNode): Long {
+        val entity = node.toMessageNodeEntity(conversationId, nodeIndex)
+        messageNodeDAO.insertAll(listOf(entity))
+        return entity.messages.length.toLong()
+    }
+
+    private fun MessageNode.toMessageNodeEntity(conversationId: String, index: Int): MessageNodeEntity =
+        MessageNodeEntity(
+            id = id.toString(),
+            conversationId = conversationId,
+            nodeIndex = index,
+            messages = AttachmentUrlStorage.toStoredJson(
+                JsonInstant.encodeToString(messages),
+                attachmentFilesDirUri,
+            ),
+            selectIndex = selectIndex,
+        )
 }
 
 /**
