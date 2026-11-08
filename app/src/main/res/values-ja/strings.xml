@@ -821,8 +821,10 @@ mDNSアドレス: .localホスト名を使用し、IPを知らなくても同じ
   <string name="setting_provider_page_basic_settings">基本設定</string>
   <string name="setting_provider_page_chat_model">チャット</string>
   <string name="setting_provider_page_claude_prompt_cache_strategy">プロンプトキャッシュ戦略</string>
-  <string name="setting_provider_page_claude_prompt_cache_strategy_standard">標準（公式）</string>
-  <string name="setting_provider_page_claude_prompt_cache_strategy_aggressive">アグレッシブ（従来）</string>
+  <string name="setting_provider_page_claude_prompt_cache_strategy_standard">標準</string>
+  <string name="setting_provider_page_claude_prompt_cache_strategy_aggressive">アグレッシブ</string>
+  <string name="setting_provider_page_claude_prompt_cache_strategy_desc">アグレッシブは従来の 4 つのブレークポイントを維持し、通常はキャッシュヒットが増えます。プロバイダーが独自のブレークポイントを追加して cache_control 上限エラー（Found 5）を返す場合は、そのプロバイダーを標準（自動 + system、system がない場合は tools）に切り替えてください。</string>
+  <string name="setting_provider_page_claude_prompt_cache_strategy_info">詳細</string>
   <string name="setting_provider_page_claude_prompt_cache_ttl">プロンプトキャッシュ TTL</string>
   <string name="setting_provider_page_claude_prompt_cache_ttl_1h">1時間</string>
   <string name="setting_provider_page_claude_prompt_cache_ttl_5m">5分</string>

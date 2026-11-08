@@ -871,8 +871,10 @@
   <string name="setting_provider_page_basic_settings">Basic Settings</string>
   <string name="setting_provider_page_chat_model">Chat</string>
   <string name="setting_provider_page_claude_prompt_cache_strategy">Prompt cache strategy</string>
-  <string name="setting_provider_page_claude_prompt_cache_strategy_standard">Standard (official)</string>
-  <string name="setting_provider_page_claude_prompt_cache_strategy_aggressive">Aggressive (original)</string>
+  <string name="setting_provider_page_claude_prompt_cache_strategy_standard">Standard</string>
+  <string name="setting_provider_page_claude_prompt_cache_strategy_aggressive">Aggressive</string>
+  <string name="setting_provider_page_claude_prompt_cache_strategy_desc">Aggressive keeps the original four breakpoints and usually gives more cache hits. If a provider adds its own breakpoints and the request fails with the cache_control limit error (Found 5), switch that provider to Standard (automatic + system, or tools when there is no system).</string>
+  <string name="setting_provider_page_claude_prompt_cache_strategy_info">Details</string>
   <string name="setting_provider_page_claude_prompt_cache_ttl">Prompt cache TTL</string>
   <string name="setting_provider_page_claude_prompt_cache_ttl_1h">1 hour</string>
   <string name="setting_provider_page_claude_prompt_cache_ttl_5m">5 minutes</string>

@@ -389,7 +389,7 @@
 
 ### C53 Claude 缓存断点按提供商切换
 
-- 落点：`ProviderSetting.Claude.promptCacheStrategy`（`ClaudePromptCacheStrategy.STANDARD`/`AGGRESSIVE`，默认 `AGGRESSIVE`）；`ClaudeProvider.buildMessageRequest` 在 STANDARD 下是顶层自动缓存加 system（无 system 时 tools），在 AGGRESSIVE 下是顶层加 system 加 tools 加倒数第二条真实 user，回到上游 `d2e52106` 的 4 个断点；`ProviderConfigure` 在提示词缓存开关下加策略选择；四份 locale 加标题和两个选项；C52 的 `limitCacheControl` 与 server tool raw 剥离继续生效。
+- 落点：`ProviderSetting.Claude.promptCacheStrategy`（`ClaudePromptCacheStrategy.STANDARD`/`AGGRESSIVE`，默认 `AGGRESSIVE`）；`ClaudeProvider.buildMessageRequest` 在 STANDARD 下是顶层自动缓存加 system（无 system 时 tools），在 AGGRESSIVE 下是顶层加 system 加 tools 加倒数第二条真实 user，回到上游 `d2e52106` 的 4 个断点；`ProviderConfigure` 在提示词缓存开关下加策略选择，选项只显示标准/激进，策略标题行右侧的 (i) 打开说明弹窗，关闭复用 `common_confirm`；四份 locale 的选项改成标准/激进，并补说明和 info 文案；C52 的 `limitCacheControl` 与 server tool raw 剥离继续生效。
 - 理由：上游原来的激进策略用了很久，只在个别中转补断点时遇到一次 Found 5；默认保留激进能继续拿到更多缓存断点，遇到 400 的 provider 手动切标准即可。标准是官方推荐的两断点组合，给中转补断点留余量。策略是 provider 级，不是助手级，切换后同一 provider 的所有 Claude 请求生效。
 - 合并注意：新字段带默认值，旧设置反序列化为 AGGRESSIVE，升级后与 C52 之前的行为一致；STANDARD 是 C52 的结果，AGGRESSIVE 是上游 `d2e52106` 的原始组合；两个模式都保留顶层自动缓存，STANDARD 只有在没有 system 时才给 tools 断点；改上游 ClaudeProvider 时按这个分叉合。
 - 测试：`ClaudePromptCacheRequestTest` 标准策略 7 条加激进策略 6 条（默认激进 4 断点、三条 user 时只标中间一条、无 system 时 3 断点、无 system 且无 tools 时 2 断点、只有一条 user 时 3 断点、1h TTL 在四个断点），共 13 条；`ClaudeRequestMessageTest` 7 条、`ClaudeServerToolTest` 10 条仍过。

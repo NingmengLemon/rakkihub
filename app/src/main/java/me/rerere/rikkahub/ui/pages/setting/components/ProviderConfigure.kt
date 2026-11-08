@@ -8,6 +8,9 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.ContainedLoadingIndicator
 import androidx.compose.material3.LinearWavyProgressIndicator
 import androidx.compose.material3.ProgressIndicatorDefaults
@@ -17,6 +20,7 @@ import androidx.compose.material3.LocalTextStyle
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -48,6 +52,7 @@ import me.rerere.hugeicons.stroke.ArrowRight01
 import me.rerere.hugeicons.stroke.Cancel01
 import me.rerere.hugeicons.stroke.DashboardSpeed02
 import me.rerere.hugeicons.stroke.FileImport
+import me.rerere.hugeicons.stroke.InformationCircle
 import me.rerere.hugeicons.stroke.Login03
 import me.rerere.hugeicons.stroke.Logout03
 import me.rerere.hugeicons.stroke.Refresh03
@@ -511,6 +516,7 @@ private fun ProviderConfigureClaude(
     provider: ProviderSetting.Claude,
     onEdit: (provider: ProviderSetting) -> Unit
 ) {
+    var showStrategyHelp by remember { mutableStateOf(false) }
     CardGroup {
         nameItem(provider, onEdit)
         apiKeyItem(provider.apiKey) { onEdit(provider.copy(apiKey = it)) }
@@ -534,6 +540,19 @@ private fun ProviderConfigureClaude(
         if (provider.promptCaching) {
             formItem(
                 headlineContent = { Text(stringResource(R.string.setting_provider_page_claude_prompt_cache_strategy)) },
+                trailingContent = {
+                    IconButton(
+                        onClick = { showStrategyHelp = true },
+                        modifier = Modifier.size(32.dp),
+                    ) {
+                        Icon(
+                            imageVector = HugeIcons.InformationCircle,
+                            contentDescription = stringResource(R.string.setting_provider_page_claude_prompt_cache_strategy_info),
+                            modifier = Modifier.size(16.dp),
+                            tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                    }
+                },
             ) {
                 ConnectedChoiceButtons(
                     options = ClaudePromptCacheStrategy.entries,
@@ -567,6 +586,19 @@ private fun ProviderConfigureClaude(
                 }
             }
         }
+    }
+
+    if (showStrategyHelp) {
+        AlertDialog(
+            onDismissRequest = { showStrategyHelp = false },
+            title = { Text(stringResource(R.string.setting_provider_page_claude_prompt_cache_strategy)) },
+            text = { Text(stringResource(R.string.setting_provider_page_claude_prompt_cache_strategy_desc), modifier = Modifier.verticalScroll(rememberScrollState())) },
+            confirmButton = {
+                TextButton(onClick = { showStrategyHelp = false }) {
+                    Text(stringResource(R.string.common_confirm))
+                }
+            },
+        )
     }
 }
 
