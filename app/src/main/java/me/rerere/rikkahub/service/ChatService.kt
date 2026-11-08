@@ -52,6 +52,7 @@ import me.rerere.rikkahub.data.files.FilesManager
 import me.rerere.rikkahub.data.model.Assistant
 import me.rerere.rikkahub.data.model.CompressionPlanResult
 import me.rerere.rikkahub.data.model.Conversation
+import me.rerere.rikkahub.data.model.HistoryTruncation
 import me.rerere.rikkahub.data.model.MessageNode
 import me.rerere.rikkahub.data.model.applyCompressionResult
 import me.rerere.rikkahub.data.model.bindConfig
@@ -70,6 +71,7 @@ import me.rerere.rikkahub.data.model.isAwaitingToolApproval
 import me.rerere.rikkahub.data.model.isTruncatedCompressionFinish
 import me.rerere.rikkahub.data.model.localFileUrls
 import me.rerere.rikkahub.data.model.planCompression
+import me.rerere.rikkahub.data.model.planHistoryTruncation
 import me.rerere.rikkahub.data.model.removeCompressionPair
 import me.rerere.rikkahub.data.model.removeCompressionPairs
 import me.rerere.rikkahub.data.model.replaceUserRegexes
@@ -1037,21 +1039,18 @@ class ChatService(
                 check(!session.isGenerating) {
                     context.getString(R.string.chat_page_truncate_blocked_generating)
                 }
-                // 失败/停止的压缩会留下 scratch 对，它不在请求里；先清掉再按剩余节点算窗口和锚点
-                val conversation = latest.removeCompressionPairs() ?: latest
-                val windowSize = conversation.contextWindowSize()
-                if (windowSize < 2) {
-                    throw IllegalStateException(context.getString(R.string.chat_page_truncate_nothing_to_cut))
-                }
-                if (keep >= windowSize) {
-                    throw IllegalStateException(
-                        context.getString(R.string.chat_page_truncate_window_too_many, windowSize)
+                when (val result = latest.planHistoryTruncation(keep)) {
+                    is HistoryTruncation.Ready -> result.conversation
+                    HistoryTruncation.NothingToCut -> throw IllegalStateException(
+                        context.getString(R.string.chat_page_truncate_nothing_to_cut)
+                    )
+                    is HistoryTruncation.KeepTooMany -> throw IllegalStateException(
+                        context.getString(R.string.chat_page_truncate_window_too_many, result.windowSize)
+                    )
+                    HistoryTruncation.AnchorMissing -> throw IllegalStateException(
+                        context.getString(R.string.chat_page_truncate_conversation_changed)
                     )
                 }
-                val anchor = conversation.messageNodes[conversation.messageNodes.size - keep - 1]
-                val updated = conversation.insertHistoryTruncation(anchor.id)
-                    ?: throw IllegalStateException(context.getString(R.string.chat_page_truncate_conversation_changed))
-                updated.copy(chatSuggestions = emptyList())
             }
             session.flush()
         }

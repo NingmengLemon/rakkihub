@@ -57,9 +57,7 @@ class ConversationHistoryTruncationTest {
             messageNodes = users + compressionPairNodes(),
         )
 
-        val cleaned = source.removeCompressionPairs()!!
-        val anchor = cleaned.messageNodes[cleaned.messageNodes.size - 2]
-        val result = cleaned.insertHistoryTruncation(anchor.id)!!
+        val result = (source.planHistoryTruncation(1) as HistoryTruncation.Ready).conversation
 
         assertEquals(listOf("message 0"), result.messageNodes.take(1).map { it.currentMessage.toText() })
         assertTrue(result.messageNodes[1].currentMessage.isHistoryTruncationMarker)
@@ -76,13 +74,33 @@ class ConversationHistoryTruncationTest {
             messageNodes = users + compressionPairNodes(),
         )
 
-        val cleaned = source.removeCompressionPairs()!!
-        val keep = 2
-        val anchor = cleaned.messageNodes[cleaned.messageNodes.size - keep - 1]
-        val result = cleaned.insertHistoryTruncation(anchor.id)!!
+        val result = (source.planHistoryTruncation(2) as HistoryTruncation.Ready).conversation
 
         assertEquals(2, result.contextWindowSize())
         assertEquals("message 5", result.messageNodes.last().currentMessage.toText())
+    }
+
+    @Test
+    fun `truncation reports nothing to cut when only the pair remains`() {
+        val source = Conversation(
+            assistantId = Uuid.random(),
+            messageNodes = compressionPairNodes(),
+        )
+
+        assertEquals(HistoryTruncation.NothingToCut, source.planHistoryTruncation(1))
+    }
+
+    @Test
+    fun `truncation reports too many when keep is not smaller than the window`() {
+        val source = Conversation(
+            assistantId = Uuid.random(),
+            messageNodes = List(2) { UIMessage.user("message $it").toMessageNode() },
+        )
+
+        val result = source.planHistoryTruncation(2)
+
+        assertTrue(result is HistoryTruncation.KeepTooMany)
+        assertEquals(2, (result as HistoryTruncation.KeepTooMany).windowSize)
     }
 
     private fun compressionPairNodes() = listOf(

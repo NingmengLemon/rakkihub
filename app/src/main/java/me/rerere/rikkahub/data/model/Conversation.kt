@@ -197,6 +197,35 @@ internal fun Conversation.contextWindowStart(): Int =
 /** 当前请求窗口的消息数，压缩与截断都用它算边界。 */
 internal fun Conversation.contextWindowSize(): Int = messageNodes.size - contextWindowStart()
 
+/** 历史截断计划的结果；服务层负责把失败原因映射成用户文案。 */
+internal sealed interface HistoryTruncation {
+    data class Ready(val conversation: Conversation) : HistoryTruncation
+
+    data object NothingToCut : HistoryTruncation
+
+    data class KeepTooMany(val windowSize: Int) : HistoryTruncation
+
+    data object AnchorMissing : HistoryTruncation
+}
+
+/**
+ * 计算历史截断：先把失败压缩留下的 scratch 对清掉，再按 [keep] 在剩余节点里插空检查点。
+ *
+ * 纯变换，不碰会话状态；[keep] 必须大于 0，服务层先校验。返回 [HistoryTruncation]，
+ * 由调用方决定错误文案，避免把 UI 文案塞进模型层。
+ */
+internal fun Conversation.planHistoryTruncation(keep: Int): HistoryTruncation {
+    val cleaned = removeCompressionPairs() ?: this
+    val windowSize = cleaned.contextWindowSize()
+    if (windowSize < 2) return HistoryTruncation.NothingToCut
+    if (keep >= windowSize) return HistoryTruncation.KeepTooMany(windowSize)
+    val anchor = cleaned.messageNodes[cleaned.messageNodes.size - keep - 1]
+    val updated = cleaned.insertHistoryTruncation(anchor.id)
+        ?.copy(chatSuggestions = emptyList())
+        ?: return HistoryTruncation.AnchorMissing
+    return HistoryTruncation.Ready(updated)
+}
+
 /**
  * 上下文消息数上限真正发生条数截断时，发送窗口的起点下标；上限为 0 或尾部没有超过上限时返回 null。
  *
