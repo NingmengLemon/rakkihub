@@ -20,6 +20,8 @@ import me.rerere.ai.core.MessageRole
 import me.rerere.ai.ui.UIMessage
 import me.rerere.ai.ui.UIMessagePart
 import me.rerere.rikkahub.data.model.Conversation
+import me.rerere.rikkahub.data.model.MessageNode
+import me.rerere.rikkahub.data.model.selectBranch
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNotNull
@@ -714,5 +716,54 @@ class ConversationSessionTest {
             session.cleanup()
             scope.cancel()
         }
+    }
+
+    @Test
+    fun `branch selection writes only select_index when the stored snapshot has that branch`() = runBlocking {
+        val id = Uuid.random()
+        val nodeId = Uuid.random()
+        val node = MessageNode(id = nodeId, messages = listOf(UIMessage.user("first"), UIMessage.user("second")))
+        val loaded = Conversation.ofId(id).copy(messageNodes = listOf(node))
+        val store = FakeConversationStore(loaded)
+        val session = ConversationSession(id, Conversation.ofId(id), this, store, {})
+        session.initialize(load = { store.persisted })
+
+        assertTrue(session.selectMessageNode(nodeId, 1, session.incarnation))
+
+        assertEquals(1, session.state.value.messageNodes.single().selectIndex)
+        assertEquals(listOf(Triple(id, nodeId, 1)), store.selectIndexUpdates)
+        assertTrue(store.writes.isEmpty())
+
+        // 只写列已经把内存与库对齐，随后的 flush 不再整份重写
+        session.flush()
+        assertTrue(store.writes.isEmpty())
+    }
+
+    @Test
+    fun `branch selection stays in memory when the stored snapshot has fewer branches`() = runBlocking {
+        val id = Uuid.random()
+        val first = UIMessage.user("first")
+        val second = UIMessage.user("second")
+        val node = MessageNode(id = Uuid.random(), messages = listOf(first))
+        val loaded = Conversation.ofId(id).copy(messageNodes = listOf(node))
+        val store = FakeConversationStore(loaded)
+        val session = ConversationSession(id, Conversation.ofId(id), this, store, {})
+        session.initialize(load = { store.persisted })
+        // 生成中的新分支只在内存里，库里的节点行还是 1 条
+        session.update { it.upsertMessage(node.id, second) }
+        // 用户先切回旧分支，再点箭头选回还没落库的新分支
+        session.update { it.selectBranch(node.id, 0) }
+
+        assertTrue(session.selectMessageNode(node.id, 1, session.incarnation))
+
+        assertEquals(1, session.state.value.messageNodes.single().selectIndex)
+        assertTrue(store.selectIndexUpdates.isEmpty())
+
+        // 下一次全量写把消息和下标一起落库
+        session.flush()
+        assertEquals(1, store.writes.size)
+        val writtenNode = store.persisted!!.messageNodes.single()
+        assertEquals(2, writtenNode.messages.size)
+        assertEquals(1, writtenNode.selectIndex)
     }
 }

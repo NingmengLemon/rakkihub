@@ -31,6 +31,13 @@ interface MessageNodeDAO {
     @Query("DELETE FROM message_node WHERE id = :nodeId")
     suspend fun deleteById(nodeId: String)
 
+    // 分支切换只改这一列，不重新编码消息 JSON；返回受影响行数
+    @Query(
+        "UPDATE message_node SET select_index = :selectIndex " +
+            "WHERE id = :nodeId AND conversation_id = :conversationId"
+    )
+    suspend fun updateSelectIndex(conversationId: String, nodeId: String, selectIndex: Int): Int
+
     // 消息节点数（重新生成的分支不另算）
     @Query("SELECT COUNT(*) FROM message_node")
     suspend fun countAll(): Int

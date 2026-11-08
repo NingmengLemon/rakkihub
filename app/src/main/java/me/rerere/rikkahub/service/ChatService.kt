@@ -65,7 +65,6 @@ import me.rerere.rikkahub.data.model.insertHistoryTruncation
 import me.rerere.rikkahub.data.model.isAwaitingToolApproval
 import me.rerere.rikkahub.data.model.localFileUrls
 import me.rerere.rikkahub.data.model.replaceUserRegexes
-import me.rerere.rikkahub.data.model.selectBranch
 import me.rerere.rikkahub.data.model.toMessageNode
 import me.rerere.rikkahub.data.model.withAssistantUpdate
 import me.rerere.rikkahub.data.model.withNodeFavorite
@@ -163,6 +162,13 @@ class ChatService(
                 conversationRepo.updateConversation(current)
             }
         }
+
+        override suspend fun updateNodeSelectIndex(conversationId: Uuid, nodeId: Uuid, selectIndex: Int): Int =
+            conversationRepo.updateMessageSelectIndex(
+                conversationId = conversationId.toString(),
+                nodeId = nodeId.toString(),
+                selectIndex = selectIndex,
+            )
     }
 
     private val sessionManager = ConversationSessionManager(
@@ -1174,14 +1180,20 @@ class ChatService(
         nodeId: Uuid,
         selectIndex: Int
     ) {
-        mutate(conversationId) { conversation ->
+        withLoadedSession<Unit>(conversationId) { session ->
+            val conversation = session.state.value
             val targetNode = conversation.messageNodes.firstOrNull { it.id == nodeId }
                 ?: throw NotFoundException("Message node not found")
             if (selectIndex !in targetNode.messages.indices) {
                 throw BadRequestException("Invalid selectIndex")
             }
-            if (targetNode.selectIndex == selectIndex) return@mutate conversation
-            conversation.selectBranch(nodeId, selectIndex)
+            session.selectMessageNode(
+                nodeId = nodeId,
+                selectIndex = selectIndex,
+                expectedIncarnation = session.incarnation,
+            )
+            // 与原来的 mutate 一致：即使只是重复选中同一下标，也尝试推进排队的消息
+            dispatchNextQueuedMessage(conversationId)
         }
     }
 

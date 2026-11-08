@@ -15,6 +15,7 @@ import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
 import me.rerere.ai.ui.finishReasoning
 import me.rerere.rikkahub.data.model.Conversation
+import me.rerere.rikkahub.data.model.selectBranch
 import java.time.Instant
 import java.util.concurrent.atomic.AtomicInteger
 import kotlin.uuid.Uuid
@@ -32,6 +33,9 @@ interface ConversationStore {
 
     /** [previous] 是上次落库或加载时的状态，从未落库的新会话为 null */
     suspend fun write(previous: Conversation?, current: Conversation)
+
+    /** 只写一个节点的 select_index，避免重新编码消息；返回受影响行数 */
+    suspend fun updateNodeSelectIndex(conversationId: Uuid, nodeId: Uuid, selectIndex: Int): Int
 }
 
 /**
@@ -162,6 +166,47 @@ class ConversationSession(
             // 改之前内存和数据库一致，按列写完两边又一致了，回收时不必整份重写；
             // 之后如果又有别的修改，内存已经不是 updated 这个实例，仍然算作没落库
             if (existsInDatabase && lastWritten === before) lastWritten = updated
+            true
+        }
+    }
+
+    /**
+     * 切换分支：只改内存；只有上次落库的节点快照确实包含目标下标时，才单独写 select_index。
+     *
+     * 节点行可能比内存旧（生成中的新分支还没落库），这时只写列会让库里的下标超出消息数量、
+     * 下次加载直接失败；这种情况留给下一次全量 [flush] 把消息和下标一起写。
+     *
+     * @param expectedIncarnation 调用方进入时记录的 [incarnation]；会话被替换或删除后不写
+     * @return 是否改了内存
+     */
+    internal suspend fun selectMessageNode(
+        nodeId: Uuid,
+        selectIndex: Int,
+        expectedIncarnation: Int,
+    ): Boolean {
+        return writeMutex.withLock {
+            if (!isInitialized || incarnation != expectedIncarnation) return@withLock false
+            val selection = synchronized(this) {
+                val before = _state.value
+                val node = before.messageNodes.firstOrNull { it.id == nodeId } ?: return@synchronized null
+                if (selectIndex !in node.messages.indices || node.selectIndex == selectIndex) {
+                    return@synchronized null
+                }
+                val persisted = lastWritten.messageNodes.firstOrNull { it.id == nodeId }
+                val canWriteColumn = existsInDatabase && persisted != null && selectIndex < persisted.messages.size
+                val updated = before.selectBranch(nodeId, selectIndex)
+                _state.value = updated
+                Triple(before, updated, canWriteColumn)
+            } ?: return@withLock false
+            val (before, updated, canWriteColumn) = selection
+            if (canWriteColumn) {
+                val affected = store.updateNodeSelectIndex(id, nodeId, selectIndex)
+                if (affected == 0) {
+                    Log.w(TAG, "updateNodeSelectIndex matched no row: node=$nodeId")
+                }
+                // 只改了 select_index 且写成功，内存和库仍一致；有别的未落库修改时不推进
+                if (affected > 0 && lastWritten === before) lastWritten = updated
+            }
             true
         }
     }

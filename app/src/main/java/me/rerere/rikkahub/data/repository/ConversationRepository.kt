@@ -370,6 +370,10 @@ class ConversationRepository(
         // 附件不在这里删：同一份内容可能还被别处引用，文件回收交给附件清理
     }
 
+    /** 只更新节点的分支下标；返回受影响行数，0 表示行还不存在或不属于这个会话。 */
+    suspend fun updateMessageSelectIndex(conversationId: String, nodeId: String, selectIndex: Int): Int =
+        messageNodeDAO.updateSelectIndex(conversationId, nodeId, selectIndex)
+
     suspend fun searchMessages(
         keyword: String,
         sort: MessageSearchSort = MessageSearchSort.RELEVANCE,
@@ -423,7 +427,9 @@ class ConversationRepository(
         return Conversation(
             id = Uuid.parse(conversationEntity.id),
             title = conversationEntity.title,
-            messageNodes = messageNodes.filter { it.messages.isNotEmpty() },
+            messageNodes = messageNodes
+                .filter { it.messages.isNotEmpty() }
+                .map { node -> node.copy(selectIndex = node.selectIndex.coerceIn(0, node.messages.lastIndex)) },
             createAt = Instant.ofEpochMilli(conversationEntity.createAt),
             updateAt = Instant.ofEpochMilli(conversationEntity.updateAt),
             assistantId = Uuid.parse(conversationEntity.assistantId),
@@ -545,7 +551,15 @@ class ConversationRepository(
                         MessageNode(
                             id = nodeId,
                             messages = messages,
-                            selectIndex = entity.selectIndex,
+                            // 分支数量可能因为只写列的旧改动或手工改库而少于下标，载入时夹紧
+                            selectIndex = if (messages.isEmpty()) {
+                                0
+                            } else {
+                                entity.selectIndex.coerceIn(
+                                    0,
+                                    messages.lastIndex
+                                )
+                            },
                             isFavorite = favoriteNodeIds.contains(nodeId)
                         )
                     )

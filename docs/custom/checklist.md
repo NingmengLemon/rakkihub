@@ -56,6 +56,7 @@
 | C46 | 管理上下文：压缩与截断共用一个入口 | 改造 |
 | C47 | 上下文消息数上限的自动边界线 | 改造 |
 | C48 | 版本号随提交自动滚动 | 改造 |
+| C49 | 分支切换只写 select_index | 改造 |
 
 ## 明细
 
@@ -353,3 +354,9 @@
 - 落点：`app/build.gradle.kts` 用 `providers.exec` 读 `git rev-list --count HEAD` 与 `git rev-parse --short=7 HEAD`，`versionCode = 194 + 提交数`，`versionName = "3.1.1-custom.<提交数>+<短 SHA>"`，不加 dirty 后缀。git 命令执行失败（例如不在仓库里）时退回 `194` / `3.1.1-custom`；git 可执行文件本身不存在时会在配置阶段失败，配置缓存无法把进程启动失败当作可回退的输入值，构建环境需要 git。已用 `aapt2 dump badging` 核对构建里的 `versionCode`/`versionName` 与当次提交一致，并验证 Gradle 配置缓存会跟踪该外部命令输出（输出变化时缓存失效）。
 - 理由：崩溃日志与安装包只看得到 versionCode/versionName；之前所有构建都停在 3.1.1/194，分不清是哪次提交。每日构建与本地构建共用同一套规则，短 SHA 直接对上。
 - 合并注意：上游改 `versionCode`/`versionName` 时同步脚本里的 `upstreamVersionCode`/`upstreamVersionName`；提交数在 reset/rebase 改写 main 历史后会倒退，versionCode 随之下跌；merge 只会让计数变大、不会回退，只在 main 上构建（ref 的提交数少，构建出来会是更低的 versionCode）；本地浅克隆（depth-1）会把提交数算成 1、versionCode 退到 195，需要完整历史；checks 与 daily-build 的构建 job 是 `fetch-depth: 0`，daily-build 的 check job 是 depth 1（只查提交，不打包）。版本名不只用于显示与崩溃日志，`BuildConfig.VERSION_NAME` 还是默认 HTTP User-Agent（`DataSourceModule.kt` 与 `SettingPreferencesNetworkPage.kt`），会随提交变化。
+
+### C49 分支切换只写 select_index
+
+- 落点：`MessageNodeDAO.updateSelectIndex(conversationId, nodeId, selectIndex)` 带 `conversation_id` 条件并返回受影响行数；`ConversationRepository.updateMessageSelectIndex`；`ConversationStore.updateNodeSelectIndex`；`ConversationSession.selectMessageNode(nodeId, selectIndex, expectedIncarnation)` 在写锁内只改内存，且只有上次落库的节点快照（`lastWritten`）确实包含目标下标时才写列，否则留给下一次全量 `flush` 把消息和下标一起写；`ChatService.selectMessageNode` 改走它，保留 `dispatchNextQueuedMessage`；载入时把 `selectIndex` 夹紧到消息下标范围（`loadMessageNodes` 与 `conversationEntityToConversation` 两处）。测试：`ConversationSessionTest` 新增两条（快照包含下标时只写列、随后 `flush` 不重写；快照分支数不足时只改内存、下一次 `flush` 把消息和下标一起写）。
+- 理由：分支切换原来走 `mutate` → 全量 `flush` → 删除并重插所有 `message_node`，会把巨长回复重新编码，OOM 就发生在这次编码上；切换分支实际只改一个整数列。守卫防止「节点行还是旧的分支数量」时写进越界下标（重新生成较早回复、Web 路由都能触发），否则下次加载 `currentMessage` 会抛异常。
+- 合并注意：写列的前提是 `lastWritten` 的节点消息包含该下标；内存里有新分支但还没落库时只改内存，下一次全量写补上。写列成功后只在 `lastWritten === before` 时推进 `lastWritten`，避免把并发的未落库修改误标成已写。载入 clamp 是坏数据兜底。Web 路由共用同一个 `ChatService.selectMessageNode`。生成中定期落库（C50）另立。
