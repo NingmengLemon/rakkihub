@@ -116,7 +116,7 @@ fun Response.toHttpException(body: String? = null): HttpException {
         Json.parseToJsonElement(body.orEmpty()).parseErrorDetail()
     }.getOrNull()
     val failureCode = parsed?.code?.takeIf { it != LlmFailureCode.UNKNOWN }
-        ?: codeForStatus(code, body)
+        ?: if (parsed != null) codeForStatus(code, parsed.message) else codeForStatus(code)
     val message = listOfNotNull("HTTP $code", body?.takeIf { it.isNotBlank() })
         .joinToString(": ")
     return HttpException(
@@ -129,30 +129,24 @@ fun Response.toHttpException(body: String? = null): HttpException {
 
 private fun codeFromJson(obj: JsonObject): LlmFailureCode {
     val signals = mutableListOf<String>()
-    listOf("code", "type", "status").forEach { key ->
-        obj[key]?.let { signals += it.asSignal() }
-    }
-    obj["error"]?.let { error ->
-        if (error is JsonObject) {
-            listOf("code", "type", "status").forEach { key ->
-                error[key]?.let { signals += it.asSignal() }
-            }
-            error["message"]?.let { signals += it.asSignal() }
-        } else {
-            signals += error.asSignal()
-        }
-    }
-    obj["details"]?.let { details ->
-        if (details is JsonArray) {
-            details.forEach { detail ->
-                if (detail is JsonObject) {
-                    detail["reason"]?.let { signals += it.asSignal() }
-                }
-            }
-        }
-    }
-    obj["message"]?.let { signals += it.asSignal() }
+    collectSignals(obj, signals)
     return codeFromText(signals.joinToString(" "))
+}
+
+private fun collectSignals(element: JsonElement, signals: MutableList<String>) {
+    when (element) {
+        is JsonObject -> {
+            listOf("code", "type", "status", "reason", "message", "@type").forEach { key ->
+                element[key]?.let { signals += it.asSignal() }
+            }
+            listOf("error", "details", "errors").forEach { key ->
+                element[key]?.let { collectSignals(it, signals) }
+            }
+        }
+
+        is JsonArray -> element.forEach { collectSignals(it, signals) }
+        is JsonPrimitive -> signals += element.content
+    }
 }
 
 private fun JsonElement.asSignal(): String = when (this) {
@@ -164,20 +158,25 @@ private fun JsonElement.asSignal(): String = when (this) {
 private fun codeFromText(raw: String): LlmFailureCode {
     val text = raw.lowercase()
     return when {
-        text.contains("insufficient_quota") || text.contains("quota") -> LlmFailureCode.QUOTA
+        text.contains("insufficient_quota") ||
+            text.contains("quota_exceeded") ||
+            text.contains("quota exceeded") ||
+            text.contains("quotafailure") -> LlmFailureCode.QUOTA
         text.contains("context_length_exceeded") ||
             text.contains("context length") ||
             text.contains("prompt is too long") ||
-            text.contains("input token count exceeds") ||
+            (text.contains("input token count") && text.contains("exceeds the maximum")) ||
             text.contains("maximum context") -> LlmFailureCode.CONTEXT_WINDOW_EXCEEDED
         text.contains("rate_limit") ||
             text.contains("rate limit") ||
             text.contains("resource_exhausted") ||
             text.contains("too many requests") -> LlmFailureCode.RATE_LIMIT
         text.contains("invalid_api_key") ||
+            text.contains("invalid api key") ||
             text.contains("authentication") ||
             text.contains("unauthenticated") ||
             text.contains("permission_denied") ||
+            text.contains("permission denied") ||
             text.contains("unauthorized") ||
             text.contains("forbidden") -> LlmFailureCode.AUTH
         text.contains("gateway_timeout") ||
@@ -191,6 +190,7 @@ private fun codeFromText(raw: String): LlmFailureCode {
         text.contains("invalid_request") ||
             text.contains("invalid argument") ||
             text.contains("bad request") -> LlmFailureCode.INVALID_REQUEST
+        text.contains("quota") -> LlmFailureCode.QUOTA
         else -> LlmFailureCode.UNKNOWN
     }
 }

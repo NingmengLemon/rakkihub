@@ -60,6 +60,23 @@ class ErrorParserTest {
     }
 
     @Test
+    fun `nested quota failure details are quota`() {
+        val body = """{"error":{"status":"RESOURCE_EXHAUSTED","details":[{"@type":"type.googleapis.com/google.rpc.QuotaFailure"}]}}"""
+        val error = response(429, "Too Many Requests", body).toHttpException(body)
+
+        assertEquals(LlmFailureCode.QUOTA, error.code)
+    }
+
+    @Test
+    fun `gemini resource exhausted 429 stays retryable`() {
+        val body = """{"error":{"code":429,"message":"Resource has been exhausted (e.g. check quota).","status":"RESOURCE_EXHAUSTED"}}"""
+        val error = response(429, "Too Many Requests", body).toHttpException(body)
+
+        assertEquals(LlmFailureCode.RATE_LIMIT, error.code)
+        assertTrue(me.rerere.ai.agent.RetryPolicy.NETWORK.shouldRetry(error))
+    }
+
+    @Test
     fun `context overflow is classified from provider message`() {
         assertEquals(
             LlmFailureCode.CONTEXT_WINDOW_EXCEEDED,
@@ -67,7 +84,7 @@ class ErrorParserTest {
         )
         assertEquals(
             LlmFailureCode.CONTEXT_WINDOW_EXCEEDED,
-            codeForStatus(400, "input token count exceeds the maximum"),
+            codeForStatus(400, "The input token count (461428) exceeds the maximum number of tokens allowed (131072)."),
         )
     }
 
@@ -75,14 +92,22 @@ class ErrorParserTest {
     fun `with response preserves structured code and parses http date`() {
         val at = ZonedDateTime.now().plusSeconds(30)
             .format(DateTimeFormatter.RFC_1123_DATE_TIME)
-        val response = response(503, "Service Unavailable", "", retryAfter = at)
+        val response = response(429, "Too Many Requests", "", retryAfter = at)
         val parsed = Json.parseToJsonElement(
-            """{"error":{"type":"server_error","message":"overloaded"}}"""
+            """{"error":{"type":"insufficient_quota","message":"You exceeded your current quota"}}"""
         ).parseErrorDetail().withResponse(response)
 
-        assertEquals(LlmFailureCode.SERVER, parsed.code)
-        assertEquals(503, parsed.statusCode)
+        assertEquals(LlmFailureCode.QUOTA, parsed.code)
+        assertEquals(429, parsed.statusCode)
         assertTrue((parsed.retryAfterMs ?: 0) > 0)
+    }
+
+    @Test
+    fun `non json body is classified by status only`() {
+        val body = "<html><body>quota internal timeout</body></html>"
+        val error = response(502, "Bad Gateway", body).toHttpException(body)
+
+        assertEquals(LlmFailureCode.SERVER, error.code)
     }
 
     @Test

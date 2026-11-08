@@ -19,7 +19,7 @@ import org.junit.Test
 class ChatCompletionsErrorTest {
     @Test
     fun `non successful response carries status code and structured failure`() = runTest {
-        val body = """{"error":{"type":"insufficient_quota","code":"insufficient_quota","message":"quota"}}"""
+        val body = """{"error":{"type":"insufficient_quota","code":"insufficient_quota","message":"You exceeded your current quota, please check your plan and billing details."}}"""
         val client = OkHttpClient.Builder()
             .addInterceptor { chain ->
                 Response.Builder()
