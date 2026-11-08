@@ -332,11 +332,30 @@ RikkaHub 现状：
 - P2 重试状态 UI。attempt 行或卡片显示编号、失败原因、等待时间和倒计时；失败消息有标记；错误卡片提供重试本步。不要在重试时静默清空半截内容，至少保留可见的失败 attempt。
 - P3 用量区分成功与失败 attempt。`usage_record` 加 outcome、attempt、retryId 或等价字段，统计页不把失败尝试计入缓存命中率，但保留成本；消息卡片继续只显示成功 attempt 的 usage。验收：旧数据默认成功或未知，迁移可回滚。
 
-### 下一步 DSH 对照检查
+### DSH 对照检查记录
 
-- 工具失败与取消恢复：DSH 的 `TOOL_NOT_STARTED`、`TOOL_OUTCOME_UNKNOWN` 与 RikkaHub 的 `withoutUnresumableToolCalls`、`cancelInterruptedTools` 对照，重点看有副作用的工具会不会被盲目重试。
-- 流空闲与超时：DSH 有 `streamIdleTimeoutMs`，默认 5 分钟，超时归类为 `TIMEOUT`；RikkaHub 只有 OkHttp 的 10 分钟 readTimeout，没有 idle watchdog，检查长时间无 chunk 的卡死和重试时机。
-- 进程死亡与后台恢复：DSH 用事件日志保存 attempt 和 retry；RikkaHub 有 C50 定期保存，检查生成或退避中被杀后会不会留下无标记半截、错误状态丢失。
-- 审批、队列与 turn 边界：DSH 用 step、turn 和 `agent/request-error`；RikkaHub 用 messageQueue、pending tool 和审批状态，检查审批中切换模型、停止、删除会话的行为。
-- 上下文溢出：DSH 由 compaction 监听 `agent/request-error` 恢复；RikkaHub 是主动压缩和截断，检查 provider 仍返回 context overflow 时有没有兜底。
-- 工具并发与屏障：DSH 分 exclusive 与 parallel-safe；RikkaHub 目前按顺序执行，检查是否有可并行工具、副作用顺序和取消时已经开始执行的工具。
+检查基线 `dsh-v0.2.1-rc.5`（`b830ec950f`）。以下是本轮只读审计确认的问题，按修复优先级排列；路径都是 RikkaHub 侧位置。
+
+| 优先级 | 领域 | 现状与风险 | 建议 |
+| --- | --- | --- | --- |
+| P1 | 截断的 SSE 被当成正常完成 | Claude 的 `onClosed` 无条件补 `Finish`，没有 `message_stop` 的半截流会被提交为完整回复，不走重试；`onFailure` 中 `t == null` 且 body 为空时 `close(null)` 也会静默成功。OpenAI/Google 的 `onClosed` 同样无条件调用 `decoder.finish()`，终止标记未逐行核对。`ClaudeProvider.kt:394-417`、`ClaudeStreamDecoder.kt:153-163`、`ChatCompletionsStreamDecoder.kt:86-92`、`GoogleStreamDecoder.kt:57-63`。 | decoder 记录是否见过终止事件；`onClosed` 未见时抛 `IOException`，复用现有重试。 |
+| P1 | 停止的 pending 结算不保证执行 | `stopGeneration` 先 pause/cancelJobs，再 join，join 后才 `finishInterruptedPendingTools`，不在 `NonCancellable`。页面退出导致 join 取消时，pending 工具不结算，`isAwaitingToolApproval` 可能挡住发送、编辑和删除。`ChatService.kt:1472-1481`、`ChatVM.kt:386-390`。 | 结算放进 `withContext(NonCancellable)` 的 `settleTurn()`，紧跟 cancelJobs；发送前那次保留为崩溃补偿。 |
+| P1 | 分支切换绕过审批门禁 | `selectMessageNode` 只挡压缩，不挡审批；切走分支后 `isAwaitingToolApproval` 变 false，队列可派发，pending 调用留在未选中分支，下一次 `withoutUnresumableToolCalls` 会整条删除该 assistant 消息。`ChatService.kt:1420-1444`、`Conversation.kt:252-253,263-273`。 | 审批期间禁止切分支，或把待审批状态提升为 session 级 turn 状态。 |
+| P1 | 审批恢复重新解析配置 | 审批期间 `setChatModel` 没有门禁；`handleToolApproval` 恢复时重新 `runTurn`/`createContext`，工具结果和工具 schema 会落到新模型/provider，不是产生 pending call 的那份配置。`ChatService.kt:559,587,630,1064-1081`、`ChatVM.kt:266-270`。 | 把本轮 `ChatTurnContext` 冻结进 session 供审批恢复复用；或审批期间拒绝改配置并提示下一轮生效。 |
+| P1 | 没有流内 idle watchdog | 只有 OkHttp/Ktor 的 10 分钟 per-read timeout；无 chunk 无心跳会卡 10 分钟，有 SSE 心跳时 read timeout 被不断重置，可能永久停在生成中。`DataSourceModule.kt:186-191,274-283`、`AgentLoop.kt:110-129`。 | 在 chunk 收集层加相邻 chunk 间隔超时，90 到 120 秒，抛专用异常；readTimeout 保留作外层兜底。 |
+| P1 | 没有 error-driven overflow 恢复 | 请求装配只有 `limitContext` 的条数截断，没有 token 水位和 context overflow 错误分类；provider 返回 overflow 直接进错误卡片，压缩只能手动触发。`ChatRequestFactory.kt:247,319-320`、`ChatService.kt:816-843`。 | provider 层归一化 `CONTEXT_WINDOW_EXCEEDED`；agent 循环自动压缩或截断一次再重试，仍失败才出卡片。 |
+| P2 | 工具恢复语义失真 | `cancelInterruptedTools` 把未开始、执行中、失败、进程死亡都写成 `cancelled by user`，也包括 `Pending`；`isExecuted` 只看 output，执行到一半会被写成已完成。`runTool` 没有超时，错误结果把堆栈交给模型。`ConversationMessages.kt:149-164`、`UIMessagePart.kt:196-202`、`AgentLoop.kt:159-170,195-205`。 | 按 `startedAt` 区分 `TOOL_NOT_STARTED` 与 `TOOL_OUTCOME_UNKNOWN`；Pending 跳过；用 `NonCancellable` 写 output；加可配置工具超时；堆栈只进日志。 |
+| P2 | `withoutUnresumableToolCalls` 删除整条消息 | 命中时删除当前 assistant 消息，文本、推理、已执行工具一起丢；Pending 的未答复调用又会被整条保留在请求里。触发面窄（常规发送先被 `finishInterruptedPendingTools` 掩盖，regenerate 不调用），但命中即持久化内容丢失。`Conversation.kt:263-271`、`ChatService.kt:591-603`。 | 按 part 处理，保留文本，把不可恢复的 Tool part 换成固定恢复结果；条件逐 part 判断。 |
+| P2 | 进程死亡丢失重试与收尾状态 | 只周期保存回复节点，5/15/30 秒分档，小节点最迟 60 秒；重试状态、错误卡片、tool 收尾都不落库，重启后半截没有失败标记。C50 在节点漂移或含 base64 图片时静默跳过。`MessageSaveLoop.kt`、`ConversationSession.kt:276-305`、`ChatService.kt:636-650`。 | 持久化 turn/generating/retrying 状态或时间戳心跳；加载时补 abandoned/interrupted 与未执行工具结果；保存失败要上报。 |
+| P2 | 消息队列暂停后静默滞留 | 队列 paused 且非空时，新消息只 enqueue，`takeNext` 因 paused 返回 null，消息不发也不进正文；队列不持久化；先 `takeNext` 出队再写历史，中间失败会丢消息。`ChatService.kt:402-419,431-449`、`MessageQueue.kt:37-43`。 | 显式发送时总是 resume；先写历史再出队，失败回插队首；至少把队列持久化。 |
+| P2 | 上下文压力只按条数，压缩能力有限 | 发送前没有 token 估算或 usage 水位；摘要请求 `maxTokens = null`，截断即整次压缩失败；没有 tool result 裁剪和图片 offload；截断 keep=1 且末条是 assistant 时会丢掉产生它的 user。`ChatRequestFactory.kt:198,247`、`CompressionPlan.kt:31-36`、`Conversation.kt:217-228`。 | 用最近 usage 或本地估算按 contextWindow 做压力检查；摘要设显式 maxTokens，截断时用部分摘要；先 prune tool result；图片占位；keep 按 user 轮次对齐。 |
+| P2 | scratch 生命周期只靠调用点清理 | 压缩失败或取消留下的 prompt 与半截回复只在发送、截断、再次压缩前清理；崩溃会留孤儿对，Web/SSE、浮动窗口和导出按普通消息处理。`ChatService.kt:859-861,977-980`、`docs/custom/checklist.md:383`。 | 消息模型层给 scratch 打不可发送标记，请求派生时强制过滤；导出过滤或折叠；载入会话时清理孤儿对。 |
+
+修复顺序：
+
+1. 先做 P0 失败 attempt 隔离，见上一节。
+2. 再做 P1 里最独立的三个：截断 SSE、停止结算、审批分支与配置快照。
+3. 然后做 P1 的 idle watchdog、稳定错误码重试、overflow 兜底。
+4. P2 按工具恢复、进程死亡与 C50、队列、上下文压缩、scratch 分批处理。
+
+范围说明：Claude 的 SSE 实现已逐行核对；OpenAI/Google 只核到 `onClosed` 无条件 `finish()`，终止标记未逐行核对。工具并发没有展开，当前 RikkaHub 按顺序执行，未发现正确性问题，只是并发效率较低。
