@@ -31,6 +31,7 @@ import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.unit.dp
 import me.rerere.ui.toast.ToastType
+import me.rerere.ai.provider.ClaudePromptCacheStrategy
 import me.rerere.ai.provider.ClaudePromptCacheTtl
 import me.rerere.ai.provider.ProviderSetting
 import me.rerere.ai.provider.ProviderQuota
@@ -531,6 +532,23 @@ private fun ProviderConfigureClaude(
             headlineContent = { Text(stringResource(R.string.setting_provider_page_claude_prompt_caching)) },
         )
         if (provider.promptCaching) {
+            formItem(
+                headlineContent = { Text(stringResource(R.string.setting_provider_page_claude_prompt_cache_strategy)) },
+            ) {
+                ConnectedChoiceButtons(
+                    options = ClaudePromptCacheStrategy.entries,
+                    selected = provider.promptCacheStrategy,
+                    onSelect = { onEdit(provider.copy(promptCacheStrategy = it)) },
+                ) { strategy, selected ->
+                    ConnectedChoiceLabel(
+                        text = when (strategy) {
+                            ClaudePromptCacheStrategy.STANDARD -> stringResource(R.string.setting_provider_page_claude_prompt_cache_strategy_standard)
+                            ClaudePromptCacheStrategy.AGGRESSIVE -> stringResource(R.string.setting_provider_page_claude_prompt_cache_strategy_aggressive)
+                        },
+                        selected = selected,
+                    )
+                }
+            }
             formItem(
                 headlineContent = { Text(stringResource(R.string.setting_provider_page_claude_prompt_cache_ttl)) },
             ) {

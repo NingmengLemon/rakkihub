@@ -36,6 +36,19 @@ enum class ClaudePromptCacheTtl(val apiValue: String?) {
 }
 
 /**
+ * Claude 提示词缓存的断点策略。默认保留 rikkahub 原来的 4 个断点，缓存命中更多；
+ * 中转额外补断点导致 Found 5 时，切到标准（官方推荐的 2 个断点）。
+ */
+@Serializable
+enum class ClaudePromptCacheStrategy {
+    @SerialName("standard")
+    STANDARD,
+
+    @SerialName("aggressive")
+    AGGRESSIVE,
+}
+
+/**
  * 是否支持模型内置联网搜索（[BuiltInTools.Search]）。
  *
  * OpenAI 兼容提供商只有 Responses API 有 `web_search` 工具，Chat Completions 没有。
@@ -193,6 +206,7 @@ sealed class ProviderSetting {
         override var baseUrl: String = "https://api.anthropic.com/v1",
         var promptCaching: Boolean = false,
         var promptCacheTtl: ClaudePromptCacheTtl = ClaudePromptCacheTtl.FIVE_MINUTES,
+        var promptCacheStrategy: ClaudePromptCacheStrategy = ClaudePromptCacheStrategy.AGGRESSIVE,
     ) : ApiKey() {
         override fun withQuotaQuery(query: QuotaQuery): ApiKey = copy(quotaQuery = query)
 

@@ -60,6 +60,7 @@
 | C50 | 生成中定期保存回复节点 | 改造 |
 | C51 | 压缩走可见生成轮次 | 改造 |
 | C52 | Claude 缓存断点按官方标准收敛 | 改造 |
+| C53 | Claude 缓存断点按提供商切换 | 改造 |
 
 ## 明细
 
@@ -381,7 +382,14 @@
 ### C52 Claude 缓存断点按官方标准收敛
 
 - 上游引入：`6098e1d3`（2026-02-24）先在请求顶层加 `cache_control`；`aede7f45`（2026-02-26，#877/#880）改成 system、最后一个 tool、倒数第二条真实 user 三处手动断点；`d2e52106`（2026-05-27）又在手动断点上加顶层自动缓存，一共 4 个，顶满 Anthropic 的上限，没有余量。长思考或中转再补一个就报 `A maximum of 4 blocks with cache_control may be provided. Found 5.`，这是断点顶满上限的来源。
-- 落点：`ClaudeProvider` 只保留顶层自动缓存和 system 最后一个文本块的断点；没有 system 时保留最后一个工具定义的断点；删掉 `insertMessagesCacheControl` 和倒数第二条 user 的断点；回放 server tool 的 raw call/result 时剥掉 `cache_control`；构造完请求统计断点，超过 4 去掉 messages 里的断点并记日志；更新 `ClaudePromptCacheRequestTest` 断言（正常 2 个断点），修 `ClaudeRequestMessageTest`/`ClaudeServerToolTest` 里 `buildMessages` 的反射签名。
-- 理由：官方 prompt caching 文档的 agent loop 推荐组合是「system 显式断点 + 顶层自动缓存」；工具在 system 之前渲染，system 断点已经覆盖 tools + system，工具断点是冗余的；倒数第二条 user 的断点也被顶层自动断点覆盖。线性对话的增量缓存仍然成立，缓存写入点从 4 个减到 2 个；分支/编辑历史时中段复用会略少，静态前缀不受影响。顶层自动缓存依赖平台支持，官方当前模型支持；代理或旧平台不支持时会直接报错，这是上游原来就有的前提。
-- 合并注意：这是 `ai` 模块的自定义行为改动，上游改 `ClaudeProvider` 时按这个标准合；provider 的单元测试要跑 `:ai:testDebugUnitTest`，app 的测试任务不会覆盖它们。自定义 body 如果自带 `cache_control`，护栏只保证 messages 里的断点被去掉，其它位置需要用户自己控制。设备上用长思考场景复现，400 消失；该次测试中转后台显示 cache_read=0，缓存命中是否稳定待观察。
-- 测试：`ClaudePromptCacheRequestTest` 7 条（自动 + system、无 system 时用 tools、无 system 且无 tools 时只有自动断点、只有一条 user 时没有 messages 断点、1h TTL 在两处、messages 永远没有断点、promptCaching=false 没有断点）；`ClaudeRequestMessageTest` 7 条、`ClaudeServerToolTest` 10 条全过；`ai` 模块的测试任务通过。
+- 落点：`ClaudeProvider` 只保留顶层自动缓存和 system 最后一个文本块的断点；没有 system 时保留最后一个工具定义的断点；删掉 `insertMessagesCacheControl` 和倒数第二条 user 的断点（这两条描述的是 STANDARD；C53 起默认 AGGRESSIVE，激进模式会恢复它们，见 C53）；回放 server tool 的 raw call/result 时剥掉 `cache_control`；构造完请求统计断点，超过 4 去掉 messages 里的断点并记日志；更新 `ClaudePromptCacheRequestTest` 断言（正常 2 个断点），修 `ClaudeRequestMessageTest`/`ClaudeServerToolTest` 里 `buildMessages` 的反射签名。
+- 理由：官方 prompt caching 文档的 agent loop 推荐组合是「system 显式断点 + 顶层自动缓存」；工具在 system 之前渲染，system 断点已经覆盖 tools + system，工具断点是冗余的；倒数第二条 user 的断点也被顶层自动断点覆盖。线性对话的增量缓存仍然成立，STANDARD 下缓存写入点从 4 个减到 2 个；分支/编辑历史时中段复用会略少，静态前缀不受影响。顶层自动缓存依赖平台支持，官方当前模型支持；代理或旧平台不支持时会直接报错，这是上游原来就有的前提。
+- 合并注意：这是 `ai` 模块的自定义行为改动，上游改 `ClaudeProvider` 时按这个标准合；provider 的单元测试要跑 `:ai:testDebugUnitTest`，app 的测试任务不会覆盖它们。自定义 body 如果自带 `cache_control`，护栏只保证 messages 里的断点被去掉，其它位置需要用户自己控制。设备上用长思考场景复现，400 消失；该次测试中转后台显示 cache_read=0，缓存命中是否稳定待观察。C53 把请求构造改成按 provider 切换，默认 AGGRESSIVE；C52 的两断点是 STANDARD 选项。
+- 测试：`ClaudePromptCacheRequestTest` 的标准策略 7 条（自动 + system、无 system 时用 tools、无 system 且无 tools 时只有自动断点、只有一条 user 时没有 messages 断点、1h TTL 在两处、messages 永远没有断点、promptCaching=false 没有断点；C53 补激进策略 6 条后共 13 条）；`ClaudeRequestMessageTest` 7 条、`ClaudeServerToolTest` 10 条全过；`ai` 模块的测试任务通过。
+
+### C53 Claude 缓存断点按提供商切换
+
+- 落点：`ProviderSetting.Claude.promptCacheStrategy`（`ClaudePromptCacheStrategy.STANDARD`/`AGGRESSIVE`，默认 `AGGRESSIVE`）；`ClaudeProvider.buildMessageRequest` 在 STANDARD 下是顶层自动缓存加 system（无 system 时 tools），在 AGGRESSIVE 下是顶层加 system 加 tools 加倒数第二条真实 user，回到上游 `d2e52106` 的 4 个断点；`ProviderConfigure` 在提示词缓存开关下加策略选择；四份 locale 加标题和两个选项；C52 的 `limitCacheControl` 与 server tool raw 剥离继续生效。
+- 理由：上游原来的激进策略用了很久，只在个别中转补断点时遇到一次 Found 5；默认保留激进能继续拿到更多缓存断点，遇到 400 的 provider 手动切标准即可。标准是官方推荐的两断点组合，给中转补断点留余量。策略是 provider 级，不是助手级，切换后同一 provider 的所有 Claude 请求生效。
+- 合并注意：新字段带默认值，旧设置反序列化为 AGGRESSIVE，升级后与 C52 之前的行为一致；STANDARD 是 C52 的结果，AGGRESSIVE 是上游 `d2e52106` 的原始组合；两个模式都保留顶层自动缓存，STANDARD 只有在没有 system 时才给 tools 断点；改上游 ClaudeProvider 时按这个分叉合。
+- 测试：`ClaudePromptCacheRequestTest` 标准策略 7 条加激进策略 6 条（默认激进 4 断点、三条 user 时只标中间一条、无 system 时 3 断点、无 system 且无 tools 时 2 断点、只有一条 user 时 3 断点、1h TTL 在四个断点），共 13 条；`ClaudeRequestMessageTest` 7 条、`ClaudeServerToolTest` 10 条仍过。

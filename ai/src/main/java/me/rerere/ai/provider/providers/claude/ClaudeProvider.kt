@@ -35,6 +35,7 @@ import me.rerere.ai.core.TokenUsage
 import me.rerere.ai.core.merge
 import me.rerere.ai.core.sum
 import me.rerere.ai.provider.BuiltInTools
+import me.rerere.ai.provider.ClaudePromptCacheStrategy
 import me.rerere.ai.provider.ClaudePromptCacheTtl
 import me.rerere.ai.provider.ImageGenerationParams
 import me.rerere.ai.provider.Model
@@ -432,15 +433,23 @@ class ClaudeProvider(private val client: OkHttpClient, context: Context? = null)
         params: TextGenerationParams,
         stream: Boolean = false
     ): JsonObject {
+        val aggressiveCacheBreakpoints = providerSetting.promptCaching &&
+            providerSetting.promptCacheStrategy == ClaudePromptCacheStrategy.AGGRESSIVE
         return buildJsonObject {
             put("model", params.model.modelId)
             put(
                 "messages",
-                buildMessages(messages)
+                buildMessages(messages).let { built ->
+                    if (aggressiveCacheBreakpoints) {
+                        insertMessagesCacheControl(built, providerSetting.promptCacheTtl)
+                    } else {
+                        built
+                    }
+                }
             )
             put("max_tokens", params.maxTokens ?: 64_000)
 
-            // 顶层 cache_control: 让 Anthropic 自动管理缓存断点
+            // 两种策略都发顶层自动缓存；激进策略再叠加 system/tools/倒数第二条真实 user，回到上游原来的 4 个断点
             if (providerSetting.promptCaching) {
                 put("cache_control", cacheControlEphemeral(providerSetting.promptCacheTtl))
             }
@@ -530,8 +539,10 @@ class ClaudeProvider(private val client: OkHttpClient, context: Context? = null)
             if (toolDefinitions.isNotEmpty()) {
                 putJsonArray("tools") {
                     toolDefinitions.forEachIndexed { index, definition ->
-                        if (providerSetting.promptCaching && !systemHasCacheControl &&
-                            index == toolDefinitions.lastIndex) {
+                        if (providerSetting.promptCaching &&
+                            (aggressiveCacheBreakpoints || !systemHasCacheControl) &&
+                            index == toolDefinitions.lastIndex
+                        ) {
                             add(JsonObject(
                                 definition + mapOf(
                                     "cache_control" to cacheControlEphemeral(providerSetting.promptCacheTtl)
@@ -593,6 +604,53 @@ class ClaudeProvider(private val client: OkHttpClient, context: Context? = null)
                     addUserMessage(message)
                 }
             }
+    }
+
+    /**
+     * 在倒数第二条非 tool_result 的 user message 的最后一个 content block 上插入 cache_control。
+     * 只在 AGGRESSIVE 策略下用：保留上游原来的会话前缀断点。
+     */
+    private fun insertMessagesCacheControl(
+        messages: JsonArray,
+        promptCacheTtl: ClaudePromptCacheTtl
+    ): JsonArray {
+        val realUserIndices = messages.mapIndexedNotNull { index, msg ->
+            val obj = msg.jsonObject
+            if (obj["role"]?.jsonPrimitive?.contentOrNull == "user") {
+                val content = obj["content"]?.jsonArray
+                val isToolResult = content?.any {
+                    it.jsonObject["type"]?.jsonPrimitive?.contentOrNull == "tool_result"
+                } == true
+                if (!isToolResult) index else null
+            } else {
+                null
+            }
+        }
+
+        val targetIndex = if (realUserIndices.size >= 2) {
+            realUserIndices[realUserIndices.size - 2]
+        } else {
+            return messages
+        }
+
+        return JsonArray(messages.mapIndexed { index, msg ->
+            if (index == targetIndex) {
+                val obj = msg.jsonObject
+                val content = obj["content"]?.jsonArray ?: return@mapIndexed msg
+                val newContent = JsonArray(content.mapIndexed { contentIndex, block ->
+                    if (contentIndex == content.lastIndex) {
+                        JsonObject(
+                            block.jsonObject + mapOf("cache_control" to cacheControlEphemeral(promptCacheTtl))
+                        )
+                    } else {
+                        block
+                    }
+                })
+                JsonObject(obj + mapOf("content" to newContent))
+            } else {
+                msg
+            }
+        })
     }
 
     private fun JsonArrayBuilder.addAssistantMessage(message: UIMessage) {

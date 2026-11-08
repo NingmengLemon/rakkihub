@@ -8,6 +8,7 @@ import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
 import me.rerere.ai.core.InputSchema
 import me.rerere.ai.core.Tool
+import me.rerere.ai.provider.ClaudePromptCacheStrategy
 import me.rerere.ai.provider.ClaudePromptCacheTtl
 import me.rerere.ai.provider.Model
 import me.rerere.ai.provider.ModelAbility
@@ -72,9 +73,20 @@ class ClaudePromptCacheRequestTest {
         }
     }
 
+    private fun JsonObject.realUserMessages(): List<JsonObject> =
+        this["messages"]!!.jsonArray.map { it.jsonObject }.filter { msg ->
+            msg["role"]?.jsonPrimitive?.content == "user" &&
+                msg["content"]?.jsonArray?.any {
+                    it.jsonObject["type"]?.jsonPrimitive?.content == "tool_result"
+                } != true
+        }
+
     @Test
     fun `promptCaching=false should not add cache_control anywhere`() {
-        val providerSetting = ProviderSetting.Claude(promptCaching = false)
+        val providerSetting = ProviderSetting.Claude(
+            promptCaching = false,
+            promptCacheStrategy = ClaudePromptCacheStrategy.STANDARD,
+        )
         val messages = listOf(
             UIMessage.system("system prompt"),
             UIMessage.user("hello")
@@ -94,8 +106,11 @@ class ClaudePromptCacheRequestTest {
     }
 
     @Test
-    fun `promptCaching=true uses the automatic and system breakpoints only`() {
-        val providerSetting = ProviderSetting.Claude(promptCaching = true)
+    fun `standard strategy uses the automatic and system breakpoints only`() {
+        val providerSetting = ProviderSetting.Claude(
+            promptCaching = true,
+            promptCacheStrategy = ClaudePromptCacheStrategy.STANDARD,
+        )
         val messages = listOf(
             UIMessage.system("system prompt"),
             UIMessage.user("hello")
@@ -118,8 +133,11 @@ class ClaudePromptCacheRequestTest {
     }
 
     @Test
-    fun `promptCaching=true without system uses the automatic and tool breakpoints`() {
-        val providerSetting = ProviderSetting.Claude(promptCaching = true)
+    fun `standard strategy without system uses the automatic and tool breakpoints`() {
+        val providerSetting = ProviderSetting.Claude(
+            promptCaching = true,
+            promptCacheStrategy = ClaudePromptCacheStrategy.STANDARD,
+        )
         val messages = listOf(UIMessage.user("hello"))
         val params = TextGenerationParams(
             model = Model(modelId = "claude-test", abilities = listOf(ModelAbility.TOOL)),
@@ -138,8 +156,11 @@ class ClaudePromptCacheRequestTest {
     }
 
     @Test
-    fun `promptCaching=true with no system and no tools has one automatic breakpoint`() {
-        val providerSetting = ProviderSetting.Claude(promptCaching = true)
+    fun `standard strategy with no system and no tools has one automatic breakpoint`() {
+        val providerSetting = ProviderSetting.Claude(
+            promptCaching = true,
+            promptCacheStrategy = ClaudePromptCacheStrategy.STANDARD,
+        )
         val messages = listOf(UIMessage.user("hello"))
         val params = TextGenerationParams(
             model = Model(modelId = "claude-test", abilities = emptyList()),
@@ -156,10 +177,11 @@ class ClaudePromptCacheRequestTest {
     }
 
     @Test
-    fun `one hour ttl is on the automatic and system breakpoints`() {
+    fun `standard one hour ttl is on the automatic and system breakpoints`() {
         val providerSetting = ProviderSetting.Claude(
             promptCaching = true,
-            promptCacheTtl = ClaudePromptCacheTtl.ONE_HOUR
+            promptCacheStrategy = ClaudePromptCacheStrategy.STANDARD,
+            promptCacheTtl = ClaudePromptCacheTtl.ONE_HOUR,
         )
         val messages = listOf(
             UIMessage.system("system prompt"),
@@ -185,8 +207,11 @@ class ClaudePromptCacheRequestTest {
     }
 
     @Test
-    fun `messages never get cache_control`() {
-        val providerSetting = ProviderSetting.Claude(promptCaching = true)
+    fun `standard strategy never adds message breakpoints`() {
+        val providerSetting = ProviderSetting.Claude(
+            promptCaching = true,
+            promptCacheStrategy = ClaudePromptCacheStrategy.STANDARD,
+        )
         val messages = listOf(
             UIMessage.system("system prompt"),
             UIMessage.user("first question"),
@@ -207,8 +232,11 @@ class ClaudePromptCacheRequestTest {
     }
 
     @Test
-    fun `promptCaching=true with only one user message has no message breakpoint`() {
-        val providerSetting = ProviderSetting.Claude(promptCaching = true)
+    fun `standard strategy with only one user message has no message breakpoint`() {
+        val providerSetting = ProviderSetting.Claude(
+            promptCaching = true,
+            promptCacheStrategy = ClaudePromptCacheStrategy.STANDARD,
+        )
         val messages = listOf(
             UIMessage.system("system prompt"),
             UIMessage.user("only question")
@@ -222,5 +250,162 @@ class ClaudePromptCacheRequestTest {
 
         assertEquals(2, countCacheControl(request))
         assertNoMessageCacheControl(request)
+    }
+
+    @Test
+    fun `aggressive is the default and keeps the original four breakpoints`() {
+        val providerSetting = ProviderSetting.Claude(promptCaching = true)
+        val messages = listOf(
+            UIMessage.system("system prompt"),
+            UIMessage.user("first question"),
+            UIMessage.assistant("first answer"),
+            UIMessage.user("second question")
+        )
+        val params = TextGenerationParams(
+            model = Model(modelId = "claude-test", abilities = listOf(ModelAbility.TOOL)),
+            tools = listOf(dummyTool())
+        )
+
+        val request = buildRequest(providerSetting, messages, params)
+
+        // 顶层 + system + tool + 第二条 user = 上游原来的 4 个断点
+        assertEquals(4, countCacheControl(request))
+        assertNotNull(request["cache_control"])
+        assertNotNull(request["system"]!!.jsonArray.last().jsonObject["cache_control"])
+        assertNotNull(request["tools"]!!.jsonArray.last().jsonObject["cache_control"])
+        val realUsers = request.realUserMessages()
+        assertEquals(2, realUsers.size)
+        assertNotNull(realUsers.first()["content"]!!.jsonArray.last().jsonObject["cache_control"])
+        assertNull(realUsers.last()["content"]!!.jsonArray.last().jsonObject["cache_control"])
+    }
+
+    @Test
+    fun `aggressive without system uses the automatic, tool and message breakpoints`() {
+        val providerSetting = ProviderSetting.Claude(promptCaching = true)
+        val messages = listOf(
+            UIMessage.user("first question"),
+            UIMessage.assistant("first answer"),
+            UIMessage.user("second question"),
+        )
+        val params = TextGenerationParams(
+            model = Model(modelId = "claude-test", abilities = listOf(ModelAbility.TOOL)),
+            tools = listOf(dummyTool())
+        )
+
+        val request = buildRequest(providerSetting, messages, params)
+
+        assertEquals(3, countCacheControl(request))
+        assertNotNull(request["cache_control"])
+        assertNull(request["system"])
+        assertNotNull(request["tools"]!!.jsonArray.last().jsonObject["cache_control"])
+        val realUsers = request.realUserMessages()
+        assertNotNull(realUsers.first()["content"]!!.jsonArray.last().jsonObject["cache_control"])
+        assertNull(realUsers.last()["content"]!!.jsonArray.last().jsonObject["cache_control"])
+    }
+
+    @Test
+    fun `aggressive with one user message has no message breakpoint`() {
+        val providerSetting = ProviderSetting.Claude(promptCaching = true)
+        val messages = listOf(
+            UIMessage.system("system prompt"),
+            UIMessage.user("only question"),
+        )
+        val params = TextGenerationParams(
+            model = Model(modelId = "claude-test", abilities = listOf(ModelAbility.TOOL)),
+            tools = listOf(dummyTool())
+        )
+
+        val request = buildRequest(providerSetting, messages, params)
+
+        assertEquals(3, countCacheControl(request))
+        assertNotNull(request["cache_control"])
+        assertNotNull(request["system"]!!.jsonArray.last().jsonObject["cache_control"])
+        assertNotNull(request["tools"]!!.jsonArray.last().jsonObject["cache_control"])
+        assertNoMessageCacheControl(request)
+    }
+
+    @Test
+    fun `aggressive one hour ttl is on all four breakpoints`() {
+        val providerSetting = ProviderSetting.Claude(
+            promptCaching = true,
+            promptCacheTtl = ClaudePromptCacheTtl.ONE_HOUR,
+        )
+        val messages = listOf(
+            UIMessage.system("system prompt"),
+            UIMessage.user("first question"),
+            UIMessage.assistant("first answer"),
+            UIMessage.user("second question"),
+        )
+        val params = TextGenerationParams(
+            model = Model(modelId = "claude-test", abilities = listOf(ModelAbility.TOOL)),
+            tools = listOf(dummyTool())
+        )
+
+        val request = buildRequest(providerSetting, messages, params)
+
+        assertEquals(4, countCacheControl(request))
+        assertEquals("1h", request["cache_control"]!!.jsonObject["ttl"]!!.jsonPrimitive.content)
+        assertEquals(
+            "1h",
+            request["system"]!!.jsonArray.last().jsonObject["cache_control"]!!.jsonObject["ttl"]!!
+                .jsonPrimitive.content,
+        )
+        assertEquals(
+            "1h",
+            request["tools"]!!.jsonArray.last().jsonObject["cache_control"]!!.jsonObject["ttl"]!!
+                .jsonPrimitive.content,
+        )
+        val target = request.realUserMessages().first()["content"]!!.jsonArray.last().jsonObject
+        assertEquals("1h", target["cache_control"]!!.jsonObject["ttl"]!!.jsonPrimitive.content)
+    }
+
+    @Test
+    fun `aggressive marks only the second-to-last of three real users`() {
+        val providerSetting = ProviderSetting.Claude(promptCaching = true)
+        val messages = listOf(
+            UIMessage.system("system prompt"),
+            UIMessage.user("first question"),
+            UIMessage.assistant("first answer"),
+            UIMessage.user("second question"),
+            UIMessage.assistant("second answer"),
+            UIMessage.user("third question"),
+        )
+        val params = TextGenerationParams(
+            model = Model(modelId = "claude-test", abilities = listOf(ModelAbility.TOOL)),
+            tools = listOf(dummyTool())
+        )
+
+        val request = buildRequest(providerSetting, messages, params)
+
+        assertEquals(4, countCacheControl(request))
+        val realUsers = request.realUserMessages()
+        assertEquals(3, realUsers.size)
+        assertNull(realUsers[0]["content"]!!.jsonArray.last().jsonObject["cache_control"])
+        assertNotNull(realUsers[1]["content"]!!.jsonArray.last().jsonObject["cache_control"])
+        assertNull(realUsers[2]["content"]!!.jsonArray.last().jsonObject["cache_control"])
+    }
+
+    @Test
+    fun `aggressive with no system and no tools has automatic and message breakpoints`() {
+        val providerSetting = ProviderSetting.Claude(promptCaching = true)
+        val messages = listOf(
+            UIMessage.user("first question"),
+            UIMessage.assistant("first answer"),
+            UIMessage.user("second question"),
+        )
+        val params = TextGenerationParams(
+            model = Model(modelId = "claude-test", abilities = emptyList()),
+            tools = emptyList()
+        )
+
+        val request = buildRequest(providerSetting, messages, params)
+
+        assertEquals(2, countCacheControl(request))
+        assertNotNull(request["cache_control"])
+        assertNull(request["system"])
+        assertNull(request["tools"])
+        val realUsers = request.realUserMessages()
+        assertNotNull(realUsers.first()["content"]!!.jsonArray.last().jsonObject["cache_control"])
+        assertNull(realUsers.last()["content"]!!.jsonArray.last().jsonObject["cache_control"])
     }
 }

@@ -840,6 +840,9 @@ mDNS 地址：使用 .local 主机名，同一网络中的其他设备可通过�
   <string name="setting_provider_page_balance_json_key">结果 JSON 键</string>
   <string name="setting_provider_page_basic_settings">基本设置</string>
   <string name="setting_provider_page_chat_model">聊天</string>
+  <string name="setting_provider_page_claude_prompt_cache_strategy">提示缓存策略</string>
+  <string name="setting_provider_page_claude_prompt_cache_strategy_standard">标准（官方）</string>
+  <string name="setting_provider_page_claude_prompt_cache_strategy_aggressive">激进（原策略）</string>
   <string name="setting_provider_page_claude_prompt_cache_ttl">提示缓存时长</string>
   <string name="setting_provider_page_claude_prompt_cache_ttl_1h">1 小时</string>
   <string name="setting_provider_page_claude_prompt_cache_ttl_5m">5 分钟</string>

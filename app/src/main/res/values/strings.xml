@@ -870,6 +870,9 @@
   <string name="setting_provider_page_balance_json_key">Result Json Key</string>
   <string name="setting_provider_page_basic_settings">Basic Settings</string>
   <string name="setting_provider_page_chat_model">Chat</string>
+  <string name="setting_provider_page_claude_prompt_cache_strategy">Prompt cache strategy</string>
+  <string name="setting_provider_page_claude_prompt_cache_strategy_standard">Standard (official)</string>
+  <string name="setting_provider_page_claude_prompt_cache_strategy_aggressive">Aggressive (original)</string>
   <string name="setting_provider_page_claude_prompt_cache_ttl">Prompt cache TTL</string>
   <string name="setting_provider_page_claude_prompt_cache_ttl_1h">1 hour</string>
   <string name="setting_provider_page_claude_prompt_cache_ttl_5m">5 minutes</string>

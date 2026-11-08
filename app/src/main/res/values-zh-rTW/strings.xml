@@ -818,6 +818,9 @@
   <string name="setting_provider_page_balance_json_key">結果 JSON 鍵值</string>
   <string name="setting_provider_page_basic_settings">基本設定</string>
   <string name="setting_provider_page_chat_model">聊天</string>
+  <string name="setting_provider_page_claude_prompt_cache_strategy">提示快取策略</string>
+  <string name="setting_provider_page_claude_prompt_cache_strategy_standard">標準（官方）</string>
+  <string name="setting_provider_page_claude_prompt_cache_strategy_aggressive">激進（原策略）</string>
   <string name="setting_provider_page_claude_prompt_cache_ttl">提示快取時長</string>
   <string name="setting_provider_page_claude_prompt_cache_ttl_1h">1 小時</string>
   <string name="setting_provider_page_claude_prompt_cache_ttl_5m">5 分鐘</string>
