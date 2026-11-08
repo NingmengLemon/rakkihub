@@ -116,9 +116,10 @@ This repository carries personal customizations on top of upstream `rikkahub/rik
 - Work on `main`. `ref` only follows upstream and must stay fast-forwardable; never commit to it.
 - Read `docs/custom/README.md` before adding or removing a feature. It holds the branch model, the upstream sync
   procedure, and the customization principles. `docs/custom/checklist.md` is the per-customization register,
-  `docs/custom/roadmap.md` the long-term plan (stage split, easy-migration target, independent-update direction,
-  distribution/compliance), `docs/custom/backup/` the backup import/export chain with its acceptance procedure, and
-  `docs/custom/build.md` / `docs/custom/locale.md` the build and string-resource operations.
+  `docs/custom/roadmap.md` the long-term plan (stage split, easy-migration target, dependency index of the
+  customizations, independent-update direction, distribution/compliance), `docs/custom/backup/` the backup
+  import/export chain with its acceptance procedure, and `docs/custom/build.md` / `docs/custom/locale.md` the build
+  and string-resource operations.
 - Tag customization commits with the `custom` scope, e.g. `feat(custom): ...`, and add the item to
   `docs/custom/checklist.md` (an index row plus a detail section) so a later upstream port can be checked against it.
 - The persisted-data freeze is lifted: the official-backup importer exists, and the criteria verified on the real samples

@@ -176,6 +176,8 @@ class ConversationSession(
      * 节点行可能比内存旧（生成中的新分支还没落库），这时只写列会让库里的下标超出消息数量、
      * 下次加载直接失败；这种情况留给下一次全量 [flush] 把消息和下标一起写。
      *
+     * 在受支持的写入路径下 `lastWritten` 与库里的状态一致；外部直接改库或运行中的导入不在保证范围内。
+     *
      * @param expectedIncarnation 调用方进入时记录的 [incarnation]；会话被替换或删除后不写
      * @return 是否改了内存
      */

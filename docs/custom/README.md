@@ -12,7 +12,7 @@
 | [`locale.md`](locale.md) | 四份 locale 的增删文案与品牌改写 |
 | [`prompts.md`](prompts.md) | 各功能默认提示词的现状、重写计划与压缩提示词草稿 |
 | [`backup/`](backup/README.md) | 官方备份的导入与导出：恢复链路、导入器、验收 |
-| [`roadmap.md`](roadmap.md) | 定位、阶段划分、独立更新、分发与合规 |
+| [`roadmap.md`](roadmap.md) | 定位、阶段划分、条目索引与依赖、独立更新、分发与合规 |
 
 大的上游同步可以另建一份作业单放在 `upstream/`，合并落地后删除；当前没有作业单，所以那个目录不存在。
 
