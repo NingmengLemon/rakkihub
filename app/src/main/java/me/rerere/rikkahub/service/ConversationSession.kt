@@ -81,7 +81,6 @@ class ConversationSession(
 
     // 压缩轮次进行中：区别于普通生成，普通生成允许切分支，压缩期间不允许
     private val _compressionActive = MutableStateFlow(false)
-    val compressionActive: StateFlow<Boolean> = _compressionActive.asStateFlow()
 
     internal val isCompressing: Boolean get() = _compressionActive.value
 

@@ -10,7 +10,6 @@ import kotlin.uuid.Uuid
 internal data class CompressionPlan(
     val messagesToSend: List<UIMessage>,
     val anchorNodeId: Uuid,
-    val keepRecent: Int,
 )
 
 internal sealed interface CompressionPlanResult {
@@ -39,7 +38,6 @@ internal fun Conversation.planCompression(windowStart: Int, keepRecent: Int): Co
         CompressionPlan(
             messagesToSend = currentMessages.take(endIndex),
             anchorNodeId = messageNodes[endIndex - 1].id,
-            keepRecent = keepRecent.coerceAtLeast(0),
         )
     )
 }
