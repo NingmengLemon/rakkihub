@@ -82,6 +82,7 @@ import okhttp3.sse.EventSourceListener
 import kotlin.time.Clock
 
 private const val TAG = "ClaudeProvider"
+private const val MAX_CACHE_CONTROL_BREAKPOINTS = 4
 private const val ANTHROPIC_VERSION = "2023-06-01"
 private const val CLAUDE_PAUSE_TURN = "pause_turn"
 private const val MAX_PAUSE_TURN_CONTINUATIONS = 5
@@ -435,7 +436,7 @@ class ClaudeProvider(private val client: OkHttpClient, context: Context? = null)
             put("model", params.model.modelId)
             put(
                 "messages",
-                buildMessages(messages, providerSetting.promptCaching, providerSetting.promptCacheTtl)
+                buildMessages(messages)
             )
             put("max_tokens", params.maxTokens ?: 64_000)
 
@@ -457,6 +458,8 @@ class ClaudeProvider(private val client: OkHttpClient, context: Context? = null)
             // system prompt
             val systemMessage = messages.firstOrNull { it.role == MessageRole.SYSTEM }
             val systemTextParts = systemMessage?.parts?.filterIsInstance<UIMessagePart.Text>().orEmpty()
+            // 工具在 system 之前渲染，system 上的断点已经覆盖 tools + system，不再给最后一个 tool 重复加
+            val systemHasCacheControl = providerSetting.promptCaching && systemTextParts.isNotEmpty()
             if (systemTextParts.isNotEmpty()) {
                 put("system", buildJsonArray {
                     systemTextParts.forEachIndexed { index, part ->
@@ -527,7 +530,8 @@ class ClaudeProvider(private val client: OkHttpClient, context: Context? = null)
             if (toolDefinitions.isNotEmpty()) {
                 putJsonArray("tools") {
                     toolDefinitions.forEachIndexed { index, definition ->
-                        if (providerSetting.promptCaching && index == toolDefinitions.lastIndex) {
+                        if (providerSetting.promptCaching && !systemHasCacheControl &&
+                            index == toolDefinitions.lastIndex) {
                             add(JsonObject(
                                 definition + mapOf(
                                     "cache_control" to cacheControlEphemeral(providerSetting.promptCacheTtl)
@@ -539,7 +543,39 @@ class ClaudeProvider(private val client: OkHttpClient, context: Context? = null)
                     }
                 }
             }
-        }.mergeCustomBody(params.customBody)
+        }.mergeCustomBody(params.customBody).limitCacheControl()
+    }
+
+    /**
+     * Anthropic 的 cache_control 断点上限是 4。这里的请求已经有顶层自动缓存和 system（或 tools）
+     * 的静态断点；如果自定义 body、回放的 server tool 块或其它来源又带了断点，去掉 messages
+     * 里的断点，把总数尽量拉回上限内（只能覆盖 messages 里的位置）。
+     */
+    private fun JsonObject.limitCacheControl(): JsonObject {
+        val count = countCacheControl(this)
+        if (count <= MAX_CACHE_CONTROL_BREAKPOINTS) return this
+        Log.w(TAG, "Too many cache_control breakpoints ($count), dropping message-level ones")
+        val messages = this["messages"] as? JsonArray ?: return this
+        return JsonObject(this + ("messages" to JsonArray(messages.map(::stripCacheControl))))
+    }
+
+    private fun countCacheControl(element: JsonElement?): Int = when (element) {
+        null -> 0
+        is JsonObject -> element.entries.sumOf { (key, value) ->
+            (if (key == "cache_control") 1 else 0) + countCacheControl(value)
+        }
+        is JsonArray -> element.sumOf(::countCacheControl)
+        else -> 0
+    }
+
+    private fun stripCacheControl(element: JsonElement): JsonElement = when (element) {
+        is JsonObject -> JsonObject(
+            element.entries
+                .filter { it.key != "cache_control" }
+                .associate { it.key to stripCacheControl(it.value) }
+        )
+        is JsonArray -> JsonArray(element.map(::stripCacheControl))
+        else -> element
     }
 
     private fun cacheControlEphemeral(promptCacheTtl: ClaudePromptCacheTtl) = buildJsonObject {
@@ -547,11 +583,7 @@ class ClaudeProvider(private val client: OkHttpClient, context: Context? = null)
         promptCacheTtl.apiValue?.let { put("ttl", it) }
     }
 
-    private fun buildMessages(
-        messages: List<UIMessage>,
-        promptCaching: Boolean,
-        promptCacheTtl: ClaudePromptCacheTtl
-    ) = buildJsonArray {
+    private fun buildMessages(messages: List<UIMessage>) = buildJsonArray {
         messages
             .filter { it.isValidToUpload() && it.role != MessageRole.SYSTEM }
             .forEach { message ->
@@ -561,58 +593,6 @@ class ClaudeProvider(private val client: OkHttpClient, context: Context? = null)
                     addUserMessage(message)
                 }
             }
-    }.let { messagesArray ->
-        if (!promptCaching) return@let messagesArray
-        insertMessagesCacheControl(messagesArray, promptCacheTtl)
-    }
-
-    /**
-     * 在倒数第二条非 tool_result 的 user message 的最后一个 content block 上插入 cache_control
-     */
-    private fun insertMessagesCacheControl(
-        messages: JsonArray,
-        promptCacheTtl: ClaudePromptCacheTtl
-    ): JsonArray {
-        // 找出所有非 tool_result 的 user message 的索引
-        val realUserIndices = messages.mapIndexedNotNull { index, msg ->
-            val obj = msg.jsonObject
-            if (obj["role"]?.jsonPrimitive?.contentOrNull == "user") {
-                val content = obj["content"]?.jsonArray
-                val isToolResult = content?.any {
-                    it.jsonObject["type"]?.jsonPrimitive?.contentOrNull == "tool_result"
-                } == true
-                if (!isToolResult) index else null
-            } else {
-                null
-            }
-        }
-
-        // 取倒数第二条
-        val targetIndex = if (realUserIndices.size >= 2) {
-            realUserIndices[realUserIndices.size - 2]
-        } else {
-            return messages
-        }
-
-        // 在目标 message 的最后一个 content block 上添加 cache_control
-        return JsonArray(messages.mapIndexed { index, msg ->
-            if (index == targetIndex) {
-                val obj = msg.jsonObject
-                val content = obj["content"]?.jsonArray ?: return@mapIndexed msg
-                val newContent = JsonArray(content.mapIndexed { contentIndex, block ->
-                    if (contentIndex == content.lastIndex) {
-                        JsonObject(
-                            block.jsonObject + mapOf("cache_control" to cacheControlEphemeral(promptCacheTtl))
-                        )
-                    } else {
-                        block
-                    }
-                })
-                JsonObject(obj + mapOf("content" to newContent))
-            } else {
-                msg
-            }
-        })
     }
 
     private fun JsonArrayBuilder.addAssistantMessage(message: UIMessage) {
@@ -713,7 +693,9 @@ class ClaudeProvider(private val client: OkHttpClient, context: Context? = null)
         if (protocol != null && protocol != ServerToolProtocol.ANTHROPIC_MESSAGES) return emptyList()
 
         return buildList {
-            val rawCall = metadata?.call.takeIf { protocol == ServerToolProtocol.ANTHROPIC_MESSAGES }
+            val rawCall = metadata?.call
+                .takeIf { protocol == ServerToolProtocol.ANTHROPIC_MESSAGES }
+                ?.withoutTopLevelCacheControl()
             add(rawCall?.let {
                 if (input == null) it else JsonObject(it + mapOf("input" to input))
             } ?: buildJsonObject {
@@ -722,7 +704,9 @@ class ClaudeProvider(private val client: OkHttpClient, context: Context? = null)
                 put("name", toolName)
                 input?.let { put("input", it) }
             })
-            val rawResult = metadata?.result.takeIf { protocol == ServerToolProtocol.ANTHROPIC_MESSAGES }
+            val rawResult = metadata?.result
+                .takeIf { protocol == ServerToolProtocol.ANTHROPIC_MESSAGES }
+                ?.withoutTopLevelCacheControl()
             if (isFinished && (output != null || rawResult != null)) {
                 add(rawResult ?: buildJsonObject {
                     put("type", "${toolName}_tool_result")
@@ -732,6 +716,9 @@ class ClaudeProvider(private val client: OkHttpClient, context: Context? = null)
             }
         }
     }
+
+    private fun JsonObject.withoutTopLevelCacheControl(): JsonObject =
+        JsonObject(filterKeys { it != "cache_control" })
 
     private fun UIMessagePart.toContentBlock(): JsonObject? = when (this) {
         is UIMessagePart.Text -> buildJsonObject {

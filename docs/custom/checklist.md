@@ -59,6 +59,7 @@
 | C49 | 分支切换只写 select_index | 改造 |
 | C50 | 生成中定期保存回复节点 | 改造 |
 | C51 | 压缩走可见生成轮次 | 改造 |
+| C52 | Claude 缓存断点按官方标准收敛 | 改造 |
 
 ## 明细
 
@@ -376,3 +377,11 @@
 - 理由：压缩原来是一次隐藏的非流式请求，用户看不到提示词和摘要怎么生成，也不能取消；改成可见轮次后流式、可取消、错误走现有卡片，失败不截断历史。请求前缀保持不变，提示词缓存仍然命中；工具定义保留，模型返回工具调用按失败处理，不执行工具。
 - 合并注意：`planCompression` 必须在插入可见提示词之前算，请求只用计划里的消息，否则提示词会被发两遍或吞掉保留消息。检查点按锚点插在保留区之前，可见提示词的位置只是 UI；成功是 prepare + finalize 两次全量写，失败是 prepare + finishGeneration 两次，旧节点仍在树里，每次都会编码保留区。压缩期间的分支切换、发送、队列派发都被挡；失败后下次真实发送会先清 scratch 对，不会把提示词当成普通历史。崩溃在截断前会留下提示词和部分回复，重启后没有检查点，用户可重试/删除；截断后的崩溃检查点已落库。临时换模型会改变请求前缀、失去缓存命中，入口留在对话框并说明。Web/SSE 没有压缩流，浮动窗口和导出把临时对当普通消息。
 - 测试：`CompressionPlanTest` 6 条（计划范围/空范围、检查点插入与删对、缺回复的清理、普通消息不误删、截断 finish reason 归一化）；`ConversationSessionTest` 增加 `flushWith` 两条（变换落库并推进快照、incarnation 不匹配不写）；`ChatRequestFactory` 的流式请求依赖已有 `compressionSummaryOrNull` 的守卫。设备验收待做：真实压缩的流式显示、停止、失败重试/删除、成功后的检查点；`data.sync` 51 条不受影响的确认。
+
+### C52 Claude 缓存断点按官方标准收敛
+
+- 上游引入：`6098e1d3`（2026-02-24）先在请求顶层加 `cache_control`；`aede7f45`（2026-02-26，#877/#880）改成 system、最后一个 tool、倒数第二条真实 user 三处手动断点；`d2e52106`（2026-05-27）又在手动断点上加顶层自动缓存，一共 4 个，顶满 Anthropic 的上限，没有余量。长思考或中转再补一个就报 `A maximum of 4 blocks with cache_control may be provided. Found 5.`，这是断点顶满上限的来源。
+- 落点：`ClaudeProvider` 只保留顶层自动缓存和 system 最后一个文本块的断点；没有 system 时保留最后一个工具定义的断点；删掉 `insertMessagesCacheControl` 和倒数第二条 user 的断点；回放 server tool 的 raw call/result 时剥掉 `cache_control`；构造完请求统计断点，超过 4 去掉 messages 里的断点并记日志；更新 `ClaudePromptCacheRequestTest` 断言（正常 2 个断点），修 `ClaudeRequestMessageTest`/`ClaudeServerToolTest` 里 `buildMessages` 的反射签名。
+- 理由：官方 prompt caching 文档的 agent loop 推荐组合是「system 显式断点 + 顶层自动缓存」；工具在 system 之前渲染，system 断点已经覆盖 tools + system，工具断点是冗余的；倒数第二条 user 的断点也被顶层自动断点覆盖。线性对话的增量缓存仍然成立，缓存写入点从 4 个减到 2 个；分支/编辑历史时中段复用会略少，静态前缀不受影响。顶层自动缓存依赖平台支持，官方当前模型支持；代理或旧平台不支持时会直接报错，这是上游原来就有的前提。
+- 合并注意：这是 `ai` 模块的自定义行为改动，上游改 `ClaudeProvider` 时按这个标准合；provider 的单元测试要跑 `:ai:testDebugUnitTest`，app 的测试任务不会覆盖它们。自定义 body 如果自带 `cache_control`，护栏只保证 messages 里的断点被去掉，其它位置需要用户自己控制。设备上用长思考场景复现，400 消失；该次测试中转后台显示 cache_read=0，缓存命中是否稳定待观察。
+- 测试：`ClaudePromptCacheRequestTest` 7 条（自动 + system、无 system 时用 tools、无 system 且无 tools 时只有自动断点、只有一条 user 时没有 messages 断点、1h TTL 在两处、messages 永远没有断点、promptCaching=false 没有断点）；`ClaudeRequestMessageTest` 7 条、`ClaudeServerToolTest` 10 条全过；`ai` 模块的测试任务通过。

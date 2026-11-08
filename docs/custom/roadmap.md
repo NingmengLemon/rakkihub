@@ -173,7 +173,7 @@
 | `speech/` | C5 删掉了全部运行时实现，只留两个序列化类与它们的序列化测试 | 不看 |
 | `mediagen/` | C1 保留模块以维持数据兼容，界面不使用 | 不主动看，改到 `MediaGenerationProviderSetting` 这类持久化类型时复核 |
 
-`ai/` 下唯一的行为删改是 C3：删掉了 `ai/util/Request.kt` 里给 aihubmix.com 加 `APP-Code` 请求头的分支。C35 的 `filterByKeywords` 与上游 `5ad19405` 逐字一致，不算分叉。移植上游对这些文件的改动时保留这两处。
+`ai/` 下有两处行为改动：C3 删掉了 `ai/util/Request.kt` 里给 aihubmix.com 加 `APP-Code` 请求头的分支；C52 把 `ClaudeProvider` 的缓存断点收敛到官方标准。C35 的 `filterByKeywords` 与上游 `5ad19405` 逐字一致，不算分叉。移植上游对这些文件的改动时保留这三处。
 
 上游从 3.0.0 起把多步生成循环放进 `ai/`（`ai/src/main/java/me/rerere/ai/agent/AgentLoop.kt`），3.1.1 又把工具执行计时与 models.dev 的模型能力数据放进去。现在还值得看 `ai/` 吗，取决于它是不是一块能单独参考的区域：如果它继续吸收 `app/` 侧的耦合，读改动的成本会变高。
 
@@ -282,6 +282,7 @@
 | C49 分支切换只写 `select_index` | L3 | 无（消息节点保存链） |
 | C50 生成中定期保存回复节点 | L3 | C49 |
 | C51 压缩走可见生成轮次 | L3 | C44、C46、C50 |
+| C52 Claude 缓存断点按官方标准收敛 | L3 | 无（Claude provider 请求组装） |
 
 ### 依赖链
 

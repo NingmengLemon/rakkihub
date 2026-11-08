@@ -15,8 +15,8 @@ import me.rerere.ai.core.TokenUsage
 import me.rerere.ai.provider.BuiltInTools
 import me.rerere.ai.provider.Model
 import me.rerere.ai.provider.ProviderSetting
-import me.rerere.ai.provider.TextGenerationResult
 import me.rerere.ai.provider.TextGenerationParams
+import me.rerere.ai.provider.TextGenerationResult
 import me.rerere.ai.provider.stream.SseEvent
 import me.rerere.ai.ui.ServerToolMetadata
 import me.rerere.ai.ui.ServerToolProtocol
@@ -420,16 +420,9 @@ class ClaudeServerToolTest {
         val method = ClaudeProvider::class.java.getDeclaredMethod(
             "buildMessages",
             List::class.java,
-            Boolean::class.javaPrimitiveType,
-            me.rerere.ai.provider.ClaudePromptCacheTtl::class.java,
         )
         method.isAccessible = true
-        return method.invoke(
-            provider,
-            messages,
-            false,
-            me.rerere.ai.provider.ClaudePromptCacheTtl.FIVE_MINUTES,
-        ) as JsonArray
+        return method.invoke(provider, messages) as JsonArray
     }
 
     private fun serverToolUse(
