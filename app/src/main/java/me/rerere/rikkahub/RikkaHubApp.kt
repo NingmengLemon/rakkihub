@@ -24,8 +24,10 @@ import kotlinx.coroutines.cancel
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
+import me.rerere.common.android.Logging
 import me.rerere.common.android.appTempFolder
 import me.rerere.rikkahub.data.ai.MemoryConsolidationScheduler
+import me.rerere.rikkahub.data.ai.RequestLoggingPreference
 import me.rerere.rikkahub.data.datastore.SettingsStore
 import me.rerere.rikkahub.data.files.ChatDraftStore
 import me.rerere.rikkahub.data.files.FileFolders
@@ -64,6 +66,7 @@ const val MEMORY_DREAM_NOTIFICATION_CHANNEL_ID = "memory_dream"
 class RikkaHubApp : Application() {
     override fun onCreate() {
         super.onCreate()
+        Logging.setRequestLoggingEnabled(RequestLoggingPreference.load(this))
         // Restore files and settings before eager Koin singletons or workers can access them.
         var restored = false
         try {

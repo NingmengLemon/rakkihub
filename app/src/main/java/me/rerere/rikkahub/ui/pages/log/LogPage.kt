@@ -4,6 +4,7 @@ import android.content.ClipData
 import android.widget.Toast
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.ClipEntry
+import me.rerere.rikkahub.data.ai.RequestLoggingPreference
 import me.rerere.hugeicons.HugeIcons
 import me.rerere.hugeicons.stroke.Copy01
 import me.rerere.hugeicons.stroke.Delete01
@@ -58,6 +59,7 @@ import java.util.Locale
 
 @Composable
 fun LogPage() {
+    val context = LocalContext.current
     var logs by remember { mutableStateOf(Logging.getRecentLogs()) }
     var requestLoggingEnabled by remember { mutableStateOf(Logging.isRequestLoggingEnabled()) }
     val scrollBehavior = TopAppBarDefaults.exitUntilCollapsedScrollBehavior()
@@ -90,6 +92,7 @@ fun LogPage() {
             onRequestLoggingChange = {
                 requestLoggingEnabled = it
                 Logging.setRequestLoggingEnabled(it)
+                RequestLoggingPreference.save(context, it)
             },
             modifier = Modifier
                 .fillMaxSize()
