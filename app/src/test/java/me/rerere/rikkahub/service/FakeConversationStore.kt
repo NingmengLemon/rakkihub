@@ -10,6 +10,7 @@ class FakeConversationStore(var persisted: Conversation? = null) : ConversationS
     val writes = mutableListOf<Pair<Conversation?, Conversation>>()
     val selectIndexUpdates = mutableListOf<Triple<Uuid, Uuid, Int>>()
     val persistedNodes = mutableMapOf<Uuid, MessageNode>()
+    val persistedNodeIndices = mutableMapOf<Uuid, Int>()
     var touchedUpdateAt: Instant? = null
     var beforeWrite: suspend () -> Unit = {}
 
@@ -28,6 +29,7 @@ class FakeConversationStore(var persisted: Conversation? = null) : ConversationS
 
     override suspend fun persistNode(conversationId: Uuid, nodeIndex: Int, node: MessageNode): Long {
         persistedNodes[node.id] = node
+        persistedNodeIndices[node.id] = nodeIndex
         return node.messages.sumOf { message -> message.parts.sumOf { it.toString().length } }.toLong()
     }
 

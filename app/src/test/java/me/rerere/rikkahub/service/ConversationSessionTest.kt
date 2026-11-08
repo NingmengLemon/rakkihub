@@ -719,7 +719,7 @@ class ConversationSessionTest {
     }
 
     @Test
-    fun `branch selection writes only select_index when the stored snapshot has that branch`() = runBlocking {
+    fun `branch selection writes only select_index when the persisted count has that branch`() = runBlocking {
         val id = Uuid.random()
         val nodeId = Uuid.random()
         val node = MessageNode(id = nodeId, messages = listOf(UIMessage.user("first"), UIMessage.user("second")))
@@ -740,7 +740,7 @@ class ConversationSessionTest {
     }
 
     @Test
-    fun `branch selection stays in memory when the stored snapshot has fewer branches`() = runBlocking {
+    fun `branch selection stays in memory when the persisted count has fewer branches`() = runBlocking {
         val id = Uuid.random()
         val first = UIMessage.user("first")
         val second = UIMessage.user("second")
@@ -781,6 +781,7 @@ class ConversationSessionTest {
         assertNotNull(session.persistMessageNode(reply.id, session.incarnation))
 
         assertEquals(setOf(reply.id), store.persistedNodes.keys)
+        assertEquals(1, store.persistedNodeIndices[reply.id])
         // 单节点写不推进 lastWritten，下一次全量 flush 仍会做完整校正
         assertTrue(store.writes.isEmpty())
         session.flush()
@@ -842,6 +843,118 @@ class ConversationSessionTest {
                 parts = listOf(UIMessagePart.Image("data:image/png;base64,AAAA")),
             )
         )
+        session.update { it.copy(messageNodes = it.messageNodes + reply) }
+
+        assertNull(session.persistMessageNode(reply.id, session.incarnation))
+        assertTrue(store.persistedNodes.isEmpty())
+    }
+
+    @Test
+    fun `periodic save skips when the appended node's prefix changed`() = runBlocking {
+        val id = Uuid.random()
+        val a = MessageNode.of(UIMessage.user("a"))
+        val b = MessageNode.of(UIMessage.user("b"))
+        val loaded = Conversation.ofId(id).copy(messageNodes = listOf(a, b))
+        val store = FakeConversationStore(loaded)
+        val session = ConversationSession(id, Conversation.ofId(id), this, store, {})
+        session.initialize(load = { store.persisted })
+        val x = MessageNode.of(UIMessage.user("x"))
+        val c = MessageNode.of(UIMessage.assistant("c"))
+        // 末尾追加的位置对，但前缀里的 b 被换成了 x
+        session.update { it.copy(messageNodes = listOf(a, x, c)) }
+
+        assertNull(session.persistMessageNode(c.id, session.incarnation))
+        assertTrue(store.persistedNodes.isEmpty())
+    }
+
+    @Test
+    fun `branch selection writes after the node was saved with both branches`() = runBlocking {
+        val id = Uuid.random()
+        val loaded = Conversation.ofId(id).copy(messageNodes = listOf(MessageNode.of(UIMessage.user("hi"))))
+        val store = FakeConversationStore(loaded)
+        val session = ConversationSession(id, Conversation.ofId(id), this, store, {})
+        session.initialize(load = { store.persisted })
+        val reply = MessageNode(
+            messages = listOf(UIMessage.assistant("first"), UIMessage.assistant("second")),
+        )
+        session.update { it.copy(messageNodes = it.messageNodes + reply) }
+        assertNotNull(session.persistMessageNode(reply.id, session.incarnation))
+
+        assertTrue(session.selectMessageNode(reply.id, 1, session.incarnation))
+
+        assertEquals(listOf(Triple(id, reply.id, 1)), store.selectIndexUpdates)
+    }
+
+    @Test
+    fun `periodic save skips base64 images inside tool output`() = runBlocking {
+        val id = Uuid.random()
+        val loaded = Conversation.ofId(id).copy(messageNodes = listOf(MessageNode.of(UIMessage.user("hi"))))
+        val store = FakeConversationStore(loaded)
+        val session = ConversationSession(id, Conversation.ofId(id), this, store, {})
+        session.initialize(load = { store.persisted })
+        val reply = MessageNode.of(
+            UIMessage(
+                role = MessageRole.ASSISTANT,
+                parts = listOf(
+                    UIMessagePart.Tool(
+                        toolCallId = "call",
+                        toolName = "render",
+                        input = "{}",
+                        output = listOf(UIMessagePart.Image("data:image/png;base64,AAAA")),
+                    )
+                ),
+            )
+        )
+        session.update { it.copy(messageNodes = it.messageNodes + reply) }
+
+        assertNull(session.persistMessageNode(reply.id, session.incarnation))
+        assertTrue(store.persistedNodes.isEmpty())
+    }
+
+    @Test
+    fun `periodic save finishes reasoning before storing`() = runBlocking {
+        val id = Uuid.random()
+        val loaded = Conversation.ofId(id).copy(messageNodes = listOf(MessageNode.of(UIMessage.user("hi"))))
+        val store = FakeConversationStore(loaded)
+        val session = ConversationSession(id, Conversation.ofId(id), this, store, {})
+        session.initialize(load = { store.persisted })
+        val reply = MessageNode.of(
+            UIMessage(
+                role = MessageRole.ASSISTANT,
+                parts = listOf(UIMessagePart.Reasoning(reasoning = "thinking", finishedAt = null)),
+            )
+        )
+        session.update { it.copy(messageNodes = it.messageNodes + reply) }
+
+        assertNotNull(session.persistMessageNode(reply.id, session.incarnation))
+
+        val stored = store.persistedNodes.getValue(reply.id).messages.single().parts.single()
+            as UIMessagePart.Reasoning
+        assertNotNull(stored.finishedAt)
+    }
+
+    @Test
+    fun `touch update at writes the column and keeps a clean session clean`() = runBlocking {
+        val id = Uuid.random()
+        val loaded = Conversation.ofId(id).copy(messageNodes = listOf(MessageNode.of(UIMessage.user("hi"))))
+        val store = FakeConversationStore(loaded)
+        val session = ConversationSession(id, Conversation.ofId(id), this, store, {})
+        session.initialize(load = { store.persisted })
+
+        assertTrue(session.touchUpdateAt(session.incarnation))
+
+        assertEquals(session.state.value.updateAt, store.touchedUpdateAt)
+        session.flush()
+        assertTrue(store.writes.isEmpty())
+    }
+
+    @Test
+    fun `periodic save is ignored for a conversation that is not in the database`() = runBlocking {
+        val id = Uuid.random()
+        val store = FakeConversationStore()
+        val session = ConversationSession(id, Conversation.ofId(id), this, store, {})
+        session.initialize(load = { null }, create = { Conversation.ofId(id) })
+        val reply = MessageNode.of(UIMessage.assistant("draft"))
         session.update { it.copy(messageNodes = it.messageNodes + reply) }
 
         assertNull(session.persistMessageNode(reply.id, session.incarnation))

@@ -445,7 +445,7 @@ private fun ChatPageContent(
                 },
                 onDelete = {
                     if (isBusy) {
-                        vm.showDeleteBlockedWhileGeneratingError()
+                        vm.showStopGeneratingFirstError()
                     } else {
                         vm.deleteMessage(it)
                     }

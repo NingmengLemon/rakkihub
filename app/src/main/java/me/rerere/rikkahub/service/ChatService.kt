@@ -619,13 +619,17 @@ class ChatService(
                             estimateNodeChars(session.state.value.messageNodes.firstOrNull { it.id == replyNodeId })
                         },
                         save = {
-                            session.persistMessageNode(replyNodeId, turnIncarnation)?.also {
+                            session.persistMessageNode(replyNodeId, turnIncarnation)?.also { storedChars ->
+                                Log.d(TAG, "periodic message save stored $storedChars chars")
                                 if (!touchedUpdateAt) {
                                     touchedUpdateAt = session.touchUpdateAt(turnIncarnation)
                                 }
                             }
                         },
                         onError = { Log.w(TAG, "periodic message save failed", it) },
+                        onTooLarge = { chars ->
+                            Log.w(TAG, "periodic message save skipped: node too large ($chars chars)")
+                        },
                     ).run()
                 }
                 try {
@@ -1148,9 +1152,9 @@ class ChatService(
     ) {
         appScope.launch(Dispatchers.IO) {
             sessionManager.withSession<Unit>(conversationId) { session ->
+                val incarnation = session.incarnation
                 try {
                     ensureInitialized(session)
-                    val incarnation = session.incarnation
                     val settings = settingsStore.awaitLoaded()
 
                     val messageText = message.parts.filterIsInstance<UIMessagePart.Text>()
@@ -1182,7 +1186,7 @@ class ChatService(
                     if (session.isInitialized) {
                         session.update { it.withTranslation(message.id, null) }
                         session.state.value.getMessageNodeByMessageId(message.id)?.let { node ->
-                            session.persistMessageNode(node.id, session.incarnation)
+                            session.persistMessageNode(node.id, incarnation)
                         }
                     }
                     addError(e, conversationId, title = context.getString(R.string.error_title_translate_message))
