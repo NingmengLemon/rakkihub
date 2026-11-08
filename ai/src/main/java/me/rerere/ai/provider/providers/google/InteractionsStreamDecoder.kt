@@ -73,7 +73,10 @@ internal class InteractionsStreamDecoder(
         }
     }
 
-    override fun onClosed(): List<StreamChunk> = finish()
+    override fun onClosed(): List<StreamChunk> {
+        if (finished) return emptyList()
+        throw java.io.IOException("Interactions stream closed before interaction.completed")
+    }
 
     private fun captureInteraction(interaction: JsonObject?) {
         if (interaction == null) return

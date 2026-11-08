@@ -66,6 +66,7 @@
 | C56 | 文档 lint 配置 | 改造 |
 | C57 | 请求日志开关持久化 | 改造 |
 | C58 | 失败与中断回复状态 | 改造 |
+| C59 | 截断流识别与停止结算 | 改造 |
 
 ## 明细
 
@@ -433,3 +434,10 @@
 - 理由：失败或停止的半截回复原来作为普通 assistant 消息保存，下一次请求会把它当成完整回复带上。失败 attempt 只应给用户看，不应进入模型历史；用户主动停止的内容用户已经看过，可以继续参与后续对话，但需要和正常完成区分。过滤失败回复后前后两条 user 会相邻，部分 provider 要求 role 交替，所以在请求列表里合并，不改会话本身。
 - 合并注意：`status` 是带默认值的序列化字段，旧消息、旧备份和官方兼容导出里的旧 JSON 解码为 `COMPLETE`；这是 `ai/ui/Message.kt` 的分叉，移植上游 `UIMessage` 改动时保留字段以及 `isModelVisible`、`filterModelVisible`、`mergeAdjacentUserMessages`。`runTurn` 在进入 `runAgent` 收集之前失败（包括 `createContext`/`createAgent` 内部失败）时没有本轮回复可标，审批续写会保留原消息状态并只出错误卡片；此时 `replyMessageId` 可能已指向旧回复，但没有结算路径读它。已收到 `AgentFinishReason` 后发生的取消保持 `COMPLETE`。删除、替换、cleanup 的内部取消也可能短暂标 `INTERRUPTED`，随后被替换或删除，用户主动停止是主要路径。`markReplyStatus` 是单向的，不会把 `FAILED` 复位成 `COMPLETE`；当前正常路径不可达，若将来出现“Pending 工具 + FAILED”的续写，需要同时处理过滤与复位。目前按整条消息标记，多步工具调用在中途失败时会整条隔离；per-step attempt 和工具语义（`TOOL_NOT_STARTED`、`TOOL_OUTCOME_UNKNOWN`、`withoutUnresumableToolCalls`、`cancelInterruptedTools`）仍归 P2。压缩请求在 `buildStep` 之后单独追加 compress prompt，仍是 user+user，不走这次合并，这是压缩指令独立成轮的既有设计。Web、导出图片、Markdown 导出和浮动窗口没有 status，只有 Android 主聊天 UI 显示标签；标签在头像行内，模型已删除且没有快照、又未开助手头像时看不到。`contextWindowSize`、`contextLimitBoundaryIndex`、`planCompression` 仍按未过滤消息计算，失败消息夹在中间时边界和压缩计数尚未同步，归 P2。FTS 索引和 `conversation_search` 仍会把失败回复文本带进模型上下文，这次没有处理，是“失败只给人看”的已知例外。
 - 测试：`UIMessageSerializationTest` 覆盖状态序列化、旧 JSON 默认 `COMPLETE`、过滤只去掉 `FAILED`；`MessageMergeTest` 覆盖相邻 user 合并和过滤失败回复后的合并；`ConversationMessagesTest` 覆盖状态只改目标消息、无变化返回 null；`SettlementStatusTest` 覆盖完成、失败、取消和完成后再取消；`ConversationSessionTest` 覆盖 `markReplyStatus`；`DialogueMessagesTest` 覆盖失败回复不进入记忆和 `read_conversations`；`ConversationRecentModelMessagesTest` 覆盖标题上下文过滤。命令：`:ai:testDebugUnitTest --tests "me.rerere.ai.ui.UIMessageSerializationTest" --tests "me.rerere.ai.ui.MessageMergeTest"`、`:app:testGithubDebugUnitTest --tests "me.rerere.rikkahub.data.model.ConversationMessagesTest" --tests "me.rerere.rikkahub.service.ConversationSessionTest" --tests "me.rerere.rikkahub.service.SettlementStatusTest" --tests "me.rerere.rikkahub.data.ai.tools.DialogueMessagesTest" --tests "me.rerere.rikkahub.data.ai.ConversationRecentModelMessagesTest"`；`assembleGithubDebug` 通过。本轮没有重跑 README 要求的设备验收样本；`UIMessage` 只增加带默认值的字段，旧 JSON 解码测试通过，设备和样本重跑留到下一批。
+
+### C59 截断流识别与停止结算
+
+- 落点：五个 `StreamChunkDecoder` 的 `onClosed()` 必须见过协议终止事件，否则抛 `IOException`：Claude 要 `message_stop`；OpenAI ChatCompletions 要 `finish_reason` 或 `[DONE]`；OpenAI Responses 要 `response.completed`、`response.incomplete` 或 `[DONE]`；Google 要 `finishReason` 或 `[DONE]`；Google Interactions 要 `interaction.completed` 或 `[DONE]`。五个 provider 的 `onClosed` 捕获异常后 `close(e)`，`onFailure` 在 `t` 和响应体都为空时用 `IOException` 兜底，不再静默正常关闭。`ChatService.stopGeneration` 把 `jobs.join()` 和 `finishInterruptedPendingTools` 放进 `withContext(NonCancellable)`。
+- 理由：传输层正常 EOF 不等于协议完成；原来 `onClosed` 无条件补 `Finish`，代理截断或半截 EOF 会被当成完整回复，不进重试也不报错。停止结算在 `viewModelScope` 取消后可能不执行，pending 工具收尾丢失，`isAwaitingToolApproval` 还可能挡住发送、编辑和删除。
+- 合并注意：这是严格判定。中转或旧平台如果不发送终止事件，行为会从“静默成功”变成可重试的 `IOException`；确需兼容时按 provider 加宽松条件，不要全局关掉。终止事件和 `[DONE]` 的幂等由 decoder 的 `finished` 保持；`onClosed` 捕获异常后必须 `close(e)`，不能只 `close()`。`stopGeneration` 的 NonCancellable 只包 join 和工具收尾，不包 UI 状态；发送前的 `finishInterruptedPendingTools` 仍保留作崩溃补偿。C58 的失败/中断消息状态与本节独立。
+- 测试：`TruncatedStreamTest` 覆盖五个 decoder 的早关抛错和终止后正常关闭；`:ai:testDebugUnitTest --tests "me.rerere.ai.provider.stream.TruncatedStreamTest"` 通过；`assembleGithubDebug` 通过。停止结算没有 JVM 单测，手动验收：生成中停止后立即离开页面，pending 工具仍被收尾，发送/编辑/删除不再被 `isAwaitingToolApproval` 锁住。

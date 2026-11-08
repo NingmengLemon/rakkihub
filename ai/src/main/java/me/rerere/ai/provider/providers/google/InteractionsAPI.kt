@@ -150,13 +150,17 @@ internal class InteractionsAPI(
                 } catch (e: Throwable) {
                     Log.w(TAG, "onFailure: failed to parse from $bodyRaw")
                 } finally {
-                    close(exception ?: Exception("Stream failed"))
+                    close(exception ?: java.io.IOException("Interactions stream failed"))
                 }
             }
 
             override fun onClosed(eventSource: EventSource) {
-                sendChunks(decoder.onClosed())
-                close()
+                try {
+                    sendChunks(decoder.onClosed())
+                    close()
+                } catch (e: Throwable) {
+                    close(e)
+                }
             }
         }
 

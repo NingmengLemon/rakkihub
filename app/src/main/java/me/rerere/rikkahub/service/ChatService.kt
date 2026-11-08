@@ -1485,7 +1485,9 @@ class ChatService(
             session.cancelJobs()
         }
         if (jobs.isEmpty()) return
-        jobs.forEach { it.join() }
-        if (session.isInitialized) finishInterruptedPendingTools(session)
+        withContext(NonCancellable) {
+            jobs.forEach { it.join() }
+            if (session.isInitialized) finishInterruptedPendingTools(session)
+        }
     }
 }

@@ -150,7 +150,10 @@ internal class ClaudeStreamDecoder : StreamChunkDecoder {
         }
     }
 
-    override fun onClosed(): List<StreamChunk> = finish()
+    override fun onClosed(): List<StreamChunk> {
+        if (finished) return emptyList()
+        throw java.io.IOException("Claude stream closed before message_stop")
+    }
 
     private fun finish(): List<StreamChunk> {
         if (finished) return emptyList()
