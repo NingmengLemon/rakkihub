@@ -1,8 +1,8 @@
 package me.rerere.rikkahub.ui.pages.setting
 
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.fillMaxSize
@@ -10,6 +10,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
@@ -18,9 +19,11 @@ import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clipToBounds
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.input.nestedscroll.nestedScroll
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
@@ -36,8 +39,6 @@ import me.rerere.rikkahub.Screen
 import me.rerere.rikkahub.ui.components.nav.BackButton
 import me.rerere.rikkahub.ui.components.ui.CardGroup
 import me.rerere.rikkahub.ui.components.ui.CardGroupIcon
-import me.rerere.rikkahub.ui.components.ui.drawAppLogo
-import me.rerere.rikkahub.ui.components.ui.rememberAppLogoLayers
 import me.rerere.rikkahub.ui.context.LocalNavController
 import me.rerere.rikkahub.ui.theme.CustomColors
 import me.rerere.rikkahub.utils.openUrl
@@ -48,7 +49,6 @@ fun SettingAboutPage() {
     val scrollBehavior = TopAppBarDefaults.pinnedScrollBehavior()
     val context = LocalContext.current
     val navController = LocalNavController.current
-    val logoLayers = rememberAppLogoLayers()
     Scaffold(
         topBar = {
             TopAppBar(
@@ -78,11 +78,13 @@ fun SettingAboutPage() {
                     horizontalAlignment = Alignment.CenterHorizontally,
                     verticalArrangement = Arrangement.spacedBy(12.dp)
                 ) {
-                    Box(
+                    Image(
+                        painter = painterResource(R.drawable.about_logo),
+                        contentDescription = null,
+                        contentScale = ContentScale.Crop,
                         modifier = Modifier
                             .size(136.dp)
-                            .clipToBounds()
-                            .drawAppLogo(logoLayers)
+                            .clip(RoundedCornerShape(28.dp)),
                     )
 
                     Text(

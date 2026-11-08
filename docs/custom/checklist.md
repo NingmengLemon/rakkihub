@@ -62,6 +62,7 @@
 | C52 | Claude 缓存断点按官方标准收敛 | 改造 |
 | C53 | Claude 缓存断点按提供商切换 | 改造 |
 | C54 | 移除关于页图标点击彩蛋并清理相关死代码 | 移除 |
+| C55 | 关于页独立图标 | 改造 |
 
 ## 明细
 
@@ -397,7 +398,14 @@
 
 ### C54 移除关于页图标点击彩蛋并清理相关死代码
 
-- 落点：`SettingAboutPage` 删掉 logo 点击的 emoji 喷射、音效、形状变形、按下缩放和坐标跟踪（去掉 `EmojiBurstHost`、`SoundEffectPlayer`、`logoMorphShape`、`graphicsLayer`/`onGloballyPositioned`），保留静态的 `rememberAppLogoLayers` 绘制并加 `clipToBounds`（图层按 108dp 画进 136dp 盒子，不裁会溢出），版本号长按进 Debug 保留；同时删掉 `utils/SoundEffectPlayer.kt`、Koin 绑定、`res/raw/bingbingbing.mp3`/`gangguan.mp3`，以及没有调用方的 `ui/easteregg/EmojiBurst.kt`；`AppLogo.kt` 的 `logoMorphShape` 保留给浮动窗口。
+- 落点：`SettingAboutPage` 删掉 logo 点击的 emoji 喷射、音效、形状变形、按下缩放和坐标跟踪（去掉 `EmojiBurstHost`、`SoundEffectPlayer`、`logoMorphShape`、`graphicsLayer`/`onGloballyPositioned`），保留静态的 `rememberAppLogoLayers` 绘制并加 `clipToBounds`（图层按 108dp 画进 136dp 盒子，不裁会溢出；C55 起改成独立的 about_logo），版本号长按进 Debug 保留；同时删掉 `utils/SoundEffectPlayer.kt`、Koin 绑定、`res/raw/bingbingbing.mp3`/`gangguan.mp3`，以及没有调用方的 `ui/easteregg/EmojiBurst.kt`；`AppLogo.kt` 的 `logoMorphShape` 保留给浮动窗口。
 - 理由：关于页只需要静态图标和版本信息；删掉彩蛋后音效播放器、raw 音效和 EmojiBurst 都没有调用方，按 C5 的约定一并清掉。
-- 合并注意：`EmojiBurst.kt` 是上游 `ui/` 的文件，删它是为了清死代码；上游改 `SettingAboutPage` 时按这个删。关于页图标仍复用 `R.mipmap.ic_launcher`；静态图标用方形裁剪，没有无障碍描述，属于装饰图。
+- 合并注意：`EmojiBurst.kt` 是上游 `ui/` 的文件，删它是为了清死代码；上游改 `SettingAboutPage` 时按这个删。关于页图标由 C55 单独提供，launcher 和浮动窗口仍用 `R.mipmap.ic_launcher`；静态图标用方形裁剪，没有无障碍描述，属于装饰图。
 - 测试：编译通过；点击 logo 不再有喷射、音效和变形；版本号长按仍进 Debug；浅色模式下没有深色背景溢出。
+
+### C55 关于页独立图标
+
+- 落点：新增 `app/src/main/res/drawable-nodpi/about_logo.webp`（1254×1240，来自 `rikka_icon.webp`），`SettingAboutPage` 用 `Image` 加 `ContentScale.Crop` 和 `RoundedCornerShape(28.dp)` 绘制，替代原来的 `rememberAppLogoLayers`/`drawAppLogo`；launcher 图标和浮动窗口不变，浮动窗口仍用 `rememberAppLogoLayers`。
+- 理由：关于页想用自己的图标，同时不动应用 launcher。
+- 合并注意：上游改 `SettingAboutPage` 时按这个；换图直接替换 `about_logo.webp`；C54 的彩蛋移除保持不变。
+- 测试：编译通过；关于页显示新图标，launcher 与浮动窗口仍用原图标。
