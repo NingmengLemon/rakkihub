@@ -101,6 +101,7 @@ internal class MessageSaveLoop(
     suspend fun run() {
         var lastSavedAt = now()
         var lastSavedChars = 0L
+        var lastTooLargeAt = now() - 60_000
         var backoffUntil = 0L
         while (currentCoroutineContext().isActive) {
             pause(1_000)
@@ -110,7 +111,11 @@ internal class MessageSaveLoop(
                 val estimate = estimateChars()
                 if (estimate <= 0) continue
                 if (MessageSavePolicy.estimatedBytes(estimate) > MessageSavePolicy.MAX_SAVE_BYTES) {
-                    onTooLarge(estimate)
+                    // 节点过大时每分钟记一次，别让日志和回调每秒刷
+                    if (time - lastTooLargeAt >= 60_000) {
+                        onTooLarge(estimate)
+                        lastTooLargeAt = time
+                    }
                     lastSavedAt = time
                     continue
                 }
