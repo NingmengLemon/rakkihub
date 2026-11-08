@@ -885,7 +885,7 @@ private fun BoxScope.MessageJumper(
 /**
  * 上下文消息数上限的只读边界线。
  *
- * 位置与请求侧 `contextLimitStart` 一致；按滞回规则跳动，不落盘，关闭上限后消失。
+ * 位置是去掉最后一条助手回复后的 `contextLimitStart`，对应产生最后一条回复的请求（多步工具轮次可能差一个滞回步幅）；按滞回规则跳动，不落盘，关闭上限后消失。
  */
 @Composable
 private fun ContextLimitBoundary(limit: Int) {

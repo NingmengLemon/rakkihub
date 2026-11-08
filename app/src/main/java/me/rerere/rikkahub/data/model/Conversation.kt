@@ -202,10 +202,19 @@ internal fun Conversation.contextWindowSize(): Int = messageNodes.size - context
  *
  * 起点必须严格晚于窗口起点：检查点之后的第一条可能本来就是边界，压缩摘要仍会发送，
  * 那时候画线会把「按条数截断」误报成发生了。
+ *
+ * 最后一条是助手回复时，按去掉它的列表算，标出产生这条回复的请求窗口，否则线会落到回复
+ * 上方，把最后一条 user 划到窗口外。多步工具/续写轮次的最后一步请求可能包含这条助手消息，
+ * 边界仍可能与那一步差一个滞回步幅。压缩的提示词和回复是 scratch，正常请求不用这对节点，
+ * 压缩提示词存在时不画线。
  */
 internal fun Conversation.contextLimitBoundaryIndex(limit: Int): Int? {
     if (limit <= 0) return null
-    val start = currentMessages.contextLimitStart(limit)
+    val messages = currentMessages
+    if (messages.any { it.isCompressionPrompt }) return null
+    val requestMessages =
+        if (messages.lastOrNull()?.role == MessageRole.ASSISTANT) messages.dropLast(1) else messages
+    val start = requestMessages.contextLimitStart(limit)
     return start.takeIf { it > contextWindowStart() }
 }
 
