@@ -472,6 +472,21 @@ class ChatService(
         addError(error, session.id, title = context.getString(title))
     }
 
+    private fun reportRegenerateBlocked(session: ConversationSession) {
+        val waitingApproval = session.state.value.isAwaitingToolApproval ||
+            session.pendingApprovalTurn != null
+        val message = if (waitingApproval) {
+            R.string.chat_page_resolve_tool_approval_first
+        } else {
+            R.string.chat_page_stop_generation_first
+        }
+        addError(
+            error = ConflictException(context.getString(message)),
+            conversationId = session.id,
+            title = context.getString(R.string.error_title_regenerate_message),
+        )
+    }
+
     // ---- 重新生成消息 ----
 
     /** 重新生成用户消息时去掉它之后的节点再回复；重新生成助手消息时在它的节点上新开一个分支 */
@@ -480,26 +495,18 @@ class ChatService(
         synchronized(session) {
             if (session.isCompressing) return
             if (!session.canRegenerate()) {
-                val waitingApproval = session.state.value.isAwaitingToolApproval ||
-                    session.pendingApprovalTurn != null
-                val message = if (waitingApproval) {
-                    R.string.chat_page_resolve_tool_approval_first
-                } else {
-                    R.string.chat_page_stop_generation_first
-                }
-                addError(
-                    error = ConflictException(context.getString(message)),
-                    conversationId = conversationId,
-                    title = context.getString(R.string.error_title_regenerate_message),
-                )
+                reportRegenerateBlocked(session)
                 return
             }
-            val previousJob = session.getJob()
             val job = launchGenerationJob(conversationId = conversationId) {
                 try {
-                    previousJob?.join()
                     session.replyMessageId.value = null
                     ensureInitialized(session)
+                    // 冷 session 在入口读不到待审批状态，加载后再挡一次再截断
+                    if (session.state.value.isAwaitingToolApproval || session.pendingApprovalTurn != null) {
+                        reportRegenerateBlocked(session)
+                        return@launchGenerationJob
+                    }
                     // 失败压缩对是 scratch：重新生成是真实 turn，先清掉；目标就在对里时直接结束
                     val cleaned = session.tryUpdate { it.removeCompressionPairs() }
                     if (cleaned != null) session.flush()
@@ -591,6 +598,7 @@ class ChatService(
      *
      * 默认接着当前分支的末尾回复；[regenerateNodeId] 不为空时只发送这个节点之前的消息，回复作为它的新分支。
      * 发送的最后一条是助手消息时从它继续（比如审批之后），回复写回那条消息。
+     * [resumeApproval] 为 true 时复用等待审批时冻结的 `ChatTurnContext`，只由 `handleToolApproval` 传入。
      * 失败时报告错误、暂停消息队列并返回 [TurnResult.Failed]；取消时直接抛出。
      */
     private suspend fun runTurn(
