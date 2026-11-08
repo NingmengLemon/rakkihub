@@ -208,7 +208,7 @@ class ChatCompletionsAPI(
                 } catch (e: Throwable) {
                     Log.w(TAG, "onFailure: failed to parse from $bodyRaw")
                     e.printStackTrace()
-                    exception = e
+                    exception = response?.toHttpException(bodyRaw) ?: e
                 } finally {
                     close(exception ?: response?.toHttpException() ?: java.io.IOException("OpenAI stream failed"))
                 }

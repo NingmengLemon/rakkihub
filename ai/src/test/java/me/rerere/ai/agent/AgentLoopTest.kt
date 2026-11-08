@@ -117,6 +117,29 @@ class AgentLoopTest {
     }
 
     @Test
+    fun `empty non-stream reply is retried as a typed failure`() = runTest {
+        provider.result(UIMessage.assistant(""))
+        provider.result(UIMessage.assistant("hello"))
+
+        val events = runToEnd(
+            request(
+                stream = false,
+                retry = RetryPolicy.NETWORK.copy(
+                    initialDelay = Duration.ZERO,
+                    jitterRatio = 0.0,
+                ),
+            )
+        )
+
+        val finished = events.finished()
+        assertEquals(AgentFinishReason.Completed, finished.reason)
+        assertEquals(listOf("hello"), finished.message.texts())
+        assertEquals(2, provider.requests.size)
+        val retry = events.filterIsInstance<AgentEvent.Retrying>().single()
+        assertEquals(LlmFailureCode.EMPTY_RESPONSE, (retry.attempt.cause as LlmFailure).code)
+    }
+
+    @Test
     fun `tool results go back to the model inside the same assistant message`() = runTest {
         val received = mutableListOf<JsonElement>()
         val search = tool("search") { args ->

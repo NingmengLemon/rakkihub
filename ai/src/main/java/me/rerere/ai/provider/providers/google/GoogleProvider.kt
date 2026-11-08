@@ -320,7 +320,7 @@ class GoogleProvider(private val client: OkHttpClient, context: Context? = null)
                     }
                 } catch (e: Throwable) {
                     e.printStackTrace()
-                    exception = e
+                    exception = response?.toHttpException() ?: e
                 } finally {
                     close(exception ?: java.io.IOException("Google stream failed"))
                 }

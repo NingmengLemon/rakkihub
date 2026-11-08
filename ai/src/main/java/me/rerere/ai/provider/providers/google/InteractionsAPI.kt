@@ -152,8 +152,9 @@ internal class InteractionsAPI(
                     }
                 } catch (e: Throwable) {
                     Log.w(TAG, "onFailure: failed to parse from $bodyRaw")
+                    exception = response?.toHttpException(bodyRaw) ?: t ?: e
                 } finally {
-                    close(exception ?: java.io.IOException("Interactions stream failed"))
+                    close(exception ?: response?.toHttpException() ?: java.io.IOException("Interactions stream failed"))
                 }
             }
 

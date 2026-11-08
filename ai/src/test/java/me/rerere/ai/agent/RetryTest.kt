@@ -95,7 +95,7 @@ class RetryTest {
 
     @OptIn(ExperimentalCoroutinesApi::class)
     @Test
-    fun `retry after is honored and capped by max delay`() = runTest {
+    fun `retry after is honored`() = runTest {
         val attempts = mutableListOf<RetryAttempt>()
         runCatching {
             withRetry(
@@ -118,6 +118,40 @@ class RetryTest {
 
         assertEquals(listOf(2.5.seconds), attempts.map { it.delay })
         assertEquals(2_500L, currentTime)
+    }
+
+    @OptIn(ExperimentalCoroutinesApi::class)
+    @Test
+    fun `retry after above max delay is capped`() = runTest {
+        val attempts = mutableListOf<RetryAttempt>()
+        runCatching {
+            withRetry(
+                RetryPolicy(
+                    maxRetries = 1,
+                    initialDelay = 1.seconds,
+                    maxDelay = 1.seconds,
+                    jitterRatio = 0.0,
+                ),
+                onRetry = { attempts += it },
+            ) {
+                throw HttpException(
+                    message = "rate limited",
+                    code = LlmFailureCode.RATE_LIMIT,
+                    statusCode = 429,
+                    retryAfterMs = 5_000,
+                )
+            }
+        }
+
+        assertEquals(listOf(1.seconds), attempts.map { it.delay })
+        assertEquals(1_000L, currentTime)
+    }
+
+    @Test
+    fun `quota is not retried`() {
+        assertFalse(RetryPolicy.NETWORK.shouldRetry(
+            HttpException("quota", LlmFailureCode.QUOTA, 429)
+        ))
     }
 
     @Test

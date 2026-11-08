@@ -1172,7 +1172,7 @@
   <string name="setting_files_page_clean_range_keep">仍在使用的檔案會保留。</string>
   <string name="setting_files_page_clean_range_description">選擇要永久刪除的檔案。此操作無法復原。</string>
   <string name="setting_page_preferences_network_auto_retry">自動重試</string>
-  <string name="setting_page_preferences_network_auto_retry_desc">發生網路錯誤時自動重試模型請求，最多重試 3 次。</string>
+  <string name="setting_page_preferences_network_auto_retry_desc">網路、限流、伺服器或空回應等暫時性失敗時自動重試模型請求，最多重試 3 次。</string>
   <string name="search_page_scope_current_assistant">目前助手</string>
   <string name="search_page_scope_all_assistants">全部助手</string>
   <string name="chat_page_queue_resume">恢復傳送</string>
