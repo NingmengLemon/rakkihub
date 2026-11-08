@@ -10,6 +10,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.ContainedLoadingIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -111,6 +112,7 @@ internal fun CompressionCard(
                     )
                 }
                 if (streaming) {
+                    ContainedLoadingIndicator(modifier = Modifier.size(16.dp))
                     IconButton(onClick = onStop, modifier = Modifier.size(32.dp)) {
                         Icon(
                             imageVector = HugeIcons.Cancel01,

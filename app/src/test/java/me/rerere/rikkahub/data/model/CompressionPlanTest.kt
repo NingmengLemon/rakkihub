@@ -2,6 +2,7 @@ package me.rerere.rikkahub.data.model
 
 import me.rerere.ai.ui.UIMessage
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
@@ -74,5 +75,15 @@ class CompressionPlanTest {
         val conversation = conversation(listOf(a))
 
         assertNull(conversation.removeCompressionPair(a.id))
+    }
+
+    @Test
+    fun `truncated finish reasons are normalized`() {
+        assertTrue(isTruncatedCompressionFinish("length"))
+        assertTrue(isTruncatedCompressionFinish("max_tokens"))
+        assertTrue(isTruncatedCompressionFinish("incomplete:max_output_tokens"))
+        assertTrue(isTruncatedCompressionFinish("MAX_OUTPUT_TOKENS"))
+        assertFalse(isTruncatedCompressionFinish("stop"))
+        assertFalse(isTruncatedCompressionFinish(null))
     }
 }

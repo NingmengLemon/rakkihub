@@ -94,6 +94,10 @@ class ConversationSession(
     var incarnation = 0
         private set
 
+    // 会话正在被整条替换/删除：压缩轮次被取消时不弹「压缩已取消」，由删除流程自己处理
+    @Volatile
+    var isClosing = false
+
     val messageQueue = MessageQueue()
 
     /**
@@ -347,6 +351,7 @@ class ConversationSession(
         write: suspend (previous: Conversation?) -> Unit,
     ) {
         require(conversation.id == id)
+        isClosing = true
         cancelJobs().forEach { it.join() }
         // 正在进行的加载结束后才替换，否则加载结果会盖掉替换后的状态
         initializationMutex.withLock {
@@ -370,6 +375,7 @@ class ConversationSession(
         replyMessageId.value = null
         generationStartedAt.value = null
         _compressionActive.value = false
+        isClosing = false
     }
 
     // 失败和取消也必须保存已收到的内容，且保存完成前不能释放生成任务。

@@ -67,6 +67,7 @@ import me.rerere.rikkahub.data.model.getChatModelOf
 import me.rerere.rikkahub.data.model.getStoredAssistantOf
 import me.rerere.rikkahub.data.model.insertHistoryTruncation
 import me.rerere.rikkahub.data.model.isAwaitingToolApproval
+import me.rerere.rikkahub.data.model.isTruncatedCompressionFinish
 import me.rerere.rikkahub.data.model.localFileUrls
 import me.rerere.rikkahub.data.model.planCompression
 import me.rerere.rikkahub.data.model.removeCompressionPair
@@ -483,6 +484,9 @@ class ChatService(
                     previousJob?.join()
                     session.replyMessageId.value = null
                     ensureInitialized(session)
+                    // 失败压缩对是 scratch：重新生成是真实 turn，先清掉；目标就在对里时直接结束
+                    val cleaned = session.tryUpdate { it.removeCompressionPairs() }
+                    if (cleaned != null) session.flush()
                     val node = session.state.value.getMessageNodeByMessageId(messageId)
                         ?: return@launchGenerationJob
 
@@ -518,6 +522,13 @@ class ChatService(
     ) {
         val session = sessionManager.getOrCreate(conversationId)
         synchronized(session) {
+            // 失败压缩对是 scratch，不执行其中未完成的工具调用
+            if (session.state.value.messageNodes.any { node ->
+                    node.messages.any { it.isCompressionPrompt }
+                }
+            ) {
+                return
+            }
             // 压缩期间不接受工具审批，避免把压缩轮次的 assistant 节点当成可继续的回复
             if (session.isCompressing) return
             val previousJob = session.getJob()
@@ -843,8 +854,11 @@ class ChatService(
         val incarnation = session.incarnation
         try {
             ensureInitialized(session)
+            val turnIncarnation = session.incarnation
             val settings = settingsStore.awaitLoaded()
-            val conversation = session.state.value
+            // 上一轮失败的压缩对是 scratch：计划里先排除，否则它们会被当成普通历史，
+            // 锚点还可能落在马上要删的节点上
+            val conversation = session.state.value.removeCompressionPairs() ?: session.state.value
             val plan = when (
                 val result = conversation.planCompression(
                     windowStart = conversation.contextWindowStart(),
@@ -890,6 +904,9 @@ class ChatService(
             )
 
             // 旧失败对先清掉，再插提示词和空回复；saver 从 tick 0 就有稳定目标
+            if (session.incarnation != turnIncarnation) {
+                throw IllegalStateException(context.getString(R.string.chat_page_compress_conversation_changed))
+            }
             session.update { latest ->
                 val cleaned = latest.removeCompressionPairs() ?: latest
                 cleaned.copy(
@@ -900,13 +917,12 @@ class ChatService(
                 )
             }
             session.flush()
-            session.replyMessageId.value = reply.id
             val replyNodeId = session.state.value.getMessageNodeByMessageId(reply.id)?.id
                 ?: throw IllegalStateException(
                     context.getString(R.string.chat_page_compress_conversation_changed)
                 )
-            val turnIncarnation = session.incarnation
-            var succeeded = false
+            session.replyMessageId.value = reply.id
+            var summary: String? = null
 
             supervisorScope {
                 val saver = launch(Dispatchers.IO) {
@@ -933,29 +949,32 @@ class ChatService(
                             session.update { it.upsertMessage(replyNodeId, updated) }
                         },
                     )
-                    if (isTruncatedFinishReason(result.finishReason)) {
+                    if (isTruncatedCompressionFinish(result.finishReason)) {
                         error(context.getString(R.string.chat_page_compress_truncated))
                     }
-                    session.flushWith(turnIncarnation) { latest ->
-                        val applied = latest.applyCompressionResult(
-                            anchorNodeId = plan.anchorNodeId,
-                            promptMessageId = prompt.id,
-                            summary = result.summary,
-                        ) ?: throw IllegalStateException(
-                            context.getString(R.string.chat_page_compress_conversation_changed)
-                        )
-                        applied.copy(chatSuggestions = emptyList(), updateAt = Instant.now())
-                    } ?: throw IllegalStateException(
-                        context.getString(R.string.chat_page_compress_conversation_changed)
-                    )
-                    succeeded = true
+                    summary = result.summary
                 } finally {
                     withContext(NonCancellable) {
                         // 先停 saver 并等它退出，再全量收尾；反过来会在写锁上互相等待
                         saver.cancelAndJoin()
                         session.processingStatus.value = null
                         session.replyMessageId.value = null
-                        if (!succeeded) {
+                        val resultSummary = summary
+                        if (resultSummary != null) {
+                            // 成功：一次写完检查点、删提示词/回复和 updateAt，不再调 finishGeneration
+                            session.flushWith(turnIncarnation) { latest ->
+                                val applied = latest.applyCompressionResult(
+                                    anchorNodeId = plan.anchorNodeId,
+                                    promptMessageId = prompt.id,
+                                    summary = resultSummary,
+                                ) ?: throw IllegalStateException(
+                                    context.getString(R.string.chat_page_compress_conversation_changed)
+                                )
+                                applied.copy(chatSuggestions = emptyList(), updateAt = Instant.now())
+                            } ?: throw IllegalStateException(
+                                context.getString(R.string.chat_page_compress_conversation_changed)
+                            )
+                        } else {
                             // 失败/取消：结束 reasoning 并把提示词和部分回复落库
                             session.finishGeneration()
                         }
@@ -963,7 +982,7 @@ class ChatService(
                 }
             }
         } catch (e: CancellationException) {
-            if (session.incarnation == incarnation) {
+            if (session.incarnation == incarnation && !session.isClosing) {
                 notifyCompression(
                     context.getString(R.string.chat_page_compress_cancelled),
                     session.id,
@@ -1001,14 +1020,6 @@ class ChatService(
             dispatchNextQueuedMessage(conversationId)
         }
     }
-
-    private fun isTruncatedFinishReason(reason: String?): Boolean =
-        reason?.lowercase() in setOf(
-            "length",
-            "max_tokens",
-            "max_output_tokens",
-            "max_completion_tokens",
-        )
 
     /**
      * 把最近 [keep] 条消息之前的历史从后续请求里去掉，不调用模型。

@@ -43,3 +43,16 @@ internal fun Conversation.planCompression(windowStart: Int, keepRecent: Int): Co
         )
     )
 }
+
+/**
+ * 压缩摘要的 finish reason 是否表示被截断。提供商的写法不同：`length`、`max_tokens`、
+ * `incomplete:max_output_tokens`、单纯 `incomplete` 都算，按包含关系归一化。
+ */
+internal fun isTruncatedCompressionFinish(reason: String?): Boolean {
+    val normalized = reason?.lowercase() ?: return false
+    return normalized.contains("length") ||
+        normalized.contains("max_tokens") ||
+        normalized.contains("max_output_tokens") ||
+        normalized.contains("max_completion_tokens") ||
+        normalized.contains("incomplete")
+}

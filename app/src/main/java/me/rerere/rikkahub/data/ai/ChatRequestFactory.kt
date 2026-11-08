@@ -2,7 +2,9 @@ package me.rerere.rikkahub.data.ai
 
 import android.content.Context
 import android.util.Log
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.withContext
 import me.rerere.ai.agent.AgentHooks
 import me.rerere.ai.agent.AgentRequest
 import me.rerere.ai.agent.RetryPolicy
@@ -185,17 +187,20 @@ class ChatRequestFactory(
             current = initial
             finishReason = null
             val handler = StreamChunkHandler(params.model)
-            usageRecorder.wrap(
-                providerManager.getProviderByType(turn.providerSetting),
-                UsageTag(UsageSource.COMPRESSION, turn.assistant.id, turn.conversationId),
-            ).streamText(
-                providerSetting = turn.providerSetting,
-                messages = requestMessages + UIMessage.user(compressPrompt),
-                params = params.copy(maxTokens = null),
-            ).collect { chunk ->
-                if (chunk is StreamChunk.Finish) finishReason = chunk.finishReason
-                current = handler.handle(listOf(current), chunk).last()
-                onUpdate(current)
+            // 收集 lambda 在主线程的 appScope 里，handler 和逐 chunk 的状态更新要挪到 IO
+            withContext(Dispatchers.IO) {
+                usageRecorder.wrap(
+                    providerManager.getProviderByType(turn.providerSetting),
+                    UsageTag(UsageSource.COMPRESSION, turn.assistant.id, turn.conversationId),
+                ).streamText(
+                    providerSetting = turn.providerSetting,
+                    messages = requestMessages + UIMessage.user(compressPrompt),
+                    params = params.copy(maxTokens = null),
+                ).collect { chunk ->
+                    if (chunk is StreamChunk.Finish) finishReason = chunk.finishReason
+                    current = handler.handle(listOf(current), chunk).last()
+                    onUpdate(current)
+                }
             }
         }
         val summary = current.compressionSummaryOrNull()
