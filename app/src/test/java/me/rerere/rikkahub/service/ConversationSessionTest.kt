@@ -17,9 +17,14 @@ import kotlinx.coroutines.test.runCurrent
 import kotlinx.coroutines.test.runTest
 import kotlinx.coroutines.withContext
 import me.rerere.ai.core.MessageRole
+import me.rerere.ai.provider.Model
+import me.rerere.ai.provider.ProviderSetting
 import me.rerere.ai.ui.MessageStatus
 import me.rerere.ai.ui.UIMessage
 import me.rerere.ai.ui.UIMessagePart
+import me.rerere.rikkahub.data.ai.ChatTurnContext
+import me.rerere.rikkahub.data.datastore.Settings
+import me.rerere.rikkahub.data.model.Assistant
 import me.rerere.rikkahub.data.model.Conversation
 import me.rerere.rikkahub.data.model.MessageNode
 import me.rerere.rikkahub.data.model.selectBranch
@@ -1004,5 +1009,27 @@ class ConversationSessionTest {
         session.markReplyStatus(MessageStatus.FAILED)
 
         assertEquals(MessageStatus.FAILED, session.state.value.currentMessages.single().status)
+    }
+
+    @Test
+    fun `replacing a session drops the frozen approval turn`() = runBlocking {
+        val id = Uuid.random()
+        val session = ConversationSession(id, Conversation.ofId(id), this, FakeConversationStore(), {})
+        session.initialize(load = { null }, create = { Conversation.ofId(id) })
+        session.pendingApprovalTurn = ChatTurnContext(
+            settings = Settings.dummy(),
+            assistant = Assistant(),
+            model = Model(modelId = "test-model"),
+            providerSetting = ProviderSetting.Claude(),
+            conversationId = id,
+            conversationSystemPrompt = null,
+            workspaceCwd = null,
+            memories = emptyList(),
+            tools = emptyList(),
+        )
+
+        session.replace(Conversation.ofId(id), existsInDatabase = false) {}
+
+        assertNull(session.pendingApprovalTurn)
     }
 }

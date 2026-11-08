@@ -290,6 +290,7 @@
 | C57 请求日志开关持久化 | L3 | 无（日志页） |
 | C58 失败与中断回复状态 | L3 | 无（消息状态与请求过滤） |
 | C59 截断流识别与停止结算 | L3 | 无（provider 流终止与停止收尾） |
+| C60 审批期间冻结 turn 上下文 | L3 | C58、C59 |
 
 ### 依赖链
 
@@ -323,7 +324,7 @@ DSH 对照版本 `dsh-v0.2.1-rc.5`（`b830ec950f`）。结论：DSH 也不做逐
 RikkaHub 现状：
 
 - 重试单位是 step，`withRetry` 失败后回到 `stepStart`，前面的 step 和工具结果保留；单步回复看起来就是整条重来。DSH 也是这个语义，不是 RikkaHub 独有。
-- 只重试 `IOException`。HTTP 429、5xx、空回复不会重试；固定 3 次，1s/2s/4s，无 jitter，无 `Retry-After`；开关是全局的。
+- 只重试 `IOException`。带 body 的 HTTP 4xx/5xx 仍是 `HttpException`，不重试；空 body 的 HTTP 错误现在由 provider 包成 `IOException`，会按策略重试。空回复不会重试；固定 3 次，1s/2s/4s，无 jitter，无 `Retry-After`；开关是全局的。
 - C58 已给失败和用户停止的回复加 `FAILED`/`INTERRUPTED` 状态；请求组装、标题生成、记忆整理和 `read_conversations` 都过滤 `FAILED`，失败半截不会再作为普通回复进入下一轮。多步工具调用在中途失败时仍按整条消息隔离。
 - 失败后待执行工具在下次发送时补成 `cancelled by user`，不区分用户停止和网络失败。
 - UI 有失败/中断标记，但没有重试 attempt 行和倒计时；错误卡片没有重试按钮；`usage_record` 每次尝试一行，但没有成功/失败状态。
@@ -343,8 +344,8 @@ RikkaHub 现状：
 | --- | --- | --- | --- |
 | P1 | 截断的 SSE 被当成正常完成（C59 已修） | C59 前 Claude 的 `onClosed` 无条件补 `Finish`，没有 `message_stop` 的半截流会被提交为完整回复；OpenAI/Google 的 `onClosed` 同样无条件调用 `decoder.finish()`。C59 起五个 decoder 未见终止事件时抛 `IOException`，provider `onClosed` 转成 `close(e)`，`onFailure` 空 body 不再静默正常关闭。`ClaudeProvider.kt`、`ClaudeStreamDecoder.kt`、`ChatCompletionsAPI.kt`、`ChatCompletionsStreamDecoder.kt`、`ResponseAPI.kt`、`ResponseApiStreamDecoder.kt`、`GoogleProvider.kt`、`GoogleStreamDecoder.kt`、`InteractionsAPI.kt`、`InteractionsStreamDecoder.kt`。 | 已按此实现；严格判定对不发终止事件的中转会变成可重试错误，按 provider 加宽松条件而不是全局关掉。 |
 | P1 | 停止的 pending 结算不保证执行（C59 已修） | C59 前 `stopGeneration` 先 pause/cancelJobs，再 join，join 后才 `finishInterruptedPendingTools`，不在 `NonCancellable`；页面退出导致 join 取消时 pending 工具不结算。C59 起 join 与工具收尾放进 `withContext(NonCancellable)`，发送前的 `finishInterruptedPendingTools` 仍保留作崩溃补偿。`ChatService.kt:1481-1493`、`ChatVM.kt:386-390`。 | 已按此实现；NonCancellable 只包 join 和工具收尾，不包 UI 状态。 |
-| P1 | 分支切换绕过审批门禁 | `selectMessageNode` 只挡压缩，不挡审批；切走分支后 `isAwaitingToolApproval` 变 false，队列可派发，pending 调用留在未选中分支，下一次 `withoutUnresumableToolCalls` 会整条删除该 assistant 消息。`ChatService.kt:1429-1453`、`Conversation.kt:252-253,264-272`。 | 审批期间禁止切分支，或把待审批状态提升为 session 级 turn 状态。 |
-| P1 | 审批恢复重新解析配置 | 审批期间 `setChatModel` 没有门禁；`handleToolApproval` 恢复时重新 `runTurn`/`createContext`，工具结果和工具 schema 会落到新模型/provider，不是产生 pending call 的那份配置。`ChatService.kt:560,581,623,631,1073-1090`、`ChatVM.kt:266-270`。 | 把本轮 `ChatTurnContext` 冻结进 session 供审批恢复复用；或审批期间拒绝改配置并提示下一轮生效。 |
+| P1 | 分支切换绕过审批门禁（C60 已修） | C60 前 `selectMessageNode` 只挡压缩，不挡审批；切走分支后 `isAwaitingToolApproval` 变 false，队列可派发，pending 调用留在未选中分支。C60 起 `isAwaitingToolApproval` 或 `pendingApprovalTurn` 非空时直接抛 `ConflictException`。`ChatService.selectMessageNode`、`Conversation.isAwaitingToolApproval`。 | 已按此实现；ChatVM 目前只记日志，Web 返回 409。 |
+| P1 | 审批恢复重新解析配置（C60 已修） | C60 前审批期间 `setChatModel` 没有门禁，`handleToolApproval` 恢复时重新 `runTurn`/`createContext`，工具结果和工具 schema 会落到新模型/provider。C60 起 `ConversationSession.pendingApprovalTurn` 冻结本轮 `ChatTurnContext`，审批恢复复用它；配置变化从下一轮生效。`ChatService.runTurn`、`ConversationSession.pendingApprovalTurn`、`ChatVM.setChatModel`。 | 已按此实现；冻结只在内存，进程死亡后退化为当前配置。 |
 | P1 | 没有流内 idle watchdog | 只有 OkHttp/Ktor 的 10 分钟 per-read timeout；无 chunk 无心跳会卡 10 分钟，有 SSE 心跳时 read timeout 被不断重置，可能永久停在生成中。`DataSourceModule.kt:186-191,274-283`、`AgentLoop.kt:110-129`。 | 在 chunk 收集层加相邻 chunk 间隔超时，90 到 120 秒，抛专用异常；readTimeout 保留作外层兜底。 |
 | P1 | 没有 error-driven overflow 恢复 | 请求装配只有 `limitContext` 的条数截断，没有 token 水位和 context overflow 错误分类；provider 返回 overflow 直接进错误卡片，压缩只能手动触发。`ChatRequestFactory.kt:223,250,322-323`、`ChatService.kt:825-852`。 | provider 层归一化 `CONTEXT_WINDOW_EXCEEDED`；agent 循环自动压缩或截断一次再重试，仍失败才出卡片。 |
 | P2 | 工具恢复语义失真 | `cancelInterruptedTools` 把未开始、执行中、失败、进程死亡都写成 `cancelled by user`，也包括 `Pending`；`isExecuted` 只看 output，执行到一半会被写成已完成。`runTool` 没有超时，错误结果把堆栈交给模型。`ConversationMessages.kt:149-164`、`UIMessagePart.kt:196-202`、`AgentLoop.kt:159-170,195-205`。 | 按 `startedAt` 区分 `TOOL_NOT_STARTED` 与 `TOOL_OUTCOME_UNKNOWN`；Pending 跳过；用 `NonCancellable` 写 output；加可配置工具超时；堆栈只进日志。 |
@@ -359,8 +360,8 @@ RikkaHub 现状：
 P1 分批：P1a 截断 SSE 与停止结算，P1b 审批分支与配置快照，P1c idle watchdog、稳定错误码重试、overflow 兜底。
 
 1. P0 失败 attempt 隔离已由 C58 完成；多步工具调用的 per-step 细化随工具恢复一起做。
-2. P1a 截断 SSE 与停止结算已由 C59 完成；下一步做 P1b 审批分支与配置快照。
-3. 然后做 P1c 的 idle watchdog、稳定错误码重试、overflow 兜底。
+2. P1a 截断 SSE 与停止结算已由 C59 完成；P1b 审批分支与配置快照已由 C60 完成；下一步做 P1c。
+3. P1c 做 idle watchdog、稳定错误码重试、overflow 兜底。
 4. P2 按工具恢复、进程死亡与 C50、队列、上下文压缩、scratch 分批处理。
 
 范围说明：C59 已逐行核对五个 decoder 的终止判定和五个 provider 接线点的 `onClosed`，并用 `:ai:testDebugUnitTest` 全量验证；工具并发没有展开，当前 RikkaHub 按顺序执行，未发现正确性问题，只是并发效率较低。

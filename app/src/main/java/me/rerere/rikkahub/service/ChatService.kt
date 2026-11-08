@@ -620,7 +620,20 @@ class ChatService(
             // 它会挂起也可能失败，期间或失败后不能还指着上一轮的回复
             session.replyMessageId.value = history.lastOrNull()?.takeIf { it.role == MessageRole.ASSISTANT }?.id
 
-            val turn = requestFactory.createContext(settings, conversation)
+            // 审批恢复沿用产生 pending call 的那份上下文，配置变化从下一轮开始。
+            // 只有末条 assistant 上还有可恢复的工具时才认这份上下文，避免 regenerate 或脏状态误用。
+            val canResumeApproval = history.lastOrNull()
+                ?.getTools()
+                ?.any { !it.isExecuted && it.canResumeExecution } == true
+            val frozenTurn = session.pendingApprovalTurn.takeIf {
+                regenerateNodeId == null && canResumeApproval
+            }
+            if (session.pendingApprovalTurn != null && frozenTurn == null) {
+                if (!canResumeApproval) session.pendingApprovalTurn = null
+                throw ConflictException("Tool approval pending")
+            }
+            val turn = frozenTurn ?: requestFactory.createContext(settings, conversation)
+            if (frozenTurn != null) session.pendingApprovalTurn = null
             senderName = if (turn.assistant.useAssistantAvatar) {
                 turn.assistant.name.ifEmpty { context.getString(R.string.assistant_page_default_assistant) }
             } else {
@@ -690,6 +703,11 @@ class ChatService(
                         val settlementStatus = resolveSettlementStatus(failure, finishReason)
                         if (settlementStatus != MessageStatus.COMPLETE) {
                             session.markReplyStatus(settlementStatus)
+                        }
+                        session.pendingApprovalTurn = if (finishReason is AgentFinishReason.AwaitingApproval) {
+                            turn
+                        } else {
+                            null
                         }
                         // 可能被取消了，或者意外结束，兜底保存
                         val finished = session.finishGeneration()
@@ -1437,6 +1455,10 @@ class ChatService(
                 throw ConflictException("Compression in progress")
             }
             val conversation = session.state.value
+            // 待审批的工具挂在当前分支上，切走分支会让它变成孤儿；审批恢复期间也不能切
+            if (conversation.isAwaitingToolApproval || session.pendingApprovalTurn != null) {
+                throw ConflictException("Tool approval pending")
+            }
             val targetNode = conversation.messageNodes.firstOrNull { it.id == nodeId }
                 ?: throw NotFoundException("Message node not found")
             if (selectIndex !in targetNode.messages.indices) {
@@ -1487,6 +1509,7 @@ class ChatService(
         if (jobs.isEmpty()) return
         withContext(NonCancellable) {
             jobs.forEach { it.join() }
+            session.pendingApprovalTurn = null
             if (session.isInitialized) finishInterruptedPendingTools(session)
         }
     }

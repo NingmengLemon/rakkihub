@@ -16,6 +16,7 @@ import kotlinx.coroutines.withContext
 import me.rerere.ai.ui.MessageStatus
 import me.rerere.ai.ui.UIMessagePart
 import me.rerere.ai.ui.finishReasoning
+import me.rerere.rikkahub.data.ai.ChatTurnContext
 import me.rerere.rikkahub.data.model.Conversation
 import me.rerere.rikkahub.data.model.MessageNode
 import me.rerere.rikkahub.data.model.selectBranch
@@ -374,6 +375,7 @@ class ConversationSession(
         }
         processingStatus.value = null
         replyMessageId.value = null
+        pendingApprovalTurn = null
         generationStartedAt.value = null
         _compressionActive.value = false
         isClosing = false
@@ -413,6 +415,10 @@ class ConversationSession(
     // 最近一轮正在写的助手消息，这一轮还没有输出时为空。重新生成较早的消息时它不在会话末尾，
     // 生成期间那个节点还可能被切到别的分支，只能按 id 找
     val replyMessageId = MutableStateFlow<Uuid?>(null)
+
+    // 等待工具审批期间冻结的本轮上下文，审批通过后继续用同一份 provider、模型和工具定义
+    @Volatile
+    internal var pendingApprovalTurn: ChatTurnContext? = null
 
     // 最近一次生成任务开始的时间，用来认出这一轮报的错。在任务启动前同步记下，任务里报的错不会早于它
     val generationStartedAt = MutableStateFlow<Long?>(null)

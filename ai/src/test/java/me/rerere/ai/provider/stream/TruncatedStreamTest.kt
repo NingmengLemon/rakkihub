@@ -50,6 +50,20 @@ class TruncatedStreamTest {
     }
 
     @Test
+    fun `the done sentinel completes every decoder`() {
+        listOf(
+            ClaudeStreamDecoder(),
+            ChatCompletionsStreamDecoder(),
+            ResponseApiStreamDecoder(),
+            GoogleStreamDecoder(responseId = "response", model = "model"),
+            InteractionsStreamDecoder(),
+        ).forEach { decoder ->
+            assertTrue(decoder.accept(SseEvent(data = "[DONE]")).completed)
+            assertTrue(decoder.onClosed().isEmpty())
+        }
+    }
+
+    @Test
     fun `each real terminal signal completes the stream`() {
         val claude = ClaudeStreamDecoder()
         assertTrue(claude.accept(SseEvent(event = "message_stop", data = "{}")).completed)
