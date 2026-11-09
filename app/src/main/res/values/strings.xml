@@ -791,8 +791,6 @@
   <string name="setting_page_preferences_network_proxy_invalid">Enter a valid proxy URL with a host and port.</string>
   <string name="setting_page_preferences_network_auto_retry">Automatic retry</string>
   <string name="setting_page_preferences_network_auto_retry_desc">Retry model requests up to 3 times on transient network, rate-limit, server, or empty-response failures.</string>
-  <string name="setting_page_documentation">Documentation</string>
-  <string name="setting_page_documentation_desc">View app usage instructions and help documentation</string>
   <string name="setting_page_donate">Donate</string>
   <string name="setting_page_donate_desc">If you like it, sponsor the author\'s work</string>
   <string name="setting_page_dynamic_color">Dynamic Color</string>

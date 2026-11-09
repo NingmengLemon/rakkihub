@@ -71,6 +71,7 @@
 | C61 | 结构化失败与重试策略 | 改造 |
 | C62 | 流式 idle watchdog | 改造 |
 | C63 | 上下文超限自动缩窗 | 改造 |
+| C64 | 移除设置页关于区域的社区与文档入口 | 移除 |
 
 ## 明细
 
@@ -161,7 +162,7 @@
 
 - 落点：`SettingPage.kt`（about 分组里的分享 item、`shareText`/`share`/`noShareApp` 三个局部变量与三个失效 import）、7 个 locale 的 `setting_page_share`、`setting_page_share_desc`、`setting_page_share_text`、`setting_page_no_share_app`；品牌文案：`setting_page_web_server_desc`（7 个 locale）、`oauth` 模块的 4 条回调提示（7 个 locale）、`web-ui` 的 `page.json` 标题与描述、`conversation-sidebar.tsx` 的侧边栏标题
 - 理由：分享出去还自称官方品牌并指向上游官网，没有意义；其余文案跟着应用名一起改成 RakkiHub
-- 合并注意：`search-picker.tsx` 里的 `rikkahub: "RikkaHub"` 是搜索服务的显示名，指官方接口，保留；`backup_page_import_from_official` 的「Import from RikkaHub」指官方应用，同样保留。`SettingAboutPage` 的 `RikkaHub` 标题与 `rikka-ai.com`、GitHub、LICENSE 链接保留，设置根页的 `docs.rikka-ai.com` 链接也保留，`web-ui` 页脚的官方站链接同样保留，作为上游出处标注，没有改成自己的品牌
+- 合并注意：`search-picker.tsx` 里的 `rikkahub: "RikkaHub"` 是搜索服务的显示名，指官方接口，保留；`backup_page_import_from_official` 的「Import from RikkaHub」指官方应用，同样保留。`SettingAboutPage` 的 `RikkaHub` 标题与 `rikka-ai.com`、GitHub、LICENSE 链接保留，设置根页的 `docs.rikka-ai.com` 链接已由 C64 移除，`web-ui` 页脚的官方站链接同样保留，作为上游出处标注，没有改成自己的品牌
 
 ### C15 移除更新检查
 
@@ -474,3 +475,10 @@
 - 理由：C61 已能把 provider 的 context overflow 归一化，但之前直接进错误卡片；用户只能手动压缩。自动缩窗不需要额外摘要请求，失败时只牺牲旧历史，保留最后几轮。
 - 合并注意：只缩一次，不做自动压缩；窗口先受 `contextMessageLimit` 约束，再取最后一条 user 起、至少两条的子窗口，仍可能因单条超大输入失败。按消息条数裁剪，不算 token；非 user 的前导消息会被丢弃，压缩检查点也可能被这个 fallback 跳过。窗口之后还会 `mergeAdjacentUserMessages`，相邻 user 合并后实际条数可能少于两条，但首条仍然是 user。hook 状态属于本次 `createAgent` 的 hooks 实例，后续工具 step 每步按当前消息重算。缩窗只改变发给模型的历史，不改会话里已有的消息和分支。C61 的 `CONTEXT_WINDOW_EXCEEDED` 分类是前置条件；非流式和流式都经过 AgentLoop，所以都覆盖。`ai/` 分叉计数因此变为十处。
 - 测试：`AgentLoopTest` 用抛 `CONTEXT_WINDOW_EXCEEDED` 的假流验证首轮、工具 step 后、连续两次、以及 preview 后重试的消息 id 复用；`ChatRequestFactoryContextTest` 覆盖 configured 窗口子集、最后 user 起始、至少两条、fallback 到上一条 user、以及当前消息刷新的边界；`:ai:testDebugUnitTest`、`:app:testGithubDebugUnitTest` 对应测试通过。手动验收：有足够旧历史时，用超长历史触发 provider 400 context，确认窗口缩到最后 user 后重试成功；重试后如果模型再发起工具调用，下一步请求必须包含新的 tool call 和工具结果，且工具只执行一次；只有一两条可见消息或单条超大输入仍失败并出卡片，不无限缩。
+
+### C64 移除设置页关于区域的社区与文档入口
+
+- 落点：`SettingPage` 关于卡片移除 QQ 群按钮、Discord 按钮和使用文档行；删除 `QQGroupBottomSheet`、`QQGroup`、`QQ_GROUPS`、`Context.joinQQGroup`、`ui/src/main/java/me/rerere/ui/icons/TencentQQIcon.kt`、`ui/src/main/java/me/rerere/ui/icons/DiscordIcon.kt`，以及四份 locale 的 `setting_page_documentation`/`setting_page_documentation_desc`。
+- 理由：这些入口指向外部社区和官方文档，不再随本分支维护；保留只会带来失效链接和额外图标/字符串维护成本。
+- 合并注意：关于卡片仍保留设置页跳转、请求日志和赞助入口；没有新增替代链接。删除的是入口和死代码，不影响设置页其它分组。两个图标是上游 `ui/` 文件，移植上游对 `ui/src/main/java/me/rerere/ui/icons/` 的改动时按本项删除；C14 里“设置根页也保留 docs 链接”的旧说法已由本项取代。`ai/` 无改动。
+- 测试：`assembleGithubDebug`、`spotlessCheck`、markdownlint 通过；手动检查设置页关于区域不再出现 QQ/Discord/文档项，关于页跳转、日志和赞助仍可用。
