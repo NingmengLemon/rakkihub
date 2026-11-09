@@ -7,6 +7,7 @@ import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.flow.FlowCollector
 import kotlinx.coroutines.flow.timeout
+import kotlinx.coroutines.withTimeoutOrNull
 import kotlinx.datetime.TimeZone
 import kotlinx.datetime.toLocalDateTime
 import kotlinx.serialization.json.buildJsonObject
@@ -243,7 +244,8 @@ internal class AgentLoop(
         val definition = findTool(tool.toolName) ?: error("Tool ${tool.toolName} not found")
         val args = runCatching { json.parseToJsonElement(tool.input.ifBlank { "{}" }) }
             .getOrElse { error("Invalid tool arguments JSON for ${tool.toolName}: ${it.message}") }
-        definition.execute(args).ifEmpty { listOf(UIMessagePart.Text(EMPTY_TOOL_OUTPUT)) }
+        val output = executeToolWithTimeout(tool.toolName) { definition.execute(args) }
+        output.ifEmpty { listOf(UIMessagePart.Text(EMPTY_TOOL_OUTPUT)) }
     } catch (e: CancellationException) {
         // 取消必须向上传播，否则停止生成会被误报为工具执行错误
         throw e
@@ -251,6 +253,23 @@ internal class AgentLoop(
         // 堆栈只留日志，不再塞进工具结果，避免把内部路径和实现细节发给模型
         e.printStackTrace()
         errorOutput("Tool execution failed: ${e.message ?: e.javaClass.simpleName}")
+    }
+
+    private suspend fun executeToolWithTimeout(
+        toolName: String,
+        execute: suspend () -> List<UIMessagePart>,
+    ): List<UIMessagePart> {
+        suspend fun call(): List<UIMessagePart> = try {
+            execute()
+        } catch (e: TimeoutCancellationException) {
+            // 工具内部自己的 timeout 不应取消整轮；先确认不是外部停止/agent 超时
+            currentCoroutineContext().ensureActive()
+            errorOutput("Tool $toolName timed out internally")
+        }
+
+        val timeout = request.toolTimeout ?: return call()
+        return withTimeoutOrNull(timeout) { call() }
+            ?: errorOutput("Tool execution timed out after ${timeout.inWholeSeconds}s")
     }
 
     private fun findTool(name: String) = request.tools.find { it.name == name }

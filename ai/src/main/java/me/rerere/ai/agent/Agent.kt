@@ -8,6 +8,7 @@ import me.rerere.ai.provider.ProviderSetting
 import me.rerere.ai.provider.TextGenerationParams
 import me.rerere.ai.ui.UIMessage
 import kotlin.time.Duration
+import kotlin.time.Duration.Companion.minutes
 import kotlin.time.Duration.Companion.seconds
 
 /**
@@ -27,6 +28,8 @@ data class AgentRequest(
     val retry: RetryPolicy = RetryPolicy.NONE,
     /** 流式相邻 chunk 的最长等待；null 关闭 watchdog */
     val streamIdleTimeout: Duration? = 90.seconds,
+    /** 单个客户端工具的最长执行时间；null 关闭超时 */
+    val toolTimeout: Duration? = 5.minutes,
 )
 
 /** 调用方在循环各个节点上的介入点 */

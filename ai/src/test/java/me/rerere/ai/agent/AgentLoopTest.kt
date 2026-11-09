@@ -10,6 +10,7 @@ import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.toList
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.test.runTest
+import kotlinx.coroutines.withTimeout
 import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
@@ -35,6 +36,8 @@ import org.junit.Assert.assertTrue
 import org.junit.Test
 import java.io.IOException
 import kotlin.time.Duration
+import kotlin.time.Duration.Companion.milliseconds
+import kotlin.time.Duration.Companion.minutes
 import kotlin.time.Duration.Companion.seconds
 
 class AgentLoopTest {
@@ -49,6 +52,7 @@ class AgentLoopTest {
         maxSteps: Int = 256,
         retry: RetryPolicy = RetryPolicy.NONE,
         streamIdleTimeout: Duration? = 90.seconds,
+        toolTimeout: Duration? = 5.minutes,
     ) = AgentRequest(
         provider = provider,
         providerSetting = ProviderSetting.OpenAI(),
@@ -58,6 +62,7 @@ class AgentLoopTest {
         maxSteps = maxSteps,
         retry = retry,
         streamIdleTimeout = streamIdleTimeout,
+        toolTimeout = toolTimeout,
     )
 
     private suspend fun runToEnd(
@@ -522,6 +527,55 @@ class AgentLoopTest {
         assertTrue(output.contains("disk full"))
         assertFalse(output.contains("IllegalStateException"))
         assertFalse(output.contains("at me.rerere"))
+        assertEquals(AgentFinishReason.Completed, finished.reason)
+    }
+
+    @Test
+    fun `tool execution timeout is reported to the model`() = runTest {
+        val tools = listOf(tool("slow") {
+            delay(10_000)
+            ok()
+        })
+        provider.stream {
+            toolCall("call-1", "slow")
+            finish()
+        }
+        provider.stream {
+            text("sorry")
+            finish()
+        }
+
+        val finished = runToEnd(
+            request(tools = tools, toolTimeout = 1.seconds)
+        ).finished()
+
+        val output = finished.message.tool("call-1").outputText()
+        assertTrue(output.contains("timed out after 1s"))
+        assertNotNull(finished.message.tool("call-1").startedAt)
+        assertNotNull(finished.message.tool("call-1").finishedAt)
+        assertEquals(2, provider.requests.size)
+        assertTrue(provider.requests[1].messages.last().tool("call-1").outputText().contains("timed out"))
+        assertEquals(AgentFinishReason.Completed, finished.reason)
+    }
+
+    @Test
+    fun `tool internal timeout is reported without cancelling the run`() = runTest {
+        val tools = listOf(tool("inner") {
+            withTimeout(100.milliseconds) { delay(1_000) }
+            ok()
+        })
+        provider.stream {
+            toolCall("call-1", "inner")
+            finish()
+        }
+        provider.stream {
+            text("sorry")
+            finish()
+        }
+
+        val finished = runToEnd(request(tools = tools, toolTimeout = null)).finished()
+
+        assertTrue(finished.message.tool("call-1").outputText().contains("timed out internally"))
         assertEquals(AgentFinishReason.Completed, finished.reason)
     }
 
