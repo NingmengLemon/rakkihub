@@ -57,11 +57,18 @@ import kotlin.uuid.Uuid
 
 private const val TAG = "ChatRequestFactory"
 
-/** 上下文超限后按实际发送窗口减半，至少保留两条；返回 null 表示无法再缩。 */
-internal fun shrinkContextLimit(configured: Int, visibleCount: Int): Int? {
-    val window = if (configured > 0) minOf(configured, visibleCount) else visibleCount
-    if (window <= 2) return null
-    return maxOf(2, window / 2).takeIf { it < window }
+/** 上下文超限后取最后一条 user 起的窗口，至少两条且必须比原窗口小；返回 null 表示无法安全缩。 */
+internal fun overflowWindow(messages: List<UIMessage>): List<UIMessage>? {
+    val lastUser = messages.indexOfLast { it.role == MessageRole.USER }
+    if (lastUser < 0) return null
+    val start = if (messages.size - lastUser >= 2) {
+        lastUser
+    } else {
+        messages.subList(0, lastUser).indexOfLast { it.role == MessageRole.USER }
+            .takeIf { it >= 0 } ?: lastUser
+    }
+    val window = messages.drop(start)
+    return window.takeIf { it.size >= 2 && it.size < messages.size }
 }
 
 /**
@@ -153,22 +160,20 @@ class ChatRequestFactory(
             stream = turn.assistant.streamOutput,
             retry = turn.settings.retryPolicy(),
         )
-        var lastVisibleCount = 0
-        var contextLimitOverride: Int? = null
+        var lastVisibleMessages: List<UIMessage> = emptyList()
+        var contextMessagesOverride: List<UIMessage>? = null
         val hooks = object : AgentHooks {
             override suspend fun prepareStep(messages: List<UIMessage>): StepRequest {
                 Log.i(TAG, "prepareStep: ${turn.model.id}")
-                lastVisibleCount = messages.filterModelVisible().size
-                return buildStep(turn, messages, processingStatus, contextLimitOverride)
+                lastVisibleMessages = messages.filterModelVisible()
+                return buildStep(turn, messages, processingStatus, contextMessagesOverride)
             }
 
             override suspend fun onContextOverflow(): Boolean {
-                if (contextLimitOverride != null) return false
-                val shrunken = shrinkContextLimit(
-                    configured = turn.assistant.contextMessageLimit,
-                    visibleCount = lastVisibleCount,
-                ) ?: return false
-                contextLimitOverride = shrunken
+                if (contextMessagesOverride != null) return false
+                val window = overflowWindow(lastVisibleMessages) ?: return false
+                contextMessagesOverride = window
+                Log.i(TAG, "context overflow: shrank ${lastVisibleMessages.size} -> ${window.size} messages")
                 return true
             }
 
@@ -234,20 +239,12 @@ class ChatRequestFactory(
         )
     }
 
-    /** Anthropic 要求首条非 system 消息是 user；缩窗后如果从 assistant 开头，丢掉前面的残片。 */
-    private fun List<UIMessage>.ensureUserFirstForOverflow(): List<UIMessage> {
-        if (firstOrNull()?.role == MessageRole.USER) return this
-        if (firstOrNull()?.isContextCheckpoint == true) return this
-        val firstUser = indexOfFirst { it.role == MessageRole.USER }
-        return if (firstUser >= 0) drop(firstUser) else this
-    }
-
     /** 一步请求实际发出的消息和参数；正常对话和压缩共用，二者的请求前缀必须一致才能命中提示词缓存 */
     private suspend fun buildStep(
         turn: ChatTurnContext,
         messages: List<UIMessage>,
         processingStatus: MutableStateFlow<String?> = MutableStateFlow(null),
-        contextLimitOverride: Int? = null,
+        contextMessagesOverride: List<UIMessage>? = null,
     ): StepRequest {
         val assistant = turn.assistant
         val visibleMessages = messages.filterModelVisible()
@@ -277,10 +274,10 @@ class ChatRequestFactory(
             if (system.isNotBlank()) {
                 add(UIMessage.system(prompt = system).copy(isSynthetic = true))
             }
-            val limited = visibleMessages.limitContext(
-                contextLimitOverride ?: assistant.contextMessageLimit
+            addAll(
+                contextMessagesOverride
+                    ?: visibleMessages.limitContext(assistant.contextMessageLimit)
             )
-            addAll(if (contextLimitOverride != null) limited.ensureUserFirstForOverflow() else limited)
         }.transforms(
             transformers = inputTransformers,
             context = context,
