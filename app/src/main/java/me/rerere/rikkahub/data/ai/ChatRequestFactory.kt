@@ -160,20 +160,21 @@ class ChatRequestFactory(
             stream = turn.assistant.streamOutput,
             retry = turn.settings.retryPolicy(),
         )
-        var lastVisibleMessages: List<UIMessage> = emptyList()
-        var contextMessagesOverride: List<UIMessage>? = null
+        var lastLimitedMessages: List<UIMessage> = emptyList()
+        var shrinkActive = false
         val hooks = object : AgentHooks {
             override suspend fun prepareStep(messages: List<UIMessage>): StepRequest {
                 Log.i(TAG, "prepareStep: ${turn.model.id}")
-                lastVisibleMessages = messages.filterModelVisible()
-                return buildStep(turn, messages, processingStatus, contextMessagesOverride)
+                lastLimitedMessages = messages.filterModelVisible()
+                    .limitContext(turn.assistant.contextMessageLimit)
+                return buildStep(turn, messages, processingStatus, shrinkActive)
             }
 
             override suspend fun onContextOverflow(): Boolean {
-                if (contextMessagesOverride != null) return false
-                val window = overflowWindow(lastVisibleMessages) ?: return false
-                contextMessagesOverride = window
-                Log.i(TAG, "context overflow: shrank ${lastVisibleMessages.size} -> ${window.size} messages")
+                if (shrinkActive) return false
+                val window = overflowWindow(lastLimitedMessages) ?: return false
+                shrinkActive = true
+                Log.i(TAG, "context overflow: shrank ${lastLimitedMessages.size} -> ${window.size} messages")
                 return true
             }
 
@@ -244,7 +245,7 @@ class ChatRequestFactory(
         turn: ChatTurnContext,
         messages: List<UIMessage>,
         processingStatus: MutableStateFlow<String?> = MutableStateFlow(null),
-        contextMessagesOverride: List<UIMessage>? = null,
+        shrinkActive: Boolean = false,
     ): StepRequest {
         val assistant = turn.assistant
         val visibleMessages = messages.filterModelVisible()
@@ -274,10 +275,8 @@ class ChatRequestFactory(
             if (system.isNotBlank()) {
                 add(UIMessage.system(prompt = system).copy(isSynthetic = true))
             }
-            addAll(
-                contextMessagesOverride
-                    ?: visibleMessages.limitContext(assistant.contextMessageLimit)
-            )
+            val limited = visibleMessages.limitContext(assistant.contextMessageLimit)
+            addAll(if (shrinkActive) overflowWindow(limited) ?: limited else limited)
         }.transforms(
             transformers = inputTransformers,
             context = context,
