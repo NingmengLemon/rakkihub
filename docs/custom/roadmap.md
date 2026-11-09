@@ -173,7 +173,7 @@
 | `speech/` | C5 删掉了全部运行时实现，只留两个序列化类与它们的序列化测试 | 不看 |
 | `mediagen/` | C1 保留模块以维持数据兼容，界面不使用 | 不主动看，改到 `MediaGenerationProviderSetting` 这类持久化类型时复核 |
 
-`ai/` 下有九处改动：C3 删掉了 `ai/util/Request.kt` 里给 aihubmix.com 加 `APP-Code` 请求头的分支；C52 把 `ClaudeProvider` 的缓存断点收敛到官方标准；C53 把 Claude 缓存策略改成按 provider 切换，默认保留上游原来的 4 个断点；C47 在 `ai/ui/Message.kt` 新增了只读的 `contextLimitStart`，不改 `limitContext`；C51 在 `ai/ui/Message.kt` 新增了序列化字段 `isCompressionPrompt`，用于标记压缩提示词；C58 在 `ai/ui/Message.kt` 新增了 `status`、`isModelVisible`、`filterModelVisible` 和 `mergeAdjacentUserMessages`；C59 让五个 `StreamChunkDecoder` 在未见终止事件时抛 `IOException`，并在五个 provider 接线点的 `onClosed` 里 `close(e)`；C61 在 `ErrorParser.kt` 增加 `LlmFailureCode`/`HttpException` 错误码和 `Retry-After`，`RetryPolicy` 按码表、jitter 和 `maxDelay` 重试，`AgentLoop` 把空回复转成 `EMPTY_RESPONSE`；C62 给 `AgentRequest` 增加 `streamIdleTimeout`，`AgentLoop` 用 `Flow.timeout` 把流内空闲转成 `TIMEOUT`。C35 的 `filterByKeywords` 与上游 `5ad19405` 逐字一致，不算分叉。移植上游对这些文件的改动时保留这九处。
+`ai/` 下有十处改动：C3 删掉了 `ai/util/Request.kt` 里给 aihubmix.com 加 `APP-Code` 请求头的分支；C52 把 `ClaudeProvider` 的缓存断点收敛到官方标准；C53 把 Claude 缓存策略改成按 provider 切换，默认保留上游原来的 4 个断点；C47 在 `ai/ui/Message.kt` 新增了只读的 `contextLimitStart`，不改 `limitContext`；C51 在 `ai/ui/Message.kt` 新增了序列化字段 `isCompressionPrompt`，用于标记压缩提示词；C58 在 `ai/ui/Message.kt` 新增了 `status`、`isModelVisible`、`filterModelVisible` 和 `mergeAdjacentUserMessages`；C59 让五个 `StreamChunkDecoder` 在未见终止事件时抛 `IOException`，并在五个 provider 接线点的 `onClosed` 里 `close(e)`；C61 在 `ErrorParser.kt` 增加 `LlmFailureCode`/`HttpException` 错误码和 `Retry-After`，`RetryPolicy` 按码表、jitter 和 `maxDelay` 重试，`AgentLoop` 把空回复转成 `EMPTY_RESPONSE`；C62 给 `AgentRequest` 增加 `streamIdleTimeout`，`AgentLoop` 用 `Flow.timeout` 把流内空闲转成 `TIMEOUT`；C63 给 `AgentHooks` 增加 `onContextOverflow`，`AgentLoop` 捕获 `CONTEXT_WINDOW_EXCEEDED` 后允许 hook 缩窗重试一次。C35 的 `filterByKeywords` 与上游 `5ad19405` 逐字一致，不算分叉。移植上游对这些文件的改动时保留这十处。
 
 上游从 3.0.0 起把多步生成循环放进 `ai/`（`ai/src/main/java/me/rerere/ai/agent/AgentLoop.kt`），3.1.1 又把工具执行计时与 models.dev 的模型能力数据放进去。现在还值得看 `ai/` 吗，取决于它是不是一块能单独参考的区域：如果它继续吸收 `app/` 侧的耦合，读改动的成本会变高。
 
@@ -293,6 +293,7 @@
 | C60 审批期间冻结 turn 上下文 | L3 | 无（审批 turn 上下文） |
 | C61 结构化失败与重试策略 | L3 | 无（错误分类与重试） |
 | C62 流式 idle watchdog | L3 | C61 |
+| C63 上下文超限自动缩窗 | L3 | C61 |
 
 ### 依赖链
 
@@ -350,7 +351,7 @@ RikkaHub 现状：
 | P1 | 分支切换绕过审批门禁（C60 已修） | C60 前 `selectMessageNode` 只挡压缩，不挡审批；切走分支后 `isAwaitingToolApproval` 变 false，队列可派发，pending 调用留在未选中分支。C60 起 `isAwaitingToolApproval` 或 `pendingApprovalTurn` 非空时直接抛 `ConflictException`。`ChatService.selectMessageNode`、`Conversation.isAwaitingToolApproval`。 | 已按此实现；ChatVM 目前只记日志，Web 返回 409。 |
 | P1 | 审批恢复重新解析配置（C60 已修） | C60 前审批期间 `setChatModel` 没有门禁，`handleToolApproval` 恢复时重新 `runTurn`/`createContext`，工具结果和工具 schema 会落到新模型/provider。C60 起 `ConversationSession.pendingApprovalTurn` 冻结本轮 `ChatTurnContext`，审批恢复复用它；配置变化从下一轮生效。`ChatService.runTurn`、`ConversationSession.pendingApprovalTurn`；`ChatVM.setChatModel` 没有改，允许改但只影响下一轮。 | 已按此实现；冻结只在内存，进程死亡后退化为当前配置。 |
 | P1 | 没有流内 idle watchdog（C62 已修） | C62 前只有 OkHttp/Ktor 的 10 分钟 per-read timeout；无 chunk 无心跳会卡 10 分钟，有 SSE 心跳时 read timeout 被不断重置，可能永久停在生成中。C62 起 `AgentRequest.streamIdleTimeout` 默认 90 秒，`AgentLoop.stream` 用 `Flow.timeout` 在相邻 chunk 间超时，抛 `LlmFailure(TIMEOUT)` 进重试；用户取消仍优先传播。`AgentLoop.kt`、`Agent.kt`。 | 已按此实现；默认值目前没有设置页入口，非流式仍依赖网络层读超时。 |
-| P1 | 没有 error-driven overflow 恢复 | 请求装配只有 `limitContext` 的条数截断，没有 token 水位和 context overflow 错误分类；provider 返回 overflow 直接进错误卡片，压缩只能手动触发。`ChatRequestFactory.kt:223,250,322-323`、`ChatService.kt:825-852`。 | provider 层归一化 `CONTEXT_WINDOW_EXCEEDED`；agent 循环自动压缩或截断一次再重试，仍失败才出卡片。 |
+| P1 | 没有 error-driven overflow 恢复（C63 已修） | C63 前请求装配只有 `limitContext` 的条数截断，provider 返回 overflow 直接进错误卡片，压缩只能手动触发。C63 起 C61 归一化 `CONTEXT_WINDOW_EXCEEDED`，`AgentHooks.onContextOverflow` 让 app 把可见历史减半一次并从本 step 重试；仍失败才出卡片。`AgentLoop.kt`、`Agent.kt`、`ChatRequestFactory.kt`。 | 已按此实现；不做自动压缩，单条超大输入仍可能失败。 |
 | P2 | 工具恢复语义失真 | `cancelInterruptedTools` 把未开始、执行中、失败、进程死亡都写成 `cancelled by user`，也包括 `Pending`；`isExecuted` 只看 output，执行到一半会被写成已完成。`runTool` 没有超时，错误结果把堆栈交给模型。`ConversationMessages.kt:149-164`、`UIMessagePart.kt:196-202`、`AgentLoop.kt:159-170,195-205`。 | 按 `startedAt` 区分 `TOOL_NOT_STARTED` 与 `TOOL_OUTCOME_UNKNOWN`；Pending 跳过；用 `NonCancellable` 写 output；加可配置工具超时；堆栈只进日志。 |
 | P2 | `withoutUnresumableToolCalls` 删除整条消息 | 命中时删除当前 assistant 消息，文本、推理、已执行工具一起丢；Pending 的未答复调用又会被整条保留在请求里。触发面窄（常规发送先被 `finishInterruptedPendingTools` 掩盖，regenerate 不调用），但命中即持久化内容丢失。`Conversation.kt:264-272`、`ChatService.kt:597-609`。 | 按 part 处理，保留文本，把不可恢复的 Tool part 换成固定恢复结果；条件逐 part 判断。 |
 | P2 | 进程死亡丢失重试与收尾状态 | 只周期保存回复节点，5/15/30 秒分档，小节点最迟 60 秒；重试状态、错误卡片、tool 收尾都不落库，重启后半截没有失败标记。C50 在节点漂移或含 base64 图片时静默跳过。`MessageSaveLoop.kt`、`ConversationSession.kt:278-307`、`ChatService.kt:638-652`。 | 持久化 turn/generating/retrying 状态或时间戳心跳；加载时补 abandoned/interrupted 与未执行工具结果；保存失败要上报。 |
@@ -364,7 +365,7 @@ P1 分批：P1a 截断 SSE 与停止结算，P1b 审批分支与配置快照，P
 
 1. P0 失败 attempt 隔离已由 C58 完成；多步工具调用的 per-step 细化随工具恢复一起做。
 2. P1a 截断 SSE 与停止结算已由 C59 完成；P1b 审批分支与配置快照已由 C60 完成。
-3. P1c 的稳定错误码重试已由 C61 完成，idle watchdog 已由 C62 完成；下一步做 overflow 兜底。
+3. P1c 的稳定错误码重试已由 C61、idle watchdog 由 C62、overflow 兜底由 C63 完成；P1 收尾后进入 P2。
 4. P2 按工具恢复、进程死亡与 C50、队列、上下文压缩、scratch 分批处理。
 
 范围说明：C59 已逐行核对五个 decoder 的终止判定和五个 provider 接线点的 `onClosed`，并用 `:ai:testDebugUnitTest` 全量验证；工具并发没有展开，当前 RikkaHub 按顺序执行，未发现正确性问题，只是并发效率较低。

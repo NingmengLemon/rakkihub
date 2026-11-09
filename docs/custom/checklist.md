@@ -70,6 +70,7 @@
 | C60 | 审批期间冻结 turn 上下文 | 改造 |
 | C61 | 结构化失败与重试策略 | 改造 |
 | C62 | 流式 idle watchdog | 改造 |
+| C63 | 上下文超限自动缩窗 | 改造 |
 
 ## 明细
 
@@ -466,3 +467,10 @@
 - 理由：原来只有 OkHttp/Ktor 的读超时，SSE 心跳会不断重置它；代理保持连接但不发内容时可以卡很久，界面一直显示生成中。watchdog 只看流内 chunk 间隔，不覆盖非流式请求、工具执行、上下文压缩和翻译的独立 streamText 路径。
 - 合并注意：默认值写在 `AgentRequest`，当前没有设置页入口；要可配置时从 `ChatRequestFactory.createAgent` 注入。`Flow.timeout` 只在上游没有新 chunk 时触发，收到任意 chunk 会重置；超时后上游被取消，重试从本步起点重放，因此不会有半截内容进入下一轮。非流式仍依赖网络层读超时。`streamIdleTimeout <= 0` 目前会立即超时并耗尽重试，调用方应只传正数。`ai/` 分叉计数因此变为九处。
 - 测试：`AgentLoopTest` 覆盖“流挂起超过 1 秒后超时并重试成功”和“相邻 chunk 都在超时内但总时长超过超时仍完成”；`:ai:testDebugUnitTest` 全量通过。手动验收：代理保持 SSE 连接但不发事件，约 90 秒后错误卡片/重试；等待中停止生成应立即结束，不额外重试。
+
+### C63 上下文超限自动缩窗
+
+- 落点：`AgentHooks.onContextOverflow()` 返回 true 表示调用方已缩小下一 step 的上下文；`AgentLoop` 捕获 `LlmFailure(CONTEXT_WINDOW_EXCEEDED)` 后只调用一次 hook，成功则从本 step 起点重试，不再让 C61 的重试码表处理。`ChatRequestFactory` 的 hook 用 `shrinkContextLimit` 把可见消息窗口减半一次，`buildStep` 用这个覆盖值调 `limitContext`。
+- 理由：C61 已能把 provider 的 context overflow 归一化，但之前直接进错误卡片；用户只能手动压缩。自动缩窗不需要额外摘要请求，失败时只牺牲旧历史，保留最后几轮。
+- 合并注意：只缩一次，不做自动压缩；按消息条数减半，不算 token，单条超大输入仍可能超限并出错误卡片。hook 状态属于本次 `createAgent` 的 hooks 实例，重试和后续工具 step 共用覆盖值。缩窗只改变发给模型的历史，不改会话里已有的消息和分支。C61 的 `CONTEXT_WINDOW_EXCEEDED` 分类是前置条件；非流式和流式都经过 AgentLoop，所以都覆盖。`ai/` 分叉计数因此变为十处。
+- 测试：`AgentLoopTest` 用抛 `CONTEXT_WINDOW_EXCEEDED` 的假流验证只问一次 hook 并重试成功、没有进入 `Retrying`；`ChatRequestFactoryContextTest` 覆盖减半和无法再缩的边界；`:ai:testDebugUnitTest`、`:app:testGithubDebugUnitTest` 对应测试通过。手动验收：用超长历史触发 provider 400 context，确认旧历史被减半后重试成功；单条超大输入仍失败并出卡片，不无限缩。

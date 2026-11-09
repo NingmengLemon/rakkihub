@@ -190,6 +190,33 @@ class AgentLoopTest {
     }
 
     @Test
+    fun `context overflow asks the hook once and retries`() = runTest {
+        provider.stream {
+            throw LlmFailure("too long", LlmFailureCode.CONTEXT_WINDOW_EXCEEDED)
+        }
+        provider.stream {
+            text("hello")
+            finish()
+        }
+        var hookCalls = 0
+        val overflowHooks = object : AgentHooks by hooks {
+            override suspend fun onContextOverflow(): Boolean {
+                hookCalls++
+                return true
+            }
+        }
+
+        val events = runToEnd(request(), overflowHooks)
+
+        val finished = events.finished()
+        assertEquals(AgentFinishReason.Completed, finished.reason)
+        assertEquals(listOf("hello"), finished.message.texts())
+        assertEquals(1, hookCalls)
+        assertEquals(2, provider.requests.size)
+        assertTrue(events.filterIsInstance<AgentEvent.Retrying>().isEmpty())
+    }
+
+    @Test
     fun `tool results go back to the model inside the same assistant message`() = runTest {
         val received = mutableListOf<JsonElement>()
         val search = tool("search") { args ->

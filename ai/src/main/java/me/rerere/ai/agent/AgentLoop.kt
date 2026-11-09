@@ -55,6 +55,7 @@ internal class AgentLoop(
 
     suspend fun run() {
         var steps = 0
+        var contextOverflowRetried = false
         while (true) {
             val current = message
             if (current != null && current.getTools().any { !it.isExecuted }) {
@@ -65,7 +66,18 @@ internal class AgentLoop(
                 return finish(AgentFinishReason.Completed)
             }
             if (steps == request.maxSteps) return finish(AgentFinishReason.StepLimitReached)
-            generateStep()
+            try {
+                generateStep()
+            } catch (e: LlmFailure) {
+                if (!contextOverflowRetried &&
+                    e.code == LlmFailureCode.CONTEXT_WINDOW_EXCEEDED &&
+                    hooks.onContextOverflow()
+                ) {
+                    contextOverflowRetried = true
+                    continue
+                }
+                throw e
+            }
             steps++
         }
     }

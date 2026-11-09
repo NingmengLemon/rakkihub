@@ -46,6 +46,12 @@ interface AgentHooks {
     suspend fun previewStep(message: UIMessage, newPartsFrom: Int): UIMessage = message
 
     /**
+     * 本轮请求因 context window 超限失败时调用一次；返回 true 表示调用方已经缩小下一 step 的上下文，
+     * AgentLoop 可从本 step 起点重试，返回 false 则把错误继续抛给上层。
+     */
+    suspend fun onContextOverflow(): Boolean = false
+
+    /**
      * 每一步生成结束、执行工具之前调用，返回值作为这一步的结果。
      *
      * 下标 [newPartsFrom] 及之后的 part 是这一步新生成的；之前的来自更早的步骤，已经处理过一次。
