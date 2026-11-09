@@ -206,7 +206,15 @@ class AgentLoopTest {
             }
         }
 
-        val events = runToEnd(request(), overflowHooks)
+        val events = runToEnd(
+            request(
+                retry = RetryPolicy.NETWORK.copy(
+                    initialDelay = Duration.ZERO,
+                    jitterRatio = 0.0,
+                )
+            ),
+            overflowHooks,
+        )
 
         val finished = events.finished()
         assertEquals(AgentFinishReason.Completed, finished.reason)
@@ -214,6 +222,112 @@ class AgentLoopTest {
         assertEquals(1, hookCalls)
         assertEquals(2, provider.requests.size)
         assertTrue(events.filterIsInstance<AgentEvent.Retrying>().isEmpty())
+    }
+
+    @Test
+    fun `context overflow after a tool step retries the request`() = runTest {
+        val executed = mutableListOf<String>()
+        val search = tool("search") { args ->
+            executed += args.jsonObject["q"]?.jsonPrimitive?.content.orEmpty()
+            listOf(UIMessagePart.Text("result"))
+        }
+        provider.stream {
+            toolCall("call-1", "search", """{"q":"kotlin"}""")
+            finish()
+        }
+        provider.stream {
+            throw LlmFailure("too long after tool", LlmFailureCode.CONTEXT_WINDOW_EXCEEDED)
+        }
+        provider.stream {
+            text("answer")
+            finish()
+        }
+        var hookCalls = 0
+        val overflowHooks = object : AgentHooks by hooks {
+            override suspend fun onContextOverflow(): Boolean {
+                hookCalls++
+                return true
+            }
+        }
+
+        val events = runToEnd(
+            request(
+                tools = listOf(search),
+                retry = RetryPolicy.NETWORK.copy(
+                    initialDelay = Duration.ZERO,
+                    jitterRatio = 0.0,
+                ),
+            ),
+            overflowHooks,
+        )
+
+        val finished = events.finished()
+        assertEquals(AgentFinishReason.Completed, finished.reason)
+        assertEquals(listOf("answer"), finished.message.texts())
+        assertEquals(1, hookCalls)
+        assertEquals(3, provider.requests.size)
+        assertEquals(listOf("kotlin"), executed)
+        assertTrue(events.filterIsInstance<AgentEvent.Retrying>().isEmpty())
+    }
+
+    @Test
+    fun `context overflow is only retried once`() = runTest {
+        provider.stream {
+            throw LlmFailure("too long once", LlmFailureCode.CONTEXT_WINDOW_EXCEEDED)
+        }
+        provider.stream {
+            throw LlmFailure("too long twice", LlmFailureCode.CONTEXT_WINDOW_EXCEEDED)
+        }
+        var hookCalls = 0
+        val overflowHooks = object : AgentHooks by hooks {
+            override suspend fun onContextOverflow(): Boolean {
+                hookCalls++
+                return true
+            }
+        }
+
+        val error = runCatching {
+            runToEnd(
+                request(
+                    retry = RetryPolicy.NETWORK.copy(
+                        initialDelay = Duration.ZERO,
+                        jitterRatio = 0.0,
+                    )
+                ),
+                overflowHooks,
+            )
+        }.exceptionOrNull()
+
+        assertTrue(error is LlmFailure)
+        assertEquals(LlmFailureCode.CONTEXT_WINDOW_EXCEEDED, (error as LlmFailure).code)
+        assertEquals(1, hookCalls)
+        assertEquals(2, provider.requests.size)
+    }
+
+    @Test
+    fun `context overflow keeps the previewed message id`() = runTest {
+        provider.stream {
+            text("partial")
+            throw LlmFailure("too long", LlmFailureCode.CONTEXT_WINDOW_EXCEEDED)
+        }
+        provider.stream {
+            text("done")
+            finish()
+        }
+        var hookCalls = 0
+        val overflowHooks = object : AgentHooks by hooks {
+            override suspend fun onContextOverflow(): Boolean {
+                hookCalls++
+                return true
+            }
+        }
+
+        val events = runToEnd(request(), overflowHooks)
+
+        assertEquals(1, hookCalls)
+        assertEquals(2, provider.requests.size)
+        assertEquals(1, events.messageIds().size)
+        assertEquals(listOf("done"), events.finished().message.texts())
     }
 
     @Test

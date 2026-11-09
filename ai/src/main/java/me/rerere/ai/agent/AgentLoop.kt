@@ -42,6 +42,9 @@ internal class AgentLoop(
     // 本轮的助手消息；新的一轮在第一次请求模型时才创建
     private var message: UIMessage?
 
+    // overflow 重试复用第一次尝试的 base，避免 preview 已经写出的消息 id 被换掉
+    private var stepBase: UIMessage? = null
+
     init {
         val last = request.messages.lastOrNull()
         if (last?.role == MessageRole.ASSISTANT) {
@@ -56,9 +59,13 @@ internal class AgentLoop(
     suspend fun run() {
         var steps = 0
         var contextOverflowRetried = false
+        var retryingStep = false
         while (true) {
             val current = message
-            if (current != null && current.getTools().any { !it.isExecuted }) {
+            if (retryingStep) {
+                // 缩窗重试要回到请求，不能把“工具都执行完了”误判成 Completed
+                retryingStep = false
+            } else if (current != null && current.getTools().any { !it.isExecuted }) {
                 val pending = requestApprovals(current)
                 if (pending.isNotEmpty()) return finish(AgentFinishReason.AwaitingApproval(pending))
                 executeTools()
@@ -74,6 +81,7 @@ internal class AgentLoop(
                     hooks.onContextOverflow()
                 ) {
                     contextOverflowRetried = true
+                    retryingStep = true
                     continue
                 }
                 throw e
@@ -104,17 +112,18 @@ internal class AgentLoop(
         val current = message
         val step = hooks.prepareStep(if (current == null) history else history + current)
         val params = step.params.copy(tools = request.tools)
-        val base = current ?: UIMessage(
+        val base = current ?: stepBase ?: UIMessage(
             role = MessageRole.ASSISTANT,
             parts = emptyList(),
             modelId = params.model.id,
-        )
+        ).also { stepBase = it }
         val generated = if (request.stream) {
             stream(step.messages, params, base)
         } else {
             generate(step.messages, params, base)
         }
         update(hooks.finishStep(generated, newPartsFrom = base.parts.size).copy(finishedAt = now()))
+        stepBase = null
     }
 
     @OptIn(FlowPreview::class)

@@ -470,7 +470,7 @@
 
 ### C63 上下文超限自动缩窗
 
-- 落点：`AgentHooks.onContextOverflow()` 返回 true 表示调用方已缩小下一 step 的上下文；`AgentLoop` 捕获 `LlmFailure(CONTEXT_WINDOW_EXCEEDED)` 后只调用一次 hook，成功则从本 step 起点重试，不再让 C61 的重试码表处理。`ChatRequestFactory` 的 hook 用 `shrinkContextLimit` 把可见消息窗口减半一次，`buildStep` 用这个覆盖值调 `limitContext`。
+- 落点：`AgentHooks.onContextOverflow()` 返回 true 表示调用方已缩小下一 step 的上下文；`AgentLoop` 捕获 `LlmFailure(CONTEXT_WINDOW_EXCEEDED)` 后只调用一次 hook，成功则用 `retryingStep` 跳过完成判定，从本 step 起点重试，不再让 C61 的重试码表处理。`ChatRequestFactory` 的 hook 用 `shrinkContextLimit` 把实际发送窗口减半一次，`buildStep` 用这个覆盖值调 `limitContext`，缩窗后如果从 assistant 开头则丢掉前导残片；`AgentLoop` 复用失败尝试的 base，避免 preview 已经写出的消息 id 被换掉。
 - 理由：C61 已能把 provider 的 context overflow 归一化，但之前直接进错误卡片；用户只能手动压缩。自动缩窗不需要额外摘要请求，失败时只牺牲旧历史，保留最后几轮。
-- 合并注意：只缩一次，不做自动压缩；按消息条数减半，不算 token，单条超大输入仍可能超限并出错误卡片。hook 状态属于本次 `createAgent` 的 hooks 实例，重试和后续工具 step 共用覆盖值。缩窗只改变发给模型的历史，不改会话里已有的消息和分支。C61 的 `CONTEXT_WINDOW_EXCEEDED` 分类是前置条件；非流式和流式都经过 AgentLoop，所以都覆盖。`ai/` 分叉计数因此变为十处。
-- 测试：`AgentLoopTest` 用抛 `CONTEXT_WINDOW_EXCEEDED` 的假流验证只问一次 hook 并重试成功、没有进入 `Retrying`；`ChatRequestFactoryContextTest` 覆盖减半和无法再缩的边界；`:ai:testDebugUnitTest`、`:app:testGithubDebugUnitTest` 对应测试通过。手动验收：用超长历史触发 provider 400 context，确认旧历史被减半后重试成功；单条超大输入仍失败并出卡片，不无限缩。
+- 合并注意：只缩一次，不做自动压缩；最小保留两条，仍可能因单条超大输入或首条 user 之前的内容而失败。按消息条数减半，不算 token；配置上限先取 `min(配置, 可见数)` 再减半；有压缩检查点时检查点始终保留，若检查点后的 tail 已经短于新上限，重试请求可能和失败请求相同。hook 状态属于本次 `createAgent` 的 hooks 实例，重试和后续工具 step 共用覆盖值。缩窗只改变发给模型的历史，不改会话里已有的消息和分支。C61 的 `CONTEXT_WINDOW_EXCEEDED` 分类是前置条件；非流式和流式都经过 AgentLoop，所以都覆盖。`ai/` 分叉计数因此变为十处。
+- 测试：`AgentLoopTest` 用抛 `CONTEXT_WINDOW_EXCEEDED` 的假流验证首轮、工具 step 后、连续两次、以及 preview 后重试的消息 id 复用；`ChatRequestFactoryContextTest` 覆盖实际窗口减半、最小两条和无法再缩的边界；`:ai:testDebugUnitTest`、`:app:testGithubDebugUnitTest` 对应测试通过。手动验收：用超长历史触发 provider 400 context，确认旧历史被减半后重试成功；工具大输出后的第二次请求 overflow 也要重试成功；单条超大输入仍失败并出卡片，不无限缩。

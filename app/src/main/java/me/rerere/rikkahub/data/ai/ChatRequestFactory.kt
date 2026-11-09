@@ -10,6 +10,7 @@ import me.rerere.ai.agent.AgentRequest
 import me.rerere.ai.agent.RetryPolicy
 import me.rerere.ai.agent.StepRequest
 import me.rerere.ai.agent.withRetry
+import me.rerere.ai.core.MessageRole
 import me.rerere.ai.core.ReasoningLevel
 import me.rerere.ai.core.Tool
 import me.rerere.ai.provider.Model
@@ -56,13 +57,11 @@ import kotlin.uuid.Uuid
 
 private const val TAG = "ChatRequestFactory"
 
-/** 上下文超限后只缩小一次窗口；配置上限更小时优先保留配置上限。返回 null 表示无法再缩。 */
+/** 上下文超限后按实际发送窗口减半，至少保留两条；返回 null 表示无法再缩。 */
 internal fun shrinkContextLimit(configured: Int, visibleCount: Int): Int? {
-    if (visibleCount <= 2) return null
-    val current = if (configured > 0) configured else visibleCount
-    if (current <= 1) return null
-    val shrunken = minOf(current, maxOf(1, visibleCount / 2))
-    return shrunken.takeIf { it < current }
+    val window = if (configured > 0) minOf(configured, visibleCount) else visibleCount
+    if (window <= 2) return null
+    return maxOf(2, window / 2).takeIf { it < window }
 }
 
 /**
@@ -235,6 +234,14 @@ class ChatRequestFactory(
         )
     }
 
+    /** Anthropic 要求首条非 system 消息是 user；缩窗后如果从 assistant 开头，丢掉前面的残片。 */
+    private fun List<UIMessage>.ensureUserFirstForOverflow(): List<UIMessage> {
+        if (firstOrNull()?.role == MessageRole.USER) return this
+        if (firstOrNull()?.isContextCheckpoint == true) return this
+        val firstUser = indexOfFirst { it.role == MessageRole.USER }
+        return if (firstUser >= 0) drop(firstUser) else this
+    }
+
     /** 一步请求实际发出的消息和参数；正常对话和压缩共用，二者的请求前缀必须一致才能命中提示词缓存 */
     private suspend fun buildStep(
         turn: ChatTurnContext,
@@ -270,7 +277,10 @@ class ChatRequestFactory(
             if (system.isNotBlank()) {
                 add(UIMessage.system(prompt = system).copy(isSynthetic = true))
             }
-            addAll(visibleMessages.limitContext(contextLimitOverride ?: assistant.contextMessageLimit))
+            val limited = visibleMessages.limitContext(
+                contextLimitOverride ?: assistant.contextMessageLimit
+            )
+            addAll(if (contextLimitOverride != null) limited.ensureUserFirstForOverflow() else limited)
         }.transforms(
             transformers = inputTransformers,
             context = context,
