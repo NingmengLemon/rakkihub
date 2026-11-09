@@ -10,6 +10,8 @@ import org.junit.Assert.assertNotEquals
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
+import kotlin.time.Clock
+import kotlin.time.Instant
 import kotlin.uuid.Uuid
 
 class ConversationMessagesTest {
@@ -113,7 +115,7 @@ class ConversationMessagesTest {
     }
 
     @Test
-    fun `interrupted tools on the last message get a cancelled result`() {
+    fun `interrupted tools on the last message get a recovery result`() {
         val conversation = conversationOf(
             UIMessage.user("run it").toMessageNode(),
             toolReply(ToolApprovalState.Approved).toMessageNode(),
@@ -122,7 +124,44 @@ class ConversationMessagesTest {
         val tool = conversation.cancelInterruptedTools()!!.currentMessages.last().getTools().single()
 
         assertTrue(tool.isExecuted)
-        assertTrue((tool.output.single() as UIMessagePart.Text).text.contains("cancelled"))
+        assertTrue((tool.output.single() as UIMessagePart.Text).text.contains("not_started"))
+    }
+
+    @Test
+    fun `started interrupted tool is marked outcome unknown`() {
+        val conversation = conversationOf(
+            UIMessage.user("run it").toMessageNode(),
+            toolReply(ToolApprovalState.Approved, startedAt = Clock.System.now()).toMessageNode(),
+        )
+
+        val tool = conversation.cancelInterruptedTools()!!.currentMessages.last().getTools().single()
+
+        assertTrue((tool.output.single() as UIMessagePart.Text).text.contains("outcome_unknown"))
+    }
+
+    @Test
+    fun `stop recovers approved tools before they execute`() {
+        val approved = UIMessagePart.Tool(
+            toolCallId = "approved",
+            toolName = "workspace_shell",
+            input = "{}",
+            approvalState = ToolApprovalState.Approved,
+        )
+        val pending = UIMessagePart.Tool(
+            toolCallId = "pending",
+            toolName = "workspace_shell",
+            input = "{}",
+            approvalState = ToolApprovalState.Pending,
+        )
+        val conversation = conversationOf(
+            UIMessage.user("run it").toMessageNode(),
+            UIMessage(role = MessageRole.ASSISTANT, parts = listOf(approved, pending)).toMessageNode(),
+        )
+
+        val tools = conversation.cancelInterruptedTools()!!.currentMessages.last().getTools()
+
+        assertTrue(tools.all { it.isExecuted })
+        assertTrue(tools.all { (it.output.single() as UIMessagePart.Text).text.contains("not_started") })
     }
 
     @Test
@@ -160,7 +199,10 @@ class ConversationMessagesTest {
     private fun conversationOf(vararg nodes: MessageNode) =
         Conversation.ofId(Uuid.random()).copy(messageNodes = nodes.toList())
 
-    private fun toolReply(approvalState: ToolApprovalState) = UIMessage(
+    private fun toolReply(
+        approvalState: ToolApprovalState,
+        startedAt: Instant? = null,
+    ) = UIMessage(
         role = MessageRole.ASSISTANT,
         parts = listOf(
             UIMessagePart.Tool(
@@ -168,6 +210,7 @@ class ConversationMessagesTest {
                 toolName = "workspace_shell",
                 input = "{}",
                 approvalState = approvalState,
+                startedAt = startedAt,
             )
         ),
     )

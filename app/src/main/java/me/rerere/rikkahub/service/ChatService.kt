@@ -613,21 +613,14 @@ class ChatService(
         var senderName = ""
         try {
             val settings = settingsStore.awaitLoaded()
-            // 清掉已存储的建议；没法继续执行的工具调用发给模型会被拒绝，先去掉。
+            // 清掉已存储的建议；没法继续执行的工具调用补恢复结果，避免没有结果的 tool call 发给模型。
             // 重新生成时只清理要发给模型的节点，被重新生成的节点保持原样，旧回复留作分支
-            val beforeCleanup = session.state.value.messageNodes
-            var conversation = session.update { latest ->
+            val conversation = session.update { latest ->
                 val untilNode = regenerateNodeId
                     ?.let { nodeId -> latest.messageNodes.indexOfFirst { it.id == nodeId } }
                     ?.takeIf { it != -1 }
                     ?: latest.messageNodes.size
                 latest.copy(chatSuggestions = emptyList()).withoutUnresumableToolCalls(untilNode)
-            }
-            // 清理可能删掉节点或消息；先把库和持久化计数对齐，定期保存的追加规则才有依据
-            val structureChanged = beforeCleanup.map { it.id } != conversation.messageNodes.map { it.id } ||
-                beforeCleanup.map { it.messages.size } != conversation.messageNodes.map { it.messages.size }
-            if (structureChanged) {
-                conversation = session.flush()
             }
 
             val nodes = conversation.messageNodes

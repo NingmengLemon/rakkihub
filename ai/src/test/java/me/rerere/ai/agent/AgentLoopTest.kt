@@ -518,8 +518,10 @@ class AgentLoopTest {
         val finished = runToEnd(request(tools = tools)).finished()
 
         val output = finished.message.tool("call-1").outputText()
-        assertTrue(output.contains("IllegalStateException"))
+        assertTrue(output.contains("Tool execution failed"))
         assertTrue(output.contains("disk full"))
+        assertFalse(output.contains("IllegalStateException"))
+        assertFalse(output.contains("at me.rerere"))
         assertEquals(AgentFinishReason.Completed, finished.reason)
     }
 

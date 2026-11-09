@@ -5,7 +5,6 @@ import me.rerere.ai.ui.ToolApprovalState
 import me.rerere.ai.ui.UIMessage
 import me.rerere.ai.ui.UIMessagePart
 import me.rerere.ai.ui.finishPendingTools
-import kotlin.time.Clock
 import kotlin.uuid.Uuid
 
 /**
@@ -27,8 +26,7 @@ internal fun Conversation.deleteMessage(messageId: Uuid): Conversation? {
 
 /**
  * 删掉一个未完成的压缩对：带 [UIMessage.isCompressionPrompt] 标记的提示词节点，以及紧随其后的
- * assistant 回复节点。回复可能已经被 withoutUnresumableToolCalls 删掉，或者下一个节点不是 assistant，
- * 这时只删提示词。提示词不存在时返回 null。
+ * assistant 回复节点。下一个节点不是 assistant 时只删提示词。提示词不存在时返回 null。
  */
 internal fun Conversation.removeCompressionPair(promptMessageId: Uuid): Conversation? {
     val promptIndex = messageNodes.indexOfFirst { node ->
@@ -143,22 +141,31 @@ internal fun Conversation.withToolApproval(toolCallId: String, approvalState: To
 }
 
 /**
- * 生成被停止时，最后一条消息里还没执行的工具补上取消的结果，否则这条消息之后没法继续发给模型。
+ * 生成被停止时，最后一条消息里还没执行的工具补上恢复结果，否则 tool call 没有结果、之后无法发给模型。
  * 没有需要补的工具时返回 null。
  */
 internal fun Conversation.cancelInterruptedTools(): Conversation? {
     val lastNode = messageNodes.lastOrNull() ?: return null
-    val updatedMessage = lastNode.currentMessage.finishPendingTools(::cancelToolByUser)
+    // stop 后没有入口再执行这些工具，一律补恢复结果；startedAt 区分未开始和执行中
+    val updatedMessage = lastNode.currentMessage.finishPendingTools(::recoverInterruptedTool)
     if (updatedMessage === lastNode.currentMessage) return null
     return upsertMessage(lastNode.id, updatedMessage)
 }
 
-private fun cancelToolByUser(tool: UIMessagePart.Tool): UIMessagePart.Tool = tool.copy(
-    output = listOf(
-        UIMessagePart.Text(
-            """{"status":"cancelled","error":"Generation cancelled by user before tool execution completed."}"""
-        )
-    ),
-    // 执行到一半被停止的工具，耗时算到取消为止
-    finishedAt = tool.finishedAt ?: tool.startedAt?.let { Clock.System.now() },
-)
+/** 给被停止/无法继续的工具补一个模型能读的恢复结果，并保留是否真正开始过的区别。 */
+internal fun recoverInterruptedTool(tool: UIMessagePart.Tool): UIMessagePart.Tool {
+    val started = tool.startedAt != null
+    val status = if (started) "outcome_unknown" else "not_started"
+    val error = if (started) {
+        "Generation stopped after the tool started; its outcome is unknown."
+    } else {
+        "Generation stopped before the tool started."
+    }
+    return tool.copy(
+        output = listOf(
+            UIMessagePart.Text("""{"status":"$status","error":"$error"}""")
+        ),
+        // 结果未知时不要把恢复时刻当结束时间，否则进程重启后 UI 会把停机时间算进工具耗时
+        finishedAt = tool.finishedAt ?: tool.startedAt,
+    )
+}

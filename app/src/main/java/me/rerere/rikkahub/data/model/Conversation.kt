@@ -258,17 +258,29 @@ internal val Conversation.pendingToolCalls: List<UIMessagePart.Tool>
     get() = currentMessages.flatMap { message -> message.getTools().filter { it.isPending } }
 
 /**
- * 去掉还有未执行、又没法继续执行的工具调用的消息（比如还在等待审批），这样的消息发给模型会被拒绝。
- * 已经批准、拒绝或回答过的工具调用之后会继续执行，保留。只处理下标小于 [untilNode] 的节点。
+ * 给无法继续执行的工具调用补恢复结果，避免把没有结果的 tool call 发给模型。
+ * 消息里还有 Approved/Denied/Answered 的工具时整条不动，等 AgentLoop 继续执行；
+ * 只有全部未执行工具都无法恢复时，才逐 part 替换并保留文本、推理和其它 part。只处理下标小于 [untilNode] 的节点。
  */
 internal fun Conversation.withoutUnresumableToolCalls(untilNode: Int = messageNodes.size): Conversation {
-    val nodes = messageNodes.mapIndexedNotNull { index, node ->
-        if (index >= untilNode) return@mapIndexedNotNull node
-        val unexecuted = node.currentMessage.getTools().filter { !it.isExecuted }
-        if (unexecuted.isEmpty() || unexecuted.any { it.canResumeExecution }) return@mapIndexedNotNull node
-        val messages = node.messages.filter { it.id != node.currentMessage.id }
-        if (messages.isEmpty()) return@mapIndexedNotNull null
-        node.copy(messages = messages, selectIndex = (node.selectIndex - 1).coerceIn(messages.indices))
+    val nodes = messageNodes.mapIndexed { index, node ->
+        if (index >= untilNode) return@mapIndexed node
+        val current = node.currentMessage
+        val unexecuted = current.getTools().filter { !it.isExecuted }
+        // 审批恢复和工具执行靠同一批未执行工具；只要还有可恢复的，整条消息保持原样
+        if (unexecuted.any { it.canResumeExecution }) return@mapIndexed node
+        val parts = current.parts.map { part ->
+            if (part is UIMessagePart.Tool && !part.isExecuted) {
+                recoverInterruptedTool(part)
+            } else {
+                part
+            }
+        }
+        if (parts == current.parts) return@mapIndexed node
+        val messages = node.messages.map { message ->
+            if (message.id == current.id) current.copy(parts = parts) else message
+        }
+        node.copy(messages = messages)
     }
     return if (nodes == messageNodes) this else copy(messageNodes = nodes)
 }

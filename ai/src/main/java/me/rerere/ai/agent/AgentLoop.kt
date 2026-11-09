@@ -248,7 +248,9 @@ internal class AgentLoop(
         // 取消必须向上传播，否则停止生成会被误报为工具执行错误
         throw e
     } catch (e: Throwable) {
-        errorOutput("[${e.javaClass.name}] ${e.message}\n${e.stackTraceToString()}")
+        // 堆栈只留日志，不再塞进工具结果，避免把内部路径和实现细节发给模型
+        e.printStackTrace()
+        errorOutput("Tool execution failed: ${e.message ?: e.javaClass.simpleName}")
     }
 
     private fun findTool(name: String) = request.tools.find { it.name == name }

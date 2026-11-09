@@ -8,11 +8,12 @@ import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Test
+import kotlin.time.Clock
 import kotlin.uuid.Uuid
 
 class ConversationToolCallsTest {
     @Test
-    fun `messages whose unexecuted tools cannot resume are dropped before generating`() {
+    fun `unresumable tools get a recovery result instead of deleting the message`() {
         val user = UIMessage.user("run it")
         val answered = toolReply(ToolApprovalState.Pending)
         val stale = toolReply(ToolApprovalState.Pending)
@@ -25,8 +26,74 @@ class ConversationToolCallsTest {
 
         val cleaned = conversation.withoutUnresumableToolCalls()
 
-        assertEquals(listOf(user.id, answered.id), cleaned.currentMessages.map { it.id })
-        assertEquals(listOf(answered.id), cleaned.messageNodes[1].messages.map { it.id })
+        assertEquals(2, cleaned.messageNodes.size)
+        val recovered = cleaned.currentMessages.last().getTools().single()
+        assertTrue(recovered.isExecuted)
+        assertTrue((recovered.output.single() as UIMessagePart.Text).text.contains("not_started"))
+    }
+
+    @Test
+    fun `recovery distinguishes started tools from not started tools`() {
+        val started = toolReply(ToolApprovalState.Pending, startedAt = Clock.System.now())
+        val notStarted = toolReply(ToolApprovalState.Pending)
+        val conversation = Conversation.ofId(Uuid.random()).copy(
+            messageNodes = listOf(
+                UIMessage.user("run it").toMessageNode(),
+                started.toMessageNode(),
+                notStarted.toMessageNode(),
+            )
+        )
+
+        val cleaned = conversation.withoutUnresumableToolCalls()
+
+        assertTrue(
+            (cleaned.currentMessages[1].getTools().single().output.single() as UIMessagePart.Text).text.contains(
+                "outcome_unknown"
+            )
+        )
+        assertTrue(
+            (cleaned.currentMessages[2].getTools().single().output.single() as UIMessagePart.Text).text.contains(
+                "not_started"
+            )
+        )
+    }
+
+    @Test
+    fun `recovery keeps text and reasoning parts`() {
+        val text = UIMessagePart.Text("visible answer")
+        val reasoning = UIMessagePart.Reasoning("internal thought")
+        val message = UIMessage(
+            role = MessageRole.ASSISTANT,
+            parts = listOf(text, reasoning, toolPart(ToolApprovalState.Pending)),
+        )
+        val conversation = Conversation.ofId(Uuid.random()).copy(
+            messageNodes = listOf(UIMessage.user("run it").toMessageNode(), message.toMessageNode())
+        )
+
+        val recovered = conversation.withoutUnresumableToolCalls().currentMessages.last()
+
+        assertEquals(text, recovered.parts[0])
+        assertEquals(reasoning, recovered.parts[1])
+        assertTrue((recovered.parts[2] as UIMessagePart.Tool).isExecuted)
+    }
+
+    @Test
+    fun `pending and auto tools are both recovered together`() {
+        val message = UIMessage(
+            role = MessageRole.ASSISTANT,
+            parts = listOf(
+                toolPart(ToolApprovalState.Pending),
+                toolPart(ToolApprovalState.Auto),
+            ),
+        )
+        val conversation = Conversation.ofId(Uuid.random()).copy(
+            messageNodes = listOf(UIMessage.user("run both").toMessageNode(), message.toMessageNode())
+        )
+
+        val tools = conversation.withoutUnresumableToolCalls().currentMessages.last().getTools()
+
+        assertEquals(2, tools.size)
+        assertTrue(tools.all { it.isExecuted })
     }
 
     @Test
@@ -38,10 +105,11 @@ class ConversationToolCallsTest {
             messageNodes = listOf(earlierStale.toMessageNode(), user.toMessageNode(), pending.toMessageNode())
         )
 
-        // 只清理要发给模型的节点：之前的节点照常去掉，被重新生成的节点保留
+        // 只处理要发给模型的节点：之前的节点保留并补恢复结果，被重新生成的节点保留
         val cleaned = conversation.withoutUnresumableToolCalls(untilNode = 2)
 
-        assertEquals(listOf(user.id, pending.id), cleaned.currentMessages.map { it.id })
+        assertEquals(listOf(earlierStale.id, user.id, pending.id), cleaned.currentMessages.map { it.id })
+        assertTrue(cleaned.currentMessages.first().getTools().single().isExecuted)
     }
 
     @Test
@@ -56,12 +124,37 @@ class ConversationToolCallsTest {
     }
 
     @Test
-    fun `node left without messages is removed`() {
+    fun `resumable tool keeps its auto sibling untouched`() {
+        val message = UIMessage(
+            role = MessageRole.ASSISTANT,
+            parts = listOf(
+                toolPart(ToolApprovalState.Approved),
+                toolPart(ToolApprovalState.Auto),
+            ),
+        )
         val conversation = Conversation.ofId(Uuid.random()).copy(
-            messageNodes = listOf(UIMessage.user("hi").toMessageNode(), toolReply(ToolApprovalState.Auto).toMessageNode())
+            messageNodes = listOf(UIMessage.user("run both").toMessageNode(), message.toMessageNode())
         )
 
-        assertEquals(1, conversation.withoutUnresumableToolCalls().messageNodes.size)
+        val cleaned = conversation.withoutUnresumableToolCalls()
+
+        assertTrue(cleaned === conversation)
+        assertTrue(cleaned.currentMessages.last().getTools().none { it.isExecuted })
+    }
+
+    @Test
+    fun `node with only an unresumable tool keeps the tool call and adds a result`() {
+        val conversation = Conversation.ofId(Uuid.random()).copy(
+            messageNodes = listOf(
+                UIMessage.user("hi").toMessageNode(),
+                toolReply(ToolApprovalState.Auto).toMessageNode()
+            )
+        )
+
+        val cleaned = conversation.withoutUnresumableToolCalls()
+
+        assertEquals(2, cleaned.messageNodes.size)
+        assertTrue(cleaned.currentMessages.last().getTools().single().isExecuted)
     }
 
     @Test
@@ -79,15 +172,22 @@ class ConversationToolCallsTest {
         )
     }
 
-    private fun toolReply(approvalState: ToolApprovalState) = UIMessage(
+    private fun toolReply(
+        approvalState: ToolApprovalState,
+        startedAt: kotlin.time.Instant? = null,
+    ) = UIMessage(
         role = MessageRole.ASSISTANT,
-        parts = listOf(
-            UIMessagePart.Tool(
-                toolCallId = Uuid.random().toString(),
-                toolName = "workspace_shell",
-                input = "{}",
-                approvalState = approvalState,
-            )
-        ),
+        parts = listOf(toolPart(approvalState, startedAt)),
+    )
+
+    private fun toolPart(
+        approvalState: ToolApprovalState,
+        startedAt: kotlin.time.Instant? = null,
+    ) = UIMessagePart.Tool(
+        toolCallId = Uuid.random().toString(),
+        toolName = "workspace_shell",
+        input = "{}",
+        approvalState = approvalState,
+        startedAt = startedAt,
     )
 }
