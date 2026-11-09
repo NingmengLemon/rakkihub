@@ -48,7 +48,7 @@ class AgentLoopTest {
         stream: Boolean = true,
         maxSteps: Int = 256,
         retry: RetryPolicy = RetryPolicy.NONE,
-        streamIdleTimeout: Duration? = null,
+        streamIdleTimeout: Duration? = 90.seconds,
     ) = AgentRequest(
         provider = provider,
         providerSetting = ProviderSetting.OpenAI(),
@@ -170,6 +170,23 @@ class AgentLoopTest {
         assertEquals(2, provider.requests.size)
         val retry = events.filterIsInstance<AgentEvent.Retrying>().single()
         assertEquals(LlmFailureCode.TIMEOUT, (retry.attempt.cause as LlmFailure).code)
+    }
+
+    @Test
+    fun `chunks reset the idle timer`() = runTest {
+        provider.stream {
+            delay(600)
+            text("a")
+            delay(600)
+            text("b")
+            finish()
+        }
+
+        val events = runToEnd(request(streamIdleTimeout = 1.seconds))
+
+        val finished = events.finished()
+        assertEquals(AgentFinishReason.Completed, finished.reason)
+        assertEquals(listOf("a", "b"), finished.message.texts())
     }
 
     @Test
