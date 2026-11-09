@@ -1,7 +1,12 @@
 package me.rerere.ai.agent
 
 import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.FlowPreview
+import kotlinx.coroutines.TimeoutCancellationException
+import kotlinx.coroutines.currentCoroutineContext
+import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.flow.FlowCollector
+import kotlinx.coroutines.flow.timeout
 import kotlinx.datetime.TimeZone
 import kotlinx.datetime.toLocalDateTime
 import kotlinx.serialization.json.buildJsonObject
@@ -100,6 +105,7 @@ internal class AgentLoop(
         update(hooks.finishStep(generated, newPartsFrom = base.parts.size).copy(finishedAt = now()))
     }
 
+    @OptIn(FlowPreview::class)
     private suspend fun stream(
         messages: List<UIMessage>,
         params: TextGenerationParams,
@@ -115,17 +121,27 @@ internal class AgentLoop(
                 val handler = StreamChunkHandler(params.model)
                 var attempt = stepStart
                 var firstChunk: TimeMark? = null
-                request.provider.streamText(request.providerSetting, messages, params).collect { chunk ->
-                    try {
-                        val mark = firstChunk ?: TimeSource.Monotonic.markNow().also { firstChunk = it }
-                        attempt = handler.handle(listOf(attempt), chunk).single()
-                        preview(attempt.withStepStats(base, mark.elapsedNow()), newPartsFrom = base.parts.size)
-                    } catch (e: CancellationException) {
-                        throw e
-                    } catch (e: Throwable) {
-                        // 合并失败或下游处理失败都不是网络故障，不能重放模型请求
-                        throw StreamChunkHandlingException(e)
+                val chunks = request.provider.streamText(request.providerSetting, messages, params)
+                val timedChunks = request.streamIdleTimeout?.let { timeout ->
+                    chunks.timeout(timeout)
+                } ?: chunks
+                try {
+                    timedChunks.collect { chunk ->
+                        try {
+                            val mark = firstChunk ?: TimeSource.Monotonic.markNow().also { firstChunk = it }
+                            attempt = handler.handle(listOf(attempt), chunk).single()
+                            preview(attempt.withStepStats(base, mark.elapsedNow()), newPartsFrom = base.parts.size)
+                        } catch (e: CancellationException) {
+                            throw e
+                        } catch (e: Throwable) {
+                            // 合并失败或下游处理失败都不是网络故障，不能重放模型请求
+                            throw StreamChunkHandlingException(e)
+                        }
                     }
+                } catch (e: TimeoutCancellationException) {
+                    // 用户停止和空闲超时都是 CancellationException；先确认协程仍然活着
+                    currentCoroutineContext().ensureActive()
+                    throw LlmFailure("Model stream idle timeout", LlmFailureCode.TIMEOUT)
                 }
                 val generated = attempt.withStepStats(base, firstChunk?.elapsedNow() ?: Duration.ZERO)
                 if (!generated.hasGeneratedContent(from = base.parts.size)) {

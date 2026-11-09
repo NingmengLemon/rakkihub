@@ -69,6 +69,7 @@
 | C59 | 截断流识别与停止结算 | 改造 |
 | C60 | 审批期间冻结 turn 上下文 | 改造 |
 | C61 | 结构化失败与重试策略 | 改造 |
+| C62 | 流式 idle watchdog | 改造 |
 
 ## 明细
 
@@ -457,4 +458,11 @@
 - 理由：原来只按 `IOException` 判断，HTTP 429/5xx 的 JSON 错误大多不重试；空回复直接以完成状态落库；重试固定 1s/2s/4s，没有 jitter，也不看服务端 `Retry-After`。
 - 合并注意：默认只重试 `RATE_LIMIT`、`SERVER`、`TIMEOUT`、`TRANSPORT`、`EMPTY_RESPONSE`；`AUTH`、`QUOTA`、`INVALID_REQUEST`、`CONTEXT_WINDOW_EXCEEDED` 不重试。`RetryPolicy` 的 `retryOn` 仍是可选的逃生口，自定义策略优先于码表。`Retry-After` 会被 `maxDelay` 截断，不做“服务端要求超过上限就放弃”的区分；jitter 固定 10%，测试用 `jitterRatio = 0`。空回复判定只把空白 Text/Reasoning 当空，Tool、图片、文档等 part 都算有内容；这会让某些本来静默成功的空回复变成重试后错误，是预期行为。结构化错误优先于 HTTP status，`insufficient_quota` 和嵌套 `QuotaFailure` 即使是 429 也归 `QUOTA` 且不重试；没有 `QuotaFailure` 的 Google `RESOURCE_EXHAUSTED` 429 仍是 `RATE_LIMIT`，可重试。非 JSON body 只按 HTTP status 分类，不拿 HTML 里的关键词做信号。流式 onFailure 解析失败时用响应状态兜底，不再把 HTML 502 当序列化异常。`ai/build.gradle.kts` 打开 `unitTests.isReturnDefaultValues` 只是为了 provider 接线测试能调用 `Log`，范围仅限 `ai` 单测。C3 的 `ai/` 小改动原则下，这是第八处分叉。
 - 手动验收：用假 provider 或代理返回 429 带 `Retry-After`、5xx 带 JSON/HTML、401、402、400 context、空回复，确认重试次数和间隔符合码表；退避等待中停止生成应立即结束；重试后工具副作用不重复。
+
+### C62 流式 idle watchdog
+
+- 落点：`AgentRequest.streamIdleTimeout` 默认 90 秒，可置空关闭；`AgentLoop.stream` 用 `Flow.timeout` 限制相邻 chunk 的等待，超时抛 `LlmFailure(TIMEOUT)` 进入 C61 的重试循环。用户停止和空闲超时都是取消类异常，catch 里先 `ensureActive()` 区分，用户取消仍向上传播。
+- 理由：原来只有 OkHttp/Ktor 的读超时，SSE 心跳会不断重置它；代理保持连接但不发内容时可以卡很久，界面一直显示生成中。watchdog 只看流内 chunk 间隔，不覆盖非流式请求和工具执行。
+- 合并注意：默认值写在 `AgentRequest`，当前没有设置页入口；要可配置时从 `ChatRequestFactory.createAgent` 注入。`Flow.timeout` 只在上游没有新 chunk 时触发，收到任意 chunk 会重置；超时后上游被取消，重试从本步起点重放，因此不会有半截内容进入下一轮。非流式仍依赖网络层读超时。`ai/` 分叉计数因此变为九处。
+- 测试：`AgentLoopTest` 覆盖“流挂起超过 1 秒后超时并重试成功”，断言 `LlmFailureCode.TIMEOUT`；`:ai:testDebugUnitTest` 全量通过。手动验收：代理保持 SSE 连接但不发事件，约 90 秒后错误卡片/重试；等待中停止生成应立即结束，不额外重试。
 - 测试：`RetryTest` 覆盖码表、`Retry-After` 原值和超过 `maxDelay` 的截断、jitter 归零后的固定间隔、`QUOTA` 不重试和取消；`ErrorParserTest` 覆盖 401/402/429/5xx/400 context 分类、结构化 `insufficient_quota`、嵌套 `QuotaFailure`、Gemini `RESOURCE_EXHAUSTED` 429 仍可重试、`withResponse` 保留结构化 code、HTTP date、非 JSON body 只按 status 分类和 `Retry-After` 解析；`AgentLoopTest` 覆盖流式和非流式空回复重试后成功；`ChatCompletionsErrorTest` 用假 interceptor 验证 429 `insufficient_quota` 到 `HttpException(status/code/Retry-After)` 的接线；`:ai:testDebugUnitTest` 全量通过；`:app:assembleGithubDebug` 通过。`:app:testGithubDebugUnitTest` 仍为已知 Windows 7 失败，本轮没有改 app。

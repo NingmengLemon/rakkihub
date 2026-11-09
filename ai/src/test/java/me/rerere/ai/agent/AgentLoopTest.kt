@@ -3,6 +3,7 @@ package me.rerere.ai.agent
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.awaitCancellation
 import kotlinx.coroutines.cancelAndJoin
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.FlowCollector
 import kotlinx.coroutines.flow.flow
@@ -34,6 +35,7 @@ import org.junit.Assert.assertTrue
 import org.junit.Test
 import java.io.IOException
 import kotlin.time.Duration
+import kotlin.time.Duration.Companion.seconds
 
 class AgentLoopTest {
     private val model = Model(modelId = "test-model")
@@ -46,6 +48,7 @@ class AgentLoopTest {
         stream: Boolean = true,
         maxSteps: Int = 256,
         retry: RetryPolicy = RetryPolicy.NONE,
+        streamIdleTimeout: Duration? = null,
     ) = AgentRequest(
         provider = provider,
         providerSetting = ProviderSetting.OpenAI(),
@@ -54,6 +57,7 @@ class AgentLoopTest {
         stream = stream,
         maxSteps = maxSteps,
         retry = retry,
+        streamIdleTimeout = streamIdleTimeout,
     )
 
     private suspend fun runToEnd(
@@ -137,6 +141,35 @@ class AgentLoopTest {
         assertEquals(2, provider.requests.size)
         val retry = events.filterIsInstance<AgentEvent.Retrying>().single()
         assertEquals(LlmFailureCode.EMPTY_RESPONSE, (retry.attempt.cause as LlmFailure).code)
+    }
+
+    @Test
+    fun `idle stream times out and retries`() = runTest {
+        provider.stream {
+            delay(10_000)
+            text("late")
+        }
+        provider.stream {
+            text("hello")
+            finish()
+        }
+
+        val events = runToEnd(
+            request(
+                retry = RetryPolicy.NETWORK.copy(
+                    initialDelay = Duration.ZERO,
+                    jitterRatio = 0.0,
+                ),
+                streamIdleTimeout = 1.seconds,
+            )
+        )
+
+        val finished = events.finished()
+        assertEquals(AgentFinishReason.Completed, finished.reason)
+        assertEquals(listOf("hello"), finished.message.texts())
+        assertEquals(2, provider.requests.size)
+        val retry = events.filterIsInstance<AgentEvent.Retrying>().single()
+        assertEquals(LlmFailureCode.TIMEOUT, (retry.attempt.cause as LlmFailure).code)
     }
 
     @Test
