@@ -6,6 +6,7 @@ import me.rerere.ai.ui.ToolApprovalState
 import me.rerere.ai.ui.UIMessage
 import me.rerere.ai.ui.UIMessagePart
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNotEquals
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
@@ -125,6 +126,61 @@ class ConversationMessagesTest {
 
         assertTrue(tool.isExecuted)
         assertTrue((tool.output.single() as UIMessagePart.Text).text.contains("not_started"))
+    }
+
+    @Test
+    fun `abandoned generating reply becomes interrupted on load`() {
+        val conversation = conversationOf(
+            UIMessage.user("run it").toMessageNode(),
+            toolReply(ToolApprovalState.Approved, startedAt = Clock.System.now())
+                .copy(isGenerating = true)
+                .toMessageNode(),
+        )
+
+        val recovered = conversation.recoverAbandonedGeneration()!!
+
+        val message = recovered.currentMessages.last()
+        assertEquals(MessageStatus.INTERRUPTED, message.status)
+        assertFalse(message.isGenerating)
+        assertTrue(message.getTools().single().isExecuted)
+    }
+
+    @Test
+    fun `abandoned generating branch not at the tail is recovered`() {
+        val abandoned = toolReply(ToolApprovalState.Approved, startedAt = Clock.System.now())
+            .copy(isGenerating = true)
+        val conversation = conversationOf(
+            abandoned.toMessageNode(),
+            UIMessage.user("after").toMessageNode(),
+        )
+
+        val recovered = conversation.recoverAbandonedGeneration()!!
+
+        assertEquals(MessageStatus.INTERRUPTED, recovered.currentMessages.first().status)
+        assertTrue(recovered.currentMessages.first().getTools().single().isExecuted)
+        assertEquals("after", (recovered.currentMessages.last().parts.single() as UIMessagePart.Text).text)
+    }
+
+    @Test
+    fun `failed generating reply keeps failed status`() {
+        val failed = UIMessage.assistant("partial").copy(
+            status = MessageStatus.FAILED,
+            isGenerating = true,
+        )
+        val recovered = conversationOf(failed.toMessageNode()).recoverAbandonedGeneration()!!
+
+        assertEquals(MessageStatus.FAILED, recovered.currentMessages.single().status)
+        assertFalse(recovered.currentMessages.single().isGenerating)
+    }
+
+    @Test
+    fun `completed reply is not touched by abandoned recovery`() {
+        val conversation = conversationOf(
+            UIMessage.user("run it").toMessageNode(),
+            UIMessage.assistant("done").toMessageNode(),
+        )
+
+        assertNull(conversation.recoverAbandonedGeneration())
     }
 
     @Test

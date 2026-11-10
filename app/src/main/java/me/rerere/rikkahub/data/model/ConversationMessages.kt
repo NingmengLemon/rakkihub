@@ -1,10 +1,12 @@
 package me.rerere.rikkahub.data.model
 
 import me.rerere.ai.core.MessageRole
+import me.rerere.ai.ui.MessageStatus
 import me.rerere.ai.ui.ToolApprovalState
 import me.rerere.ai.ui.UIMessage
 import me.rerere.ai.ui.UIMessagePart
 import me.rerere.ai.ui.finishPendingTools
+import me.rerere.ai.ui.finishReasoning
 import kotlin.uuid.Uuid
 
 /**
@@ -138,6 +140,34 @@ internal fun Conversation.withToolApproval(toolCallId: String, approvalState: To
             })
         }
     )
+}
+
+/** 进程死亡后加载：扫描所有仍在生成的消息，补成 INTERRUPTED 并给未执行工具补恢复结果。 */
+internal fun Conversation.recoverAbandonedGeneration(): Conversation? {
+    var changed = false
+    val nodes = messageNodes.map { node ->
+        val messages = node.messages.map { message ->
+            if (!message.isGenerating) {
+                message
+            } else {
+                changed = true
+                message
+                    .finishPendingTools(::recoverInterruptedTool)
+                    .copy(
+                        status = if (message.status ==
+                            MessageStatus.FAILED) {
+                            MessageStatus.FAILED
+                        } else {
+                            MessageStatus.INTERRUPTED
+                        },
+                        isGenerating = false,
+                    )
+                    .finishReasoning()
+            }
+        }
+        if (messages == node.messages) node else node.copy(messages = messages)
+    }
+    return if (changed) copy(messageNodes = nodes) else null
 }
 
 /**

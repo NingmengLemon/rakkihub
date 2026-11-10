@@ -29,6 +29,7 @@ import me.rerere.rikkahub.data.model.Assistant
 import me.rerere.rikkahub.data.model.Conversation
 import me.rerere.rikkahub.data.model.MessageNode
 import me.rerere.rikkahub.data.model.selectBranch
+import me.rerere.rikkahub.data.model.toMessageNode
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNotNull
@@ -39,6 +40,34 @@ import org.junit.Test
 import kotlin.uuid.Uuid
 
 class ConversationSessionTest {
+    @Test
+    fun `loading an abandoned generation marks it interrupted and persists`() = runBlocking {
+        val id = Uuid.random()
+        val tool = UIMessagePart.Tool(
+            toolCallId = "pending",
+            toolName = "workspace_shell",
+            input = "{}",
+            approvalState = ToolApprovalState.Approved,
+        )
+        val abandoned = UIMessage(
+            role = MessageRole.ASSISTANT,
+            parts = listOf(tool),
+            isGenerating = true,
+        )
+        val store = FakeConversationStore(
+            Conversation.ofId(id, messages = listOf(abandoned.toMessageNode()))
+        )
+        val session = ConversationSession(id, Conversation.ofId(id), this, store, {})
+
+        session.initialize(load = { store.persisted })
+
+        val message = session.state.value.currentMessages.single()
+        assertEquals(MessageStatus.INTERRUPTED, message.status)
+        assertFalse(message.isGenerating)
+        assertTrue(message.getTools().single().isExecuted)
+        assertEquals(MessageStatus.INTERRUPTED, store.persisted!!.currentMessages.single().status)
+    }
+
     @Test
     fun `metadata edits survive reopening and final generation save`() = runBlocking {
         val id = Uuid.random()

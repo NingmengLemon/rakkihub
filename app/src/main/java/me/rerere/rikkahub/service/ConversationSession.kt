@@ -20,6 +20,7 @@ import me.rerere.rikkahub.data.ai.ChatTurnContext
 import me.rerere.rikkahub.data.model.Conversation
 import me.rerere.rikkahub.data.model.MessageNode
 import me.rerere.rikkahub.data.model.isAwaitingToolApproval
+import me.rerere.rikkahub.data.model.recoverAbandonedGeneration
 import me.rerere.rikkahub.data.model.selectBranch
 import me.rerere.rikkahub.data.model.updateMessageStatus
 import java.time.Instant
@@ -114,8 +115,17 @@ class ConversationSession(
         initializationMutex.withLock {
             if (isInitialized) return
             val loaded = load()
-            val conversation = loaded ?: create()
+            var conversation = loaded ?: create()
             require(conversation.id == id)
+            // 上次进程在生成中退出：先补成 INTERRUPTED 并落库，避免半截回复一直装成生成中
+            if (loaded != null) {
+                val recovered = loaded.recoverAbandonedGeneration()
+                if (recovered != null) {
+                    conversation = store.prepareWrite()(recovered)
+                    require(conversation.id == id)
+                    store.write(previous = loaded, current = conversation)
+                }
+            }
             writeMutex.withLock {
                 lastWritten = conversation
                 existsInDatabase = loaded != null
@@ -398,7 +408,9 @@ class ConversationSession(
         update { current ->
             current.copy(
                 messageNodes = current.messageNodes.map { node ->
-                    node.copy(messages = node.messages.map { it.finishReasoning() })
+                    node.copy(messages = node.messages.map {
+                        it.finishReasoning().copy(isGenerating = false)
+                    })
                 },
                 updateAt = Instant.now(),
             )

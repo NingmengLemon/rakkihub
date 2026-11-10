@@ -689,12 +689,13 @@ class ChatService(
                             is AgentEvent.MessageUpdated -> {
                                 // 生成过程中只有网络重试的提示会留着，收到新内容说明重试已经成功
                                 session.processingStatus.value = null
-                                session.update { it.upsertMessage(replyNodeId, event.message) }
-                                session.replyMessageId.value = event.message.id
+                                val updated = event.message.copy(isGenerating = true)
+                                session.update { it.upsertMessage(replyNodeId, updated) }
+                                session.replyMessageId.value = updated.id
                                 // 通知等边缘副作用由 ChatNotificationManager 消费；
                                 // tryEmit 不挂起，事件丢失只影响单次通知更新，不能反压生成链
                                 appEventBus.tryEmit(
-                                    AppEvent.ChatGenerationUpdate(conversationId, event.message, senderName)
+                                    AppEvent.ChatGenerationUpdate(conversationId, updated, senderName)
                                 )
                             }
 

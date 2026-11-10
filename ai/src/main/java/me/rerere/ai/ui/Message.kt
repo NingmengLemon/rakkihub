@@ -17,8 +17,8 @@ import kotlin.uuid.Uuid
 /**
  * 一条助手回复的完成状态。旧数据没有这个字段，反序列化为 [COMPLETE]。
  *
- * [FAILED] 的回复只保留给用户查看，不进入下一次模型请求；[INTERRUPTED] 是用户主动停止，
- * 内容已经展示给用户，可以继续参与后续对话。
+ * [FAILED] 的回复只保留给用户查看，不进入下一次模型请求；[INTERRUPTED] 是用户主动停止或
+ * 进程在生成中退出留下的半截回复，内容已经展示给用户，可以继续参与后续对话。
  */
 @Serializable
 enum class MessageStatus {
@@ -44,6 +44,8 @@ data class UIMessage(
     val finishedAt: LocalDateTime? = null,
     // 生成失败或用户停止的回复不等同于正常完成，见 MessageStatus
     val status: MessageStatus = MessageStatus.COMPLETE,
+    // 生成中的标记会随消息一起落库，进程重启后据此把半截回复补成 INTERRUPTED
+    val isGenerating: Boolean = false,
     val modelId: Uuid? = null,
     // 模型名称的快照：modelId 指向的模型被删除后，靠它继续显示这条消息由谁生成
     val modelSnapshot: ModelSnapshot? = null,
