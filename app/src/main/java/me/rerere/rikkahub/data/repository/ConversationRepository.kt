@@ -20,11 +20,13 @@ import me.rerere.rikkahub.data.db.dao.MessageNodeDAO
 import me.rerere.rikkahub.data.db.entity.ConversationEntity
 import me.rerere.rikkahub.data.db.entity.MessageNodeEntity
 import me.rerere.rikkahub.data.db.fts.MessageFtsManager
+import me.rerere.rikkahub.data.db.fts.MessageSearchResult
 import me.rerere.rikkahub.data.db.fts.MessageSearchSort
 import me.rerere.rikkahub.data.db.fts.SearchIndexHealth
 import me.rerere.rikkahub.data.files.AttachmentUrlStorage
 import me.rerere.rikkahub.data.model.Conversation
 import me.rerere.rikkahub.data.model.MessageNode
+import me.rerere.rikkahub.data.model.scratchMessageIds
 import me.rerere.rikkahub.utils.JsonInstant
 import java.time.Instant
 import kotlin.uuid.Uuid
@@ -382,11 +384,32 @@ class ConversationRepository(
         keyword: String,
         sort: MessageSearchSort = MessageSearchSort.RELEVANCE,
         assistantId: Uuid? = null,
-    ) = messageFtsManager.search(keyword, sort, assistantId?.let { listOf(it.toString()) })
+    ) = filterScratch(messageFtsManager.search(keyword, sort, assistantId?.let { listOf(it.toString()) }))
 
     /** 只在 [assistantIds] 这些助手的对话里搜索 */
     suspend fun searchMessagesOfAssistants(keyword: String, assistantIds: Set<Uuid>) =
-        messageFtsManager.search(keyword, MessageSearchSort.RELEVANCE, assistantIds.map { it.toString() })
+        filterScratch(
+            messageFtsManager.search(
+                keyword,
+                MessageSearchSort.RELEVANCE,
+                assistantIds.map { it.toString() },
+            )
+        )
+
+    /** FTS 索引里仍会有历史 scratch 行；结果按会话当前消息过滤，避免搜到提示词和半截回复。 */
+    private suspend fun filterScratch(results: List<MessageSearchResult>): List<MessageSearchResult> {
+        if (results.isEmpty()) return results
+        val scratchByConversation = mutableMapOf<String, Set<String>>()
+        return results.filter { result ->
+            val scratchIds = scratchByConversation[result.conversationId] ?: run {
+                val conversationId = runCatching { Uuid.parse(result.conversationId) }.getOrNull()
+                val ids = conversationId?.let { getConversationById(it)?.scratchMessageIds() }.orEmpty()
+                scratchByConversation[result.conversationId] = ids
+                ids
+            }
+            result.messageId !in scratchIds
+        }
+    }
 
     suspend fun rebuildAllIndexes(onProgress: (current: Int, total: Int) -> Unit = { _, _ -> }) {
         messageFtsManager.markRebuildStarted()

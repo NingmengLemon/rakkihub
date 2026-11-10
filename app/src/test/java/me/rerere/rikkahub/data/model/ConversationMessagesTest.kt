@@ -174,6 +174,61 @@ class ConversationMessagesTest {
     }
 
     @Test
+    fun `scratch message ids include prompt and reply`() {
+        val user = UIMessage.user("question")
+        val prompt = UIMessage.user("compress").copy(isCompressionPrompt = true)
+        val reply = UIMessage.assistant("half")
+        val answer = UIMessage.assistant("answer")
+        val conversation = conversationOf(
+            user.toMessageNode(),
+            prompt.toMessageNode(),
+            reply.toMessageNode(),
+            answer.toMessageNode(),
+        )
+
+        assertEquals(
+            setOf(prompt.id.toString(), reply.id.toString()),
+            conversation.scratchMessageIds(),
+        )
+    }
+
+    @Test
+    fun `scratch id helper handles missing reply and following user`() {
+        val prompt = UIMessage.user("compress").copy(isCompressionPrompt = true)
+        val user = UIMessage.user("next")
+        val withUser = conversationOf(prompt.toMessageNode(), user.toMessageNode())
+        val atTail = conversationOf(prompt.toMessageNode())
+
+        assertEquals(setOf(prompt.id.toString()), withUser.scratchMessageIds())
+        assertEquals(setOf(prompt.id.toString()), atTail.scratchMessageIds())
+    }
+
+    @Test
+    fun `scratch id helper handles multiple prompts and no prompts`() {
+        val firstPrompt = UIMessage.user("compress one").copy(isCompressionPrompt = true)
+        val firstReply = UIMessage.assistant("one")
+        val secondPrompt = UIMessage.user("compress two").copy(isCompressionPrompt = true)
+        val secondReply = UIMessage.assistant("two")
+        val conversation = conversationOf(
+            firstPrompt.toMessageNode(),
+            firstReply.toMessageNode(),
+            secondPrompt.toMessageNode(),
+            secondReply.toMessageNode(),
+        )
+
+        assertEquals(
+            setOf(
+                firstPrompt.id.toString(),
+                firstReply.id.toString(),
+                secondPrompt.id.toString(),
+                secondReply.id.toString(),
+            ),
+            conversation.scratchMessageIds(),
+        )
+        assertTrue(conversationOf(UIMessage.user("plain").toMessageNode()).scratchMessageIds().isEmpty())
+    }
+
+    @Test
     fun `completed reply is not touched by abandoned recovery`() {
         val conversation = conversationOf(
             UIMessage.user("run it").toMessageNode(),

@@ -164,6 +164,19 @@ internal fun Conversation.withToolApproval(toolCallId: String, approvalState: To
     )
 }
 
+/** 压缩 scratch 对的消息 ID：提示词和紧随 assistant 回复，搜索等派生数据据此过滤。 */
+internal fun Conversation.scratchMessageIds(): Set<String> {
+    val ids = mutableSetOf<String>()
+    messageNodes.forEachIndexed { index, node ->
+        if (node.messages.none { it.isCompressionPrompt }) return@forEachIndexed
+        node.messages.forEach { ids += it.id.toString() }
+        messageNodes.getOrNull(index + 1)?.messages
+            ?.filter { it.role == MessageRole.ASSISTANT }
+            ?.forEach { ids += it.id.toString() }
+    }
+    return ids
+}
+
 /** 进程死亡后加载：扫描所有仍在生成的消息，补成 INTERRUPTED 并给未执行工具补恢复结果。 */
 internal fun Conversation.recoverAbandonedGeneration(): Conversation? {
     var changed = false
