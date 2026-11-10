@@ -75,7 +75,7 @@
 | C65 | 工具中断恢复结果 | 改造 |
 | C66 | 消息队列恢复与回插 | 改造 |
 | C67 | 进程死亡回复恢复 | 改造 |
-| C68 | 压缩孤儿对加载清理 | 改造 |
+| C68 | 压缩孤儿对加载清理与过滤 | 改造 |
 
 ## 明细
 
@@ -391,7 +391,7 @@
 
 - 落点：`ChatService.startCompression` 在 `synchronized(session)` 里检查 job/待审批并设置 `compressionActive`，失败返回 `Result.failure`，job 不启前台服务；`runCompressionTurn` 先用 `Conversation.planCompression` 在插入提示词之前钉死 `messagesToSend`/锚点，再插提示词和空回复并 flush，起 per-turn saver，成功用一次 `ConversationSession.flushWith(incarnation)` 完成「检查点 + 删提示词/回复 + updateAt」，失败/取消保留这对节点并 `finishGeneration`；`UIMessage.isCompressionPrompt`（带默认值的序列化字段），`editMessage` 保留标记，`removeCompressionPair(s)` 一次删一对，`sendQueuedMessage` 前和压缩计划前排除旧 scratch，prepare 再清最新状态；`gates`：压缩期间拒绝重新生成、工具审批、分支切换和起标题；`ChatRequestFactory.streamCompressionSummary` 与正常对话同前缀（保留工具定义、`maxTokens = null`、提示词最后追加），`withRetry` 包住收集、每次重试重置同一 message id、捕获 `StreamChunk.Finish.finishReason`，截断按归一化字符串集合判失败；`ChatVM.handleCompressContext` 改为 `startCompression` 的 Result 处理，`deleteCompressionPair`；对话框 `onCompress` 改成 `() -> Unit` 并点开始即关；`ChatList` 跳过紧随提示词的回复节点，由 `CompressionCard` 一张卡承载折叠头/展开区/停止/重试/删除，失败默认展开；`ChatPage` 串起重试（删对后重开管理上下文对话框）；四份 locale 加卡片与取消/截断文案。旧的 `compressConversation` 与 `generateCompressionSummary` 删除。
 - 理由：压缩原来是一次隐藏的非流式请求，用户看不到提示词和摘要怎么生成，也不能取消；改成可见轮次后流式、可取消、错误走现有卡片，失败不截断历史。请求前缀保持不变，提示词缓存仍然命中；工具定义保留，模型返回工具调用按失败处理，不执行工具。
-- 合并注意：`planCompression` 必须在插入可见提示词之前算，请求只用计划里的消息，否则提示词会被发两遍或吞掉保留消息。检查点按锚点插在保留区之前，可见提示词的位置只是 UI；成功是 prepare + finalize 两次全量写，失败是 prepare + finishGeneration 两次，旧节点仍在树里，每次都会编码保留区。压缩期间的分支切换、发送、队列派发都被挡；发送、重新生成、截断、分支切换、标题生成目前各自判断能否开始（谓词不统一，统一留到下次改 ChatService，`CompressionPlan` 的待审批/可续跑用例已补）；失败后下次真实发送或截断会先清 scratch 对，不会把提示词当成普通历史。失败/取消留下的对会标 `FAILED`，跨 reload（含 5 秒 idle 回收）保留，用户可重试/删除；进程崩溃留下的 `COMPLETE` 对由 C68 在加载时删除，不会留下检查点，也无法重试。截断后的崩溃检查点已落库。临时换模型会改变请求前缀、失去缓存命中，入口留在对话框并说明。Web/SSE 没有压缩流，浮动窗口和导出把临时对当普通消息。
+- 合并注意：`planCompression` 必须在插入可见提示词之前算，请求只用计划里的消息，否则提示词会被发两遍或吞掉保留消息。检查点按锚点插在保留区之前，可见提示词的位置只是 UI；成功是 prepare + finalize 两次全量写，失败是 prepare + finishGeneration 两次，旧节点仍在树里，每次都会编码保留区。压缩期间的分支切换、发送、队列派发都被挡；发送、重新生成、截断、分支切换、标题生成目前各自判断能否开始（谓词不统一，统一留到下次改 ChatService，`CompressionPlan` 的待审批/可续跑用例已补）；失败后下次真实发送或截断会先清 scratch 对，不会把提示词当成普通历史。失败/取消留下的对会标 `FAILED`，跨 reload（含 5 秒 idle 回收）保留，用户可重试/删除；进程崩溃留下的 `COMPLETE` 对由 C68 在加载时删除，不会留下检查点，也无法重试。截断后的崩溃检查点已落库。临时换模型会改变请求前缀、失去缓存命中，入口留在对话框并说明。Web/SSE 没有压缩流，浮动窗口把临时对当普通消息；导出已由 C68 过滤。
 - 测试：`CompressionPlanTest` 9 条（计划范围/空范围、检查点插入与删对、缺回复的清理、普通消息不误删、截断 finish reason 归一化、待审批工具、可续跑的已批准工具、待审批工具只在保留尾部时仍 Ready）；`ConversationSessionTest` 增加 `flushWith` 两条（变换落库并推进快照、incarnation 不匹配不写）；`ChatRequestFactory` 的流式请求依赖已有 `compressionSummaryOrNull` 的守卫。设备验收待做：真实压缩的流式显示、停止、失败重试/删除、成功后的检查点；`data.sync` 51 条不受影响的确认。
 
 ### C52 Claude 缓存断点按官方标准收敛
@@ -508,9 +508,9 @@
 - 合并注意：标记只覆盖已经被 C50 周期保存到的半截回复；进程在首次保存前死亡、队列消息、重试卡片和错误卡片仍会丢，队列持久化继续归进程死亡项。加载时的恢复写库失败会让初始化抛错，这是有意的，避免内存显示已恢复但库里仍是生成中。旧 JSON 没有 `isGenerating`，默认 false。`ai/` 分叉计数因此变为十二处。
 - 测试：`ConversationMessagesTest` 覆盖生成中回复转 `INTERRUPTED`、非末尾节点恢复、FAILED 保留、未执行工具补结果、正常完成回复不被改动；`ConversationSessionTest` 覆盖加载时恢复并落库；`:app:testGithubDebugUnitTest` 对应测试通过。手动验收：等 C50 至少保存过一次（小节点 60 秒或 64KB 增长才写一次）后再杀进程，重启打开会话应看到中断标记和工具恢复结果，不显示生成中；首次保存窗口内杀进程不会出现中断标记。
 
-### C68 压缩孤儿对加载清理
+### C68 压缩孤儿对加载清理与过滤
 
-- 落点：`ConversationSession.initialize` 在 C67 的恢复之后对加载结果调用 `Conversation.removeCrashedCompressionPairs`，只把没有回复或回复状态仍为 `COMPLETE` 的崩溃对删掉，再和 C67 的恢复结果一次 `store.prepareWrite`/`write` 落库；压缩失败或取消时 `ChatService` 先把回复标成 `FAILED`，加载时保留这对节点，重试/删除入口仍在。
-- 理由：压缩失败或取消留下的 prompt 与半截回复原来只在发送、重新生成、截断、再次压缩前清理，管理上下文对话框和文件选择器还会在内存里清；进程崩溃后没人再碰它们，Web/SSE、浮动窗口和普通导出会把它们当正常消息。失败/取消对是 C51 明确要保留给用户重试的，不能和崩溃对一起删。
-- 合并注意：只清理加载时能识别的、回复仍为 `COMPLETE` 的 prompt 对；活动中的压缩不会被误删，因为加载时没有活动任务。失败/取消对靠 `FAILED` 状态跨 reload 保留；如果普通失败也在同一会话里重试，先清旧对再插新对。Web/SSE、浮动窗口和导出仍可能读到内存里的孤儿对，模型层也没有不可发送标记；这些仍归 scratch 生命周期的后续项。`ai/` 无改动。
-- 测试：`ConversationSessionTest` 覆盖加载时删除崩溃 prompt+半截回复并落库、`FAILED` 对保留；`:app:testGithubDebugUnitTest` 对应测试通过。手动验收：压缩中杀进程，重启打开会话不应看到崩溃的压缩提示词或半截回复；压缩失败/取消后返回列表再进入，重试卡应还在。
+- 落点：`ConversationSession.initialize` 在 C67 的恢复之后对加载结果调用 `Conversation.removeCrashedCompressionPairs`，只把没有回复或回复状态仍为 `COMPLETE` 的崩溃对删掉，再和 C67 的恢复结果一次 `store.prepareWrite`/`write` 落库；压缩失败或取消时 `ChatService` 先把回复标成 `FAILED`，加载时保留这对节点，重试/删除入口仍在。`ai/ui/Message.kt` 增加 `List<UIMessage>.withoutCompressionScratch()`，`ChatRequestFactory` 两处、`ConversationMetaGenerator.recentModelMessages`、`Conversation.dialogueMessages` 和导出选中消息都先过滤提示词及紧随的 assistant 回复。
+- 理由：压缩失败或取消留下的 prompt 与半截回复原来只在发送、重新生成、截断、再次压缩前清理，管理上下文对话框和文件选择器还会在内存里清；进程崩溃后没人再碰它们，Web/SSE 和浮动窗口会把它们当正常消息。失败/取消对是 C51 明确要保留给用户重试的，不能和崩溃对一起删。
+- 合并注意：只清理加载时能识别的、回复仍为 `COMPLETE` 的 prompt 对；活动中的压缩不会被误删，因为加载时没有活动任务。失败/取消对靠 `FAILED` 状态跨 reload 保留；如果普通失败也在同一会话里重试，先清旧对再插新对。请求派生和导出已过滤，但 Web/SSE 和浮动窗口仍可能把内存里的孤儿对当普通消息显示；消息模型层用 `isCompressionPrompt` 加列表 helper，没有逐 part 的不可发送标记。`ai/` 分叉计数因此变为十三处。
+- 测试：`ConversationSessionTest` 覆盖加载时删除崩溃 prompt+半截回复并落库、`FAILED` 对保留；`MessageMergeTest` 覆盖提示词+回复成对删除和只有提示词；`ConversationRecentModelMessagesTest`、`DialogueMessagesTest` 覆盖标题和对话历史的过滤。请求装配的两处过滤由代码走查确认，没有单独构造 `ChatRequestFactory` 用例。手动验收：压缩中杀进程，重启打开会话不应看到崩溃的压缩提示词或半截回复；压缩失败/取消后返回列表再进入，重试卡应还在；导出不包含临时提示词和半截回复。

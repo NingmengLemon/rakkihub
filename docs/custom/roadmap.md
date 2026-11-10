@@ -173,7 +173,7 @@
 | `speech/` | C5 删掉了全部运行时实现，只留两个序列化类与它们的序列化测试 | 不看 |
 | `mediagen/` | C1 保留模块以维持数据兼容，界面不使用 | 不主动看，改到 `MediaGenerationProviderSetting` 这类持久化类型时复核 |
 
-`ai/` 下有十二处改动：C3 删掉了 `ai/util/Request.kt` 里给 aihubmix.com 加 `APP-Code` 请求头的分支；C52 把 `ClaudeProvider` 的缓存断点收敛到官方标准；C53 把 Claude 缓存策略改成按 provider 切换，默认保留上游原来的 4 个断点；C47 在 `ai/ui/Message.kt` 新增了只读的 `contextLimitStart`，不改 `limitContext`；C51 在 `ai/ui/Message.kt` 新增了序列化字段 `isCompressionPrompt`，用于标记压缩提示词；C58 在 `ai/ui/Message.kt` 新增了 `status`、`isModelVisible`、`filterModelVisible` 和 `mergeAdjacentUserMessages`；C59 让五个 `StreamChunkDecoder` 在未见终止事件时抛 `IOException`，并在五个 provider 接线点的 `onClosed` 里 `close(e)`；C61 在 `ErrorParser.kt` 增加 `LlmFailureCode`/`HttpException` 错误码和 `Retry-After`，`RetryPolicy` 按码表、jitter 和 `maxDelay` 重试，`AgentLoop` 把空回复转成 `EMPTY_RESPONSE`；C62 给 `AgentRequest` 增加 `streamIdleTimeout`，`AgentLoop` 用 `Flow.timeout` 把流内空闲转成 `TIMEOUT`；C63 给 `AgentHooks` 增加 `onContextOverflow`，`AgentLoop` 捕获 `CONTEXT_WINDOW_EXCEEDED` 后允许 hook 缩窗重试一次；C65 让工具错误结果只带摘要，堆栈只进 stderr，并给 `AgentRequest` 增加 `toolTimeout`，`AgentLoop` 用 `withTimeoutOrNull` 执行工具；C67 在 `UIMessage` 增加 `isGenerating`，加载时据此把进程死亡留下的半截回复补成 `INTERRUPTED`。C35 的 `filterByKeywords` 与上游 `5ad19405` 逐字一致，不算分叉。移植上游对这些文件的改动时保留这十二处。
+`ai/` 下有十三处改动：C3 删掉了 `ai/util/Request.kt` 里给 aihubmix.com 加 `APP-Code` 请求头的分支；C52 把 `ClaudeProvider` 的缓存断点收敛到官方标准；C53 把 Claude 缓存策略改成按 provider 切换，默认保留上游原来的 4 个断点；C47 在 `ai/ui/Message.kt` 新增了只读的 `contextLimitStart`，不改 `limitContext`；C51 在 `ai/ui/Message.kt` 新增了序列化字段 `isCompressionPrompt`，用于标记压缩提示词；C58 在 `ai/ui/Message.kt` 新增了 `status`、`isModelVisible`、`filterModelVisible` 和 `mergeAdjacentUserMessages`；C59 让五个 `StreamChunkDecoder` 在未见终止事件时抛 `IOException`，并在五个 provider 接线点的 `onClosed` 里 `close(e)`；C61 在 `ErrorParser.kt` 增加 `LlmFailureCode`/`HttpException` 错误码和 `Retry-After`，`RetryPolicy` 按码表、jitter 和 `maxDelay` 重试，`AgentLoop` 把空回复转成 `EMPTY_RESPONSE`；C62 给 `AgentRequest` 增加 `streamIdleTimeout`，`AgentLoop` 用 `Flow.timeout` 把流内空闲转成 `TIMEOUT`；C63 给 `AgentHooks` 增加 `onContextOverflow`，`AgentLoop` 捕获 `CONTEXT_WINDOW_EXCEEDED` 后允许 hook 缩窗重试一次；C65 让工具错误结果只带摘要，堆栈只进 stderr，并给 `AgentRequest` 增加 `toolTimeout`，`AgentLoop` 用 `withTimeoutOrNull` 执行工具；C67 在 `UIMessage` 增加 `isGenerating`，加载时据此把进程死亡留下的半截回复补成 `INTERRUPTED`；C68 增加 `withoutCompressionScratch`，把压缩提示词和紧随回复从请求与导出里过滤掉。C35 的 `filterByKeywords` 与上游 `5ad19405` 逐字一致，不算分叉。移植上游对这些文件的改动时保留这十三处。
 
 上游从 3.0.0 起把多步生成循环放进 `ai/`（`ai/src/main/java/me/rerere/ai/agent/AgentLoop.kt`），3.1.1 又把工具执行计时与 models.dev 的模型能力数据放进去。现在还值得看 `ai/` 吗，取决于它是不是一块能单独参考的区域：如果它继续吸收 `app/` 侧的耦合，读改动的成本会变高。
 
@@ -298,7 +298,7 @@
 | C65 工具中断恢复结果 | L3 | 无（工具恢复） |
 | C66 消息队列恢复与回插 | L3 | 无（消息队列） |
 | C67 进程死亡回复恢复 | L3 | 无（进程死亡） |
-| C68 压缩孤儿对加载清理 | L3 | 无（scratch 生命周期） |
+| C68 压缩孤儿对加载清理与过滤 | L3 | 无（scratch 生命周期） |
 
 ### 依赖链
 
@@ -362,7 +362,7 @@ RikkaHub 现状：
 | P2 | 进程死亡丢失重试与收尾状态（C67 已恢复半截回复） | 只周期保存回复节点，5/15/30 秒分档，小节点最迟 60 秒；C67 的 `isGenerating` 随消息落库，加载时把半截回复补成 `INTERRUPTED` 并补工具结果，但重试状态、错误卡片、队列仍未落库，首次保存前死亡仍会丢。C50 在节点漂移或含 base64 图片时静默跳过。`MessageSaveLoop.kt`、`ConversationSession.kt`、`ChatService.kt`。 | 继续持久化 turn/retrying 状态或时间戳心跳；队列持久化；保存失败要上报。 |
 | P2 | 消息队列暂停后静默滞留（C66 已修派发与回插） | C66 前队列 paused 且非空时，新消息只 enqueue，`takeNext` 因 paused 返回 null，消息不发也不进正文；先 `takeNext` 出队再写历史，中间失败会丢消息。C66 起显式发送总是 resume，发送失败且未落库时回插队首。队列仍不持久化，进程死亡后丢失。`ChatService.kt`、`MessageQueue.kt`。 | 已按此实现派发恢复和失败回插；原建议的“先写历史再出队”由未落库回插补偿，队列持久化仍留到进程死亡收尾。 |
 | P2 | 上下文压力只按条数，压缩能力有限 | 发送前没有 token 估算或 usage 水位；摘要请求 `maxTokens = null`，截断即整次压缩失败；没有 tool result 裁剪和图片 offload；截断 keep=1 且末条是 assistant 时会丢掉产生它的 user。`ChatRequestFactory.kt:200,250`、`CompressionPlan.kt:31-36`、`Conversation.kt:217-228`。 | 用最近 usage 或本地估算按 contextWindow 做压力检查；摘要设显式 maxTokens，截断时用部分摘要；先 prune tool result；图片占位；keep 按 user 轮次对齐。 |
-| P2 | scratch 生命周期只靠调用点清理（C68 已清理崩溃孤儿对） | 压缩失败或取消留下的 prompt 与半截回复只在发送、截断、再次压缩前清理；C68 起加载会话时删除回复仍为 `COMPLETE` 的崩溃对，失败/取消对标 `FAILED` 后跨 reload 保留，但 Web/SSE、浮动窗口和导出仍可能读到内存里的孤儿对，消息模型层也没有不可发送标记。`ChatService.kt`、`ConversationSession.kt`、`ConversationMessages.kt`。 | 给 scratch 打不可发送标记，请求派生时强制过滤；导出过滤或折叠；C68 已做崩溃对载入清理。 |
+| P2 | scratch 生命周期只靠调用点清理（C68 已清理崩溃对并过滤请求/导出） | 压缩失败或取消留下的 prompt 与半截回复只在发送、截断、再次压缩前清理；C68 起加载会话时删除回复仍为 `COMPLETE` 的崩溃对，失败/取消对标 `FAILED` 后跨 reload 保留，请求派生和导出会用 `withoutCompressionScratch` 过滤，但 Web/SSE 和浮动窗口仍可能把内存里的孤儿对当普通消息显示。`ChatService.kt`、`ConversationSession.kt`、`ConversationMessages.kt`、`ai/ui/Message.kt`。 | 给 scratch 打逐 part 不可发送标记，Web/SSE 显示过滤或折叠；C68 已做崩溃对载入清理、请求与导出过滤。 |
 
 修复顺序：
 
@@ -371,6 +371,6 @@ P1 分批：P1a 截断 SSE 与停止结算，P1b 审批分支与配置快照，P
 1. P0 失败 attempt 隔离已由 C58 完成；多步工具调用的 per-step 细化仍留 P2，工具恢复结果已由 C65 处理。
 2. P1a 截断 SSE 与停止结算已由 C59 完成；P1b 审批分支与配置快照已由 C60 完成。
 3. P1c 的稳定错误码重试已由 C61、idle watchdog 由 C62、overflow 兜底由 C63 完成；P1 收尾后进入 P2。
-4. P2 工具恢复结果和工具超时已由 C65 完成，队列派发与失败回插由 C66 完成，进程死亡半截回复由 C67 完成，scratch 加载清理由 C68 完成；剩余取消写入、队列持久化、重试状态持久化、上下文压缩、scratch 请求/导出过滤。
+4. P2 工具恢复结果和工具超时已由 C65 完成，队列派发与失败回插由 C66 完成，进程死亡半截回复由 C67 完成，scratch 加载清理与请求/导出过滤由 C68 完成；剩余取消写入、队列持久化、重试状态持久化、上下文压缩、Web/SSE 显示过滤。
 
 范围说明：C59 已逐行核对五个 decoder 的终止判定和五个 provider 接线点的 `onClosed`，并用 `:ai:testDebugUnitTest` 全量验证；工具并发没有展开，当前 RikkaHub 按顺序执行，未发现正确性问题，只是并发效率较低。

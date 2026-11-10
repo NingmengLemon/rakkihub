@@ -23,6 +23,7 @@ import me.rerere.ai.ui.UIMessage
 import me.rerere.ai.ui.filterModelVisible
 import me.rerere.ai.ui.limitContext
 import me.rerere.ai.ui.mergeAdjacentUserMessages
+import me.rerere.ai.ui.withoutCompressionScratch
 import me.rerere.rikkahub.R
 import me.rerere.rikkahub.data.ai.prompts.buildMemoryPrompt
 import me.rerere.rikkahub.data.ai.tools.ChatToolFactory
@@ -165,7 +166,7 @@ class ChatRequestFactory(
         val hooks = object : AgentHooks {
             override suspend fun prepareStep(messages: List<UIMessage>): StepRequest {
                 Log.i(TAG, "prepareStep: ${turn.model.id}")
-                lastLimitedMessages = messages.filterModelVisible()
+                lastLimitedMessages = messages.filterModelVisible().withoutCompressionScratch()
                     .limitContext(turn.assistant.contextMessageLimit)
                 return buildStep(turn, messages, processingStatus, shrinkActive)
             }
@@ -248,7 +249,7 @@ class ChatRequestFactory(
         shrinkActive: Boolean = false,
     ): StepRequest {
         val assistant = turn.assistant
-        val visibleMessages = messages.filterModelVisible()
+        val visibleMessages = messages.filterModelVisible().withoutCompressionScratch()
         val requestMessages = buildList {
             val system = buildString {
                 val effectiveSystemPrompt =

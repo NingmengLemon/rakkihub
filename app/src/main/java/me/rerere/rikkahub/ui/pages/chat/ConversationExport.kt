@@ -74,6 +74,7 @@ import me.rerere.ai.core.MessageRole
 import me.rerere.ai.ui.UIMessage
 import me.rerere.ai.ui.UIMessagePart
 import me.rerere.ai.ui.isEmptyUIMessage
+import me.rerere.ai.ui.withoutCompressionScratch
 import me.rerere.ai.util.encodeBase64
 import me.rerere.common.android.appTempFolder
 import me.rerere.rikkahub.R
@@ -120,6 +121,7 @@ fun ChatExportSheet(
     val scope = rememberCoroutineScope()
     val density = LocalDensity.current
     val settings = LocalSettings.current
+    val exportedMessages = remember(selectedMessages) { selectedMessages.withoutCompressionScratch() }
     var exportOptions by remember { mutableStateOf(ExportOptions()) }
 
     if (visible) {
@@ -156,7 +158,7 @@ fun ChatExportSheet(
                     stringResource(id = R.string.chat_page_export_success, "Markdown")
                 OutlinedCard(
                     onClick = {
-                        exportToMarkdown(context, conversation, selectedMessages, exportOptions)
+                        exportToMarkdown(context, conversation, exportedMessages, exportOptions)
                         toaster.show(
                             markdownSuccessMessage,
                             type = ToastType.Success
@@ -226,7 +228,7 @@ fun ChatExportSheet(
                                                 scope = scope,
                                                 density = density,
                                                 conversation = conversation,
-                                                messages = selectedMessages,
+                                                messages = exportedMessages,
                                                 settings = settings,
                                                 options = exportOptions
                                             )

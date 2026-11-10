@@ -151,6 +151,23 @@ data class UIMessage(
 /** 过滤掉只用于展示的失败回复；其余消息保持原顺序 */
 fun List<UIMessage>.filterModelVisible(): List<UIMessage> = filter { it.isModelVisible }
 
+/** 去掉压缩临时提示词及其紧随的 assistant 回复；失败/取消的重试卡只给用户看，不进请求。 */
+fun List<UIMessage>.withoutCompressionScratch(): List<UIMessage> {
+    if (none { it.isCompressionPrompt }) return this
+    val result = ArrayList<UIMessage>(size)
+    var index = 0
+    while (index < size) {
+        val message = this[index]
+        if (message.isCompressionPrompt) {
+            index += if (index + 1 < size && this[index + 1].role == MessageRole.ASSISTANT) 2 else 1
+            continue
+        }
+        result += message
+        index++
+    }
+    return result
+}
+
 /**
  * 合并相邻的 user 消息。
  *

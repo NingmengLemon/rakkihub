@@ -13,6 +13,7 @@ import me.rerere.ai.core.Tool
 import me.rerere.ai.ui.UIMessage
 import me.rerere.ai.ui.UIMessagePart
 import me.rerere.ai.ui.filterModelVisible
+import me.rerere.ai.ui.withoutCompressionScratch
 import me.rerere.rikkahub.data.db.fts.MessageSearchResult
 import me.rerere.rikkahub.data.db.fts.MessageSearchSort
 import me.rerere.rikkahub.data.model.Conversation
@@ -191,4 +192,4 @@ fun createMemoryConversationTools(
 internal fun Conversation.dialogueMessages(): List<UIMessage> =
     currentMessages.filter {
         (it.role == MessageRole.USER || it.role == MessageRole.ASSISTANT) && !it.isHistoryTruncationMarker
-    }.filterModelVisible()
+    }.filterModelVisible().withoutCompressionScratch()

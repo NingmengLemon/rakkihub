@@ -27,4 +27,25 @@ class ConversationRecentModelMessagesTest {
             conversation.recentModelMessages(10).map { it.id },
         )
     }
+
+    @Test
+    fun `compression scratch stays out of title context`() {
+        val user = UIMessage.user("question")
+        val prompt = UIMessage.user("compress").copy(isCompressionPrompt = true)
+        val half = UIMessage.assistant("half")
+        val answer = UIMessage.assistant("answer")
+        val conversation = Conversation.ofId(Uuid.random()).copy(
+            messageNodes = listOf(
+                user.toMessageNode(),
+                prompt.toMessageNode(),
+                half.toMessageNode(),
+                answer.toMessageNode(),
+            )
+        )
+
+        assertEquals(
+            listOf(user.id, answer.id),
+            conversation.recentModelMessages(10).map { it.id },
+        )
+    }
 }
