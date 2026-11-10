@@ -45,6 +45,28 @@ internal fun Conversation.removeCompressionPair(promptMessageId: Uuid): Conversa
     )
 }
 
+/** 只清理崩溃留下的压缩对；失败/取消后保留的配对由状态标记保留，供用户重试或删除。 */
+internal fun Conversation.removeCrashedCompressionPairs(): Conversation? {
+    var conversation = this
+    var result: Conversation? = null
+    val promptIds = messageNodes.flatMap { node ->
+        node.messages.filter { it.isCompressionPrompt }.map { it.id }
+    }
+    for (promptId in promptIds) {
+        val promptIndex = conversation.messageNodes.indexOfFirst { node ->
+            node.messages.any { it.id == promptId }
+        }
+        if (promptIndex == -1) continue
+        val reply = conversation.messageNodes.getOrNull(promptIndex + 1)
+            ?.messages
+            ?.firstOrNull { it.role == MessageRole.ASSISTANT }
+        if (reply != null && reply.status != MessageStatus.COMPLETE) continue
+        conversation = conversation.removeCompressionPair(promptId) ?: continue
+        result = conversation
+    }
+    return result
+}
+
 /** 清理所有未完成的压缩对；没有可清理的返回 null */
 internal fun Conversation.removeCompressionPairs(): Conversation? {
     var result: Conversation? = null

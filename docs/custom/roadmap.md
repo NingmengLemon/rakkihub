@@ -298,6 +298,7 @@
 | C65 工具中断恢复结果 | L3 | 无（工具恢复） |
 | C66 消息队列恢复与回插 | L3 | 无（消息队列） |
 | C67 进程死亡回复恢复 | L3 | 无（进程死亡） |
+| C68 压缩孤儿对加载清理 | L3 | 无（scratch 生命周期） |
 
 ### 依赖链
 
@@ -361,7 +362,7 @@ RikkaHub 现状：
 | P2 | 进程死亡丢失重试与收尾状态（C67 已恢复半截回复） | 只周期保存回复节点，5/15/30 秒分档，小节点最迟 60 秒；C67 的 `isGenerating` 随消息落库，加载时把半截回复补成 `INTERRUPTED` 并补工具结果，但重试状态、错误卡片、队列仍未落库，首次保存前死亡仍会丢。C50 在节点漂移或含 base64 图片时静默跳过。`MessageSaveLoop.kt`、`ConversationSession.kt`、`ChatService.kt`。 | 继续持久化 turn/retrying 状态或时间戳心跳；队列持久化；保存失败要上报。 |
 | P2 | 消息队列暂停后静默滞留（C66 已修派发与回插） | C66 前队列 paused 且非空时，新消息只 enqueue，`takeNext` 因 paused 返回 null，消息不发也不进正文；先 `takeNext` 出队再写历史，中间失败会丢消息。C66 起显式发送总是 resume，发送失败且未落库时回插队首。队列仍不持久化，进程死亡后丢失。`ChatService.kt`、`MessageQueue.kt`。 | 已按此实现派发恢复和失败回插；原建议的“先写历史再出队”由未落库回插补偿，队列持久化仍留到进程死亡收尾。 |
 | P2 | 上下文压力只按条数，压缩能力有限 | 发送前没有 token 估算或 usage 水位；摘要请求 `maxTokens = null`，截断即整次压缩失败；没有 tool result 裁剪和图片 offload；截断 keep=1 且末条是 assistant 时会丢掉产生它的 user。`ChatRequestFactory.kt:200,250`、`CompressionPlan.kt:31-36`、`Conversation.kt:217-228`。 | 用最近 usage 或本地估算按 contextWindow 做压力检查；摘要设显式 maxTokens，截断时用部分摘要；先 prune tool result；图片占位；keep 按 user 轮次对齐。 |
-| P2 | scratch 生命周期只靠调用点清理 | 压缩失败或取消留下的 prompt 与半截回复只在发送、截断、再次压缩前清理；崩溃会留孤儿对，Web/SSE、浮动窗口和导出按普通消息处理。`ChatService.kt:870,920,988`、`docs/custom/checklist.md:383`。 | 消息模型层给 scratch 打不可发送标记，请求派生时强制过滤；导出过滤或折叠；载入会话时清理孤儿对。 |
+| P2 | scratch 生命周期只靠调用点清理（C68 已清理崩溃孤儿对） | 压缩失败或取消留下的 prompt 与半截回复只在发送、截断、再次压缩前清理；C68 起加载会话时删除回复仍为 `COMPLETE` 的崩溃对，失败/取消对标 `FAILED` 后跨 reload 保留，但 Web/SSE、浮动窗口和导出仍可能读到内存里的孤儿对，消息模型层也没有不可发送标记。`ChatService.kt`、`ConversationSession.kt`、`ConversationMessages.kt`。 | 给 scratch 打不可发送标记，请求派生时强制过滤；导出过滤或折叠；C68 已做崩溃对载入清理。 |
 
 修复顺序：
 
@@ -370,6 +371,6 @@ P1 分批：P1a 截断 SSE 与停止结算，P1b 审批分支与配置快照，P
 1. P0 失败 attempt 隔离已由 C58 完成；多步工具调用的 per-step 细化仍留 P2，工具恢复结果已由 C65 处理。
 2. P1a 截断 SSE 与停止结算已由 C59 完成；P1b 审批分支与配置快照已由 C60 完成。
 3. P1c 的稳定错误码重试已由 C61、idle watchdog 由 C62、overflow 兜底由 C63 完成；P1 收尾后进入 P2。
-4. P2 工具恢复结果和工具超时已由 C65 完成，队列派发与失败回插由 C66 完成，进程死亡半截回复由 C67 完成；剩余取消写入、队列持久化、重试状态持久化、上下文压缩、scratch 分批处理。
+4. P2 工具恢复结果和工具超时已由 C65 完成，队列派发与失败回插由 C66 完成，进程死亡半截回复由 C67 完成，scratch 加载清理由 C68 完成；剩余取消写入、队列持久化、重试状态持久化、上下文压缩、scratch 请求/导出过滤。
 
 范围说明：C59 已逐行核对五个 decoder 的终止判定和五个 provider 接线点的 `onClosed`，并用 `:ai:testDebugUnitTest` 全量验证；工具并发没有展开，当前 RikkaHub 按顺序执行，未发现正确性问题，只是并发效率较低。

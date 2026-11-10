@@ -21,6 +21,7 @@ import me.rerere.rikkahub.data.model.Conversation
 import me.rerere.rikkahub.data.model.MessageNode
 import me.rerere.rikkahub.data.model.isAwaitingToolApproval
 import me.rerere.rikkahub.data.model.recoverAbandonedGeneration
+import me.rerere.rikkahub.data.model.removeCrashedCompressionPairs
 import me.rerere.rikkahub.data.model.selectBranch
 import me.rerere.rikkahub.data.model.updateMessageStatus
 import java.time.Instant
@@ -117,11 +118,13 @@ class ConversationSession(
             val loaded = load()
             var conversation = loaded ?: create()
             require(conversation.id == id)
-            // 上次进程在生成中退出：先补成 INTERRUPTED 并落库，避免半截回复一直装成生成中
+            // 上次进程在生成中退出：先补成 INTERRUPTED，再清掉崩溃留下的压缩孤儿对，一起落库
             if (loaded != null) {
-                val recovered = loaded.recoverAbandonedGeneration()
-                if (recovered != null) {
-                    conversation = store.prepareWrite()(recovered)
+                var restored = loaded.recoverAbandonedGeneration()
+                val cleaned = (restored ?: loaded).removeCrashedCompressionPairs()
+                if (cleaned != null) restored = cleaned
+                if (restored != null) {
+                    conversation = store.prepareWrite()(restored)
                     require(conversation.id == id)
                     store.write(previous = loaded, current = conversation)
                 }

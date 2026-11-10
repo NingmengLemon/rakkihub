@@ -69,6 +69,68 @@ class ConversationSessionTest {
     }
 
     @Test
+    fun `loading removes abandoned compression pairs and persists`() = runBlocking {
+        val id = Uuid.random()
+        val prompt = UIMessage(
+            role = MessageRole.USER,
+            parts = listOf(UIMessagePart.Text("compress this")),
+            isCompressionPrompt = true,
+        )
+        val store = FakeConversationStore(
+            Conversation.ofId(
+                id,
+                messages = listOf(prompt.toMessageNode(), UIMessage.assistant("half").toMessageNode()),
+            )
+        )
+        val session = ConversationSession(id, Conversation.ofId(id), this, store, {})
+
+        session.initialize(load = { store.persisted })
+
+        assertTrue(session.state.value.messageNodes.isEmpty())
+        assertTrue(store.persisted!!.messageNodes.isEmpty())
+    }
+
+    @Test
+    fun `loading keeps failed compression pairs for retry`() = runBlocking {
+        val id = Uuid.random()
+        val prompt = UIMessage(
+            role = MessageRole.USER,
+            parts = listOf(UIMessagePart.Text("compress this")),
+            isCompressionPrompt = true,
+        )
+        val failedReply = UIMessage.assistant("half").copy(status = MessageStatus.FAILED)
+        val store = FakeConversationStore(
+            Conversation.ofId(
+                id,
+                messages = listOf(prompt.toMessageNode(), failedReply.toMessageNode()),
+            )
+        )
+        val session = ConversationSession(id, Conversation.ofId(id), this, store, {})
+
+        session.initialize(load = { store.persisted })
+
+        assertEquals(2, session.state.value.messageNodes.size)
+        assertEquals(2, store.persisted!!.messageNodes.size)
+    }
+
+    @Test
+    fun `failed compression reply stays failed after finish`() = runBlocking {
+        val id = Uuid.random()
+        val store = FakeConversationStore(Conversation.ofId(id))
+        val session = ConversationSession(id, Conversation.ofId(id), this, store, {})
+        session.initialize(load = { store.persisted })
+        val reply = UIMessage.assistant("half")
+        session.update { it.updateCurrentMessages(listOf(reply)) }
+        session.replyMessageId.value = reply.id
+
+        session.markReplyStatus(MessageStatus.FAILED)
+        session.finishGeneration()
+
+        assertEquals(MessageStatus.FAILED, session.state.value.currentMessages.single().status)
+        assertEquals(MessageStatus.FAILED, store.persisted!!.currentMessages.single().status)
+    }
+
+    @Test
     fun `metadata edits survive reopening and final generation save`() = runBlocking {
         val id = Uuid.random()
         val oldAssistant = Uuid.random()

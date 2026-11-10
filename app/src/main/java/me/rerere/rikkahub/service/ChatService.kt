@@ -1003,9 +1003,9 @@ class ChatService(
                         // 先停 saver 并等它退出，再全量收尾；反过来会在写锁上互相等待
                         saver.cancelAndJoin()
                         session.processingStatus.value = null
-                        session.replyMessageId.value = null
                         val resultSummary = summary
                         if (resultSummary != null) {
+                            session.replyMessageId.value = null
                             // 成功：一次写完检查点、删提示词/回复和 updateAt，不再调 finishGeneration
                             session.flushWith(turnIncarnation) { latest ->
                                 val applied = latest.applyCompressionResult(
@@ -1020,7 +1020,10 @@ class ChatService(
                                 context.getString(R.string.chat_page_compress_conversation_changed)
                             )
                         } else {
-                            // 失败/取消：结束 reasoning 并把提示词和部分回复落库
+                            // 失败/取消：标成可重试的失败对，结束 reasoning 后连同提示词一起落库；
+                            // 加载时只清理 COMPLETE 的崩溃对，不能把这张重试卡清掉
+                            session.markReplyStatus(MessageStatus.FAILED)
+                            session.replyMessageId.value = null
                             session.finishGeneration()
                         }
                     }
