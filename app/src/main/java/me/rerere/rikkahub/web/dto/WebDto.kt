@@ -1,11 +1,12 @@
 package me.rerere.rikkahub.web.dto
 
 import kotlinx.serialization.Serializable
+import me.rerere.ai.core.MessageRole
 import me.rerere.ai.core.ReasoningLevel
 import me.rerere.ai.core.TokenUsage
 import me.rerere.ai.ui.ModelSnapshot
-import me.rerere.ai.ui.UIMessageAnnotation
 import me.rerere.ai.ui.UIMessage
+import me.rerere.ai.ui.UIMessageAnnotation
 import me.rerere.ai.ui.UIMessagePart
 import me.rerere.rikkahub.data.model.Conversation
 import me.rerere.rikkahub.data.model.ConversationConfig
@@ -339,23 +340,33 @@ fun me.rerere.rikkahub.data.model.Folder.toDto() = FolderDto(
     createAt = createAt.toEpochMilli(),
 )
 
-fun Conversation.toDto(isGenerating: Boolean = false) = ConversationDto(
-    id = id.toString(),
-    assistantId = assistantId.toString(),
-    title = title,
-    messages = messageNodes.map { it.toDto() },
-    chatSuggestions = chatSuggestions,
-    isPinned = isPinned,
-    customSystemPrompt = customSystemPrompt,
-    modeInjectionIds = modeInjectionIds.map { it.toString() },
-    lorebookIds = lorebookIds.map { it.toString() },
-    config = config,
-    workspaceCwd = workspaceCwd,
-    folderId = folderId?.toString(),
-    createAt = createAt.toEpochMilli(),
-    updateAt = updateAt.toEpochMilli(),
-    isGenerating = isGenerating
-)
+fun Conversation.toDto(isGenerating: Boolean = false): ConversationDto {
+    // Web/SSE 不显示压缩 scratch 对：提示词节点和紧随它的 assistant 回复一起过滤
+    val visibleNodes = messageNodes.filterIndexed { index, node ->
+        val message = node.currentMessage
+        !message.isCompressionPrompt &&
+            !(index > 0 &&
+                messageNodes[index - 1].currentMessage.isCompressionPrompt &&
+                message.role == MessageRole.ASSISTANT)
+    }
+    return ConversationDto(
+        id = id.toString(),
+        assistantId = assistantId.toString(),
+        title = title,
+        messages = visibleNodes.map { it.toDto() },
+        chatSuggestions = chatSuggestions,
+        isPinned = isPinned,
+        customSystemPrompt = customSystemPrompt,
+        modeInjectionIds = modeInjectionIds.map { it.toString() },
+        lorebookIds = lorebookIds.map { it.toString() },
+        config = config,
+        workspaceCwd = workspaceCwd,
+        folderId = folderId?.toString(),
+        createAt = createAt.toEpochMilli(),
+        updateAt = updateAt.toEpochMilli(),
+        isGenerating = isGenerating
+    )
+}
 
 fun MessageNode.toDto() = MessageNodeDto(
     id = id.toString(),
