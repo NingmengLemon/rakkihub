@@ -43,6 +43,13 @@ class MessageQueue {
         return next
     }
 
+    /** 发送失败时把已出队的消息放回队首；同 id 已在队列时不重复插入。 */
+    @Synchronized
+    fun requeueFront(message: QueuedMessage) {
+        if (state.value.messages.any { it.id == message.id }) return
+        mutableState.value = state.value.copy(messages = listOf(message) + state.value.messages)
+    }
+
     @Synchronized
     fun remove(id: Uuid): QueuedMessage? {
         val removed = state.value.messages.find { it.id == id } ?: return null
@@ -66,10 +73,14 @@ class MessageQueue {
         val previous = state.value.messages.find { it.id == id } ?: return null
         mutableState.value = state.value.copy(
             messages = state.value.messages.map {
-                if (it.id == id) it.copy(
-                    parts = parts?.toList() ?: it.parts,
-                    isEditing = false
-                ) else it
+                if (it.id == id) {
+                    it.copy(
+                        parts = parts?.toList() ?: it.parts,
+                        isEditing = false
+                    )
+                } else {
+                    it
+                }
             },
         )
         // 取消编辑只释放占位，不能清理原附件。

@@ -296,6 +296,7 @@
 | C63 上下文超限自动缩窗 | L3 | C61 |
 | C64 移除设置页关于区域的社区与文档入口 | L3 | 无（设置页 UI） |
 | C65 工具中断恢复结果 | L3 | 无（工具恢复） |
+| C66 消息队列恢复与回插 | L3 | 无（消息队列） |
 
 ### 依赖链
 
@@ -355,8 +356,8 @@ RikkaHub 现状：
 | P1 | 没有 error-driven overflow 恢复（C63 已修） | C63 前请求装配只有 `limitContext` 的条数截断，provider 返回 overflow 直接进错误卡片，压缩只能手动触发。C63 起 C61 归一化 `CONTEXT_WINDOW_EXCEEDED`，`AgentHooks.onContextOverflow` 让 app 把窗口收到最后一条 user 后，并在每个后续 step 按当前消息重算，再从本 step 重试；仍失败才出卡片。`AgentLoop.kt`、`Agent.kt`、`ChatRequestFactory.kt`。 | 已按此实现；不做自动压缩，单条超大输入仍可能失败。 |
 | P2 | 工具恢复语义失真（C65 已修恢复结果） | C65 起按 `startedAt` 区分 `not_started` 与 `outcome_unknown`，`cancelInterruptedTools` 和 `withoutUnresumableToolCalls` 共用恢复结果；工具错误只给模型摘要，堆栈只进 stderr；`AgentRequest.toolTimeout` 默认 5 分钟，超时返回可读结果。尚未做 output 的 NonCancellable 写入和错误日志分级。`ConversationMessages.kt`、`Conversation.kt`、`AgentLoop.kt`。 | 已按恢复语义和工具超时实现；取消写入与日志分级留到后续。 |
 | P2 | `withoutUnresumableToolCalls` 删除整条消息（C65 已修） | C65 起逐 part 处理，只把不可恢复的 Tool part 换成恢复结果，保留文本、推理和其它 part，不再删除整条 assistant 消息。`Conversation.kt`。 | 已按此实现。 |
-| P2 | 进程死亡丢失重试与收尾状态 | 只周期保存回复节点，5/15/30 秒分档，小节点最迟 60 秒；重试状态、错误卡片、tool 收尾都不落库，重启后半截没有失败标记。C50 在节点漂移或含 base64 图片时静默跳过。`MessageSaveLoop.kt`、`ConversationSession.kt:278-307`、`ChatService.kt:638-652`。 | 持久化 turn/generating/retrying 状态或时间戳心跳；加载时补 abandoned/interrupted 与未执行工具结果；保存失败要上报。 |
-| P2 | 消息队列暂停后静默滞留 | 队列 paused 且非空时，新消息只 enqueue，`takeNext` 因 paused 返回 null，消息不发也不进正文；队列不持久化；先 `takeNext` 出队再写历史，中间失败会丢消息。`ChatService.kt:403-420,432-450`、`MessageQueue.kt:37-43`。 | 显式发送时总是 resume；先写历史再出队，失败回插队首；至少把队列持久化。 |
+| P2 | 进程死亡丢失重试与收尾状态 | 只周期保存回复节点，5/15/30 秒分档，小节点最迟 60 秒；重试状态、错误卡片、tool 收尾都不落库，重启后半截没有失败标记。C50 在节点漂移或含 base64 图片时静默跳过。`MessageSaveLoop.kt`、`ConversationSession.kt:278-307`、`ChatService.kt:638-652`。 | 持久化 turn/generating/retrying 状态或时间戳心跳；加载时补 abandoned/interrupted 与未执行工具结果；保存失败要上报；队列持久化也放在这里。 |
+| P2 | 消息队列暂停后静默滞留（C66 已修派发与回插） | C66 前队列 paused 且非空时，新消息只 enqueue，`takeNext` 因 paused 返回 null，消息不发也不进正文；先 `takeNext` 出队再写历史，中间失败会丢消息。C66 起显式发送总是 resume，发送失败且未落库时回插队首。队列仍不持久化，进程死亡后丢失。`ChatService.kt`、`MessageQueue.kt`。 | 已按此实现派发恢复和失败回插；原建议的“先写历史再出队”由未落库回插补偿，队列持久化仍留到进程死亡收尾。 |
 | P2 | 上下文压力只按条数，压缩能力有限 | 发送前没有 token 估算或 usage 水位；摘要请求 `maxTokens = null`，截断即整次压缩失败；没有 tool result 裁剪和图片 offload；截断 keep=1 且末条是 assistant 时会丢掉产生它的 user。`ChatRequestFactory.kt:200,250`、`CompressionPlan.kt:31-36`、`Conversation.kt:217-228`。 | 用最近 usage 或本地估算按 contextWindow 做压力检查；摘要设显式 maxTokens，截断时用部分摘要；先 prune tool result；图片占位；keep 按 user 轮次对齐。 |
 | P2 | scratch 生命周期只靠调用点清理 | 压缩失败或取消留下的 prompt 与半截回复只在发送、截断、再次压缩前清理；崩溃会留孤儿对，Web/SSE、浮动窗口和导出按普通消息处理。`ChatService.kt:870,920,988`、`docs/custom/checklist.md:383`。 | 消息模型层给 scratch 打不可发送标记，请求派生时强制过滤；导出过滤或折叠；载入会话时清理孤儿对。 |
 
@@ -367,6 +368,6 @@ P1 分批：P1a 截断 SSE 与停止结算，P1b 审批分支与配置快照，P
 1. P0 失败 attempt 隔离已由 C58 完成；多步工具调用的 per-step 细化仍留 P2，工具恢复结果已由 C65 处理。
 2. P1a 截断 SSE 与停止结算已由 C59 完成；P1b 审批分支与配置快照已由 C60 完成。
 3. P1c 的稳定错误码重试已由 C61、idle watchdog 由 C62、overflow 兜底由 C63 完成；P1 收尾后进入 P2。
-4. P2 工具恢复结果和工具超时已由 C65 完成；剩余取消写入、进程死亡与 C50、队列、上下文压缩、scratch 分批处理。
+4. P2 工具恢复结果和工具超时已由 C65 完成，队列派发与失败回插由 C66 完成；剩余取消写入、队列持久化、进程死亡与 C50、上下文压缩、scratch 分批处理。
 
 范围说明：C59 已逐行核对五个 decoder 的终止判定和五个 provider 接线点的 `onClosed`，并用 `:ai:testDebugUnitTest` 全量验证；工具并发没有展开，当前 RikkaHub 按顺序执行，未发现正确性问题，只是并发效率较低。

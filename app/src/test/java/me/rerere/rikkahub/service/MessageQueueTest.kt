@@ -24,6 +24,22 @@ class MessageQueueTest {
     }
 
     @Test
+    fun `requeued message goes back to the front and is not duplicated`() {
+        val queue = MessageQueue()
+        queue.enqueue(text("first"))
+        queue.enqueue(text("second"))
+        val second = queue.state.value.messages[1]
+        val first = queue.takeNext()!!
+
+        queue.requeueFront(first)
+        queue.requeueFront(first)
+
+        assertEquals(listOf(first.id, second.id), queue.state.value.messages.map { it.id })
+        assertEquals(text("first"), queue.takeNext()!!.parts)
+        assertEquals(text("second"), queue.takeNext()!!.parts)
+    }
+
+    @Test
     fun `editing the head blocks later messages and keeps its position`() {
         val queue = MessageQueue()
         queue.enqueue(text("first"))

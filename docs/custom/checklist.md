@@ -73,6 +73,7 @@
 | C63 | 上下文超限自动缩窗 | 改造 |
 | C64 | 移除设置页关于区域的社区与文档入口 | 移除 |
 | C65 | 工具中断恢复结果 | 改造 |
+| C66 | 消息队列恢复与回插 | 改造 |
 
 ## 明细
 
@@ -490,3 +491,10 @@
 - 理由：原来所有中断都写成 `cancelled by user`，分不清工具是否已经产生副作用；`withoutUnresumableToolCalls` 命中时会丢掉整条消息的文本和已执行结果；工具错误把内部堆栈发给模型，既浪费 token 也泄露实现细节。`workspace_shell` 自身允许 600 秒，而默认工具超时是 300 秒；用 shell 长任务时需要显式调大 `toolTimeout`，否则 300 秒会被中止并丢弃输出。
 - 合并注意：恢复结果仍然写进 `output`，所以 `isExecuted=true`、`isPending=false`，Pending 审批不会再显示；这是“本轮停止/放弃审批”的语义，不是用户点了拒绝。没有恢复 `ApprovalState`，如果后续要做“重新审批”需要另设状态。旧消息没有 `startedAt` 一律按 `not_started`，可能把实际执行过的旧工具写成未开始；进程死亡后才恢复的 `outcome_unknown` 不把恢复时刻当结束时间，`finishedAt` 沿用 `startedAt`。工具超时默认 5 分钟，可在 `AgentRequest` 覆盖或置空关闭；`withTimeoutOrNull` 是协作式取消，不挂起且不走 `runInterruptible` 的阻塞工具不会被按时打断；`toolTimeout <= 0` 会立即超时。output 的 NonCancellable 写入和错误日志分级还没做，仍是 roadmap P2 的剩余项。`ai/` 分叉计数因此变为十一处。
 - 测试：`ConversationToolCallsTest` 覆盖不可恢复工具保留消息、startedAt 区分两种状态、文本/推理保留、只有工具调用的节点不删除、同消息里 resumable 工具不会误伤 Auto 兄弟、Pending+Auto 一起恢复；`ConversationMessagesTest` 覆盖停止的 `not_started` 和 `outcome_unknown`；`AgentLoopTest` 覆盖工具失败只给模型摘要、否定断言确认不含类名/堆栈、工具执行超时后继续下一轮（断言 after 1s、startedAt/finishedAt 和下一轮请求包含结果）、工具内部超时不取消整轮，以及默认 5 分钟下用户停止仍向上传播；`:app:testGithubDebugUnitTest`、`:ai:testDebugUnitTest` 对应测试通过。手动验收：停止在工具未开始/执行中两种时机，输出状态分别为 `not_started`/`outcome_unknown`；待审批工具被放弃后不会继续显示审批按钮；工具抛错时模型只看到摘要。
+
+### C66 消息队列恢复与回插
+
+- 落点：`ChatService.sendMessage` 在入队前无条件 `messageQueue.resume()`，不再因为队列非空而把新消息静默留在 paused 队列；`MessageQueue.requeueFront` 把出队后发送失败的消息放回队首，并按 id 去重；`sendQueuedMessage` 在 `session.flush()` 成功前失败时回插，成功落库后失败不回插，避免重复用户消息。
+- 理由：原来的条件是“队列为空才 resume”，paused 且非空时显式发送只 enqueue，`takeNext` 返回 null，消息不发也不进正文；先 `takeNext` 再写历史，中间失败会丢消息。
+- 合并注意：`requeueFront` 只处理内存队列，队列本身仍不持久化，进程死亡后丢失；`messagePersisted` 在 `session.update` 之后、`flush()` 成功时置真；`flush()` 抛异常时内存已有消息但仍会回插，之后重派发会再追加一条，下一次 flush 成功时两条都落库，失败那次会在历史和队列面板各显示一份。正常失败由 `reportFailure` 暂停队列；取消分支 `reportFailure` 先 rethrow、不执行 pause，靠 `stopGeneration` 和删除路径先暂停兜住。显式发送会再次 resume。`MessageQueue.kt` 在本批触发整文件 spotless 清理，属既有违规的一次性格式化。`ai/` 无改动。
+- 测试：`MessageQueueTest` 覆盖出队后回插队首和重复回插去重；`:app:testGithubDebugUnitTest` 对应测试通过。手动验收：在 paused 且有排队消息时发送新消息，队列恢复并按顺序派发；失败回插由 `MessageQueueTest` 和代码走查覆盖，ChatService 层没有稳定的初始化/保存失败注入入口，不做设备步骤。

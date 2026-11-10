@@ -50,7 +50,7 @@ CI 的 checks workflow 在 Linux 上跑 app、ai、workspace 的 JVM 测试，�
 
 CI 的 checks workflow 在 push 时先把 `origin/main` 指到本次推送之前的提交（`github.event.before`）再跑，所以检查的是刚推上去的改动；PR 用基线的 `origin/main`；手动触发没有可靠的基点，跳过格式检查，只跑测试。首次推送、强推之后基点不可达时同样跳过并打 notice。
 
-基点只管本批，历史文件里与定制无关的格式违规不会因为跑一次 `spotlessCheck` 全部冒出来，改到哪个文件才检查哪个。已知的四处（`SettingsNormalization.kt`、`MessageQueue.kt`、`PermissionTypes.kt`、`SettingVM.kt`）仍在，某次改动碰到其中一个时，整个文件会被检查，顺手把它修干净就好，不必为它们单独跑一轮。
+基点只管本批，历史文件里与定制无关的格式违规不会因为跑一次 `spotlessCheck` 全部冒出来，改到哪个文件才检查哪个。已知的三处（`SettingsNormalization.kt`、`PermissionTypes.kt`、`SettingVM.kt`）仍在，某次改动碰到其中一个时，整个文件会被检查，顺手把它修干净就好，不必为它们单独跑一轮。
 
 ## 文档检查
 

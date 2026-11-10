@@ -404,7 +404,8 @@ class ChatService(
         if (content.isEmptyInputMessage()) return
         val session = sessionManager.getOrCreate(conversationId)
         synchronized(session) {
-            if (session.messageQueue.state.value.messages.isEmpty()) session.messageQueue.resume()
+            // 显式发送总是恢复暂停队列；否则 paused 非空时新消息只会入队，不会派发
+            session.messageQueue.resume()
             session.messageQueue.enqueue(content, answer)
             dispatchNextQueuedMessage(conversationId)
         }
@@ -429,6 +430,7 @@ class ChatService(
             conversationId = conversationId,
             keepAliveInBackground = queued.answer,
         ) {
+            var messagePersisted = false
             try {
                 ensureInitialized(session)
                 finishInterruptedPendingTools(session)
@@ -447,11 +449,14 @@ class ChatService(
                     )
                 }
                 session.flush()
+                messagePersisted = true
                 session.submittingMessage = null
 
                 // 开始补全
                 val result = if (queued.answer) runTurn(session) else null
             } catch (e: Exception) {
+                // 用户消息还没落库时把它放回队首，避免出队后发送失败丢消息
+                if (!messagePersisted && !session.isClosing) session.messageQueue.requeueFront(queued)
                 e.printStackTrace()
                 reportFailure(session, e, R.string.error_title_send_message)
             }
