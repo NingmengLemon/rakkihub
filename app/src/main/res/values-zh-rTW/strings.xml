@@ -597,6 +597,8 @@
   <string name="setting_display_page_code_block_auto_collapse_title">程式碼區塊自動摺疊</string>
   <string name="setting_display_page_code_block_auto_wrap_desc">自動換行程式碼區塊中的長行</string>
   <string name="setting_display_page_code_block_auto_wrap_title">程式碼區塊自動換行</string>
+  <string name="setting_display_page_confirm_stop_generation_desc">停止回覆前先顯示確認對話框，避免誤觸取消生成</string>
+  <string name="setting_display_page_confirm_stop_generation_title">停止生成前確認</string>
   <string name="setting_display_page_create_new_conversation_on_start_desc">當應用程式啟動時，自動建立一個新的對話</string>
   <string name="setting_display_page_create_new_conversation_on_start_title">啟動時新建對話</string>
   <string name="setting_display_page_enable_auto_scroll_desc">AI 正在產生內容時，自動捲動至底部</string>
@@ -1258,6 +1260,8 @@
   <string name="chat_page_compress_checkpoint_title">先前的訊息已壓縮為摘要</string>
   <string name="chat_page_compress_checkpoint_hint">此線以上的訊息將不再傳送給模型；此摘要會取代它們。刪除摘要即可再次傳送完整歷史記錄。</string>
   <string name="chat_page_compress_blocked_generating">請先停止生成，再壓縮上下文</string>
+  <string name="chat_page_stop_generation_confirm_desc">目前生成會停止，已生成的內容會保留。</string>
+  <string name="chat_page_stop_generation_confirm_title">停止生成？</string>
   <string name="chat_page_stop_generation_first">請先停止生成</string>
   <string name="chat_page_resolve_tool_approval_first">請先處理待核准的工具調用</string>
   <string name="chat_page_compress_cancelled">壓縮已取消，歷史未截斷</string>

@@ -383,9 +383,9 @@ class ChatVM(
         chatService.handleToolApproval(_conversationId, toolCallId, approved = true, answer = answer)
     }
 
-    fun stopGeneration() {
+    fun stopGeneration(expectedJob: Job? = null) {
         viewModelScope.launch {
-            chatService.stopGeneration(_conversationId)
+            chatService.stopGeneration(_conversationId, expectedJob)
         }
     }
 

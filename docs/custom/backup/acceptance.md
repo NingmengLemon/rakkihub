@@ -145,3 +145,13 @@ v31 的附件没有逐个在设备上比：整包推上设备再解压不划算�
 每次改动 schema 或 `Settings` 结构之后重跑全部样本与设备验收。只编译通过不算数。
 
 C40 与 C41 落地后的安卓端用例与 5GB 样本已在设备上跑过，结果见上表与「5GB 样本」。上面两节的设备结果仍是改名之前的数，附件的数量口径没变，只是被导入方的落盘名换成了内容指纹。
+
+## 2026-11-12 C69 重跑
+
+C69 给 `DisplaySetting` 增加 `confirmStopGeneration` 后，除 search 人工闸门和 crosscheck 索引日志外，按上面的标准重跑：
+
+- `data.sync` 设备包 51 条全部通过；含 `BackupManagerTest` 的构造 Convert、同安装自家恢复、高版本拒绝。
+- v32 与 5GB 的官方兼容出口各交给官方 RikkaHub 3.1.1 恢复一次，库计数与归档一致，图片正常；两份归档的 settings 都带新字段。
+- 换包名 `.crosscheck` 恢复通过，绝对引用改写到新包名，图片正常。
+- 附件计数：原始官方 780 = 682 个 5GB 内容名 + 98 个旧 UUID；v32 的 61 个与原集合重叠 25、新增 36，目录变 816；5GB 的 682 个全部已在原集合内、新增 0，目录仍 816。验收后官方从备份还原为 780，fork 为 168/61。
+- 未记录：search 人工闸门（acceptance 没有固定查询集；官方恢复不重建 FTS，5GB 官方数据搜 iOS 为空）与 crosscheck 的 `Rebuilt search indexes after restore` 日志。

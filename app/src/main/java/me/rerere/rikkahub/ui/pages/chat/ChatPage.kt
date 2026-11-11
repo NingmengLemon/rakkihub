@@ -76,6 +76,10 @@ import me.rerere.rikkahub.ui.components.ai.ChatAttachmentPickerActions
 import me.rerere.rikkahub.ui.components.ai.ChatInput
 import me.rerere.rikkahub.ui.components.ai.FilesPicker
 import me.rerere.rikkahub.ui.components.ai.SearchMode
+import me.rerere.rikkahub.ui.components.ai.StopAction
+import me.rerere.rikkahub.ui.components.ai.StopConfirmState
+import me.rerere.rikkahub.ui.components.ai.StopGenerationConfirmDialog
+import me.rerere.rikkahub.ui.components.ai.resolveStopAction
 import me.rerere.rikkahub.ui.components.ai.completion.WorkspaceCompletionProvider
 import me.rerere.rikkahub.ui.components.ai.rememberChatAttachmentPickerActions
 import me.rerere.rikkahub.ui.context.LocalNavController
@@ -295,6 +299,26 @@ private fun ChatPageContent(
     var showFilesSheet by remember { mutableStateOf(false) }
     // 压缩失败卡片的「重试」先删失败对，再带着这个标记重新打开管理上下文对话框
     var openContextDialogOnOpen by remember { mutableStateOf(false) }
+    // 停止生成默认先确认，避免误触；设置里关掉后直接停止。
+    // 确认状态记下这一轮的 job，队列换轮或生成结束时关闭，避免停到下一轮
+    var stopConfirm by remember { mutableStateOf(StopConfirmState()) }
+    var stopRequestJob by remember { mutableStateOf<Job?>(null) }
+    val requestStopGeneration = {
+        when (val action = resolveStopAction(setting.displaySetting.confirmStopGeneration, stopRequestJob, loadingJob)) {
+            StopAction.Ignored -> Unit
+            StopAction.StopNow -> {
+                stopRequestJob = loadingJob
+                vm.stopGeneration(loadingJob)
+            }
+            is StopAction.Confirm -> stopConfirm = action.state
+        }
+    }
+    LaunchedEffect(loadingJob) {
+        if (stopRequestJob !== loadingJob) stopRequestJob = null
+        if (stopConfirm.visible && !stopConfirm.matches(loadingJob)) {
+            stopConfirm = stopConfirm.close()
+        }
+    }
     val attachmentPickerActions = rememberChatAttachmentPickerActions(
         inputState = inputState,
         setting = setting,
@@ -358,7 +382,7 @@ private fun ChatPageContent(
                     hazeState = hazeState,
                     completionProviders = completionProviders,
                     onCancelClick = {
-                        vm.stopGeneration()
+                        requestStopGeneration()
                     },
                     onSendClick = {
                         if (currentChatModel == null) {
@@ -479,7 +503,7 @@ private fun ChatPageContent(
                 onConversationSystemPromptChange = { newPrompt ->
                     vm.updateConversationSystemPrompt(newPrompt)
                 },
-                onStopCompression = { vm.stopGeneration() },
+                onStopCompression = requestStopGeneration,
                 onRetryCompression = { promptId ->
                     vm.deleteCompressionPair(promptId)
                     openContextDialogOnOpen = true
@@ -503,6 +527,20 @@ private fun ChatPageContent(
                 onDismiss = {
                     showFilesSheet = false
                     openContextDialogOnOpen = false
+                },
+            )
+        }
+
+        if (stopConfirm.visible) {
+            StopGenerationConfirmDialog(
+                onDismissRequest = { stopConfirm = stopConfirm.close() },
+                onConfirm = {
+                    val target = stopConfirm
+                    stopConfirm = stopConfirm.close()
+                    if (target.matches(loadingJob)) {
+                        stopRequestJob = loadingJob
+                        vm.stopGeneration(target.targetJob)
+                    }
                 },
             )
         }

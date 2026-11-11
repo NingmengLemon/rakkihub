@@ -186,6 +186,8 @@ data class DisplaySetting(
     val pasteLongTextAsFile: Boolean = false,
     val pasteLongTextThreshold: Int = 1000,
     val sendOnEnter: Boolean = false,
+    // 停止生成是不可撤销的，误触代价高；默认先确认，用户可以在设置里关掉
+    val confirmStopGeneration: Boolean = true,
     val enableAutoScroll: Boolean = true,
     val enableLatexRendering: Boolean = true,
     val enableQuoteHighlight: Boolean = false,

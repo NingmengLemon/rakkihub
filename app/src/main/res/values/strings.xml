@@ -614,6 +614,8 @@
   <string name="setting_display_page_code_block_auto_collapse_title">Code Block Auto Collapse</string>
   <string name="setting_display_page_code_block_auto_wrap_desc">Automatically wrap long lines in code blocks</string>
   <string name="setting_display_page_code_block_auto_wrap_title">Code Block Auto Wrap</string>
+  <string name="setting_display_page_confirm_stop_generation_desc">Show a confirmation before stopping a reply, so a misplaced tap does not cancel the generation</string>
+  <string name="setting_display_page_confirm_stop_generation_title">Confirm before stopping</string>
   <string name="setting_display_page_create_new_conversation_on_start_desc">Create a new conversation when the app starts</string>
   <string name="setting_display_page_create_new_conversation_on_start_title">New chat on launch</string>
   <string name="setting_display_page_custom_font_import">Import custom font</string>
@@ -1258,6 +1260,8 @@
   <string name="chat_page_compress_checkpoint_title">Earlier messages compressed into a summary</string>
   <string name="chat_page_compress_checkpoint_hint">Messages above this line are no longer sent to the model; this summary replaces them. Delete the summary to send the full history again.</string>
   <string name="chat_page_compress_blocked_generating">Stop the generation before compressing the context</string>
+  <string name="chat_page_stop_generation_confirm_desc">The current generation will stop. Content already generated is kept.</string>
+  <string name="chat_page_stop_generation_confirm_title">Stop generating?</string>
   <string name="chat_page_stop_generation_first">Stop the generation first</string>
   <string name="chat_page_resolve_tool_approval_first">Resolve the pending tool approval first</string>
   <string name="chat_page_compress_cancelled">Compression cancelled; history was not truncated</string>

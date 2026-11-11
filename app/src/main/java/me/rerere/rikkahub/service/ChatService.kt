@@ -1520,10 +1520,12 @@ class ChatService(
         deleteMessage(conversationId, message.id, failIfMissing = false)
     }
 
-    // 停止当前会话生成任务（不清理会话缓存）
-    suspend fun stopGeneration(conversationId: Uuid) {
+    // 停止当前会话生成任务（不清理会话缓存）。
+    // expectedJob 非空时只在它仍是当前 job 时执行，避免确认期间换轮后停到下一轮
+    suspend fun stopGeneration(conversationId: Uuid, expectedJob: Job? = null) {
         val session = sessionManager.get(conversationId) ?: return
         val jobs = synchronized(session) {
+            if (expectedJob != null && session.getJob() !== expectedJob) return
             session.messageQueue.pause()
             session.cancelJobs()
         }

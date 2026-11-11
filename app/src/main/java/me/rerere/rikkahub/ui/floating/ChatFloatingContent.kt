@@ -8,6 +8,7 @@ import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxScope
@@ -78,10 +79,15 @@ import me.rerere.rikkahub.R
 import me.rerere.rikkahub.data.ai.tools.local.ASK_USER_TOOL_NAME
 import me.rerere.rikkahub.data.model.GenerationPhase
 import me.rerere.rikkahub.service.ChatError
+import me.rerere.rikkahub.ui.components.ai.StopAction
+import me.rerere.rikkahub.ui.components.ai.StopConfirmState
+import me.rerere.rikkahub.ui.components.ai.StopGenerationConfirmCard
+import me.rerere.rikkahub.ui.components.ai.resolveStopAction
 import me.rerere.rikkahub.ui.components.ui.drawAppLogo
 import me.rerere.rikkahub.ui.components.ui.logoMorphShape
 import me.rerere.rikkahub.ui.components.ui.rememberAppLogoLayers
 import me.rerere.rikkahub.ui.components.richtext.MaterialMarkdown
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlin.math.ceil
@@ -112,6 +118,8 @@ data class FloatingChatUiState(
     val queuePaused: Boolean,
     /** 这一轮出现的错误 */
     val error: ChatError?,
+    /** 当前生成 job，用来确认停止确认框还属于这一轮 */
+    val generationJob: Job? = null,
 ) {
     val failed: Boolean get() = !generating && error != null
 }
@@ -189,14 +197,26 @@ private fun BoxScope.StatusBadge(icon: ImageVector, containerColor: Color, conte
 fun ChatFloatingPanel(
     state: FloatingChatUiState,
     maxHeight: Dp,
+    confirmStop: Boolean,
+    stopConfirm: StopConfirmState,
+    onStopConfirmChange: (StopConfirmState) -> Unit,
     onCollapse: () -> Unit,
     onDismiss: () -> Unit,
     onOpenConversation: () -> Unit,
     onToolApproval: (toolCallId: String, approved: Boolean) -> Unit,
-    onStop: () -> Unit,
+    onStop: (Job?) -> Unit,
     onSend: (String) -> Unit,
     onResumeQueue: () -> Unit,
 ) {
+    // 停止生成默认先确认；悬浮窗是独立窗口，用同窗口内的卡片代替 Dialog
+    val focusManager = LocalFocusManager.current
+    var stopRequestJob by remember { mutableStateOf<Job?>(null) }
+    LaunchedEffect(state.generationJob) {
+        if (stopRequestJob !== state.generationJob) stopRequestJob = null
+        if (stopConfirm.visible && !stopConfirm.matches(state.generationJob)) {
+            onStopConfirmChange(stopConfirm.close())
+        }
+    }
     // 窗口和屏幕一样宽，大屏上限制宽度并居中
     Box(modifier = Modifier.fillMaxWidth().heightIn(max = maxHeight), contentAlignment = Alignment.TopCenter) {
         Surface(
@@ -249,9 +269,45 @@ fun ChatFloatingPanel(
                     conversationId = state.conversationId,
                     generating = state.generating,
                     onSend = onSend,
-                    onStop = onStop,
+                    onStop = {
+                        when (val action = resolveStopAction(confirmStop, stopRequestJob, state.generationJob)) {
+                            StopAction.Ignored -> Unit
+                            StopAction.StopNow -> {
+                                stopRequestJob = state.generationJob
+                                onStop(state.generationJob)
+                            }
+                            is StopAction.Confirm -> {
+                                focusManager.clearFocus()
+                                onStopConfirmChange(action.state)
+                            }
+                        }
+                    },
                 )
             }
+        }
+        if (stopConfirm.visible) {
+            Box(
+                modifier = Modifier
+                    .matchParentSize()
+                    .background(Color.Black.copy(alpha = 0.32f))
+                    .clickable(
+                        interactionSource = remember { MutableInteractionSource() },
+                        indication = null,
+                        onClick = { onStopConfirmChange(stopConfirm.close()) },
+                    ),
+            )
+            StopGenerationConfirmCard(
+                onDismissRequest = { onStopConfirmChange(stopConfirm.close()) },
+                onConfirm = {
+                    val target = stopConfirm
+                    onStopConfirmChange(target.close())
+                    if (target.matches(state.generationJob)) {
+                        stopRequestJob = state.generationJob
+                        onStop(target.targetJob)
+                    }
+                },
+                modifier = Modifier.align(Alignment.Center),
+            )
         }
     }
 }

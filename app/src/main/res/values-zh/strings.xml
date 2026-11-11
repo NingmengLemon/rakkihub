@@ -607,6 +607,8 @@
   <string name="setting_display_page_code_block_auto_collapse_title">代码块自动折叠</string>
   <string name="setting_display_page_code_block_auto_wrap_desc">自动换行代码块中的长行</string>
   <string name="setting_display_page_code_block_auto_wrap_title">代码块自动换行</string>
+  <string name="setting_display_page_confirm_stop_generation_desc">停止回复前先弹出确认框，避免误触取消生成</string>
+  <string name="setting_display_page_confirm_stop_generation_title">停止生成前确认</string>
   <string name="setting_display_page_create_new_conversation_on_start_desc">当应用启动时，自动创建一个新的对话</string>
   <string name="setting_display_page_create_new_conversation_on_start_title">启动时新建对话</string>
   <string name="setting_display_page_custom_font_import">导入自定义字体</string>
@@ -1260,6 +1262,8 @@ mDNS 地址：使用 .local 主机名，同一网络中的其他设备可通过�
   <string name="chat_page_compress_checkpoint_title">以上内容已压缩为摘要</string>
   <string name="chat_page_compress_checkpoint_hint">分隔线以上的消息不再发送给模型，由这份摘要代替。删除摘要即可恢复发送完整历史。</string>
   <string name="chat_page_compress_blocked_generating">请先停止生成再压缩上下文</string>
+  <string name="chat_page_stop_generation_confirm_desc">当前生成会停止，已生成的内容会保留。</string>
+  <string name="chat_page_stop_generation_confirm_title">停止生成？</string>
   <string name="chat_page_stop_generation_first">请先停止生成</string>
   <string name="chat_page_resolve_tool_approval_first">请先处理待审批的工具调用</string>
   <string name="chat_page_compress_cancelled">压缩已取消，历史未截断</string>

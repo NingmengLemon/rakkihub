@@ -1,5 +1,6 @@
 package me.rerere.rikkahub.ui.floating
 
+import kotlinx.coroutines.Job
 import me.rerere.ai.core.MessageRole
 import me.rerere.ai.ui.ToolApprovalState
 import me.rerere.ai.ui.UIMessage
@@ -11,6 +12,7 @@ import me.rerere.rikkahub.data.model.toMessageNode
 import me.rerere.rikkahub.service.MessageQueueState
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
+import org.junit.Assert.assertSame
 import org.junit.Test
 import kotlin.uuid.Uuid
 
@@ -80,5 +82,24 @@ class FloatingChatUiStateTest {
         val state = state(regenerated(UIMessage.assistant("new answer")), replyMessageId = null, generating = true)
         assertFalse(state.hasReply)
         assertEquals("", state.preview)
+    }
+
+    @Test
+    fun `state carries the generation job for stop confirmation`() {
+        val job = Job()
+        try {
+            val state = buildFloatingChatUiState(
+                conversation = regenerated(UIMessage.assistant("answer")),
+                replyMessageId = null,
+                generating = true,
+                processingStatus = null,
+                queue = MessageQueueState(),
+                error = null,
+                generationJob = job,
+            )
+            assertSame(job, state.generationJob)
+        } finally {
+            job.cancel()
+        }
     }
 }

@@ -9,7 +9,9 @@ import android.view.WindowManager
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalUriHandler
@@ -32,6 +34,7 @@ import com.petterp.floatingx.system.permission.FxPermission
 import com.petterp.floatingx.system.permission.FxPermissionStrategy
 import com.petterp.floatingx.system.systemHost
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
@@ -46,6 +49,7 @@ import kotlinx.coroutines.launch
 import me.rerere.ai.ui.UIMessagePart
 import me.rerere.rikkahub.AppScope
 import me.rerere.rikkahub.conversationIntent
+import me.rerere.rikkahub.data.datastore.SettingsStore
 import me.rerere.rikkahub.data.model.Conversation
 import me.rerere.rikkahub.data.model.GenerationPhase
 import me.rerere.rikkahub.data.model.generationPhase
@@ -54,6 +58,7 @@ import me.rerere.rikkahub.service.ChatError
 import me.rerere.rikkahub.service.ChatFloatingTracker
 import me.rerere.rikkahub.service.ChatService
 import me.rerere.rikkahub.service.MessageQueueState
+import me.rerere.rikkahub.ui.components.ai.StopConfirmState
 import me.rerere.rikkahub.ui.theme.RikkahubTheme
 import kotlin.uuid.Uuid
 
@@ -70,11 +75,19 @@ class ChatFloatingWindows(
     private val context: Application,
     private val appScope: AppScope,
     private val tracker: ChatFloatingTracker,
+    settingsStore: SettingsStore,
     lazyChatService: Lazy<ChatService>,
 ) {
     private val chatService by lazyChatService
     private var bubble: FxControl? = null
     private var panel: FxControl? = null
+
+    // 确认状态放在窗口控制器里，收起、返回键和切换会话时都能统一复位
+    private var stopConfirm by mutableStateOf(StopConfirmState())
+
+    private val confirmStopFlow = settingsStore.settingsFlow
+        .map { it.displaySetting.confirmStopGeneration }
+        .stateIn(appScope, SharingStarted.Eagerly, true)
 
     // 悬浮窗显示期间一直汇总，气泡和面板切换时直接拿到当前状态，不会先空一帧
     private val uiState: StateFlow<FloatingChatUiState?> = tracker.window
@@ -99,6 +112,12 @@ class ChatFloatingWindows(
         appScope.launch {
             tracker.window.map { it?.expanded }.distinctUntilChanged().collect(::render)
         }
+        // 换到另一个会话时，上一轮没确认完的弹窗不能留着
+        appScope.launch {
+            tracker.window.map { it?.conversationId }.distinctUntilChanged().collect {
+                stopConfirm = stopConfirm.close()
+            }
+        }
     }
 
     private fun chatState(id: Uuid): Flow<FloatingChatUiState> {
@@ -109,18 +128,28 @@ class ChatFloatingWindows(
         val conversation = combine(chatService.getConversationFlow(id), chatService.getReplyMessageIdFlow(id), ::Pair)
         return combine(
             conversation,
-            chatService.getGenerationJobStateFlow(id).map { it != null },
+            chatService.getGenerationJobStateFlow(id),
             chatService.getProcessingStatusFlow(id),
             chatService.getMessageQueueFlow(id),
             error,
-        ) { (conversation, replyMessageId), generating, processingStatus, queue, error ->
-            buildFloatingChatUiState(conversation, replyMessageId, generating, processingStatus, queue, error)
+        ) { (conversation, replyMessageId), job, processingStatus, queue, error ->
+            buildFloatingChatUiState(
+                conversation = conversation,
+                replyMessageId = replyMessageId,
+                generating = job != null,
+                generationJob = job,
+                processingStatus = processingStatus,
+                queue = queue,
+                error = error,
+            )
         }.flowOn(Dispatchers.Default)
     }
 
     private fun render(expanded: Boolean?) {
+        if (expanded != true) stopConfirm = stopConfirm.close()
         // 后台弹不出权限申请页，没有权限就不显示
         if (expanded == null || !FxPermission.isGranted(context)) {
+            stopConfirm = stopConfirm.close()
             bubble?.cancel()
             panel?.cancel()
             bubble = null
@@ -153,16 +182,22 @@ class ChatFloatingWindows(
         compose {
             WindowContent { state ->
                 val conversationId = state.conversationId
+                val confirmStop by confirmStopFlow.collectAsStateWithLifecycle()
                 ChatFloatingPanel(
                     state = state,
                     maxHeight = rememberPanelMaxHeight(),
+                    confirmStop = confirmStop,
+                    stopConfirm = stopConfirm,
+                    onStopConfirmChange = { stopConfirm = it },
                     onCollapse = tracker::collapse,
                     onDismiss = tracker::dismiss,
                     onOpenConversation = { openConversation(conversationId) },
                     onToolApproval = { toolCallId, approved ->
                         chatService.handleToolApproval(conversationId, toolCallId, approved)
                     },
-                    onStop = { appScope.launch { chatService.stopGeneration(conversationId) } },
+                    onStop = { expectedJob ->
+                        appScope.launch { chatService.stopGeneration(conversationId, expectedJob) }
+                    },
                     onSend = { text -> chatService.sendMessage(conversationId, listOf(UIMessagePart.Text(text))) },
                     onResumeQueue = { chatService.resumeMessageQueue(conversationId) },
                 )
@@ -180,7 +215,11 @@ class ChatFloatingWindows(
                 it.width = WindowManager.LayoutParams.MATCH_PARENT
             }
             onBackPressed {
-                tracker.collapse()
+                if (stopConfirm.visible) {
+                    stopConfirm = stopConfirm.close()
+                } else {
+                    tracker.collapse()
+                }
                 true
             }
         }
@@ -234,6 +273,7 @@ internal fun buildFloatingChatUiState(
     processingStatus: String?,
     queue: MessageQueueState,
     error: ChatError?,
+    generationJob: Job? = null,
 ): FloatingChatUiState {
     // 不看末尾也不看节点选中的分支：重新生成较早的消息时，后面的节点还在，用户也可能切回了旧回复
     val reply = replyMessageId?.let { id ->
@@ -256,5 +296,6 @@ internal fun buildFloatingChatUiState(
         queuedCount = queue.messages.size,
         queuePaused = queue.paused,
         error = error,
+        generationJob = generationJob,
     )
 }

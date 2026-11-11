@@ -85,6 +85,12 @@ fun SettingPreferencesGeneralPage(vm: SettingVM = koinViewModel()) {
                         supportingContent = { Text(stringResource(R.string.setting_display_page_send_on_enter_desc)) },
                         headlineContent = { Text(stringResource(R.string.setting_display_page_send_on_enter_title)) },
                     )
+                    switchItem(
+                        checked = displaySetting.confirmStopGeneration,
+                        onCheckedChange = { updateDisplaySetting(displaySetting.copy(confirmStopGeneration = it)) },
+                        supportingContent = { Text(stringResource(R.string.setting_display_page_confirm_stop_generation_desc)) },
+                        headlineContent = { Text(stringResource(R.string.setting_display_page_confirm_stop_generation_title)) },
+                    )
                 }
             }
 

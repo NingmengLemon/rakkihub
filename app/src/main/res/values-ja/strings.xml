@@ -597,6 +597,8 @@
   <string name="setting_display_page_code_block_auto_collapse_title">コードブロックの自動折りたたみ</string>
   <string name="setting_display_page_code_block_auto_wrap_desc">コードブロック内の長い行を自動的に折り返す</string>
   <string name="setting_display_page_code_block_auto_wrap_title">コードブロックの自動折り返し</string>
+  <string name="setting_display_page_confirm_stop_generation_desc">返信を停止する前に確認ダイアログを表示し、誤タップで生成が中断されないようにします</string>
+  <string name="setting_display_page_confirm_stop_generation_title">停止前に確認</string>
   <string name="setting_display_page_create_new_conversation_on_start_desc">アプリ起動時に新しい会話を自動作成する</string>
   <string name="setting_display_page_create_new_conversation_on_start_title">起動時に新しいチャット</string>
   <string name="setting_display_page_enable_auto_scroll_desc">AIがコンテンツを生成中に自動で下までスクロールする</string>
@@ -1260,6 +1262,8 @@ mDNSアドレス: .localホスト名を使用し、IPを知らなくても同じ
   <string name="chat_page_compress_checkpoint_title">以前のメッセージが要約に圧縮されました</string>
   <string name="chat_page_compress_checkpoint_hint">この行より上のメッセージはモデルに送信されなくなり、代わりにこの要約が使用されます。要約を削除すると、履歴全体が再び送信されます。</string>
   <string name="chat_page_compress_blocked_generating">コンテキストを圧縮する前に生成を停止してください</string>
+  <string name="chat_page_stop_generation_confirm_desc">現在の生成を停止します。生成済みの内容は保持されます。</string>
+  <string name="chat_page_stop_generation_confirm_title">生成を停止しますか？</string>
   <string name="chat_page_stop_generation_first">先に生成を停止してください</string>
   <string name="chat_page_resolve_tool_approval_first">保留中のツール承認を先に処理してください</string>
   <string name="chat_page_compress_cancelled">圧縮はキャンセルされました。履歴は切り詰めていません</string>
