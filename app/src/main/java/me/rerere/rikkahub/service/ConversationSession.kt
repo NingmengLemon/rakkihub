@@ -177,8 +177,15 @@ class ConversationSession(
                 .map { it.messages }
                 .distinctUntilChanged()
                 .collect { messages ->
-                    runCatching { queueStore.save(id, messages) }
-                        .onFailure { Log.e(TAG, "Failed to persist message queue for $id", it) }
+                    // 取消要原样抛出去；runCatching 会把 CancellationException 也吞进来，
+                    // 日志路径在 JVM 测试里还会撞到未 mock 的 android.util.Log
+                    try {
+                        queueStore.save(id, messages)
+                    } catch (e: CancellationException) {
+                        throw e
+                    } catch (e: Exception) {
+                        Log.e(TAG, "Failed to persist message queue for $id", e)
+                    }
                 }
         }
     }

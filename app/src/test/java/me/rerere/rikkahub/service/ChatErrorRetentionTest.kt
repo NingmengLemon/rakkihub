@@ -2,6 +2,7 @@ package me.rerere.rikkahub.service
 
 import org.junit.Assert.assertEquals
 import org.junit.Test
+import java.io.IOException
 import kotlin.uuid.Uuid
 
 class ChatErrorRetentionTest {
@@ -68,5 +69,38 @@ class ChatErrorRetentionTest {
 
         // 自己会话只留最近两条，另一个会话的两条都还在
         assertEquals(mine.takeLast(2).map { it.id } + theirs.map { it.id }, kept.map { it.id })
+    }
+
+    @Test
+    fun `restored cards with the same text but different exception types both survive`() {
+        val first = ChatError(
+            error = IllegalStateException("same"),
+            conversationId = conversation,
+            timestamp = 1,
+        )
+        val second = ChatError(
+            error = IOException("same"),
+            conversationId = conversation,
+            timestamp = 2,
+        )
+
+        val kept = emptyList<ChatError>().withRestoredErrors(listOf(first, second))
+
+        assertEquals(listOf(first.id, second.id), kept.map { it.id })
+    }
+
+    @Test
+    fun `restored cards apply the per conversation cap by timestamp`() {
+        val all = (1..7).map { timestamp ->
+            ChatError(
+                error = IllegalStateException("mine $timestamp"),
+                conversationId = conversation,
+                timestamp = timestamp.toLong(),
+            )
+        }
+
+        val kept = emptyList<ChatError>().withRestoredErrors(all, maxPerConversation = 3)
+
+        assertEquals(all.takeLast(3).map { it.id }, kept.map { it.id })
     }
 }

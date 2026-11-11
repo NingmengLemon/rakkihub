@@ -78,6 +78,7 @@
 | C68 | 压缩孤儿对加载清理与过滤 | 改造 |
 | C69 | 停止生成前确认 | 新增 |
 | C70 | 消息队列持久化 | 新增 |
+| C71 | 错误卡片持久化 | 新增 |
 
 ## 明细
 
@@ -344,7 +345,7 @@
 
 - 落点：`DisplaySetting` 新增 `autoDismissErrorCards`（默认 `false`，即保留）；`ErrorCardsDisplay` 与 `ErrorCard` 增加 `autoDismiss` 参数，`LaunchedEffect` 只在开启时 `delay(5000)` 后关闭，`error.id` 与 `autoDismiss` 都进 key；`ChatList` 把 `settings.displaySetting.autoDismissErrorCards` 传进去；`SettingPreferencesUIPage` 的「显示 Token 和上下文统计」下方加一个开关；8 份 locale 新增 `setting_display_page_auto_dismiss_errors_title` 与 `_desc`。既然不再自动消失，同时把错误列表的会话口径补齐：`ChatError.conversationId` 与 `addError` 的入参都改成非空，`ChatVM.errors` 只放出当前会话的错误，压缩失败那处补上会话 id，删除会话时连带清掉它的错误；`ChatService.addError` 交给 `withNewError`（标题、会话、异常类型与消息都相同的算同一条，只留最新一份，每个会话各留 `MAX_RETAINED_ERRORS` 条），`clearErrors` 也只看当前会话，别的会话的卡片不会被清掉或挤掉；卡片栈限高 320dp 且可滚动，来了新错误滚到最新一条，「全部清除」移到最后。
 - 理由：错误卡片原来固定 5 秒后收起。网络中断常常发生在用户离开手机的时候，回来看不到错误卡片，只看到半截回复，无法判断是模型断了还是自己停的。默认保留，靠卡片右侧的关闭按钮或多条时的「全部清除」收起；想恢复旧行为可以在 UI 设置里打开。卡片常驻之后，原来被 5 秒掩盖的两个问题会暴露出来：错误是应用级状态、聊天页没有按会话过滤，以及每轮自动起标题、工具能力提醒、用户重复同一个操作都会把同一类失败再报一遍，所以一起处理。新增的设置字段带默认值，改完按约定重跑了验收样本：`data.sync` 包的 51 条设备用例（含官方样本表数据、整包恢复、applied outcome）全部通过。
-- 合并注意：默认值 `false` 与上游行为相反，上游改 `ErrorCard` 时要把 `autoDismiss` 参数一起合过来。会话过滤放在 `ChatVM` 而不是 `ChatList`：Web 端 SSE 与悬浮窗本来就是按 `conversationId` 过滤的，`ChatVM` 这一层补齐后聊天页与它们一致；`ChatError.conversationId` 非空，新加错误入口时不会再漏。滚动在最新一条变化时做一次（按 `errors.lastOrNull()?.id` 起效，等一帧布局完再滚），也就是来了新的一条或最新那条被关掉；关掉中间的卡片、旋转这类高度变化不再动滚动位置。这个开关只管聊天页的错误卡片，悬浮窗（`ChatFloatingContent`）用 `ChatError` 自己画状态徽标，不经过这里；`WorkspaceDetailPage` 里的 `ErrorCard(String)` 是另一个同名私有函数，不受影响。
+- 合并注意：默认值 `false` 与上游行为相反，上游改 `ErrorCard` 时要把 `autoDismiss` 参数一起合过来。会话过滤放在 `ChatVM` 而不是 `ChatList`：Web 端 SSE 与悬浮窗本来就是按 `conversationId` 过滤的，`ChatVM` 这一层补齐后聊天页与它们一致；`ChatError.conversationId` 非空，新加错误入口时不会再漏。滚动在最新一条变化时做一次（按 `errors.lastOrNull()?.id` 起效，等一帧布局完再滚），也就是来了新的一条或最新那条被关掉；关掉中间的卡片、旋转这类高度变化不再动滚动位置。这个开关只管聊天页的错误卡片，悬浮窗（`ChatFloatingContent`）用 `ChatError` 自己画状态徽标，不经过这里；`WorkspaceDetailPage` 里的 `ErrorCard(String)` 是另一个同名私有函数，不受影响。C71 起错误卡片在 add/dismiss/clear 时落盘到 `noBackupFilesDir`，启动恢复时过滤已删会话，卡片不再只活在内存里。
 
 ### C44 上下文压缩的提示词可编辑
 
@@ -507,7 +508,7 @@
 
 - 落点：`UIMessage` 增加带默认值的 `isGenerating`；`ChatService` 收到生成中的 `MessageUpdated` 时置真，`ConversationSession.finishGeneration` 统一清假，C50 的周期保存把标记写进消息 JSON。`ConversationSession.initialize` 加载后调用 `Conversation.recoverAbandonedGeneration`：扫描所有节点和分支里 `isGenerating` 的消息，改成 `INTERRUPTED`（已经是 `FAILED` 就保留），清掉标记，并给未执行工具补 `not_started`/`outcome_unknown`；有变化时立即用 `store.prepareWrite`/`write` 落库。
 - 理由：只靠消息形状和 `finishedAt` 推断会把旧消息误判，明确写一个随消息保存的生成标记；进程死亡后不能让半截回复一直显示为生成中，也不能让未执行 tool call 留在历史里。
-- 合并注意：标记只覆盖已经被 C50 周期保存到的半截回复；进程在首次保存前死亡、重试卡片和错误卡片仍会丢，队列消息已由 C70 持久化。加载时的恢复写库失败会让初始化抛错，这是有意的，避免内存显示已恢复但库里仍是生成中。旧 JSON 没有 `isGenerating`，默认 false。`ai/` 分叉计数因此变为十二处。
+- 合并注意：标记只覆盖已经被 C50 周期保存到的半截回复；进程在首次保存前死亡、live retrying 状态仍会丢，错误卡片已由 C71 落盘，队列消息已由 C70 持久化。加载时的恢复写库失败会让初始化抛错，这是有意的，避免内存显示已恢复但库里仍是生成中。旧 JSON 没有 `isGenerating`，默认 false。`ai/` 分叉计数因此变为十二处。
 - 测试：`ConversationMessagesTest` 覆盖生成中回复转 `INTERRUPTED`、非末尾节点恢复、FAILED 保留、未执行工具补结果、正常完成回复不被改动；`ConversationSessionTest` 覆盖加载时恢复并落库；`:app:testGithubDebugUnitTest` 对应测试通过。手动验收：等 C50 至少保存过一次（小节点 60 秒或 64KB 增长才写一次）后再杀进程，重启打开会话应看到中断标记和工具恢复结果，不显示生成中；首次保存窗口内杀进程不会出现中断标记。
 
 ### C68 压缩孤儿对加载清理与过滤
@@ -530,4 +531,11 @@
 - 落点：`MessageQueueStore`（`noBackupFilesDir/message-queues/<会话 id>.json`）保存未出队的 `QueuedMessage`；`QueuedMessage` 加 `@Serializable`，`isEditing` 标 `@Transient`。`MessageQueue.restore` 和初始化期间已经入队的消息按 id 合并，恢复为暂停态；`ConversationSession.initialize` 读回队列，按会话里已有 user 消息 id 过滤掉“已经落库但队列文件没来得及删”的项，然后启动一个消息列表变化就落盘的 collector；collector 启动时先把当前队列落一次，`replace` 也调用同一个幂等启动函数。`ChatService.sendQueuedMessage` 正常用 `queued.id` 作为新 user 消息的 id，供恢复时去重；如果 flush 失败后回插重试、旧消息还在，则换新 id 避免同 id 撞 FTS。`deleteConversation` 删队列文件，`RikkaHubApp` 启动时清理孤儿文件。`AttachmentCleaner` 扫描队列文件里的附件地址。队列面板不需要改，直接显示恢复后的暂停队列。
 - 理由：C66 只修了内存队列的派发与失败回插，进程死亡后队列丢失，用户已经排好的消息会静默消失。落盘后重开能看到 `Queue paused · N`，由用户 Resume，避免自动发送。
 - 合并注意：队列文件不进备份（`noBackupFilesDir`），不改 Room、Settings 或官方兼容导出，不触发数据层验收；恢复一律暂停；`isEditing` 不跨进程；文件损坏按空队列处理，collector 启动写回时覆盖坏文件，之前若被附件清理扫到仍会保守保留一次；写入是原子替换，collector 被会话回收取消时最后一次改动可能来不及写；消息已经出队、会话还没整份落库的窗口仍可能丢，这段包含 `ensureInitialized` 和一次会话写库，不是微秒级，C66 的失败回插只覆盖进程内失败；同一队列 id 既用于去重也作为消息 id，重试时若已存在同 id 会换新 id；`deleteOrphans` 只保留库里仍存在的会话，跨安装或删除后的遗留文件由下次启动清理；附件清理扫队列目录的原始文本，坏文件也会保附件。没有改 `ai/`。
-- 测试：`MessageQueueStoreTest` 覆盖往返、编辑态不落盘、空队列删文件、坏文件忽略、附件引用、孤儿清理；`MessageQueueTest` 覆盖 restore 暂停且清编辑态；`ConversationSessionTest` 覆盖初始化恢复暂停队列、已有 user 消息去重、变化落盘、初始化期间入队的消息与落盘队列合并、`replace` 后仍启动队列落盘。设备手动：生成中发送第二条消息变为 `Queued · 1`，杀进程重开显示 `Queue paused · 1`，Resume 后队列文件删除并继续发送。`:app:testGithubDebugUnitTest` 735 条，7 条既有 Windows 失败未变；assemble、spotless、markdownlint 通过。
+- 测试：`MessageQueueStoreTest` 覆盖往返、编辑态不落盘、空队列删文件、坏文件忽略、附件引用、孤儿清理；`MessageQueueTest` 覆盖 restore 暂停且清编辑态；`ConversationSessionTest` 覆盖初始化恢复暂停队列、已有 user 消息去重、变化落盘、初始化期间入队的消息与落盘队列合并、`replace` 后仍启动队列落盘。设备手动：生成中发送第二条消息变为 `Queued · 1`，杀进程重开显示 `Queue paused · 1`，Resume 后队列文件删除并继续发送。C71 顺带把 collector 的取消从 `runCatching` 中放出来，`ConversationSessionTest` 52 条仍通过。`:app:testGithubDebugUnitTest` 735 条（C70 当时计数），7 条既有 Windows 失败未变；assemble、spotless、markdownlint 通过。
+
+### C71 错误卡片持久化
+
+- 落点：`ChatErrorStore`（`noBackupFilesDir/chat-errors.json`）保存所有会话的错误卡片；`Throwable` 不直接序列化，只存卡片 id、标题、消息、会话 id、时间与 `ChatErrorSolution` 枚举名，恢复时用消息重建普通 `Throwable`。`ChatService` 启动时把文件里的卡片按仍存在的会话过滤后合并进 `_errors`，恢复全程持 `errorsPersistenceMutex`，`persistErrors` 只能排在读取之后；恢复合并用 `withRestoredErrors`，只按 id 去重并按会话上限裁剪，不按 live 的“同失败”规则合并。`addError`、`dismissError`、`clearErrors` 更新后写回整份可持久化列表，写失败只记日志；删除会话走 `clearErrors` 一并删卡片。通知类卡片（停止中不能重新生成、工具不可用、压缩门禁/取消、操作门禁）用 `persistable = false`，只活在内存。`restorePersistedErrors` 与 `persistErrors` 遇到 `CancellationException` 原样抛出，不把取消当 IO 失败记录；顺带把 C70 的 `ConversationSession` 队列 collector 取消路径也改成原样抛出，`ConversationSessionTest` 52 条仍通过。
+- 理由：C43 把错误卡片改成默认保留到手动关闭，但卡片只在内存里，进程死亡后用户看不到上次失败的原因。恢复卡片让「失败只给人看」这条在重启后仍成立。实时 `Retrying (n/m)` 不落盘：进程死亡后没有在途请求，半截回复由 C67 标成 `INTERRUPTED`，把重试倒计时恢复出来只会误导；重试 attempt 的 UI 与用量仍归后续。通知类卡片也不落盘，避免重启后在没有生成/压缩的会话里出现「Stop the generation first」。
+- 合并注意：文件不进备份，不改 Room、Settings、官方兼容导出或 `ai/`；恢复的异常是普通 `Throwable`，与新的同类失败不会按 `javaClass` 合并，可能出现一张旧卡片加一张新卡片；恢复卡片之间只按 id 去重，所以同文本不同异常类型的两张旧卡片都会保留。卡片消息可能很长，原样保留；文件损坏按空列表处理，下一次写入覆盖；没有对应会话的卡片过滤掉，但上次打开、还没落库的会话不在保留集合里，首次写库失败留下的卡片不会恢复。`dismiss`/`clear` 是异步落盘：成功路径会删文件，但进程在 IO 完成前被杀或删除失败时旧卡片会在下次启动复活，设备验收只覆盖成功路径。恢复读取失败时下一次写可能覆盖旧文件；启动清理没有处理写失败的 `.tmp` 临时文件。没有改 `ai/`。
+- 测试：`ChatErrorStoreTest` 覆盖往返（标题、消息、会话、时间、solution、卡片 id）、空列表删文件、坏文件忽略、未知 solution 解码为空、双会话往返、null 消息兜底；`ChatErrorRetentionTest` 覆盖会话内上限与同失败合并，以及恢复时同文本不同异常类型都保留、按时间戳裁剪。设备手动：新会话用无效 provider 触发 `Message generation failed`，`chat-errors.json` 写入；force-stop 重开同一会话卡片恢复；Dismiss 后文件删除，再重开不再出现。`:app:testGithubDebugUnitTest` 743 条，7 条既有 Windows 失败未变；assemble、spotless、markdownlint 通过。

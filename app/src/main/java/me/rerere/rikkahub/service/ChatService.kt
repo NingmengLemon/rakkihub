@@ -19,6 +19,8 @@ import kotlinx.coroutines.flow.flowOn
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.supervisorScope
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
 import me.rerere.ai.agent.AgentEvent
 import me.rerere.ai.agent.AgentFinishReason
@@ -106,6 +108,8 @@ data class ChatError(
     val conversationId: Uuid,
     val timestamp: Long = System.currentTimeMillis(),
     val solution: ChatErrorSolution? = null,
+    // 通知类卡片（停止中不能重新生成、工具不可用、压缩门禁等）只活在内存，不写进错误文件
+    val persistable: Boolean = true,
 )
 
 // 同一条错误：标题、会话、异常类型与消息都相同。每轮自动起标题、工具能力提醒、
@@ -132,6 +136,22 @@ internal fun List<ChatError>.withNewError(
     return merged.filter { it.id in kept }
 }
 
+/**
+ * 恢复卡片只按 id 去重并按会话上限裁剪，不按 [isSameFailureAs] 合并。
+ *
+ * 恢复出来的异常都是普通 `Throwable`；如果走 live 的同失败合并，两张原本因异常类型不同
+ * 而共存的同文本卡片会在重启时被吞掉一张，而且合并结果会写回文件。
+ */
+internal fun List<ChatError>.withRestoredErrors(
+    restored: List<ChatError>,
+    maxPerConversation: Int = MAX_RETAINED_ERRORS,
+): List<ChatError> {
+    val merged = (this + restored).distinctBy { it.id }
+    return merged.groupBy { it.conversationId }.values
+        .flatMap { errors -> errors.sortedBy { it.timestamp }.takeLast(maxPerConversation) }
+        .sortedBy { it.timestamp }
+}
+
 enum class ChatErrorSolution {
     CheckFastModelSettings,
 }
@@ -151,6 +171,7 @@ class ChatService(
     private val folderRepository: FolderRepository,
     private val chatDraftStore: ChatDraftStore,
     private val messageQueueStore: MessageQueueStore,
+    private val chatErrorStore: ChatErrorStore,
 ) {
     /** 一轮生成的结果 */
     private sealed interface TurnResult {
@@ -210,12 +231,18 @@ class ChatService(
     // 错误状态
     private val _errors = MutableStateFlow<List<ChatError>>(emptyList())
     val errors: StateFlow<List<ChatError>> = _errors.asStateFlow()
+    private val errorsPersistenceMutex = Mutex()
+
+    init {
+        appScope.launch { restorePersistedErrors() }
+    }
 
     fun addError(
         error: Throwable,
         conversationId: Uuid,
         title: String? = null,
         solution: ChatErrorSolution? = null,
+        persistable: Boolean = true,
     ) {
         if (error is CancellationException) return
         val chatError = ChatError(
@@ -223,17 +250,69 @@ class ChatService(
             error = error,
             conversationId = conversationId,
             solution = solution,
+            persistable = persistable,
         )
         _errors.update { current -> current.withNewError(chatError) }
+        persistErrors()
     }
 
     fun dismissError(id: Uuid) {
         _errors.update { list -> list.filter { it.id != id } }
+        persistErrors()
     }
 
     // 只清当前会话的错误：别的会话可能也有没看过的卡片
     fun clearErrors(conversationId: Uuid) {
         _errors.update { list -> list.filterNot { it.conversationId == conversationId } }
+        persistErrors()
+    }
+
+    /** 恢复上次进程留下的错误卡片；库里已经没有的会话上的旧卡片丢弃。 */
+    private suspend fun restorePersistedErrors() {
+        // 整个读取和合并都持锁：addError/clearErrors 的异步写必须排在 restore 之后，
+        // 否则它们会用只含内存卡片的列表覆盖掉还没读出来的旧文件
+        errorsPersistenceMutex.withLock {
+            val existing = try {
+                conversationRepo.getConversationIds()
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                Log.e(TAG, "Failed to load conversation ids for persisted errors", e)
+                return@withLock
+            }
+            val stored = try {
+                chatErrorStore.load()
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                Log.e(TAG, "Failed to load persisted chat errors", e)
+                return@withLock
+            }
+            val visible = stored.filter { it.conversationId in existing }
+            if (visible.isEmpty()) return@withLock
+            _errors.update { current -> current.withRestoredErrors(visible) }
+            try {
+                chatErrorStore.save(_errors.value.filter { it.persistable })
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                Log.e(TAG, "Failed to rewrite persisted chat errors", e)
+            }
+        }
+    }
+
+    private fun persistErrors() {
+        appScope.launch {
+            errorsPersistenceMutex.withLock {
+                try {
+                    chatErrorStore.save(_errors.value.filter { it.persistable })
+                } catch (e: CancellationException) {
+                    throw e
+                } catch (e: Exception) {
+                    Log.e(TAG, "Failed to persist chat errors", e)
+                }
+            }
+        }
     }
 
     fun cleanup() = runCatching { sessionManager.cleanup() }
@@ -499,6 +578,7 @@ class ChatService(
             error = ConflictException(context.getString(message)),
             conversationId = session.id,
             title = context.getString(R.string.error_title_regenerate_message),
+            persistable = false,
         )
     }
 
@@ -792,7 +872,8 @@ class ChatService(
             addError(
                 IllegalStateException(context.getString(R.string.tools_warning)),
                 conversationId,
-                title = context.getString(R.string.error_title_tool_unavailable)
+                title = context.getString(R.string.error_title_tool_unavailable),
+                persistable = false,
             )
         }
     }
@@ -1064,6 +1145,7 @@ class ChatService(
             error = IllegalStateException(message),
             conversationId = conversationId,
             title = context.getString(R.string.error_title_compress_conversation),
+            persistable = false,
         )
     }
 

@@ -17,6 +17,7 @@ import me.rerere.rikkahub.data.repository.MemoryRepository
 import me.rerere.rikkahub.data.repository.TranslationHistoryRepository
 import me.rerere.rikkahub.data.repository.WorkspaceRepository
 import me.rerere.rikkahub.data.skills.SkillManager
+import me.rerere.rikkahub.service.ChatErrorStore
 import me.rerere.rikkahub.service.MessageQueueStore
 import me.rerere.workspace.ProotShellRunner
 import me.rerere.workspace.RootfsInstaller
@@ -76,6 +77,14 @@ val repositoryModule = module {
         val context: Context = get()
         MessageQueueStore(
             directory = File(context.noBackupFilesDir, "message-queues"),
+            json = get(),
+        )
+    }
+
+    single {
+        val context: Context = get()
+        ChatErrorStore(
+            file = File(context.noBackupFilesDir, "chat-errors.json"),
             json = get(),
         )
     }

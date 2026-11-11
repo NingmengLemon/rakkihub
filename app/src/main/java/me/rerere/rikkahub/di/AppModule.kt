@@ -112,6 +112,7 @@ val appModule = module {
             folderRepository = get(),
             chatDraftStore = get(),
             messageQueueStore = get(),
+            chatErrorStore = get(),
         )
     }
 

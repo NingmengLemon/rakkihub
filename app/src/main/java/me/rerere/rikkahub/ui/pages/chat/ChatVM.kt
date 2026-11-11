@@ -307,6 +307,7 @@ class ChatVM(
                     error = it,
                     conversationId = _conversationId,
                     title = context.getString(R.string.error_title_compress_conversation),
+                    persistable = false,
                 )
             }
     }
@@ -320,6 +321,7 @@ class ChatVM(
                     error = e,
                     conversationId = _conversationId,
                     title = context.getString(R.string.error_title_operation),
+                    persistable = false,
                 )
             }
         }
@@ -332,6 +334,7 @@ class ChatVM(
                     error = it,
                     conversationId = _conversationId,
                     title = context.getString(R.string.error_title_operation),
+                    persistable = false,
                 )
             }
         }
@@ -360,7 +363,8 @@ class ChatVM(
         chatService.addError(
             error = IllegalStateException(context.getString(R.string.chat_page_stop_generation_first)),
             conversationId = _conversationId,
-            title = context.getString(R.string.error_title_operation)
+            title = context.getString(R.string.error_title_operation),
+            persistable = false,
         )
     }
 
