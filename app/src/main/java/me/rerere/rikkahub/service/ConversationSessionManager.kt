@@ -22,6 +22,7 @@ class ConversationSessionManager(
     private val onGenerationFinished: (ConversationSession, Throwable?) -> Unit,
     // 会话没有页面引用也不在生成，被回收了
     private val onSessionRemoved: (Uuid) -> Unit = {},
+    private val messageQueueStore: MessageQueueStore? = null,
 ) {
     private val lock = Any()
     private val sessions = MutableStateFlow<Map<Uuid, ConversationSession>>(emptyMap())
@@ -42,6 +43,7 @@ class ConversationSessionManager(
             onGenerationFinished = { id, cause ->
                 if (get(id) === session) onGenerationFinished(session, cause)
             },
+            messageQueueStore = messageQueueStore,
         )
         // Publish the actual registry, so collectors never observe a version before insertion.
         sessions.value = sessions.value + (conversationId to session)

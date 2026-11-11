@@ -150,6 +150,7 @@ class ChatService(
     private val filesManager: FilesManager,
     private val folderRepository: FolderRepository,
     private val chatDraftStore: ChatDraftStore,
+    private val messageQueueStore: MessageQueueStore,
 ) {
     /** 一轮生成的结果 */
     private sealed interface TurnResult {
@@ -203,6 +204,7 @@ class ChatService(
         },
         onGenerationFinished = ::onSessionGenerationFinished,
         onSessionRemoved = memoryConsolidationScheduler::onConversationLeft,
+        messageQueueStore = messageQueueStore,
     )
 
     // 错误状态
@@ -441,10 +443,18 @@ class ChatService(
                 // 添加消息到列表；上一轮压缩失败留下的提示词/回复对先清掉，不能当成普通历史
                 session.update { latest ->
                     val cleaned = latest.removeCompressionPairs() ?: latest
+                    // 正常用队列 id 供恢复去重；flush 失败后回插重试时旧消息可能还在，
+                    // 同 id 会撞上 FTS/按 id 定位，这时换一个新 id
+                    val messageId = if (latest.messageNodes.any { node -> node.messages.any { it.id == queued.id } }) {
+                        Uuid.random()
+                    } else {
+                        queued.id
+                    }
                     cleaned.copy(
                         messageNodes = cleaned.messageNodes + UIMessage(
                             role = MessageRole.USER,
                             parts = processedContent,
+                            id = messageId,
                         ).toMessageNode(),
                     )
                 }
@@ -1326,6 +1336,7 @@ class ChatService(
         }
         // 会话的输入框内容也属于它。没落过库的新会话在仓库里查不到，所以删在这里
         chatDraftStore.delete(conversationId)
+        messageQueueStore.delete(conversationId)
         // 卡片不自动消失，被删会话留下的错误也要一起清掉
         clearErrors(conversationId)
         sessionManager.removeIfIdle(session)

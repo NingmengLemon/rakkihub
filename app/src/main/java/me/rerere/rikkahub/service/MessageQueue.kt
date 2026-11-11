@@ -2,15 +2,19 @@ package me.rerere.rikkahub.service
 
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.serialization.Serializable
+import kotlinx.serialization.Transient
 import me.rerere.ai.ui.UIMessagePart
 import me.rerere.ai.ui.isEmptyInputMessage
 import kotlin.uuid.Uuid
 
+@Serializable
 data class QueuedMessage(
     val id: Uuid = Uuid.random(),
     val parts: List<UIMessagePart>,
     val answer: Boolean = true,
-    val isEditing: Boolean = false,
+    // 编辑占位只在当前进程里的队列面板上有意义，不随队列落盘
+    @Transient val isEditing: Boolean = false,
 )
 
 data class MessageQueueState(
@@ -95,5 +99,19 @@ class MessageQueue {
     @Synchronized
     fun resume() {
         mutableState.value = state.value.copy(paused = false)
+    }
+
+    /**
+     * 进程重启后把落盘的队列放回来。恢复的队列一律暂停，等用户看到队列面板后自己恢复，
+     * 不在打开会话时自动发出去；编辑占位不跨进程。初始化期间用户可能已经又入队了消息，
+     * 这里按 id 合并而不是整份替换，不能把新消息盖掉。
+     */
+    @Synchronized
+    fun restore(messages: List<QueuedMessage>) {
+        val merged = (messages + state.value.messages).distinctBy { it.id }
+        mutableState.value = MessageQueueState(
+            messages = merged.map { it.copy(isEditing = false) },
+            paused = true,
+        )
     }
 }

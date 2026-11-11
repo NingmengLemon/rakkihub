@@ -151,4 +151,18 @@ class MessageQueueTest {
         assertNull(first.takeNext())
         assertEquals(text("second"), second.takeNext()!!.parts)
     }
+
+    @Test
+    fun `restored queue is paused and does not keep editing placeholders`() {
+        val queue = MessageQueue()
+        val restored = QueuedMessage(parts = text("queued"), isEditing = true)
+
+        queue.restore(listOf(restored))
+
+        assertTrue(queue.state.value.paused)
+        assertFalse(queue.state.value.messages.single().isEditing)
+        assertNull(queue.takeNext())
+        queue.resume()
+        assertEquals(text("queued"), queue.takeNext()!!.parts)
+    }
 }

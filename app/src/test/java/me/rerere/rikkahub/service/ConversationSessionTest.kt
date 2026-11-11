@@ -8,6 +8,7 @@ import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.awaitCancellation
 import kotlinx.coroutines.cancel
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.onCompletion
 import kotlinx.coroutines.launch
@@ -16,6 +17,7 @@ import kotlinx.coroutines.test.advanceTimeBy
 import kotlinx.coroutines.test.runCurrent
 import kotlinx.coroutines.test.runTest
 import kotlinx.coroutines.withContext
+import kotlinx.coroutines.withTimeout
 import me.rerere.ai.core.MessageRole
 import me.rerere.ai.provider.Model
 import me.rerere.ai.provider.ProviderSetting
@@ -30,6 +32,7 @@ import me.rerere.rikkahub.data.model.Conversation
 import me.rerere.rikkahub.data.model.MessageNode
 import me.rerere.rikkahub.data.model.selectBranch
 import me.rerere.rikkahub.data.model.toMessageNode
+import me.rerere.rikkahub.utils.JsonInstant
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNotNull
@@ -1142,6 +1145,191 @@ class ConversationSessionTest {
         session.update { it.updateCurrentMessages(listOf(UIMessage.assistant("plain"))) }
         session.pendingApprovalTurn = approvalTurn(id)
         assertFalse(session.canRegenerate())
+    }
+
+    @Test
+    fun `initialize restores a persisted message queue as paused`() = runBlocking {
+        val id = Uuid.random()
+        val directory = java.nio.file.Files.createTempDirectory("message-queue-session-").toFile()
+        try {
+            val queueStore = MessageQueueStore(directory, JsonInstant)
+            val queued = QueuedMessage(parts = listOf(UIMessagePart.Text("later")))
+            queueStore.save(id, listOf(queued))
+            val persisted = Conversation.ofId(id)
+            val session = ConversationSession(
+                id = id,
+                initial = persisted,
+                scope = this,
+                store = FakeConversationStore(persisted),
+                onIdle = {},
+                messageQueueStore = queueStore,
+            )
+
+            session.initialize(load = { persisted })
+
+            assertEquals(listOf(queued), session.messageQueue.state.value.messages)
+            assertTrue(session.messageQueue.state.value.paused)
+            session.cleanup()
+        } finally {
+            directory.deleteRecursively()
+        }
+    }
+
+    @Test
+    fun `restored queue drops messages already persisted with the same id`() = runBlocking {
+        val id = Uuid.random()
+        val directory = java.nio.file.Files.createTempDirectory("message-queue-session-").toFile()
+        try {
+            val queueStore = MessageQueueStore(directory, JsonInstant)
+            val queued = QueuedMessage(parts = listOf(UIMessagePart.Text("sent")))
+            queueStore.save(id, listOf(queued))
+            val persisted = Conversation.ofId(
+                id,
+                messages = listOf(
+                    UIMessage(
+                        id = queued.id,
+                        role = MessageRole.USER,
+                        parts = queued.parts,
+                    ).toMessageNode()
+                ),
+            )
+            val session = ConversationSession(
+                id = id,
+                initial = persisted,
+                scope = this,
+                store = FakeConversationStore(persisted),
+                onIdle = {},
+                messageQueueStore = queueStore,
+            )
+
+            session.initialize(load = { persisted })
+
+            assertTrue(session.messageQueue.state.value.messages.isEmpty())
+            val cleared = withTimeout(5_000) {
+                var loaded = queueStore.load(id)
+                while (loaded.isNotEmpty()) {
+                    delay(10)
+                    loaded = queueStore.load(id)
+                }
+                loaded
+            }
+            assertTrue(cleared.isEmpty())
+            session.cleanup()
+        } finally {
+            directory.deleteRecursively()
+        }
+    }
+
+    @Test
+    fun `queue changes are persisted for the next process`() = runBlocking {
+        val id = Uuid.random()
+        val directory = java.nio.file.Files.createTempDirectory("message-queue-session-").toFile()
+        try {
+            val queueStore = MessageQueueStore(directory, JsonInstant)
+            val persisted = Conversation.ofId(id)
+            val session = ConversationSession(
+                id = id,
+                initial = persisted,
+                scope = this,
+                store = FakeConversationStore(persisted),
+                onIdle = {},
+                messageQueueStore = queueStore,
+            )
+            session.initialize(load = { persisted })
+
+            session.messageQueue.enqueue(listOf(UIMessagePart.Text("later")))
+            val saved = withTimeout(5_000) {
+                var loaded = queueStore.load(id)
+                while (loaded.isEmpty()) {
+                    delay(10)
+                    loaded = queueStore.load(id)
+                }
+                loaded
+            }
+
+            assertEquals(listOf(UIMessagePart.Text("later")), saved.single().parts)
+            session.cleanup()
+        } finally {
+            directory.deleteRecursively()
+        }
+    }
+
+    @Test
+    fun `messages queued while loading survive the persisted queue restore`() = runBlocking {
+        val id = Uuid.random()
+        val directory = java.nio.file.Files.createTempDirectory("message-queue-session-").toFile()
+        try {
+            val queueStore = MessageQueueStore(directory, JsonInstant)
+            val restored = QueuedMessage(parts = listOf(UIMessagePart.Text("restored")))
+            queueStore.save(id, listOf(restored))
+            val persisted = Conversation.ofId(id)
+            val session = ConversationSession(
+                id = id,
+                initial = persisted,
+                scope = this,
+                store = FakeConversationStore(persisted),
+                onIdle = {},
+                messageQueueStore = queueStore,
+            )
+            session.messageQueue.enqueue(listOf(UIMessagePart.Text("during load")))
+
+            session.initialize(load = { persisted })
+
+            assertEquals(
+                listOf(
+                    listOf(UIMessagePart.Text("restored")),
+                    listOf(UIMessagePart.Text("during load")),
+                ),
+                session.messageQueue.state.value.messages.map { it.parts },
+            )
+            assertTrue(session.messageQueue.state.value.paused)
+            val saved = withTimeout(5_000) {
+                var loaded = queueStore.load(id)
+                while (loaded.size < 2) {
+                    delay(10)
+                    loaded = queueStore.load(id)
+                }
+                loaded
+            }
+            assertEquals(2, saved.size)
+            session.cleanup()
+        } finally {
+            directory.deleteRecursively()
+        }
+    }
+
+    @Test
+    fun `replace starts queue persistence for a session that never initialized`() = runBlocking {
+        val id = Uuid.random()
+        val directory = java.nio.file.Files.createTempDirectory("message-queue-session-").toFile()
+        try {
+            val queueStore = MessageQueueStore(directory, JsonInstant)
+            val persisted = Conversation.ofId(id)
+            val session = ConversationSession(
+                id = id,
+                initial = persisted,
+                scope = this,
+                store = FakeConversationStore(persisted),
+                onIdle = {},
+                messageQueueStore = queueStore,
+            )
+
+            session.replace(persisted, existsInDatabase = true) {}
+            session.messageQueue.enqueue(listOf(UIMessagePart.Text("after replace")))
+
+            val saved = withTimeout(5_000) {
+                var loaded = queueStore.load(id)
+                while (loaded.isEmpty()) {
+                    delay(10)
+                    loaded = queueStore.load(id)
+                }
+                loaded
+            }
+            assertEquals(listOf(UIMessagePart.Text("after replace")), saved.single().parts)
+            session.cleanup()
+        } finally {
+            directory.deleteRecursively()
+        }
     }
 
     private fun approvalTurn(id: Uuid) = ChatTurnContext(

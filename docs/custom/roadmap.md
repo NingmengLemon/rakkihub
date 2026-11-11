@@ -130,7 +130,7 @@
 
 附件已经改成按内容寻址（C32）：文件名是内容的 SHA-256，写完临时文件、算出指纹之后先看目标在不在，在就复用。引用形式对消费方没变：内存与 UI 仍是绝对 `file://`，消息库与备份里落盘的是 `file:upload/...`（C36），序列化格式与 Room schema 也不变，按文件名去重的逻辑不受影响。指纹就在文件名里，清理时不必再算一遍内容。收益在真实备份上量过：同一份内容被反复存成多份。这次改动只让新写入去重，存量文件不会自动归并，体积回收要等旧引用消失后被清理收走。
 
-删除语义随之改成「只摘引用」：删消息、删会话、移除输入框附件、换头像都不再直接删文件，回收统一交给标记-清除。标记-清除不用引用计数，因为引用计数要在消息删除、分支切换、助手删除、导入覆盖每一处维护，漏一处就少算，少算的结果是误删用户文件；标记-清除只要求扫描覆盖所有引用点，漏一处的最坏后果是少收一点垃圾。扫描范围是消息 JSON、设置里的助手与用户头像和背景、落盘的草稿（C31），以及内存里的会话、队列、提交中的消息与输入框里的附件；收藏存的是节点引用、没有消息快照，不需要扫。生成过程中不清理，避免工具结果里的新文件还没落库就被收走。手动触发，入口在设置的文件管理页。
+删除语义随之改成「只摘引用」：删消息、删会话、移除输入框附件、换头像都不再直接删文件，回收统一交给标记-清除。标记-清除不用引用计数，因为引用计数要在消息删除、分支切换、助手删除、导入覆盖每一处维护，漏一处就少算，少算的结果是误删用户文件；标记-清除只要求扫描覆盖所有引用点，漏一处的最坏后果是少收一点垃圾。扫描范围是消息 JSON、设置里的助手与用户头像和背景、落盘的草稿（C31）与待发送队列（C70），以及内存里的会话、队列、提交中的消息与输入框里的附件；收藏存的是节点引用、没有消息快照，不需要扫。生成过程中不清理，避免工具结果里的新文件还没落库就被收走。手动触发，入口在设置的文件管理页。
 
 另一件独立的事是「引用绑死了安装路径」。消息库里的附件地址已经改成相对形态落盘（C36）：内存与消费方仍是绝对，库里与备份里是 `file:upload/...`，读取时还原到当前安装；包名、用户号、工作资料变化后仍能解析。旧库里的两种绝对形态（`/data/user/...` 与旧的 `/data/data/...`）继续有效，下一次保存时转成相对。设置里的头像仍存绝对地址，靠导入侧重写；草稿不随备份走，也维持原样。官方兼容导出把相对形态与绝对路径都换成官方安装的位置（C30/C36）；官方备份进来的方向仍是绝对路径，导入器的路径重写保留。
 
@@ -300,6 +300,7 @@
 | C67 进程死亡回复恢复 | L3 | 无（进程死亡） |
 | C68 压缩孤儿对加载清理与过滤 | L3 | 无（scratch 生命周期） |
 | C69 停止生成前确认 | L3 | 无（停止入口与设置） |
+| C70 消息队列持久化 | L3 | 无（队列文件与恢复时序） |
 
 ### 依赖链
 
@@ -310,6 +311,7 @@
 - 上下文：C46（C44 只影响压缩提示词入口的组成）→ C47。
 - 消息保存：C49 → C50。
 - 重试与流：C61 → C62。
+- 队列：C66 → C70。
 - 压缩：C44 → C46 → C51（提示词、检查点、可见轮次），保存由 C49 → C50 支撑。
 - 平台：C37、C45、C48 不依赖具体功能，但所有功能都在它们之上。
 
@@ -359,8 +361,8 @@ RikkaHub 现状：
 | P1 | 没有 error-driven overflow 恢复（C63 已修） | C63 前请求装配只有 `limitContext` 的条数截断，provider 返回 overflow 直接进错误卡片，压缩只能手动触发。C63 起 C61 归一化 `CONTEXT_WINDOW_EXCEEDED`，`AgentHooks.onContextOverflow` 让 app 把窗口收到最后一条 user 后，并在每个后续 step 按当前消息重算，再从本 step 重试；仍失败才出卡片。`AgentLoop.kt`、`Agent.kt`、`ChatRequestFactory.kt`。 | 已按此实现；不做自动压缩，单条超大输入仍可能失败。 |
 | P2 | 工具恢复语义失真（C65 已修恢复结果） | C65 起按 `startedAt` 区分 `not_started` 与 `outcome_unknown`，`cancelInterruptedTools` 和 `withoutUnresumableToolCalls` 共用恢复结果；工具错误只给模型摘要，堆栈只进 stderr；`AgentRequest.toolTimeout` 默认 5 分钟，超时返回可读结果。尚未做 output 的 NonCancellable 写入和错误日志分级。`ConversationMessages.kt`、`Conversation.kt`、`AgentLoop.kt`。 | 已按恢复语义和工具超时实现；取消写入与日志分级留到后续。 |
 | P2 | `withoutUnresumableToolCalls` 删除整条消息（C65 已修） | C65 起逐 part 处理，只把不可恢复的 Tool part 换成恢复结果，保留文本、推理和其它 part，不再删除整条 assistant 消息。`Conversation.kt`。 | 已按此实现。 |
-| P2 | 进程死亡丢失重试与收尾状态（C67 已恢复半截回复） | 只周期保存回复节点，5/15/30 秒分档，小节点最迟 60 秒；C67 的 `isGenerating` 随消息落库，加载时把半截回复补成 `INTERRUPTED` 并补工具结果，但重试状态、错误卡片、队列仍未落库，首次保存前死亡仍会丢。C50 在节点漂移或含 base64 图片时静默跳过。`MessageSaveLoop.kt`、`ConversationSession.kt`、`ChatService.kt`。 | 继续持久化 turn/retrying 状态或时间戳心跳；队列持久化；保存失败要上报。 |
-| P2 | 消息队列暂停后静默滞留（C66 已修派发与回插） | C66 前队列 paused 且非空时，新消息只 enqueue，`takeNext` 因 paused 返回 null，消息不发也不进正文；先 `takeNext` 出队再写历史，中间失败会丢消息。C66 起显式发送总是 resume，发送失败且未落库时回插队首。队列仍不持久化，进程死亡后丢失。`ChatService.kt`、`MessageQueue.kt`。 | 已按此实现派发恢复和失败回插；原建议的“先写历史再出队”由未落库回插补偿，队列持久化仍留到进程死亡收尾。 |
+| P2 | 进程死亡丢失重试与收尾状态（C67 已恢复半截回复，C70 已持久化队列） | 只周期保存回复节点，5/15/30 秒分档，小节点最迟 60 秒；C67 的 `isGenerating` 随消息落库，加载时把半截回复补成 `INTERRUPTED` 并补工具结果；C70 把未出队消息落到 `noBackupFilesDir`，恢复为暂停态。重试状态、错误卡片仍未落库，首次保存前死亡仍会丢。C50 在节点漂移或含 base64 图片时静默跳过。`MessageSaveLoop.kt`、`ConversationSession.kt`、`ChatService.kt`。 | 继续持久化 turn/retrying 状态或时间戳心跳；保存失败要上报。 |
+| P2 | 消息队列暂停后静默滞留（C66 已修派发与回插，C70 已持久化） | C66 前队列 paused 且非空时，新消息只 enqueue，`takeNext` 因 paused 返回 null，消息不发也不进正文；先 `takeNext` 出队再写历史，中间失败会丢消息。C66 起显式发送总是 resume，发送失败且未落库时回插队首。C70 起未出队消息按会话落到 `noBackupFilesDir`，恢复为暂停态，用队列 id 与已落库消息去重。`ChatService.kt`、`MessageQueue.kt`、`MessageQueueStore.kt`。 | 已按此实现派发恢复、失败回插和跨进程持久化；编辑占位与暂停状态不落盘。 |
 | P2 | 上下文压力只按条数，压缩能力有限 | 发送前没有 token 估算或 usage 水位；摘要请求 `maxTokens = null`，截断即整次压缩失败；没有 tool result 裁剪和图片 offload；截断 keep=1 且末条是 assistant 时会丢掉产生它的 user。`ChatRequestFactory.kt:200,250`、`CompressionPlan.kt:31-36`、`Conversation.kt:217-228`。 | 用最近 usage 或本地估算按 contextWindow 做压力检查；摘要设显式 maxTokens，截断时用部分摘要；先 prune tool result；图片占位；keep 按 user 轮次对齐。 |
 | P2 | scratch 生命周期只靠调用点清理（C68 已清理崩溃对并过滤请求/导出/Web 快照/搜索） | 压缩失败或取消留下的 prompt 与半截回复只在发送、截断、再次压缩前清理；C68 起加载会话时删除回复仍为 `COMPLETE` 的崩溃对，失败/取消对标 `FAILED` 后跨 reload 保留，请求派生、导出、Web/SSE 的 `Conversation.toDto` 和 App/Web/agent 搜索结果会过滤；浮动窗口只预览当前回复，压缩轮次结束即清空，不列出孤儿对。`ChatService.kt`、`ConversationSession.kt`、`ConversationMessages.kt`、`ConversationRepository.kt`、`ai/ui/Message.kt`。 | 给 scratch 打逐 part 不可发送标记；C68 已做崩溃对载入清理、请求/导出/Web 快照/搜索过滤。 |
 
@@ -371,6 +373,6 @@ P1 分批：P1a 截断 SSE 与停止结算，P1b 审批分支与配置快照，P
 1. P0 失败 attempt 隔离已由 C58 完成；多步工具调用的 per-step 细化仍留 P2，工具恢复结果已由 C65 处理。
 2. P1a 截断 SSE 与停止结算已由 C59 完成；P1b 审批分支与配置快照已由 C60 完成。
 3. P1c 的稳定错误码重试已由 C61、idle watchdog 由 C62、overflow 兜底由 C63 完成；P1 收尾后进入 P2。
-4. P2 工具恢复结果和工具超时已由 C65 完成，队列派发与失败回插由 C66 完成，进程死亡半截回复由 C67 完成，scratch 加载清理与请求/导出/Web 快照/搜索过滤由 C68 完成；剩余取消写入、队列持久化、重试状态持久化、上下文压缩。
+4. P2 工具恢复结果和工具超时已由 C65 完成，队列派发与失败回插由 C66 完成，进程死亡半截回复由 C67 完成，scratch 加载清理与请求/导出/Web 快照/搜索过滤由 C68 完成，队列持久化由 C70 完成；剩余取消写入、重试状态持久化、上下文压缩。
 
 范围说明：C59 已逐行核对五个 decoder 的终止判定和五个 provider 接线点的 `onClosed`，并用 `:ai:testDebugUnitTest` 全量验证；工具并发没有展开，当前 RikkaHub 按顺序执行，未发现正确性问题，只是并发效率较低。

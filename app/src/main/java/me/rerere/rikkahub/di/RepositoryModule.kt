@@ -17,6 +17,7 @@ import me.rerere.rikkahub.data.repository.MemoryRepository
 import me.rerere.rikkahub.data.repository.TranslationHistoryRepository
 import me.rerere.rikkahub.data.repository.WorkspaceRepository
 import me.rerere.rikkahub.data.skills.SkillManager
+import me.rerere.rikkahub.service.MessageQueueStore
 import me.rerere.workspace.ProotShellRunner
 import me.rerere.workspace.RootfsInstaller
 import me.rerere.workspace.WorkspaceBindMount
@@ -72,6 +73,14 @@ val repositoryModule = module {
     }
 
     single {
+        val context: Context = get()
+        MessageQueueStore(
+            directory = File(context.noBackupFilesDir, "message-queues"),
+            json = get(),
+        )
+    }
+
+    single {
         LiveAttachmentReferences()
     }
 
@@ -82,6 +91,7 @@ val repositoryModule = module {
             conversationRepository = get(),
             settingsStore = get(),
             draftStore = get(),
+            messageQueueStore = get(),
             chatService = get(),
             liveReferences = get(),
         )

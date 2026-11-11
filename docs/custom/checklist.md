@@ -77,6 +77,7 @@
 | C67 | 进程死亡回复恢复 | 改造 |
 | C68 | 压缩孤儿对加载清理与过滤 | 改造 |
 | C69 | 停止生成前确认 | 新增 |
+| C70 | 消息队列持久化 | 新增 |
 
 ## 明细
 
@@ -499,14 +500,14 @@
 
 - 落点：`ChatService.sendMessage` 在入队前无条件 `messageQueue.resume()`，不再因为队列非空而把新消息静默留在 paused 队列；`MessageQueue.requeueFront` 把出队后发送失败的消息放回队首，并按 id 去重；`sendQueuedMessage` 在 `session.flush()` 成功前失败时回插，成功落库后失败不回插，避免重复用户消息。
 - 理由：原来的条件是“队列为空才 resume”，paused 且非空时显式发送只 enqueue，`takeNext` 返回 null，消息不发也不进正文；先 `takeNext` 再写历史，中间失败会丢消息。
-- 合并注意：`requeueFront` 只处理内存队列，队列本身仍不持久化，进程死亡后丢失；`messagePersisted` 在 `session.update` 之后、`flush()` 成功时置真；`flush()` 抛异常时内存已有消息但仍会回插，之后重派发会再追加一条，下一次 flush 成功时两条都落库，失败那次会在历史和队列面板各显示一份。正常失败由 `reportFailure` 暂停队列；取消分支 `reportFailure` 先 rethrow、不执行 pause，靠 `stopGeneration` 和删除路径先暂停兜住。显式发送会再次 resume。`MessageQueue.kt` 在本批触发整文件 spotless 清理，属既有违规的一次性格式化。`ai/` 无改动。
+- 合并注意：`requeueFront` 只处理内存队列，C66 时队列本身仍不持久化，进程死亡后丢失；C70 已按会话落盘并恢复为暂停态。`messagePersisted` 在 `session.update` 之后、`flush()` 成功时置真；`flush()` 抛异常时内存已有消息但仍会回插，之后重派发会再追加一条，下一次 flush 成功时两条都落库，失败那次会在历史和队列面板各显示一份。正常失败由 `reportFailure` 暂停队列；取消分支 `reportFailure` 先 rethrow、不执行 pause，靠 `stopGeneration` 和删除路径先暂停兜住。显式发送会再次 resume。`MessageQueue.kt` 在本批触发整文件 spotless 清理，属既有违规的一次性格式化。`ai/` 无改动。
 - 测试：`MessageQueueTest` 覆盖出队后回插队首和重复回插去重；`:app:testGithubDebugUnitTest` 对应测试通过。手动验收：在 paused 且有排队消息时发送新消息，队列恢复并按顺序派发；失败回插由 `MessageQueueTest` 和代码走查覆盖，ChatService 层没有稳定的初始化/保存失败注入入口，不做设备步骤。
 
 ### C67 进程死亡回复恢复
 
 - 落点：`UIMessage` 增加带默认值的 `isGenerating`；`ChatService` 收到生成中的 `MessageUpdated` 时置真，`ConversationSession.finishGeneration` 统一清假，C50 的周期保存把标记写进消息 JSON。`ConversationSession.initialize` 加载后调用 `Conversation.recoverAbandonedGeneration`：扫描所有节点和分支里 `isGenerating` 的消息，改成 `INTERRUPTED`（已经是 `FAILED` 就保留），清掉标记，并给未执行工具补 `not_started`/`outcome_unknown`；有变化时立即用 `store.prepareWrite`/`write` 落库。
 - 理由：只靠消息形状和 `finishedAt` 推断会把旧消息误判，明确写一个随消息保存的生成标记；进程死亡后不能让半截回复一直显示为生成中，也不能让未执行 tool call 留在历史里。
-- 合并注意：标记只覆盖已经被 C50 周期保存到的半截回复；进程在首次保存前死亡、队列消息、重试卡片和错误卡片仍会丢，队列持久化继续归进程死亡项。加载时的恢复写库失败会让初始化抛错，这是有意的，避免内存显示已恢复但库里仍是生成中。旧 JSON 没有 `isGenerating`，默认 false。`ai/` 分叉计数因此变为十二处。
+- 合并注意：标记只覆盖已经被 C50 周期保存到的半截回复；进程在首次保存前死亡、重试卡片和错误卡片仍会丢，队列消息已由 C70 持久化。加载时的恢复写库失败会让初始化抛错，这是有意的，避免内存显示已恢复但库里仍是生成中。旧 JSON 没有 `isGenerating`，默认 false。`ai/` 分叉计数因此变为十二处。
 - 测试：`ConversationMessagesTest` 覆盖生成中回复转 `INTERRUPTED`、非末尾节点恢复、FAILED 保留、未执行工具补结果、正常完成回复不被改动；`ConversationSessionTest` 覆盖加载时恢复并落库；`:app:testGithubDebugUnitTest` 对应测试通过。手动验收：等 C50 至少保存过一次（小节点 60 秒或 64KB 增长才写一次）后再杀进程，重启打开会话应看到中断标记和工具恢复结果，不显示生成中；首次保存窗口内杀进程不会出现中断标记。
 
 ### C68 压缩孤儿对加载清理与过滤
@@ -523,3 +524,10 @@
 - 合并注意：`confirmStopGeneration` 是 `DisplaySetting` 的序列化字段，旧 JSON 缺少时解码为 `true`；官方兼容导出会带上这个键。官方源码的 `JsonInstant` 开着 `ignoreUnknownKeys`，本轮也用官方 RikkaHub 3.1.1 实际恢复了两份带新字段的归档，库计数与归档一致、图片正常，不能只把它当成源码推断。关闭确认后仍然是立即停止；同一轮已请求停止时会忽略重复点击，避免重复调用，这一点与原来不同。确认只包住用户主动点停止的三个 UI 入口，程序化停止（Web API、前台服务超时、队列/删除等内部路径）不受影响；Web UI 的停止按钮仍直接 POST，本轮明确不覆盖。悬浮窗的卡片是同一窗口里的普通子节点，确认时窗口可以长到卡片高度，不会被面板高度裁掉；关闭确认不会收起面板，收起面板、切换会话或按返回键时确认状态一起复位。没有改 `ai/`。
 - 测试：`StopConfirmStateTest` 覆盖打开、关闭、job 身份匹配，以及 `resolveStopAction` 的关闭确认直接停止、关闭确认时已请求停止被忽略、开启确认、已请求停止被忽略、换轮后重新允许五个分支；`DisplaySettingTest` 覆盖旧 JSON 默认 `true` 和关闭值往返；`FloatingChatUiStateTest` 覆盖 job 随状态传递。`:app:testGithubDebugUnitTest` 运行 723 条，新增用例通过，Windows 上 7 条既有文件占用失败未变；`assembleGithubDebug`、`spotlessCheck`、markdownlint 通过。手动验收已执行：设备上打开样本会话，发送后点输入栏停止，出现 `Stop generating?` 弹窗；Cancel 后生成继续（停止按钮仍在），再次停止并确认后回到发送态；把开关关闭后再生成并点停止，直接回到发送态、没有弹窗；设置页通用分组的 `Confirm before stopping` 默认勾选。压缩卡片停止、悬浮窗卡片、大字号滚动和旋转后的重复点击没有在设备上单独验。样本 provider 的 key 无效，同一轮出现鉴权错误卡片，这次没有拿到干净的 INTERRUPTED 样本，中断状态仍由 C58/C67 用例覆盖。
 - 验收：`data.sync` 整个 instrumented 包 51 条通过（`BackupManagerTest` 26、`DatabaseBackupTest` 3、`OfficialBackupRestoreAcceptanceTest` 2、`RestoreAppliedOutcomeTest` 1、`OfficialDatabaseConverterTest` 2、`OfficialDatabaseReaderTest` 7、`OfficialDatabaseWriterTest` 4、`OfficialForeignAttachmentPathsTest` 4、`OfficialSampleAcceptanceTest` 2），覆盖构造 Convert、同安装自家恢复、高版本拒绝等 2/4/5 样本。v32 官方兼容出口 86 条目、89.7MB，settings 含 `confirmStopGeneration=true`；官方 RikkaHub 3.1.1 恢复后 168/673/107 处引用（64 节点），61 个被引用附件，图片正常，恢复库与导出库一致；工作数据本身是 168/673，历史 170/676 是更早样本状态。换包名 `.crosscheck` 恢复后 168/673，107 处引用改写，61 个附件，图片正常。5GB 导入 fork 后 1664/11483/682；官方兼容导出 707 条目、649MB、682 附件，settings 含新字段；官方 3.1.1 恢复后 1664/11483、9080 处引用（783 节点），图片正常。附件计数逐项：原始官方 780 = 682 个 5GB 内容名 + 98 个旧 UUID；v32 的 61 个与原集合重叠 25、新增 36，官方目录变 816；5GB 的 682 个全部已在原集合内、新增 0，目录仍 816，即 682 + 98 + 36。验收后官方从备份还原为 780（682+98），fork 为 168/61，两端启动正常。search 人工闸门未重跑（acceptance 未给固定查询集；官方恢复不重建 FTS，5GB 官方数据搜 iOS 为空是预期），crosscheck 的 `Rebuilt search indexes after restore` 日志未捕获，这两项作为已知缺口记录。
+
+### C70 消息队列持久化
+
+- 落点：`MessageQueueStore`（`noBackupFilesDir/message-queues/<会话 id>.json`）保存未出队的 `QueuedMessage`；`QueuedMessage` 加 `@Serializable`，`isEditing` 标 `@Transient`。`MessageQueue.restore` 和初始化期间已经入队的消息按 id 合并，恢复为暂停态；`ConversationSession.initialize` 读回队列，按会话里已有 user 消息 id 过滤掉“已经落库但队列文件没来得及删”的项，然后启动一个消息列表变化就落盘的 collector；collector 启动时先把当前队列落一次，`replace` 也调用同一个幂等启动函数。`ChatService.sendQueuedMessage` 正常用 `queued.id` 作为新 user 消息的 id，供恢复时去重；如果 flush 失败后回插重试、旧消息还在，则换新 id 避免同 id 撞 FTS。`deleteConversation` 删队列文件，`RikkaHubApp` 启动时清理孤儿文件。`AttachmentCleaner` 扫描队列文件里的附件地址。队列面板不需要改，直接显示恢复后的暂停队列。
+- 理由：C66 只修了内存队列的派发与失败回插，进程死亡后队列丢失，用户已经排好的消息会静默消失。落盘后重开能看到 `Queue paused · N`，由用户 Resume，避免自动发送。
+- 合并注意：队列文件不进备份（`noBackupFilesDir`），不改 Room、Settings 或官方兼容导出，不触发数据层验收；恢复一律暂停；`isEditing` 不跨进程；文件损坏按空队列处理，collector 启动写回时覆盖坏文件，之前若被附件清理扫到仍会保守保留一次；写入是原子替换，collector 被会话回收取消时最后一次改动可能来不及写；消息已经出队、会话还没整份落库的窗口仍可能丢，这段包含 `ensureInitialized` 和一次会话写库，不是微秒级，C66 的失败回插只覆盖进程内失败；同一队列 id 既用于去重也作为消息 id，重试时若已存在同 id 会换新 id；`deleteOrphans` 只保留库里仍存在的会话，跨安装或删除后的遗留文件由下次启动清理；附件清理扫队列目录的原始文本，坏文件也会保附件。没有改 `ai/`。
+- 测试：`MessageQueueStoreTest` 覆盖往返、编辑态不落盘、空队列删文件、坏文件忽略、附件引用、孤儿清理；`MessageQueueTest` 覆盖 restore 暂停且清编辑态；`ConversationSessionTest` 覆盖初始化恢复暂停队列、已有 user 消息去重、变化落盘、初始化期间入队的消息与落盘队列合并、`replace` 后仍启动队列落盘。设备手动：生成中发送第二条消息变为 `Queued · 1`，杀进程重开显示 `Queue paused · 1`，Resume 后队列文件删除并继续发送。`:app:testGithubDebugUnitTest` 735 条，7 条既有 Windows 失败未变；assemble、spotless、markdownlint 通过。

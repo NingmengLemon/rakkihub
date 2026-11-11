@@ -9,10 +9,14 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.collect
+import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
+import me.rerere.ai.core.MessageRole
 import me.rerere.ai.ui.MessageStatus
 import me.rerere.ai.ui.UIMessagePart
 import me.rerere.ai.ui.finishReasoning
@@ -63,6 +67,7 @@ class ConversationSession(
     private val store: ConversationStore,
     private val onIdle: (Uuid) -> Unit,
     private val onGenerationFinished: (Uuid, Throwable?) -> Unit = { _, _ -> },
+    private val messageQueueStore: MessageQueueStore? = null,
 ) {
     // 会话状态
     private val _state = MutableStateFlow(initial)
@@ -105,6 +110,9 @@ class ConversationSession(
 
     val messageQueue = MessageQueue()
 
+    // 队列状态变化的落盘协程；会话被回收时取消
+    private var queuePersistenceJob: Job? = null
+
     /**
      * 页面切换和 SSE 重连只加载一次。[load] 返回 null 表示数据库里没有这个会话，改用 [create] 新建。
      * 加载完成前会话不接受修改，所以不会出现加载结果覆盖新内容的情况。
@@ -129,6 +137,21 @@ class ConversationSession(
                     store.write(previous = loaded, current = conversation)
                 }
             }
+            val queueStore = messageQueueStore
+            if (queueStore != null) {
+                val restored = queueStore.load(id)
+                if (restored.isNotEmpty()) {
+                    // 消息可能已经落库但队列文件还没来得及删；用发送时复用的队列 id 认出来。
+                    // restore 会和初始化期间已经入队的消息合并
+                    val persistedUserIds = conversation.messageNodes
+                        .flatMap { it.messages }
+                        .asSequence()
+                        .filter { it.role == MessageRole.USER }
+                        .map { it.id }
+                        .toSet()
+                    messageQueue.restore(restored.filterNot { it.id in persistedUserIds })
+                }
+            }
             writeMutex.withLock {
                 lastWritten = conversation
                 existsInDatabase = loaded != null
@@ -138,6 +161,25 @@ class ConversationSession(
                 _state.value = conversation
                 isInitialized = true
             }
+            startQueuePersistence()
+        }
+    }
+
+    /**
+     * 队列变化就写回磁盘。collector 启动时先把当前队列落一次，恢复队列与初始化期间新入队的
+     * 消息都在里面；一次写失败只记日志，下一次变化会带最新状态重试。会话被回收时取消。
+     */
+    private fun startQueuePersistence() {
+        val queueStore = messageQueueStore ?: return
+        if (queuePersistenceJob != null) return
+        queuePersistenceJob = scope.launch {
+            messageQueue.state
+                .map { it.messages }
+                .distinctUntilChanged()
+                .collect { messages ->
+                    runCatching { queueStore.save(id, messages) }
+                        .onFailure { Log.e(TAG, "Failed to persist message queue for $id", it) }
+                }
         }
     }
 
@@ -393,6 +435,8 @@ class ConversationSession(
         generationStartedAt.value = null
         _compressionActive.value = false
         isClosing = false
+        // replace 也会把 isInitialized 置真；没走过 initialize 的会话在这里补上队列落盘
+        startQueuePersistence()
     }
 
     /** 生成中、审批中或审批恢复中都不允许重新生成，避免截断一半后才发现被冻结挡住。 */
@@ -524,6 +568,8 @@ class ConversationSession(
         cancelJobs()
         idleCheckJob?.cancel()
         idleCheckJob = null
+        queuePersistenceJob?.cancel()
+        queuePersistenceJob = null
     }
 }
 

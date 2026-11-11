@@ -42,6 +42,7 @@ import me.rerere.rikkahub.di.appModule
 import me.rerere.rikkahub.di.dataSourceModule
 import me.rerere.rikkahub.di.repositoryModule
 import me.rerere.rikkahub.di.viewModelModule
+import me.rerere.rikkahub.service.MessageQueueStore
 import me.rerere.rikkahub.service.WebServerService
 import me.rerere.rikkahub.ui.hooks.readLastConversationId
 import me.rerere.rikkahub.utils.CrashHandler
@@ -104,7 +105,7 @@ class RikkaHubApp : Application() {
         cleanupWorkspaceTempDirs()
 
         // 清理会话已经不在库里的聊天草稿
-        cleanupOrphanDrafts()
+        cleanupOrphanInputs()
 
         // check workspace integrity (mark workspaces with missing files as broken after backup restore)
         checkWorkspaceIntegrity()
@@ -194,17 +195,23 @@ class RikkaHubApp : Application() {
     }
 
     /**
-     * 删掉不该再留的草稿。保留集是库里的会话加上上次打开的会话：那个会话没落过库，但关掉
-     * 「启动新建会话」时下次启动会直接打开它。其余规则见 [ChatDraftStore.deleteOrphans]。
+     * 删掉不该再留的草稿与待发送队列。草稿的保留集是库里的会话加上上次打开的会话：那个会话
+     * 没落过库，但关掉「启动新建会话」时下次启动会直接打开它。队列只保留库里仍在的会话。
      */
-    private fun cleanupOrphanDrafts() {
+    private fun cleanupOrphanInputs() {
         get<AppScope>().launch(Dispatchers.IO) {
             runCatching {
                 val existing = get<ConversationRepository>().getConversationIds()
-                val removed = get<ChatDraftStore>().deleteOrphans(existing, readLastConversationId())
-                if (removed > 0) Log.i(TAG, "Removed $removed stale chat draft files")
+                val removedDrafts = get<ChatDraftStore>().deleteOrphans(existing, readLastConversationId())
+                val removedQueues = get<MessageQueueStore>().deleteOrphans(existing)
+                if (removedDrafts + removedQueues > 0) {
+                    Log.i(
+                        TAG,
+                        "Removed $removedDrafts stale chat draft files and $removedQueues stale message queue files",
+                    )
+                }
             }.onFailure {
-                Log.e(TAG, "cleanupOrphanDrafts failed", it)
+                Log.e(TAG, "cleanupOrphanInputs failed", it)
             }
         }
     }

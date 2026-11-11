@@ -9,6 +9,7 @@ import me.rerere.rikkahub.data.datastore.SettingsStore
 import me.rerere.rikkahub.data.repository.ConversationRepository
 import me.rerere.rikkahub.data.repository.FilesRepository
 import me.rerere.rikkahub.service.ChatService
+import me.rerere.rikkahub.service.MessageQueueStore
 import me.rerere.rikkahub.utils.JsonInstant
 import java.io.File
 
@@ -35,6 +36,7 @@ class AttachmentCleaner(
     private val conversationRepository: ConversationRepository,
     private val settingsStore: SettingsStore,
     private val draftStore: ChatDraftStore,
+    private val messageQueueStore: MessageQueueStore,
     private val chatService: ChatService,
     private val liveReferences: LiveAttachmentReferences,
 ) {
@@ -128,6 +130,7 @@ class AttachmentCleaner(
                 conversationRepository.messageContentsWithFileReferences().forEach { addAll(extractFileUrls(it)) }
                 addAll(extractFileUrls(JsonInstant.encodeToString(settings)))
                 addAll(draftStore.referencedFileUrls())
+                addAll(messageQueueStore.referencedFileUrls())
             },
             filesDir = context.filesDir,
         )
