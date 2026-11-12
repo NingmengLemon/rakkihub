@@ -19,7 +19,9 @@ import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -28,11 +30,17 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import kotlinx.coroutines.delay
+import kotlinx.datetime.TimeZone
+import kotlinx.datetime.toInstant
 import me.rerere.ai.ui.UIMessage
 import me.rerere.hugeicons.HugeIcons
 import me.rerere.hugeicons.stroke.Cancel01
 import me.rerere.hugeicons.stroke.LeftToRightListBullet
 import me.rerere.rikkahub.R
+import me.rerere.rikkahub.data.model.GenerationPhase
+import me.rerere.rikkahub.data.model.generationPhase
+import me.rerere.rikkahub.data.model.streamedTokens
 import me.rerere.rikkahub.utils.writeClipboardText
 
 /**
@@ -68,6 +76,48 @@ internal fun CompressionCard(
     } else {
         MaterialTheme.colorScheme.onSurface
     }
+    val startedAt = remember(prompt.id, reply?.createdAt) {
+        reply?.createdAt?.toInstant(TimeZone.currentSystemDefault())?.toEpochMilliseconds()
+            ?: System.currentTimeMillis()
+    }
+    var now by remember(prompt.id) { mutableLongStateOf(System.currentTimeMillis()) }
+    LaunchedEffect(streaming) {
+        while (streaming) {
+            now = System.currentTimeMillis()
+            delay(500)
+        }
+    }
+    val elapsedSeconds = ((now - startedAt).coerceAtLeast(0) / 1000).toInt()
+    val phaseText = when (reply?.generationPhase()) {
+        is GenerationPhase.Thinking -> stringResource(R.string.chat_page_compression_phase_thinking)
+        is GenerationPhase.Writing -> stringResource(R.string.chat_page_compression_phase_writing)
+        is GenerationPhase.RunningTool -> stringResource(R.string.chat_page_compression_phase_tool)
+        else -> stringResource(R.string.chat_page_compression_phase_waiting)
+    }
+    // provider 的 usage 通常在最后一个 chunk 才到；流式期间先用已生成文本估算
+    val completionTokens = maxOf(
+        reply?.usage?.completionTokens ?: 0,
+        reply?.streamedTokens() ?: 0,
+    )
+    val tokensPerSecond = if (elapsedSeconds > 0 && completionTokens > 0) {
+        completionTokens.toDouble() / elapsedSeconds
+    } else {
+        null
+    }
+    val streamingDetail = if (tokensPerSecond != null) {
+        stringResource(
+            R.string.chat_page_compression_status,
+            phaseText,
+            tokensPerSecond,
+            elapsedSeconds,
+        )
+    } else {
+        stringResource(
+            R.string.chat_page_compression_status_no_tps,
+            phaseText,
+            elapsedSeconds,
+        )
+    }
 
     Card(
         modifier = modifier.fillMaxWidth(),
@@ -101,7 +151,7 @@ internal fun CompressionCard(
                     )
                     Text(
                         text = when {
-                            streaming -> stringResource(R.string.chat_page_compressing)
+                            streaming -> streamingDetail
                             failed -> stringResource(R.string.chat_page_compression_failed_hint)
                             else -> summaryText.take(80).ifBlank { promptText.take(80) }
                         },

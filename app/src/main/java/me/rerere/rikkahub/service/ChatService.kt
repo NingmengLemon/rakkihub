@@ -27,6 +27,7 @@ import me.rerere.ai.agent.AgentFinishReason
 import me.rerere.ai.agent.RetryAttempt
 import me.rerere.ai.agent.runAgent
 import me.rerere.ai.core.MessageRole
+import me.rerere.ai.core.ReasoningLevel
 import me.rerere.ai.provider.BuiltInTools
 import me.rerere.ai.provider.ModelAbility
 import me.rerere.ai.ui.MessageStatus
@@ -44,6 +45,7 @@ import me.rerere.rikkahub.data.ai.MemoryConsolidationScheduler
 import me.rerere.rikkahub.data.ai.TranslationHandler
 import me.rerere.rikkahub.data.ai.mcp.McpManager
 import me.rerere.rikkahub.data.ai.prompts.buildCompressPrompt
+import me.rerere.rikkahub.data.ai.shouldDisablePromptCache
 import me.rerere.rikkahub.data.ai.tools.InvalidMcpServerNamesException
 import me.rerere.rikkahub.data.ai.tools.shouldUseExternalWebSearch
 import me.rerere.rikkahub.data.datastore.SettingsStore
@@ -60,9 +62,6 @@ import me.rerere.rikkahub.data.model.MessageNode
 import me.rerere.rikkahub.data.model.applyCompressionResult
 import me.rerere.rikkahub.data.model.bindConfig
 import me.rerere.rikkahub.data.model.cancelInterruptedTools
-import me.rerere.rikkahub.data.model.compressionInputBudget
-import me.rerere.rikkahub.data.model.compressionSummaryMaxTokens
-import me.rerere.rikkahub.data.model.contextWindowStart
 import me.rerere.rikkahub.data.model.deleteMessage
 import me.rerere.rikkahub.data.model.editMessage
 import me.rerere.rikkahub.data.model.fillModelSnapshots
@@ -73,7 +72,7 @@ import me.rerere.rikkahub.data.model.getStoredAssistantOf
 import me.rerere.rikkahub.data.model.isAwaitingToolApproval
 import me.rerere.rikkahub.data.model.isTruncatedCompressionFinish
 import me.rerere.rikkahub.data.model.localFileUrls
-import me.rerere.rikkahub.data.model.planCompression
+import me.rerere.rikkahub.data.model.planCompressionFor
 import me.rerere.rikkahub.data.model.planHistoryTruncation
 import me.rerere.rikkahub.data.model.removeCompressionPair
 import me.rerere.rikkahub.data.model.removeCompressionPairs
@@ -1008,6 +1007,8 @@ class ChatService(
         conversationId: Uuid,
         additionalPrompt: String,
         keepRecentMessages: Int = 0,
+        modelId: Uuid? = null,
+        reasoningLevel: ReasoningLevel? = null,
     ): Result<Job> {
         val session = sessionManager.getOrCreate(conversationId)
         synchronized(session) {
@@ -1025,7 +1026,13 @@ class ChatService(
                 conversationId = conversationId,
                 keepAliveInBackground = false,
             ) {
-                runCompressionTurn(session, additionalPrompt, keepRecentMessages)
+                runCompressionTurn(
+                    session = session,
+                    additionalPrompt = additionalPrompt,
+                    keepRecentMessages = keepRecentMessages,
+                    modelId = modelId,
+                    reasoningLevel = reasoningLevel,
+                )
             }
             job.invokeOnCompletion { session.setCompressionActive(false) }
             session.setJob(job)
@@ -1041,6 +1048,8 @@ class ChatService(
         session: ConversationSession,
         additionalPrompt: String,
         keepRecentMessages: Int,
+        modelId: Uuid?,
+        reasoningLevel: ReasoningLevel?,
     ) {
         val incarnation = session.incarnation
         try {
@@ -1051,17 +1060,20 @@ class ChatService(
             // 上一轮失败的压缩对是 scratch：计划里先排除，否则它们会被当成普通历史，
             // 锚点还可能落在马上要删的节点上
             val conversation = session.state.value.removeCompressionPairs() ?: session.state.value
-            val turn = requestFactory.createContext(settings, conversation)
-            val summaryMaxTokens = compressionSummaryMaxTokens(
-                contextLength = turn.model.contextLength,
-                assistantMaxTokens = turn.assistant.maxTokens,
+            val currentModelId = settings.getChatModelOf(conversation)?.id
+            val turn = requestFactory.createContext(
+                settings = settings,
+                conversation = conversation,
+                modelId = modelId,
+                reasoningLevel = reasoningLevel,
+                // 临时换模型后请求前缀和上一轮不同，不能再写提示词缓存
+                disablePromptCache = shouldDisablePromptCache(modelId, currentModelId),
             )
             val plan = when (
-                val result = conversation.planCompression(
-                    windowStart = conversation.contextWindowStart(),
+                val result = conversation.planCompressionFor(
+                    model = turn.model,
+                    assistant = turn.assistant,
                     keepRecent = keepRecentMessages,
-                    maxInputTokens = compressionInputBudget(turn.model.contextLength, summaryMaxTokens),
-                    contextMessageLimit = turn.assistant.contextMessageLimit,
                 )
             ) {
                 CompressionPlanResult.NothingToCompress -> {

@@ -335,7 +335,6 @@
 ## 待办方向
 
 - 统一重写各功能的默认提示词。现状、调研结论与压缩提示词草稿在 [`prompts.md`](prompts.md)，先做压缩，再按同一套方法过标题、翻译、OCR。
-- 压缩交互的改进：面板里临时换模型（换的时候这次请求去掉 `cache_control`）、思考强度单独可配、压缩请求的实时状态（tok/s、思考/输出阶段；流式已由 C51 完成）。
 - 调研 Gemini 协议的缓存控制：区分 implicit caching 与 explicit `cachedContents`，核对 Google/Interactions provider 的 usage cached tokens、TTL 与最小 token 限制、与 OpenAI 兼容入口的差异；评估是否在 Gemini 请求里透传缓存配置或自动建缓存，先出成本与安全边界，再决定实现。
 - 把 `tools/i18n` 从 Bun 重写成 Python：现在本机跑不起来（没有 bun 和 `.env`），新文案只能手翻；重写后接回同一套 config，保留缺条目与未使用条目的检查。
 

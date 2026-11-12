@@ -262,6 +262,18 @@
   <string name="chat_page_cancel">Cancel</string>
   <string name="chat_page_check_fast_model_settings">Check fast model settings</string>
   <string name="chat_page_clear_all_errors">Clear all</string>
+  <string name="chat_page_compress_model">Model</string>
+  <string name="chat_page_compress_model_none">No chat model</string>
+  <string name="chat_page_compress_reasoning">Reasoning</string>
+  <string name="chat_page_compress_temporary_hint">Only applies to this compression and is not saved.</string>
+  <string name="chat_page_compress_preview_ready">Will summarize %1$d messages and keep %2$d.</string>
+  <string name="chat_page_compress_preview_loading">Calculating compression range…</string>
+  <string name="chat_page_compression_phase_thinking">Thinking</string>
+  <string name="chat_page_compression_phase_writing">Writing</string>
+  <string name="chat_page_compression_phase_waiting">Waiting</string>
+  <string name="chat_page_compression_phase_tool">Using tool</string>
+  <string name="chat_page_compression_status">%1$s · %2$.1f tok/s · %3$ds</string>
+  <string name="chat_page_compression_status_no_tps">%1$s · %2$ds</string>
   <string name="chat_page_compress_additional_prompt">Additional Instructions (Optional)</string>
   <string name="chat_page_compress_additional_prompt_hint">Specify what to preserve or focus on</string>
   <string name="chat_page_compress_context_desc">Compress the conversation into a summary to save tokens</string>
@@ -288,7 +300,6 @@
   <string name="chat_page_context_limit_boundary">Context message limit: %1$d; the request window starts here</string>
   <string name="chat_page_keep_recent_decrease">Decrease</string>
   <string name="chat_page_keep_recent_increase">Increase</string>
-  <string name="chat_page_compressing">Compressing...</string>
   <string name="chat_page_conversation_system_prompt">Conversation System Prompt</string>
   <string name="chat_page_conversation_system_prompt_clear">Clear</string>
   <string name="chat_page_conversation_system_prompt_hint">Override the assistant\'s system prompt for this conversation</string>

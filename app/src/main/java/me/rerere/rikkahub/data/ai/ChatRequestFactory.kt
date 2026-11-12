@@ -45,6 +45,7 @@ import me.rerere.rikkahub.data.ai.transformers.transforms
 import me.rerere.rikkahub.data.ai.transformers.visualTransforms
 import me.rerere.rikkahub.data.datastore.NetworkSetting
 import me.rerere.rikkahub.data.datastore.Settings
+import me.rerere.rikkahub.data.datastore.findModelById
 import me.rerere.rikkahub.data.datastore.findProvider
 import me.rerere.rikkahub.data.model.Assistant
 import me.rerere.rikkahub.data.model.Conversation
@@ -78,7 +79,8 @@ internal fun overflowWindow(messages: List<UIMessage>): List<UIMessage>? {
  * 一轮对话的请求上下文，按会话固定的配置解析一次。
  *
  * 正常对话和压缩用同一份上下文组装请求，系统提示词、工具定义、参数和 sessionId 都相同，
- * 压缩请求的前缀才能和上一轮对话一致，命中提示词缓存。
+ * 压缩请求的前缀才能和上一轮对话一致，命中提示词缓存。压缩面板临时换模型时，前缀和缓存
+ * 都不再对应，调用方要显式关闭这次请求的提示词缓存。
  */
 class ChatTurnContext(
     val settings: Settings,
@@ -119,17 +121,33 @@ class ChatRequestFactory(
     )
 
     /** 解析本轮的助手、模型、记忆和工具；MCP 服务名不合法时抛出 InvalidMcpServerNamesException */
-    suspend fun createContext(settings: Settings, conversation: Conversation): ChatTurnContext {
-        // 模型、思考级别、搜索、工具等以会话上固定的配置为准
-        val assistant = settings.getAssistantOf(conversation)
-        val model = settings.getChatModelOf(conversation)
-            ?: throw IllegalStateException("No chat model selected")
+    suspend fun createContext(
+        settings: Settings,
+        conversation: Conversation,
+        modelId: Uuid? = null,
+        reasoningLevel: ReasoningLevel? = null,
+        disablePromptCache: Boolean = false,
+    ): ChatTurnContext {
+        // 模型、思考级别、搜索、工具等以会话上固定的配置为准；压缩面板可以临时覆盖模型和思考级别。
+        // 选中的模型与会话当前模型相同时必须走 getChatModelOf，保留 config 里的 builtInSearch 等会话配置。
+        val baseAssistant = settings.getAssistantOf(conversation)
+        val assistant = if (reasoningLevel != null) {
+            baseAssistant.copy(reasoningLevel = reasoningLevel)
+        } else {
+            baseAssistant
+        }
+        val currentModel = settings.getChatModelOf(conversation)
+        val model = if (shouldUseConversationModel(modelId, currentModel?.id)) {
+            currentModel
+        } else {
+            settings.findModelById(modelId)
+        } ?: throw IllegalStateException("No chat model selected")
         val provider = model.findProvider(settings.providers) ?: error("Provider not found")
         return ChatTurnContext(
             settings = settings,
             assistant = assistant,
             model = model,
-            providerSetting = provider,
+            providerSetting = if (disablePromptCache) provider.withoutClaudePromptCache() else provider,
             conversationId = conversation.id,
             conversationSystemPrompt = conversation.customSystemPrompt,
             workspaceCwd = conversation.workspaceCwd,
@@ -372,6 +390,20 @@ internal fun Settings.retryPolicy(): RetryPolicy =
     } else {
         RetryPolicy.NONE
     }
+
+/** 临时换模型时本次请求不带 Claude 的 cache_control；缓存前缀已经对不上，写缓存没有意义。 */
+internal fun ProviderSetting.withoutClaudePromptCache(): ProviderSetting = when (this) {
+    is ProviderSetting.Claude -> copy(promptCaching = false)
+    else -> this
+}
+
+/** 选中的模型与会话当前模型相同（或没有覆盖）时，必须走会话模型，保留 builtInSearch 等快照。 */
+internal fun shouldUseConversationModel(selectedModelId: Uuid?, currentModelId: Uuid?): Boolean =
+    selectedModelId == null || selectedModelId == currentModelId
+
+/** 只有真的临时换了模型才关闭这次请求的提示词缓存。 */
+internal fun shouldDisablePromptCache(selectedModelId: Uuid?, currentModelId: Uuid?): Boolean =
+    selectedModelId != null && selectedModelId != currentModelId
 
 /** 压缩流式请求的结果；finishReason 是提供商原始字符串，调用方据此判断是否被截断 */
 internal data class CompressionStreamResult(

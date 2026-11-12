@@ -51,6 +51,7 @@ import me.rerere.rikkahub.ui.hooks.writeLastConversationId
 import me.rerere.rikkahub.ui.hooks.ChatInputState
 import me.rerere.rikkahub.web.ApiException
 import java.util.Locale
+import me.rerere.ai.core.ReasoningLevel
 import kotlin.uuid.Uuid
 
 private const val TAG = "ChatVM"
@@ -343,8 +344,19 @@ class ChatVM(
         }
     }
 
-    fun handleCompressContext(additionalPrompt: String, keepRecentMessages: Int) {
-        chatService.startCompression(_conversationId, additionalPrompt, keepRecentMessages)
+    fun handleCompressContext(
+        additionalPrompt: String,
+        keepRecentMessages: Int,
+        modelId: Uuid? = null,
+        reasoningLevel: ReasoningLevel? = null,
+    ) {
+        chatService.startCompression(
+            conversationId = _conversationId,
+            additionalPrompt = additionalPrompt,
+            keepRecentMessages = keepRecentMessages,
+            modelId = modelId,
+            reasoningLevel = reasoningLevel,
+        )
             .onFailure {
                 chatService.addError(
                     error = it,

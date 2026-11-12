@@ -134,7 +134,7 @@ fun ReasoningPicker(
                 title = stringResource(R.string.reasoning_picker_title),
                 value = previewLevel,
                 hint = stringResource(R.string.reasoning_picker_hint),
-                label = { it.label() },
+                label = { it.reasoningLevelName() },
             ) {
                 // 等级越高形状越「激烈」
                 PickerHero(
@@ -204,7 +204,7 @@ private fun ReasoningLevel.shape(): RoundedPolygon = when (this) {
 }
 
 @Composable
-private fun ReasoningLevel.label(): String = when (this) {
+internal fun ReasoningLevel.reasoningLevelName(): String = when (this) {
     ReasoningLevel.OFF -> stringResource(R.string.reasoning_off)
     ReasoningLevel.AUTO -> stringResource(R.string.reasoning_auto)
     ReasoningLevel.LOW -> stringResource(R.string.reasoning_light)

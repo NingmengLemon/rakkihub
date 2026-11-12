@@ -52,6 +52,7 @@ import kotlin.uuid.Uuid
 import kotlinx.coroutines.Job
 import me.rerere.ai.provider.Model
 import me.rerere.ai.provider.ProviderSetting
+import me.rerere.ai.core.ReasoningLevel
 import me.rerere.hugeicons.HugeIcons
 import me.rerere.hugeicons.stroke.ArrowLeft01
 import me.rerere.hugeicons.stroke.ArrowRight01
@@ -110,7 +111,12 @@ internal fun FilesPicker(
     chatModel: Model?,
     state: ChatInputState,
     mcpManager: McpManager,
-    onCompressContext: (additionalPrompt: String, keepRecentMessages: Int) -> Unit,
+    onCompressContext: (
+        additionalPrompt: String,
+        keepRecentMessages: Int,
+        modelId: Uuid?,
+        reasoningLevel: ReasoningLevel?,
+    ) -> Unit,
     onTruncateHistory: (keep: Int) -> Unit,
     onUpdateAssistant: (Assistant) -> Unit,
     onUpdateWorkspaceCwd: (String?) -> Unit,

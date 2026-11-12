@@ -252,6 +252,52 @@ class CompressionPlanTest {
         assertEquals(a.id, plan.anchorNodeId)
     }
 
+    @Test
+    fun `preview counts use the aligned boundary`() {
+        val a = MessageNode.of(UIMessage.user("a"))
+        val b = MessageNode.of(UIMessage.assistant("b"))
+        val c = MessageNode.of(UIMessage.user("c"))
+        val d = MessageNode.of(UIMessage.assistant("d"))
+        val conversation = conversation(listOf(a, b, c, d))
+        val plan = (conversation.planCompression(windowStart = 0, keepRecent = 1) as CompressionPlanResult.Ready).plan
+
+        val counts = requireNotNull(conversation.compressionPlanCounts(plan))
+
+        assertEquals(2, counts.summarized)
+        assertEquals(2, counts.kept)
+    }
+
+    @Test
+    fun `preview counts exclude the previous checkpoint`() {
+        val summary = MessageNode.of(UIMessage.user("summary").copy(isContextCheckpoint = true))
+        val newUser = MessageNode.of(UIMessage.user("new"))
+        val conversation = conversation(listOf(summary, newUser))
+        val start = conversation.contextWindowStart()
+        val plan = (conversation.planCompression(
+            windowStart = start,
+            keepRecent = 0
+        ) as CompressionPlanResult.Ready).plan
+
+        val counts = requireNotNull(conversation.compressionPlanCounts(plan))
+
+        assertEquals(1, counts.summarized)
+        assertEquals(0, counts.kept)
+    }
+
+    @Test
+    fun `streamed tokens count text and reasoning but not images`() {
+        val message = UIMessage(
+            role = MessageRole.ASSISTANT,
+            parts = listOf(
+                UIMessagePart.Text("hello"),
+                UIMessagePart.Reasoning("思考"),
+                UIMessagePart.Image(url = "file:///tmp/x.png"),
+            ),
+        )
+
+        assertEquals(4, message.streamedTokens())
+    }
+
     private fun toolNode(state: ToolApprovalState) = MessageNode.of(
         UIMessage(
             role = MessageRole.ASSISTANT,

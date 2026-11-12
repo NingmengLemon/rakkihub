@@ -260,6 +260,18 @@
   <string name="chat_page_cancel">キャンセル</string>
   <string name="chat_page_check_fast_model_settings">高速モデル設定を確認</string>
   <string name="chat_page_clear_all_errors">すべてクリア</string>
+  <string name="chat_page_compress_model">この圧縮で使うモデル</string>
+  <string name="chat_page_compress_model_none">モデル未選択</string>
+  <string name="chat_page_compress_reasoning">この圧縮の推論レベル</string>
+  <string name="chat_page_compress_temporary_hint">この圧縮にのみ適用され、保存されません。</string>
+  <string name="chat_page_compress_preview_ready">%1$d 件を要約し、%2$d 件を保持します。</string>
+  <string name="chat_page_compress_preview_loading">圧縮範囲を計算中…</string>
+  <string name="chat_page_compression_phase_thinking">思考中</string>
+  <string name="chat_page_compression_phase_writing">出力中</string>
+  <string name="chat_page_compression_phase_waiting">待機中</string>
+  <string name="chat_page_compression_phase_tool">ツール使用中</string>
+  <string name="chat_page_compression_status">%1$s · %2$.1f tok/s · %3$d 秒</string>
+  <string name="chat_page_compression_status_no_tps">%1$s · %2$d 秒</string>
   <string name="chat_page_compress_additional_prompt">追加指示（オプション）</string>
   <string name="chat_page_compress_additional_prompt_hint">保持または重点的に扱う内容を指定</string>
   <string name="chat_page_compress_context_desc">会話を要約して圧縮し、トークンを節約します</string>
@@ -286,7 +298,6 @@
   <string name="chat_page_context_limit_boundary">コンテキストメッセージ上限 %1$d 件、ここからがリクエストに含まれる範囲です</string>
   <string name="chat_page_keep_recent_decrease">減らす</string>
   <string name="chat_page_keep_recent_increase">増やす</string>
-  <string name="chat_page_compressing">圧縮中…</string>
   <string name="chat_page_conversation_system_prompt">会話システムプロンプト</string>
   <string name="chat_page_conversation_system_prompt_clear">クリア</string>
   <string name="chat_page_conversation_system_prompt_hint">この会話でアシスタントのシステムプロンプトを上書き</string>

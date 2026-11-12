@@ -1,6 +1,7 @@
 package me.rerere.rikkahub.data.model
 
 import me.rerere.ai.core.MessageRole
+import me.rerere.ai.provider.Model
 import me.rerere.ai.ui.UIMessage
 import me.rerere.ai.ui.UIMessagePart
 import me.rerere.ai.ui.filterModelVisible
@@ -26,6 +27,44 @@ internal sealed interface CompressionPlanResult {
     /** 待摘要的历史按本地估算已经超过模型上下文，单次摘要请求放不下。 */
     data object RangeTooLarge : CompressionPlanResult
 }
+
+/** 面板和服务共用的压缩计划：预算、范围检查都从这里走，避免两处各算一遍。 */
+internal fun Conversation.planCompressionFor(
+    model: Model,
+    assistant: Assistant,
+    keepRecent: Int,
+): CompressionPlanResult {
+    val summaryMaxTokens = compressionSummaryMaxTokens(model.contextLength, assistant.maxTokens)
+    return planCompression(
+        windowStart = contextWindowStart(),
+        keepRecent = keepRecent,
+        maxInputTokens = compressionInputBudget(model.contextLength, summaryMaxTokens),
+        contextMessageLimit = assistant.contextMessageLimit,
+    )
+}
+
+internal data class CompressionPlanCounts(
+    val summarized: Int,
+    val kept: Int,
+)
+
+/** 面板预览用实际边界算条数：保留起点会对齐到 user，摘要起点在检查点之后。 */
+internal fun Conversation.compressionPlanCounts(plan: CompressionPlan): CompressionPlanCounts? {
+    val end = messageNodes.indexOfFirst { it.id == plan.anchorNodeId }
+        .takeIf { it >= 0 }
+        ?.plus(1)
+        ?: return null
+    val windowStart = contextWindowStart()
+    return CompressionPlanCounts(
+        summarized = (end - windowStart).coerceAtLeast(0),
+        kept = (messageNodes.size - end).coerceAtLeast(0),
+    )
+}
+
+/** 流式期间只有最后的 usage，tok/s 先从已生成的正文/思考估算；最终 usage 到达后取较大值。 */
+internal fun UIMessage.streamedTokens(): Int = parts
+    .filter { it is UIMessagePart.Text || it is UIMessagePart.Reasoning }
+    .sumOf { it.estimatedTokens() }
 
 /**
  * 以 [windowStart] 为当前请求窗口起点，保留最后 [keepRecent] 条不算在压缩范围里。
