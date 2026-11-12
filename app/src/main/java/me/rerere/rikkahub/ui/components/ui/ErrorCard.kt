@@ -8,6 +8,7 @@ import androidx.compose.animation.slideInVertically
 import androidx.compose.animation.slideOutVertically
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.heightIn
@@ -16,11 +17,13 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.rememberCoroutineScope
@@ -57,6 +60,8 @@ fun ErrorCardsDisplay(
     onDismissError: (Uuid) -> Unit,
     onClearAllErrors: () -> Unit,
     autoDismiss: Boolean,
+    onRetryError: ((ChatError) -> Unit)? = null,
+    retryEnabled: Boolean = true,
     modifier: Modifier = Modifier,
 ) {
     // 卡片不自动消失后可能攒下多条，限高滚动。最新一条变化时（来了新的一条，
@@ -90,6 +95,12 @@ fun ErrorCardsDisplay(
                     error = error,
                     onDismiss = { onDismissError(error.id) },
                     autoDismiss = autoDismiss,
+                    onRetry = if (error.retryable && onRetryError != null) {
+                        { onRetryError.invoke(error) }
+                    } else {
+                        null
+                    },
+                    retryEnabled = retryEnabled,
                 )
             }
 
@@ -128,6 +139,8 @@ fun ErrorCard(
     error: ChatError,
     onDismiss: () -> Unit,
     autoDismiss: Boolean,
+    onRetry: (() -> Unit)? = null,
+    retryEnabled: Boolean = true,
     modifier: Modifier = Modifier,
 ) {
     val clipboard = LocalClipboard.current
@@ -199,6 +212,21 @@ fun ErrorCard(
                         style = MaterialTheme.typography.bodySmall,
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis,
+                    )
+                }
+            }
+            if (onRetry != null) {
+                TextButton(
+                    onClick = onRetry,
+                    enabled = retryEnabled,
+                    colors = ButtonDefaults.textButtonColors(
+                        contentColor = MaterialTheme.colorScheme.onErrorContainer,
+                    ),
+                    contentPadding = PaddingValues(horizontal = 8.dp),
+                ) {
+                    Text(
+                        text = stringResource(R.string.chat_page_retry_error),
+                        style = MaterialTheme.typography.labelMedium,
                     )
                 }
             }

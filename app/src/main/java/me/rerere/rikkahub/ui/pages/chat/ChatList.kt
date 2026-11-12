@@ -104,6 +104,7 @@ import me.rerere.rikkahub.data.model.MessageNode
 import me.rerere.rikkahub.data.model.contextLimitBoundaryIndex
 import me.rerere.rikkahub.data.model.getAssistantOf
 import me.rerere.rikkahub.data.model.withConversation
+import me.rerere.rikkahub.data.model.isAwaitingToolApproval
 import me.rerere.rikkahub.service.ChatError
 import me.rerere.rikkahub.service.RecordedRetryAttempt
 import me.rerere.rikkahub.ui.components.ai.RetryAttemptsCard
@@ -135,6 +136,7 @@ fun ChatList(
     errors: List<ChatError> = emptyList(),
     retryAttempts: List<RecordedRetryAttempt> = emptyList(),
     retryInProgress: Boolean = false,
+    onRetryError: ((ChatError) -> Unit)? = null,
     onDismissError: (Uuid) -> Unit = {},
     onClearAllErrors: () -> Unit = {},
     onRegenerate: (UIMessage) -> Unit = {},
@@ -181,6 +183,7 @@ fun ChatList(
                 errors = errors,
                 retryAttempts = retryAttempts,
                 retryInProgress = retryInProgress,
+                onRetryError = onRetryError,
                 onDismissError = onDismissError,
                 onClearAllErrors = onClearAllErrors,
                 onRegenerate = onRegenerate,
@@ -234,6 +237,7 @@ private fun ChatListNormal(
     errors: List<ChatError>,
     retryAttempts: List<RecordedRetryAttempt> = emptyList(),
     retryInProgress: Boolean = false,
+    onRetryError: ((ChatError) -> Unit)? = null,
     onDismissError: (Uuid) -> Unit,
     onClearAllErrors: () -> Unit,
     onRegenerate: (UIMessage) -> Unit,
@@ -523,6 +527,8 @@ private fun ChatListNormal(
                     onDismissError = onDismissError,
                     onClearAllErrors = onClearAllErrors,
                     autoDismiss = settings.displaySetting.autoDismissErrorCards,
+                    onRetryError = onRetryError,
+                    retryEnabled = !loading && !selecting && !conversation.isAwaitingToolApproval,
                 )
             }
 

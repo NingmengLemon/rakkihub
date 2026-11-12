@@ -293,6 +293,8 @@
   <string name="chat_page_conversation_system_prompt_save">儲存</string>
   <string name="chat_page_delete">刪除</string>
   <string name="chat_page_dismiss_error">關閉錯誤</string>
+  <string name="chat_page_retry_error">重試</string>
+  <string name="chat_page_retry_stale">對話已經繼續，這一輪無法再重試。請在原訊息上重新產生。</string>
   <string name="chat_page_edit_nickname">編輯暱稱</string>
   <string name="chat_page_edit_title">編輯標題</string>
   <string name="chat_page_edit_title_warning">請先聊天再編輯標題吧</string>

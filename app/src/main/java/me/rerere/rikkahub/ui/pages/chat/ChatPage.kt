@@ -233,6 +233,7 @@ fun ChatPage(id: Uuid, text: String?, files: List<Uri>, nodeId: Uuid? = null) {
                     errors = errors,
                     retryAttempts = retryAttempts,
                     retryInProgress = retrying,
+                    onRetryError = { vm.retryError(it) },
                     onDismissError = { vm.dismissError(it) },
                     onClearAllErrors = { vm.clearErrors() },
                 )
@@ -268,6 +269,7 @@ fun ChatPage(id: Uuid, text: String?, files: List<Uri>, nodeId: Uuid? = null) {
                     errors = errors,
                     retryAttempts = retryAttempts,
                     retryInProgress = retrying,
+                    onRetryError = { vm.retryError(it) },
                     onDismissError = { vm.dismissError(it) },
                     onClearAllErrors = { vm.clearErrors() },
                 )
@@ -296,6 +298,7 @@ private fun ChatPageContent(
     errors: List<ChatError>,
     retryAttempts: List<RecordedRetryAttempt> = emptyList(),
     retryInProgress: Boolean = false,
+    onRetryError: ((ChatError) -> Unit)? = null,
     onDismissError: (Uuid) -> Unit,
     onClearAllErrors: () -> Unit,
 ) {
@@ -479,6 +482,7 @@ private fun ChatPageContent(
                 errors = errors,
                 retryAttempts = retryAttempts,
                 retryInProgress = retryInProgress,
+                onRetryError = onRetryError,
                 onDismissError = onDismissError,
                 onClearAllErrors = onClearAllErrors,
                 onRegenerate = {

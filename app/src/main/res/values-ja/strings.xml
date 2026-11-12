@@ -293,6 +293,8 @@
   <string name="chat_page_conversation_system_prompt_save">保存</string>
   <string name="chat_page_delete">削除</string>
   <string name="chat_page_dismiss_error">エラーを閉じる</string>
+  <string name="chat_page_retry_error">再試行</string>
+  <string name="chat_page_retry_stale">会話が先に進んだため、このターンは再試行できません。元のメッセージから再生成してください。</string>
   <string name="chat_page_edit_nickname">ニックネームを編集</string>
   <string name="chat_page_edit_title">タイトルを編集</string>
   <string name="chat_page_edit_title_warning">まずチャットしてからタイトルを編集してください</string>

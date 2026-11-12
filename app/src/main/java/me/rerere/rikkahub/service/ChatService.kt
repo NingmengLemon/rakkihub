@@ -112,6 +112,10 @@ data class ChatError(
     val solution: ChatErrorSolution? = null,
     // 通知类卡片（停止中不能重新生成、工具不可用、压缩门禁等）只活在内存，不写进错误文件
     val persistable: Boolean = true,
+    // 生成失败可以手动重试；压缩、起标题、翻译等错误由各自入口处理，不显示通用重试按钮
+    val retryable: Boolean = false,
+    // 生成失败时记录重试目标：普通发送是最后一条用户消息，重新生成是当时的目标消息
+    val retryMessageId: Uuid? = null,
 )
 
 // 同一条错误：标题、会话、异常类型与消息都相同。每轮自动起标题、工具能力提醒、
@@ -121,6 +125,24 @@ private fun ChatError.isSameFailureAs(other: ChatError): Boolean =
         conversationId == other.conversationId &&
         error.javaClass == other.error.javaClass &&
         error.message == other.error.message
+
+/**
+ * 生成失败时记录的重试目标。重新生成取目标节点当前消息的 UIMessage id，普通发送取最后一条
+ * 用户消息；MessageNode.id 和 UIMessage.id 不是一回事，不能把节点 id 存进 retryMessageId。
+ */
+internal fun Conversation.retryTargetMessageId(regenerateNodeId: Uuid?): Uuid? =
+    regenerateNodeId
+        ?.let { nodeId -> messageNodes.firstOrNull { it.id == nodeId } }
+        ?.let { node -> node.messages.getOrNull(node.selectIndex) ?: node.messages.firstOrNull() }
+        ?.id
+        ?: currentMessages.lastOrNull { it.role == MessageRole.USER && !it.isCompressionPrompt }?.id
+
+/** 目标节点之后是否已经出现新的用户轮次；有的话重试这个 USER 节点会截断后续对话。 */
+internal fun Conversation.hasLaterUserTurn(nodeId: Uuid): Boolean {
+    val index = messageNodes.indexOfFirst { it.id == nodeId }
+    if (index == -1) return false
+    return messageNodes.drop(index + 1).any { node -> node.role == MessageRole.USER }
+}
 
 /**
  * 加入一条错误：同一个失败只留最新的一份，每个会话最多保留 [maxPerConversation] 条。
@@ -245,6 +267,8 @@ class ChatService(
         title: String? = null,
         solution: ChatErrorSolution? = null,
         persistable: Boolean = true,
+        retryable: Boolean = false,
+        retryMessageId: Uuid? = null,
     ) {
         if (error is CancellationException) return
         val chatError = ChatError(
@@ -253,6 +277,8 @@ class ChatService(
             conversationId = conversationId,
             solution = solution,
             persistable = persistable,
+            retryable = retryable,
+            retryMessageId = retryMessageId,
         )
         _errors.update { current -> current.withNewError(chatError) }
         persistErrors()
@@ -592,8 +618,16 @@ class ChatService(
 
     // ---- 重新生成消息 ----
 
-    /** 重新生成用户消息时去掉它之后的节点再回复；重新生成助手消息时在它的节点上新开一个分支 */
-    fun regenerateAtMessage(conversationId: Uuid, messageId: Uuid) {
+    /**
+     * 重新生成用户消息时去掉它之后的节点再回复；重新生成助手消息时在它的节点上新开一个分支。
+     * [onStarted] 在目标节点确认并真正开始生成后回调，调用方可以据此再关闭对应的错误卡片，
+     * 避免压缩中、审批中或目标已被删除时错误卡片先消失却什么也没发生。
+     */
+    fun regenerateAtMessage(
+        conversationId: Uuid,
+        messageId: Uuid,
+        onStarted: (() -> Unit)? = null,
+    ) {
         val session = sessionManager.getOrCreate(conversationId)
         synchronized(session) {
             if (session.isCompressing) return
@@ -624,8 +658,10 @@ class ChatService(
                             conversation.copy(messageNodes = conversation.messageNodes.take(index + 1))
                         } ?: return@launchGenerationJob
                         session.flush()
+                        onStarted?.invoke()
                         runTurn(session)
                     } else {
+                        onStarted?.invoke()
                         runTurn(session, regenerateNodeId = node.id)
                     }
                 } catch (e: Exception) {
@@ -868,7 +904,14 @@ class ChatService(
             appEventBus.tryEmit(AppEvent.ChatGenerationEnded(conversationId, senderName, null))
             session.messageQueue.pause()
             e.printStackTrace()
-            addError(e, conversationId, title = context.getString(R.string.error_title_generation))
+            val retryMessageId = session.state.value.retryTargetMessageId(regenerateNodeId)
+            addError(
+                e,
+                conversationId,
+                title = context.getString(R.string.error_title_generation),
+                retryable = true,
+                retryMessageId = retryMessageId,
+            )
             Logging.log(TAG, "runTurn: $e")
             Logging.log(TAG, e.stackTraceToString())
             return TurnResult.Failed

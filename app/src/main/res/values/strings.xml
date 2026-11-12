@@ -295,6 +295,8 @@
   <string name="chat_page_conversation_system_prompt_save">Save</string>
   <string name="chat_page_delete">Delete</string>
   <string name="chat_page_dismiss_error">Dismiss error</string>
+  <string name="chat_page_retry_error">Retry</string>
+  <string name="chat_page_retry_stale">The conversation has moved on, so this turn can no longer be retried. Regenerate from that message instead.</string>
   <string name="chat_page_edit_nickname">Edit Nickname</string>
   <string name="chat_page_edit_title">Edit title</string>
   <string name="chat_page_edit_title_warning">Please chat first before editing the title</string>

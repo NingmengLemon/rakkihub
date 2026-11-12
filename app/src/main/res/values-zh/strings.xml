@@ -295,6 +295,8 @@
   <string name="chat_page_conversation_system_prompt_save">保存</string>
   <string name="chat_page_delete">删除</string>
   <string name="chat_page_dismiss_error">关闭错误</string>
+  <string name="chat_page_retry_error">重试</string>
+  <string name="chat_page_retry_stale">对话已经继续，这一轮无法再重试。请在原消息上重新生成。</string>
   <string name="chat_page_edit_nickname">编辑昵称</string>
   <string name="chat_page_edit_title">编辑标题</string>
   <string name="chat_page_edit_title_warning">请先聊天再编辑标题吧</string>

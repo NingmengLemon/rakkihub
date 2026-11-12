@@ -41,7 +41,10 @@ import me.rerere.rikkahub.data.model.getAssistantOf
 import me.rerere.rikkahub.data.model.getChatModelOf
 import me.rerere.rikkahub.data.model.localFileUrls
 import me.rerere.rikkahub.data.repository.FavoriteRepository
+import me.rerere.ai.core.MessageRole
+import me.rerere.rikkahub.data.model.isAwaitingToolApproval
 import me.rerere.rikkahub.service.ChatError
+import me.rerere.rikkahub.service.hasLaterUserTurn
 import me.rerere.rikkahub.service.ChatService
 import me.rerere.rikkahub.service.RecordedRetryAttempt
 import me.rerere.rikkahub.ui.hooks.writeLastConversationId
@@ -233,6 +236,39 @@ class ChatVM(
         .stateIn(viewModelScope, SharingStarted.Eagerly, emptyList())
 
     fun dismissError(id: Uuid) = chatService.dismissError(id)
+
+    /** 生成失败卡片上的重试：回到错误记录的目标消息，重新生成那一轮。 */
+    fun retryError(error: ChatError) {
+        if (!error.retryable) return
+        if (conversationJob.value != null || conversation.value.isAwaitingToolApproval) {
+            showStopGeneratingFirstError()
+            return
+        }
+        val conversation = conversation.value
+        val targetId = error.retryMessageId
+            ?: conversation.currentMessages
+                .lastOrNull { it.role == MessageRole.USER && !it.isCompressionPrompt }
+                ?.id
+            ?: return
+        val targetNode = conversation.getMessageNodeByMessageId(targetId) ?: return
+        // USER 重试会 take(index + 1)，如果后面已经有新的用户轮次，重试会删掉后续对话
+        if (targetNode.role == MessageRole.USER && conversation.hasLaterUserTurn(targetNode.id)) {
+            showRetryStaleError()
+            return
+        }
+        chatService.regenerateAtMessage(_conversationId, targetId) {
+            chatService.dismissError(error.id)
+        }
+    }
+
+    private fun showRetryStaleError() {
+        chatService.addError(
+            error = IllegalStateException(context.getString(R.string.chat_page_retry_stale)),
+            conversationId = _conversationId,
+            title = context.getString(R.string.error_title_operation),
+            persistable = false,
+        )
+    }
 
     fun clearErrors() = chatService.clearErrors(_conversationId)
 

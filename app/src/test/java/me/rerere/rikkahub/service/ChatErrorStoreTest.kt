@@ -31,8 +31,9 @@ class ChatErrorStoreTest {
     private fun store() = ChatErrorStore(file, JsonInstant)
 
     @Test
-    fun `saved errors round trip title message timestamp and solution`() = runBlocking {
+    fun `saved errors round trip title message timestamp solution and retryable`() = runBlocking {
         val conversationId = Uuid.random()
+        val retryMessageId = Uuid.random()
         val timestamp = 1_700_000_000_000L
         val error = ChatError(
             title = "Generation failed",
@@ -40,6 +41,8 @@ class ChatErrorStoreTest {
             conversationId = conversationId,
             timestamp = timestamp,
             solution = ChatErrorSolution.CheckFastModelSettings,
+            retryable = true,
+            retryMessageId = retryMessageId,
         )
 
         store().save(listOf(error))
@@ -51,6 +54,8 @@ class ChatErrorStoreTest {
         assertEquals(conversationId, loaded.conversationId)
         assertEquals(timestamp, loaded.timestamp)
         assertEquals(ChatErrorSolution.CheckFastModelSettings, loaded.solution)
+        assertTrue(loaded.retryable)
+        assertEquals(retryMessageId, loaded.retryMessageId)
     }
 
     @Test
@@ -87,7 +92,10 @@ class ChatErrorStoreTest {
             """.trimIndent()
         )
 
-        assertNull(store().load().single().solution)
+        val loaded = store().load().single()
+        assertNull(loaded.solution)
+        assertFalse(loaded.retryable)
+        assertNull(loaded.retryMessageId)
     }
 
     @Test
