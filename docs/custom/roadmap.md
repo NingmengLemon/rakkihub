@@ -330,6 +330,11 @@
 - 压缩交互的改进：面板里临时换模型（换的时候这次请求去掉 `cache_control`）、思考强度单独可配、压缩请求的实时状态（tok/s、思考/输出阶段；流式已由 C51 完成）。
 - 把 `tools/i18n` 从 Bun 重写成 Python：现在本机跑不起来（没有 bun 和 `.env`），新文案只能手翻；重写后接回同一套 config，保留缺条目与未使用条目的检查。
 
+### Markdown 渲染能力
+
+- 调研 HTML `<svg>` 标签支持：分别看 Android 的 `MarkdownBlock`/BetterText、Web 的 Streamdown + `rehype-raw`、HTML 预览 WebView 三处是否保留内联 SVG、是否做清洗与尺寸约束、外链和工作区文件引用怎么解析；先查清安全边界和渲染差异，再决定是否放开、放开到哪一层。
+- Mermaid 支持版本升级：Web 端 `workbench-host.tsx` 目前从 `esm.sh/mermaid@11` 动态加载，`streamdown` 自带 mermaid 但 `controls.mermaid=false`，锁文件里另有一个 `mermaid@11.15.0`；调研统一版本、升级锁文件、是否在正文里直接渲染 mermaid，以及升级后的语法兼容、安全配置和导出回归。Android 端先确认 `MarkdownBlock` 对 mermaid 的支持程度，再决定是否同步。
+
 ### 重试、失败尝试与用量
 
 DSH 对照版本 `dsh-v0.2.1-rc.5`（`b830ec950f`）。结论：DSH 也不做逐 token 续传，重试单位是 agent step；失败 attempt 以 `assistant/attempt` 落日志但不进入模型历史，成功才写 `assistant/message`；用户主动停止且已有内容时写 `interrupted: true` 的 `assistant/message`。重试策略由 provider 拥有，默认对 `EMPTY_RESPONSE`、`RATE_LIMIT`、`SERVER`、`TIMEOUT`、`TRANSPORT` 最多重试 5 次，也就是最多 6 次请求；退避从 500ms 到 10s，10% 对称抖动，读取 `Retry-After`；每次重试先落 `llm/retry` 再等待。参考文件：`packages/llm/llm-retry`、`packages/llm/llm/src/retry-policy.ts`、`packages/core/agent-loop/src/agent.ts`、`packages/core/session/README.md`、`packages/llm/llm-deepseek/src/transport.ts`。
