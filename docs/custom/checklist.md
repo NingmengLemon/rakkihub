@@ -82,6 +82,7 @@
 | C72 | 上下文压缩按 token 预算 | 新增 |
 | C73 | 发送前上下文裁剪 | 新增 |
 | C74 | 上下文水位与压缩建议 | 新增 |
+| C75 | 自动重试次数可调 | 新增 |
 
 ## 明细
 
@@ -468,7 +469,7 @@
 
 - 落点：`ErrorParser.kt` 新增 `LlmFailureCode`、`LlmFailure`，`HttpException` 带上 code、HTTP status 和 `Retry-After`；`toHttpException`、`withResponse` 负责从响应归一化。五个聊天 provider 接线点（Claude、ChatCompletions、Responses、Google generateContent、Interactions）的非流式非 2xx 改抛 `HttpException`，流式 `onFailure` 的解析错误附加响应状态，空响应体也保留状态。`RetryPolicy` 改为按错误码允许列表重试，支持 `maxDelay`、10% jitter 和 `Retry-After`；`AgentLoop` 在流式和非流式路径把空回复包成 `EMPTY_RESPONSE`，进入同一重试循环。
 - 理由：原来只按 `IOException` 判断，HTTP 429/5xx 的 JSON 错误大多不重试；空回复直接以完成状态落库；重试固定 1s/2s/4s，没有 jitter，也不看服务端 `Retry-After`。
-- 合并注意：默认只重试 `RATE_LIMIT`、`SERVER`、`TIMEOUT`、`TRANSPORT`、`EMPTY_RESPONSE`；`AUTH`、`QUOTA`、`INVALID_REQUEST`、`CONTEXT_WINDOW_EXCEEDED` 不重试。`RetryPolicy` 的 `retryOn` 仍是可选的逃生口，自定义策略优先于码表。`Retry-After` 会被 `maxDelay` 截断，不做“服务端要求超过上限就放弃”的区分；jitter 固定 10%，测试用 `jitterRatio = 0`。空回复判定只把空白 Text/Reasoning 当空，Tool、图片、文档等 part 都算有内容；这会让某些本来静默成功的空回复变成重试后错误，是预期行为。结构化错误优先于 HTTP status，`insufficient_quota` 和嵌套 `QuotaFailure` 即使是 429 也归 `QUOTA` 且不重试；没有 `QuotaFailure` 的 Google `RESOURCE_EXHAUSTED` 429 仍是 `RATE_LIMIT`，可重试。非 JSON body 只按 HTTP status 分类，不拿 HTML 里的关键词做信号。流式 onFailure 解析失败时用响应状态兜底，不再把 HTML 502 当序列化异常。`ai/build.gradle.kts` 打开 `unitTests.isReturnDefaultValues` 只是为了 provider 接线测试能调用 `Log`，范围仅限 `ai` 单测。C3 的 `ai/` 小改动原则下，这是第八处分叉。
+- 合并注意：默认只重试 `RATE_LIMIT`、`SERVER`、`TIMEOUT`、`TRANSPORT`、`EMPTY_RESPONSE`；`AUTH`、`QUOTA`、`INVALID_REQUEST`、`CONTEXT_WINDOW_EXCEEDED` 不重试。C75 起 `NetworkSetting.maxRetries` 控制重试次数，默认 3，范围 0 到 10；0 表示开关仍开但不重试，开关关掉时恒为 `RetryPolicy.NONE`。`RetryPolicy` 的 `retryOn` 仍是可选的逃生口，自定义策略优先于码表。`Retry-After` 会被 `maxDelay` 截断，不做“服务端要求超过上限就放弃”的区分；jitter 固定 10%，测试用 `jitterRatio = 0`。空回复判定只把空白 Text/Reasoning 当空，Tool、图片、文档等 part 都算有内容；这会让某些本来静默成功的空回复变成重试后错误，是预期行为。结构化错误优先于 HTTP status，`insufficient_quota` 和嵌套 `QuotaFailure` 即使是 429 也归 `QUOTA` 且不重试；没有 `QuotaFailure` 的 Google `RESOURCE_EXHAUSTED` 429 仍是 `RATE_LIMIT`，可重试。非 JSON body 只按 HTTP status 分类，不拿 HTML 里的关键词做信号。流式 onFailure 解析失败时用响应状态兜底，不再把 HTML 502 当序列化异常。`ai/build.gradle.kts` 打开 `unitTests.isReturnDefaultValues` 只是为了 provider 接线测试能调用 `Log`，范围仅限 `ai` 单测。C3 的 `ai/` 小改动原则下，这是第八处分叉。
 - 手动验收：用假 provider 或代理返回 429 带 `Retry-After`、5xx 带 JSON/HTML、401、402、400 context、空回复，确认重试次数和间隔符合码表；退避等待中停止生成应立即结束；重试后工具副作用不重复。
 - 测试：`RetryTest` 覆盖码表、`Retry-After` 原值和超过 `maxDelay` 的截断、jitter 归零后的固定间隔、`QUOTA` 不重试和取消；`ErrorParserTest` 覆盖 401/402/429/5xx/400 context 分类、结构化 `insufficient_quota`、嵌套 `QuotaFailure`、Gemini `RESOURCE_EXHAUSTED` 429 仍可重试、`withResponse` 保留结构化 code、HTTP date、非 JSON body 只按 status 分类和 `Retry-After` 解析；`AgentLoopTest` 覆盖流式和非流式空回复重试后成功；`ChatCompletionsErrorTest` 用假 interceptor 验证 429 `insufficient_quota` 到 `HttpException(status/code/Retry-After)` 的接线；`:ai:testDebugUnitTest` 全量通过；`:app:assembleGithubDebug` 通过。`:app:testGithubDebugUnitTest` 仍为已知 Windows 7 失败，本轮没有改 app。
 
@@ -563,3 +564,10 @@
 - 理由：C72/C73 解决的是压缩计划和发送前裁剪，但用户看不到上下文还剩多少；长会话要等到 provider overflow 或裁掉旧内容才有反馈。用最近一次真实 usage 加尾部估算做建议条，既比本地估算准，也不需要新增设置或自动改历史。
 - 合并注意：不改 Room、Settings、官方兼容导出或 `ai/`；不自动压缩，不写历史，只显示建议并打开现有对话框；最近一条 usage 为 0 时跳过，找不到可用 usage 才整窗估算；旧消息没有 `lastUsage` 时 `contextTokens()` 会退回累计 `usage`，比例可能偏高；last usage 必须在最后一个检查点之后且 `createdAt` 晚于检查点，否则压缩/截断保留段的旧回复会把建议条常亮；删除或编辑更早消息不会插检查点，最后一条 usage 仍可能偏高；比例是近似值，尾部用本地估算，整窗估算不含 system prompt 和工具定义；`currentChatModel` 没有 contextLength、生成/压缩中或预览模式时不显示；banner 只在 Android 主聊天页，Web、悬浮窗和导出没有；建议条没有 dismiss 状态，压力降下来或压缩/截断后自然消失。
 - 测试：`ContextPressureTest` 覆盖真实 usage 加尾部、无 usage 回退估算、检查点前 usage 忽略、保留段创建更早的 usage 忽略、多个 usage 取最后一个、legacy 累计 usage、80% 阈值、ratio>1、失败回复与压缩 scratch 不计入、空会话、非正 contextLength；全量 `:app:testGithubDebugUnitTest` 773 条，7 条既有 Windows 失败未变；assemble、spotless、markdownlint 通过。没有设备验证：样本会话 usage 很小、模型 contextLength 默认 1M，banner 阈值只由 JVM 用例覆盖。
+
+### C75 自动重试次数可调
+
+- 落点：`NetworkSetting.maxRetries` 默认 3，范围 `0..NetworkSetting.MAX_RETRIES`（10）。`Settings.retryPolicy()` 在开关打开时用 `RetryPolicy.NETWORK.copy(maxRetries = 设置值)`，0 表示不重试；开关关闭仍是 `RetryPolicy.NONE`。网络设置页在 Automatic retry 开关下方加 `formItem` + Slider，0 到 10，trailing 显示当前值，开关关闭时整项隐藏；四份 locale 更新描述并新增「Retry attempts」。
+- 理由：C61 的自动重试次数固定为 3，用户无法调整重试次数；把次数放回网络设置，和已有的自动重试开关放在一起。
+- 合并注意：这是 Settings 结构变更，字段带默认值，老 settings JSON 没有该字段时按 3 解码；不改 Room 和 `ai/`。次数是全局的，不按 provider/会话区分；0 只关闭重试，不关闭开关本身；Slider 拖动时直接写 SettingsStore，没有额外确认；重试 attempt 行、倒计时、失败 usage 区分仍归 P2/P3，这次只做次数设置。官方兼容出口仍写整份 settings，因此 settings.json 会多一个官方不认识的 `networkSetting.maxRetries` 键，容忍方式和 C69 的 `confirmStopGeneration` 相同。
+- 测试：`SettingsRetryPolicyTest` 覆盖默认 3、开关关闭为 0、设置为 0、设置 5、越界钳到 10/0、旧 JSON 缺字段按 3 解码；全量 `:app:testGithubDebugUnitTest` 779 条，7 条既有 Windows 失败未变；assemble、spotless、markdownlint 通过。设备验收：`data.sync` 设备包 51 条全部通过（含 `BackupManagerTest`、`DatabaseBackupTest`、官方样本 v32/v31、官方备份恢复、applied outcome 等）；官方 RikkaHub 3.1.1 手动恢复、5GB 和 `.crosscheck` 换包名恢复跳过，原因是官方 App 3.1.1 的设置入口在当前设备无法通过自动化进入，且 C69 已用官方 3.1.1 恢复过同类自定义 Settings 字段，51 条已覆盖 settings 序列化与官方样本；跳过由请求方确认。设置页滑块没有单独设备点验。

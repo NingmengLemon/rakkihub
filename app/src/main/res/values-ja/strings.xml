@@ -1176,7 +1176,9 @@ mDNSアドレス: .localホスト名を使用し、IPを知らなくても同じ
   <string name="setting_files_page_clean_range_keep">使用中のファイルは残します。</string>
   <string name="setting_files_page_clean_range_description">完全に削除するファイルを選択してください。この操作は元に戻せません。</string>
   <string name="setting_page_preferences_network_auto_retry">自動再試行</string>
-  <string name="setting_page_preferences_network_auto_retry_desc">ネットワーク、レート制限、サーバー、空応答などの一時的な失敗時に、モデルリクエストを最大3回再試行します。</string>
+  <string name="setting_page_preferences_network_auto_retry_desc">ネットワーク、レート制限、サーバー、空応答などの一時的な失敗時に、設定した回数だけモデルリクエストを再試行します。</string>
+  <string name="setting_page_preferences_network_auto_retry_count">再試行回数</string>
+  <string name="setting_page_preferences_network_auto_retry_count_desc">最初のリクエスト後に最大何回再試行するか。0 で無効、最大 10 回。</string>
   <string name="search_page_scope_current_assistant">現在のアシスタント</string>
   <string name="search_page_scope_all_assistants">すべてのアシスタント</string>
   <string name="chat_page_queue_resume">送信を再開</string>

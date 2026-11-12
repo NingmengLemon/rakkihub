@@ -43,6 +43,7 @@ import me.rerere.rikkahub.data.ai.transformers.onGenerationFinish
 import me.rerere.rikkahub.data.ai.transformers.transformThinkTags
 import me.rerere.rikkahub.data.ai.transformers.transforms
 import me.rerere.rikkahub.data.ai.transformers.visualTransforms
+import me.rerere.rikkahub.data.datastore.NetworkSetting
 import me.rerere.rikkahub.data.datastore.Settings
 import me.rerere.rikkahub.data.datastore.findProvider
 import me.rerere.rikkahub.data.model.Assistant
@@ -363,8 +364,14 @@ internal fun backgroundTextGenerationParams(
     sessionId = sessionId.toString(),
 )
 
-internal fun Settings.retryPolicy() =
-    if (networkSetting.enableAutoRetry) RetryPolicy.NETWORK else RetryPolicy.NONE
+internal fun Settings.retryPolicy(): RetryPolicy =
+    if (networkSetting.enableAutoRetry) {
+        RetryPolicy.NETWORK.copy(
+            maxRetries = networkSetting.maxRetries.coerceIn(0, NetworkSetting.MAX_RETRIES),
+        )
+    } else {
+        RetryPolicy.NONE
+    }
 
 /** 压缩流式请求的结果；finishReason 是提供商原始字符串，调用方据此判断是否被截断 */
 internal data class CompressionStreamResult(

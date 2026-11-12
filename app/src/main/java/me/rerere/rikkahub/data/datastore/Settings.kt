@@ -117,7 +117,13 @@ data class NetworkSetting(
     val proxyUsername: String = "",
     val proxyPassword: String = "",
     val enableAutoRetry: Boolean = true,
-)
+    // 自动重试的最大次数（不包含首次请求）；0 表示只发一次，不重试
+    val maxRetries: Int = 3,
+) {
+    companion object {
+        const val MAX_RETRIES = 10
+    }
+}
 
 @Serializable
 enum class ChatFontFamily {

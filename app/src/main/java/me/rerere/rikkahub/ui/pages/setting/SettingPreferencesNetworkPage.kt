@@ -19,6 +19,7 @@ import androidx.compose.material3.LargeFlexibleTopAppBar
 import androidx.compose.material3.LoadingIndicator
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.Slider
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBarDefaults
@@ -50,9 +51,11 @@ import me.rerere.hugeicons.stroke.View
 import me.rerere.hugeicons.stroke.ViewOff
 import me.rerere.rikkahub.BuildConfig
 import me.rerere.rikkahub.R
+import me.rerere.rikkahub.data.datastore.NetworkSetting
 import me.rerere.rikkahub.data.remote.toProxyOrNull
 import me.rerere.rikkahub.ui.components.nav.BackButton
 import me.rerere.rikkahub.ui.components.ui.CardGroup
+import me.rerere.rikkahub.ui.components.ui.CardGroupValue
 import me.rerere.rikkahub.ui.components.ui.switchItem
 import me.rerere.rikkahub.ui.context.LocalToaster
 import me.rerere.rikkahub.ui.theme.CustomColors
@@ -61,6 +64,7 @@ import okhttp3.OkHttpClient
 import okhttp3.Request
 import org.koin.androidx.compose.koinViewModel
 import org.koin.compose.koinInject
+import kotlin.math.roundToInt
 
 private const val PROXY_TEST_URL = "https://www.google.com/generate_204"
 
@@ -296,6 +300,37 @@ fun SettingPreferencesNetworkPage(vm: SettingVM = koinViewModel()) {
                             Text(stringResource(R.string.setting_page_preferences_network_auto_retry))
                         },
                     )
+                    if (settings.networkSetting.enableAutoRetry) {
+                        formItem(
+                            headlineContent = {
+                                Text(stringResource(R.string.setting_page_preferences_network_auto_retry_count))
+                            },
+                            supportingContent = {
+                                Text(stringResource(R.string.setting_page_preferences_network_auto_retry_count_desc))
+                            },
+                            trailingContent = {
+                                CardGroupValue("${settings.networkSetting.maxRetries}")
+                            },
+                        ) {
+                            Slider(
+                                value = settings.networkSetting.maxRetries.toFloat(),
+                                onValueChange = { value ->
+                                    val retries = value.roundToInt()
+                                        .coerceIn(0, NetworkSetting.MAX_RETRIES)
+                                    if (retries != settings.networkSetting.maxRetries) {
+                                        vm.updateSettings {
+                                            it.copy(
+                                                networkSetting = it.networkSetting.copy(maxRetries = retries),
+                                            )
+                                        }
+                                    }
+                                },
+                                valueRange = 0f..NetworkSetting.MAX_RETRIES.toFloat(),
+                                steps = NetworkSetting.MAX_RETRIES - 1,
+                                modifier = Modifier.fillMaxWidth(),
+                            )
+                        }
+                    }
                 }
             }
             item {

@@ -155,3 +155,11 @@ C69 给 `DisplaySetting` 增加 `confirmStopGeneration` 后，除 search 人工�
 - 换包名 `.crosscheck` 恢复通过，绝对引用改写到新包名，图片正常。
 - 附件计数：原始官方 780 = 682 个 5GB 内容名 + 98 个旧 UUID；v32 的 61 个与原集合重叠 25、新增 36，目录变 816；5GB 的 682 个全部已在原集合内、新增 0，目录仍 816。验收后官方从备份还原为 780，fork 为 168/61。
 - 未记录：search 人工闸门（acceptance 没有固定查询集；官方恢复不重建 FTS，5GB 官方数据搜 iOS 为空）与 crosscheck 的 `Rebuilt search indexes after restore` 日志。
+
+## 2026-11-12 C75 重跑
+
+C75 给 `NetworkSetting` 增加 `maxRetries`（默认 3）。这次只新增带默认值的自定义设置字段，不改 Room/schema、数据库表、附件和官方兼容出口结构；官方兼容出口写整份 settings，因此 `settings.json` 会多一个官方不认识的 `networkSetting.maxRetries` 键，容忍方式与 C69 的 `confirmStopGeneration` 相同。按上面的标准重跑设备数据验收：
+
+- `data.sync` 设备包 51 条全部通过（`BackupManagerTest` 26、`DatabaseBackupTest` 3、`OfficialBackupRestoreAcceptanceTest` 2、`RestoreAppliedOutcomeTest` 1、`OfficialDatabaseConverterTest` 2、`OfficialDatabaseReaderTest` 7、`OfficialDatabaseWriterTest` 4、`OfficialForeignAttachmentPathsTest` 4、`OfficialSampleAcceptanceTest` 2）。
+- v32/v31 官方样本读取与转换、同安装自家恢复、官方备份恢复、applied outcome 都通过；旧 settings JSON 没有 `maxRetries` 时按 3 解码，`SettingsRetryPolicyTest` 覆盖。
+- 官方 RikkaHub 3.1.1 手动恢复、5GB 和 `.crosscheck` 换包名恢复跳过，由请求方确认：官方 App 3.1.1 的设置入口在当前设备无法通过自动化进入（抽屉底部 Menu 只打开 Image Generation，右侧按钮是更新日志，Assistant 页只有 Back/Add，临时放大显示也未出现 Settings），而 C69 已用官方 3.1.1 恢复过同类自定义 Settings 字段，51 条已覆盖自家导出/恢复和官方样本；本次没有新增路径/附件/Room 变化，`.crosscheck` 的 C25 路径改写不受影响。设置页滑块也没有单独设备点验。
