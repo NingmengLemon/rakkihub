@@ -73,6 +73,7 @@ import me.rerere.rikkahub.data.model.contextPressure
 import me.rerere.rikkahub.data.model.isAwaitingToolApproval
 import me.rerere.rikkahub.data.repository.WorkspaceRepository
 import me.rerere.rikkahub.service.ChatError
+import me.rerere.rikkahub.service.RecordedRetryAttempt
 import me.rerere.rikkahub.ui.components.ai.ChatAttachmentPickerActions
 import me.rerere.rikkahub.ui.components.ai.ChatInput
 import me.rerere.rikkahub.ui.components.ai.ContextPressureBanner
@@ -116,6 +117,8 @@ fun ChatPage(id: Uuid, text: String?, files: List<Uri>, nodeId: Uuid? = null) {
     val currentChatModel by vm.currentChatModel.collectAsStateWithLifecycle()
     val assistant by vm.assistant.collectAsStateWithLifecycle()
     val errors by vm.errors.collectAsStateWithLifecycle()
+    val retryAttempts by vm.retryAttempts.collectAsStateWithLifecycle()
+    val retrying by vm.retrying.collectAsStateWithLifecycle()
 
     // 新会话发出第一条消息前，跟随抽屉当前选中的文件夹（#2133）
     val drawerVm: ChatDrawerVM = koinViewModel(viewModelStoreOwner = LocalContext.current as ComponentActivity)
@@ -228,6 +231,8 @@ fun ChatPage(id: Uuid, text: String?, files: List<Uri>, nodeId: Uuid? = null) {
                     currentChatModel = currentChatModel,
                     bigScreen = true,
                     errors = errors,
+                    retryAttempts = retryAttempts,
+                    retryInProgress = retrying,
                     onDismissError = { vm.dismissError(it) },
                     onClearAllErrors = { vm.clearErrors() },
                 )
@@ -261,6 +266,8 @@ fun ChatPage(id: Uuid, text: String?, files: List<Uri>, nodeId: Uuid? = null) {
                     currentChatModel = currentChatModel,
                     bigScreen = false,
                     errors = errors,
+                    retryAttempts = retryAttempts,
+                    retryInProgress = retrying,
                     onDismissError = { vm.dismissError(it) },
                     onClearAllErrors = { vm.clearErrors() },
                 )
@@ -287,6 +294,8 @@ private fun ChatPageContent(
     assistant: Assistant,
     currentChatModel: Model?,
     errors: List<ChatError>,
+    retryAttempts: List<RecordedRetryAttempt> = emptyList(),
+    retryInProgress: Boolean = false,
     onDismissError: (Uuid) -> Unit,
     onClearAllErrors: () -> Unit,
 ) {
@@ -468,6 +477,8 @@ private fun ChatPageContent(
                 settings = setting,
                 hazeState = hazeState,
                 errors = errors,
+                retryAttempts = retryAttempts,
+                retryInProgress = retryInProgress,
                 onDismissError = onDismissError,
                 onClearAllErrors = onClearAllErrors,
                 onRegenerate = {

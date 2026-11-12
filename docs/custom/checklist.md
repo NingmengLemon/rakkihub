@@ -83,6 +83,7 @@
 | C73 | 发送前上下文裁剪 | 新增 |
 | C74 | 上下文水位与压缩建议 | 新增 |
 | C75 | 自动重试次数可调 | 新增 |
+| C76 | 重试 attempt 可见化 | 新增 |
 
 ## 明细
 
@@ -570,4 +571,11 @@
 - 落点：`NetworkSetting.maxRetries` 默认 3，范围 `0..NetworkSetting.MAX_RETRIES`（10）。`Settings.retryPolicy()` 在开关打开时用 `RetryPolicy.NETWORK.copy(maxRetries = 设置值)`，0 表示不重试；开关关闭仍是 `RetryPolicy.NONE`。网络设置页在 Automatic retry 开关下方加 `formItem` + Slider，0 到 10，trailing 显示当前值，开关关闭时整项隐藏；四份 locale 更新描述并新增「Retry attempts」。
 - 理由：C61 的自动重试次数固定为 3，用户无法调整重试次数；把次数放回网络设置，和已有的自动重试开关放在一起。
 - 合并注意：这是 Settings 结构变更，字段带默认值，老 settings JSON 没有该字段时按 3 解码；不改 Room 和 `ai/`。次数是全局的，不按 provider/会话区分；0 只关闭重试，不关闭开关本身；Slider 拖动时直接写 SettingsStore，没有额外确认；重试 attempt 行、倒计时、失败 usage 区分仍归 P2/P3，这次只做次数设置。官方兼容出口仍写整份 settings，因此 settings.json 会多一个官方不认识的 `networkSetting.maxRetries` 键，容忍方式和 C69 的 `confirmStopGeneration` 相同。
-- 测试：`SettingsRetryPolicyTest` 覆盖默认 3、开关关闭为 0、设置为 0、设置 5、越界钳到 10/0、旧 JSON 缺字段按 3 解码；全量 `:app:testGithubDebugUnitTest` 779 条，7 条既有 Windows 失败未变；assemble、spotless、markdownlint 通过。设备验收：`data.sync` 设备包 51 条全部通过（含 `BackupManagerTest`、`DatabaseBackupTest`、官方样本 v32/v31、官方备份恢复、applied outcome 等）；官方 RikkaHub 3.1.1 手动恢复、5GB 和 `.crosscheck` 换包名恢复跳过，原因是官方 App 3.1.1 的设置入口在当前设备无法通过自动化进入，且 C69 已用官方 3.1.1 恢复过同类自定义 Settings 字段，51 条已覆盖 settings 序列化与官方样本；跳过由请求方确认。设置页滑块没有单独设备点验。
+- 测试：`SettingsRetryPolicyTest` 覆盖默认 3、开关关闭为 0、设置为 0、设置 5、越界钳到 10/0、旧 JSON 缺字段按 3 解码；全量 `:app:testGithubDebugUnitTest` 779 条，7 条既有 Windows 失败未变；assemble、spotless、markdownlint 通过。设备验收：`data.sync` 设备包 51 条全部通过（含 `BackupManagerTest`、`DatabaseBackupTest`、官方样本 v32/v31、官方备份恢复、applied outcome 等）；官方 RikkaHub 3.1.1 手动恢复、5GB 和 `.crosscheck` 换包名恢复跳过，原因是官方 App 3.1.1 的设置入口在当前设备无法通过自动化进入，且 C69 已用官方 3.1.1 恢复过同类自定义 Settings 字段，51 条已覆盖 settings 序列化与官方样本；跳过由请求方确认。设置页滑块没有单独设备点验。C76 起 attempt 行和倒计时已补，错误卡片重试本步与失败 usage 区分仍留 P2/P3。
+
+### C76 重试 attempt 可见化
+
+- 落点：`ConversationSession.retryAttempts` 保存 `RecordedRetryAttempt`（`RetryAttempt` + 进入等待的时间），`ChatService` 收到 `AgentEvent.Retrying` 时追加，`runTurn`（含审批恢复）/`runCompressionTurn` 新一轮开始和 `replace` 时清空，最多保留 20 条。`ChatList` 把 `RetryAttemptsCard` 和错误卡片放进同一个底部浮层 Column，重试记录在错误卡片上方；卡片限高 240dp、可滚动并自动滚到最新 attempt，浮层实际高度通过 `onSizeChanged` 计入 LazyColumn 底部 contentPadding，最后一条消息可以滚到浮层上方；选择模式隐藏重试卡。标题、编号/原因、计划等待秒数；最新一条在 `retrying` 为 true 时由 `RetryCountdown` 每 250ms 刷新「N 秒后重试」，到点显示「正在重试」。`retrying` 是独立状态，不再借 `processingStatus`，避免 OCR 等步骤误点亮倒计时。成功或失败后卡片保留到下一轮，失败时和错误卡片同屏。纯函数 `retryRemainingSeconds` 和会话记录/清空有单测。
+- 理由：C61/C75 的重试状态只有一行 `Retrying (n/m)`，失败原因和等待时间在状态清掉后就看不到了；把 attempt 做成会话内存里的记录，既不落盘，也不改消息历史，用户能看到这一轮到底重试了几次、每次为什么失败、等了多久。
+- 合并注意：只在 Android 主聊天页，Web、悬浮窗和导出没有；记录只在内存，进程死亡后随 C67 的 `INTERRUPTED` 恢复消失，离开聊天页超过 idle 回收时间（约 5 秒）也会丢；新一轮发送、压缩、审批恢复或 replace 会清空，失败后保留到下一次发送；最多 20 条，列表限高滚动，正常受 C75 的 0..10 次限制；原因取 `cause.message` 前 160 字符且 UI 最多两行，可能包含 provider 的网络细节；倒计时按墙钟，应用在后台时不主动刷新，回前台后按真实时间校正；显示的是计划退避向上取整，取消等待时可能比实际等待偏大；多步工具调用每一步的 `withRetry` 从 1 重新计数，同一卡片可能出现两次 `Attempt 1/3`；没有加错误卡片重试按钮，失败 attempt 的 usage 仍需 P3 的 Room 字段；不改 Room、Settings、备份或 `ai/`。
+- 测试：`RetryAttemptsTest` 覆盖倒计时向上取整/到点归零/超过截止时间、会话记录和清空、最多保留 20 条、replace 清空；全量 `:app:testGithubDebugUnitTest` 783 条，7 条既有 Windows 失败未变；assemble、spotless、markdownlint 通过。设备手动两段：无效 Claude provider 重试中看到 `Retry attempts`、`Attempt 1/3`、连接原因和 `Retrying now`；等三次重试都失败后，错误卡片 `Message generation failed` 出现在重试记录下方，两者同屏不遮挡。测试消息已清掉，fork 数据恢复为 168/61；底部留白和卡片限高滚动由代码审查/编译覆盖，未在设备上重新截失败后的滚动状态。

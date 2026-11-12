@@ -1179,6 +1179,12 @@ mDNSアドレス: .localホスト名を使用し、IPを知らなくても同じ
   <string name="setting_page_preferences_network_auto_retry_desc">ネットワーク、レート制限、サーバー、空応答などの一時的な失敗時に、設定した回数だけモデルリクエストを再試行します。</string>
   <string name="setting_page_preferences_network_auto_retry_count">再試行回数</string>
   <string name="setting_page_preferences_network_auto_retry_count_desc">最初のリクエスト後に最大何回再試行するか。0 で無効、最大 10 回。</string>
+  <string name="chat_retry_attempts_title">再試行の記録</string>
+  <string name="chat_retry_attempt_row">%1$d/%2$d 回目</string>
+  <string name="chat_retry_attempt_waited">%1$d 秒待機</string>
+  <string name="chat_retry_attempt_countdown">%1$d 秒後に再試行</string>
+  <string name="chat_retry_attempt_now">再試行中</string>
+  <string name="chat_retry_attempt_unknown">不明なエラー</string>
   <string name="search_page_scope_current_assistant">現在のアシスタント</string>
   <string name="search_page_scope_all_assistants">すべてのアシスタント</string>
   <string name="chat_page_queue_resume">送信を再開</string>

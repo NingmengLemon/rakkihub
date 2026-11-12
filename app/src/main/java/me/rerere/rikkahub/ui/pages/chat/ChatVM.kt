@@ -43,6 +43,7 @@ import me.rerere.rikkahub.data.model.localFileUrls
 import me.rerere.rikkahub.data.repository.FavoriteRepository
 import me.rerere.rikkahub.service.ChatError
 import me.rerere.rikkahub.service.ChatService
+import me.rerere.rikkahub.service.RecordedRetryAttempt
 import me.rerere.rikkahub.ui.hooks.writeLastConversationId
 import me.rerere.rikkahub.ui.hooks.ChatInputState
 import me.rerere.rikkahub.web.ApiException
@@ -91,6 +92,12 @@ class ChatVM(
     val processingStatus: StateFlow<String?> =
         chatService
             .getProcessingStatusFlow(_conversationId)
+
+    val retryAttempts: StateFlow<List<RecordedRetryAttempt>> =
+        chatService.getRetryAttemptsFlow(_conversationId)
+
+    val retrying: StateFlow<Boolean> =
+        chatService.getRetryingFlow(_conversationId)
 
     val conversationJobs = chatService
         .getConversationJobs()

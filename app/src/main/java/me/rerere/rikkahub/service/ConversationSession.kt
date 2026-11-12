@@ -12,10 +12,12 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.collect
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
+import me.rerere.ai.agent.RetryAttempt
 import me.rerere.ai.core.MessageRole
 import me.rerere.ai.ui.MessageStatus
 import me.rerere.ai.ui.UIMessagePart
@@ -437,6 +439,8 @@ class ConversationSession(
             }
         }
         processingStatus.value = null
+        retryAttempts.value = emptyList()
+        retrying.value = false
         replyMessageId.value = null
         pendingApprovalTurn = null
         generationStartedAt.value = null
@@ -482,6 +486,21 @@ class ConversationSession(
 
     // 处理状态（如 OCR 识别中）
     val processingStatus = MutableStateFlow<String?>(null)
+
+    // 当前这一轮自动重试的记录；只活在内存，新的一轮开始时清空
+    val retryAttempts = MutableStateFlow<List<RecordedRetryAttempt>>(emptyList())
+    // 与 processingStatus 分开：OCR 等步骤也会写 processingStatus，不能用它判断是否在等重试
+    val retrying = MutableStateFlow(false)
+
+    fun recordRetryAttempt(attempt: RetryAttempt) {
+        retrying.value = true
+        retryAttempts.update { (it + RecordedRetryAttempt(attempt)).takeLast(20) }
+    }
+
+    fun clearRetryAttempts() {
+        retryAttempts.value = emptyList()
+        retrying.value = false
+    }
 
     // 最近一轮正在写的助手消息，这一轮还没有输出时为空。重新生成较早的消息时它不在会话末尾，
     // 生成期间那个节点还可能被切到别的分支，只能按 id 找

@@ -54,6 +54,7 @@ import androidx.compose.material3.surfaceColorAtElevation
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -73,6 +74,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.CompositingStrategy
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalScrollCaptureInProgress
 import androidx.compose.ui.geometry.Offset
@@ -103,6 +105,8 @@ import me.rerere.rikkahub.data.model.contextLimitBoundaryIndex
 import me.rerere.rikkahub.data.model.getAssistantOf
 import me.rerere.rikkahub.data.model.withConversation
 import me.rerere.rikkahub.service.ChatError
+import me.rerere.rikkahub.service.RecordedRetryAttempt
+import me.rerere.rikkahub.ui.components.ai.RetryAttemptsCard
 import me.rerere.rikkahub.ui.components.message.ChatMessage
 import me.rerere.rikkahub.ui.components.message.CompressionCard
 import me.rerere.rikkahub.ui.components.ui.ErrorCardsDisplay
@@ -129,6 +133,8 @@ fun ChatList(
     settings: Settings,
     hazeState: HazeState,
     errors: List<ChatError> = emptyList(),
+    retryAttempts: List<RecordedRetryAttempt> = emptyList(),
+    retryInProgress: Boolean = false,
     onDismissError: (Uuid) -> Unit = {},
     onClearAllErrors: () -> Unit = {},
     onRegenerate: (UIMessage) -> Unit = {},
@@ -173,6 +179,8 @@ fun ChatList(
                 settings = settings,
                 hazeState = hazeState,
                 errors = errors,
+                retryAttempts = retryAttempts,
+                retryInProgress = retryInProgress,
                 onDismissError = onDismissError,
                 onClearAllErrors = onClearAllErrors,
                 onRegenerate = onRegenerate,
@@ -224,6 +232,8 @@ private fun ChatListNormal(
     settings: Settings,
     hazeState: HazeState,
     errors: List<ChatError>,
+    retryAttempts: List<RecordedRetryAttempt> = emptyList(),
+    retryInProgress: Boolean = false,
     onDismissError: (Uuid) -> Unit,
     onClearAllErrors: () -> Unit,
     onRegenerate: (UIMessage) -> Unit,
@@ -247,6 +257,8 @@ private fun ChatListNormal(
     var isRecentScroll by remember { mutableStateOf(false) }
     val conversationUpdated by rememberUpdatedState(conversation)
     val density = LocalDensity.current
+    // 底部错误/重试浮层会盖住内容，把它的实际高度加到列表底部留白，最后一条可以滚到浮层上方
+    var bottomOverlayHeight by remember { mutableIntStateOf(0) }
     val activity = LocalContext.current as? me.rerere.rikkahub.RouteActivity
 
     DisposableEffect(Unit) {
@@ -352,12 +364,13 @@ private fun ChatListNormal(
             }
             val compressionStreaming =
                 loading && compressionReplyNode == conversation.messageNodes.lastOrNull()
+            val bottomOverlayDp = with(density) { bottomOverlayHeight.toDp() }
             LazyColumn(
                 state = state,
                 // 顶部留白放进 contentPadding，让消息可以滚动到透明标题栏下面
                 contentPadding = PaddingValues(16.dp) + PaddingValues(
                     top = innerPadding.calculateTopPadding(),
-                    bottom = 32.dp + innerPadding.calculateBottomPadding(),
+                    bottom = 32.dp + innerPadding.calculateBottomPadding() + bottomOverlayDp,
                 ),
                 horizontalAlignment = Alignment.CenterHorizontally,
                 verticalArrangement = Arrangement.spacedBy(12.dp),
@@ -490,16 +503,28 @@ private fun ChatListNormal(
                 .fillMaxSize()
                 .padding(innerPadding),
         ) {
-            // 错误消息卡片
-            ErrorCardsDisplay(
-                errors = errors,
-                onDismissError = onDismissError,
-                onClearAllErrors = onClearAllErrors,
-                autoDismiss = settings.displaySetting.autoDismissErrorCards,
+            // 错误消息卡片和重试记录放在同一个底部浮层里：错误卡片不会盖住重试记录
+            Column(
                 modifier = Modifier
                     .align(Alignment.BottomCenter)
                     .zIndex(5f)
-            )
+                    .onSizeChanged { bottomOverlayHeight = it.height },
+                horizontalAlignment = Alignment.CenterHorizontally,
+            ) {
+                if (!selecting && retryAttempts.isNotEmpty()) {
+                    RetryAttemptsCard(
+                        attempts = retryAttempts,
+                        isRetrying = retryInProgress,
+                        modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
+                    )
+                }
+                ErrorCardsDisplay(
+                    errors = errors,
+                    onDismissError = onDismissError,
+                    onClearAllErrors = onClearAllErrors,
+                    autoDismiss = settings.displaySetting.autoDismissErrorCards,
+                )
+            }
 
             // 完成选择
             AnimatedVisibility(

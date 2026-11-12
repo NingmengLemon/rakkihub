@@ -797,6 +797,12 @@
   <string name="setting_page_preferences_network_auto_retry_desc">Retry model requests on transient network, rate-limit, server, or empty-response failures, using the configured number of attempts.</string>
   <string name="setting_page_preferences_network_auto_retry_count">Retry attempts</string>
   <string name="setting_page_preferences_network_auto_retry_count_desc">How many times to retry after the first request. 0 disables retries; up to 10.</string>
+  <string name="chat_retry_attempts_title">Retry attempts</string>
+  <string name="chat_retry_attempt_row">Attempt %1$d/%2$d</string>
+  <string name="chat_retry_attempt_waited">Waited %1$ds</string>
+  <string name="chat_retry_attempt_countdown">Retrying in %1$ds</string>
+  <string name="chat_retry_attempt_now">Retrying now</string>
+  <string name="chat_retry_attempt_unknown">Unknown error</string>
   <string name="setting_page_donate">Donate</string>
   <string name="setting_page_donate_desc">If you like it, sponsor the author\'s work</string>
   <string name="setting_page_dynamic_color">Dynamic Color</string>

@@ -1177,6 +1177,12 @@
   <string name="setting_page_preferences_network_auto_retry_desc">網路、限流、伺服器或空回應等暫時性失敗時自動重試模型請求，次數由下方設定決定。</string>
   <string name="setting_page_preferences_network_auto_retry_count">重試次數</string>
   <string name="setting_page_preferences_network_auto_retry_count_desc">首次請求失敗後最多重試幾次。0 表示不重試，最多 10 次。</string>
+  <string name="chat_retry_attempts_title">重試記錄</string>
+  <string name="chat_retry_attempt_row">第 %1$d/%2$d 次</string>
+  <string name="chat_retry_attempt_waited">等待 %1$d 秒</string>
+  <string name="chat_retry_attempt_countdown">%1$d 秒後重試</string>
+  <string name="chat_retry_attempt_now">正在重試</string>
+  <string name="chat_retry_attempt_unknown">未知錯誤</string>
   <string name="search_page_scope_current_assistant">目前助手</string>
   <string name="search_page_scope_all_assistants">全部助手</string>
   <string name="chat_page_queue_resume">恢復傳送</string>

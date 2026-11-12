@@ -364,6 +364,12 @@ class ChatService(
     fun getProcessingStatusFlow(conversationId: Uuid): StateFlow<String?> =
         sessionManager.getProcessingStatusFlow(conversationId)
 
+    fun getRetryAttemptsFlow(conversationId: Uuid): StateFlow<List<RecordedRetryAttempt>> =
+        sessionManager.getRetryAttemptsFlow(conversationId)
+
+    fun getRetryingFlow(conversationId: Uuid): StateFlow<Boolean> =
+        sessionManager.getRetryingFlow(conversationId)
+
     fun getReplyMessageIdFlow(conversationId: Uuid): StateFlow<Uuid?> =
         sessionManager.getReplyMessageIdFlow(conversationId)
 
@@ -706,6 +712,7 @@ class ChatService(
         val conversationId = session.id
         // 先清理上一轮状态；确定历史后，仅为真正的续写恢复消息 ID。
         session.replyMessageId.value = null
+        session.clearRetryAttempts()
         // 生成开始前失败时通知只用来取消 Live Update，用不到发送者名称
         var senderName = ""
         try {
@@ -781,6 +788,7 @@ class ChatService(
                             is AgentEvent.MessageUpdated -> {
                                 // 生成过程中只有网络重试的提示会留着，收到新内容说明重试已经成功
                                 session.processingStatus.value = null
+                                session.retrying.value = false
                                 val updated = event.message.copy(isGenerating = true)
                                 session.update { it.upsertMessage(replyNodeId, updated) }
                                 session.replyMessageId.value = updated.id
@@ -793,6 +801,7 @@ class ChatService(
 
                             is AgentEvent.Retrying -> {
                                 logRetry(event.attempt)
+                                session.recordRetryAttempt(event.attempt)
                                 session.processingStatus.value = retryStatus(event.attempt)
                             }
 
@@ -810,6 +819,7 @@ class ChatService(
                         // 先停掉 saver 并等它退出，再全量落库；反过来会在写锁上互相等待
                         saver.cancelAndJoin()
                         session.processingStatus.value = null
+                        session.retrying.value = false
                         val settlementStatus = resolveSettlementStatus(failure, finishReason)
                         if (settlementStatus != MessageStatus.COMPLETE) {
                             session.markReplyStatus(settlementStatus)
@@ -992,6 +1002,7 @@ class ChatService(
         val incarnation = session.incarnation
         try {
             ensureInitialized(session)
+            session.clearRetryAttempts()
             val turnIncarnation = session.incarnation
             val settings = settingsStore.awaitLoaded()
             // 上一轮失败的压缩对是 scratch：计划里先排除，否则它们会被当成普通历史，
@@ -1116,6 +1127,7 @@ class ChatService(
                         // 先停 saver 并等它退出，再全量收尾；反过来会在写锁上互相等待
                         saver.cancelAndJoin()
                         session.processingStatus.value = null
+                        session.retrying.value = false
                         val resultSummary = summary
                         if (resultSummary != null) {
                             session.replyMessageId.value = null

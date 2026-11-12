@@ -99,6 +99,12 @@ class ConversationSessionManager(
     fun getProcessingStatusFlow(conversationId: Uuid): StateFlow<String?> =
         getOrCreate(conversationId).processingStatus
 
+    fun getRetryAttemptsFlow(conversationId: Uuid): StateFlow<List<RecordedRetryAttempt>> =
+        getOrCreate(conversationId).retryAttempts
+
+    fun getRetryingFlow(conversationId: Uuid): StateFlow<Boolean> =
+        getOrCreate(conversationId).retrying
+
     fun getReplyMessageIdFlow(conversationId: Uuid): StateFlow<Uuid?> =
         getOrCreate(conversationId).replyMessageId
 
