@@ -42,7 +42,7 @@ class BackupVM(
     val webDavBackupItems = MutableStateFlow<UiState<List<WebDavBackupItem>>>(UiState.Idle)
 
     /** 本地导出/导入的选择项。聊天记录始终包含，这里只放用户能关掉的附件与工作区。 */
-    val localBackupItems = MutableStateFlow(WebDavConfig.BackupItem.DEFAULT_SELECTION)
+    val localBackupItems = MutableStateFlow(WebDavConfig.BackupItem.LOCAL_DEFAULT_SELECTION)
 
     private val _exportProgress = MutableStateFlow<BackupProgress?>(null)
 

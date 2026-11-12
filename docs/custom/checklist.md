@@ -86,6 +86,7 @@
 | C76 | 重试 attempt 可见化 | 新增 |
 | C77 | 错误卡片重试本步 | 新增 |
 | C78 | 工具失败日志分级 | 改造 |
+| C79 | 本地导出默认包含工作区文件 | 改造 |
 
 ## 明细
 
@@ -264,8 +265,8 @@
 
 ### C29 备份可选包含工作区文件
 
-- 落点：`WebDavConfig.BackupItem` 增加 `WORKSPACES`（默认不在 `items` 里，`DEFAULT_SELECTION` 由设置默认与本地导出页共用，所以默认关）、两个备份页的多选标签与 8 个 locale 的 `backup_page_workspaces`；`BackupManager.createBackup` 增加 `includeWorkspaceFiles`，新增 `collectWorkspaceFiles`（按 `workspaceDao()` 的工作区逐个走 `<root>/files`，跳过 `linux/` 与 `tmp/`，root 不合法时记 warning 并跳过）；`stageRestore` 增加同名参数与 `isWorkspaceFile` 校验（形状无条件校验，不看勾选）；官方兼容出口编码 settings 前把 `WORKSPACES` 从 `webDavConfig.items` 里滤掉；目录名改用 `WorkspaceManager.BASE_DIR_NAME` 与 `FILES_DIR`；归档条目名与 `filesDir` 下的布局一致（`workspaces/<root>/files/<relative>`），恢复侧因此复用已有的 `files/` 映射
-- 理由：工作区文件是用户产物，但工作区里还可能有整个 PRoot 根文件系统，体积与必要性都不适合默认进备份
+- 落点：`WebDavConfig.BackupItem` 增加 `WORKSPACES`（本地导出页由 C79 改为默认勾选；WebDAV 的 `DEFAULT_SELECTION` 仍默认关）、两个备份页的多选标签与 8 个 locale 的 `backup_page_workspaces`；`BackupManager.createBackup` 增加 `includeWorkspaceFiles`，新增 `collectWorkspaceFiles`（按 `workspaceDao()` 的工作区逐个走 `<root>/files`，跳过 `linux/` 与 `tmp/`，root 不合法时记 warning 并跳过）；`stageRestore` 增加同名参数与 `isWorkspaceFile` 校验（形状无条件校验，不看勾选）；官方兼容出口编码 settings 前把 `WORKSPACES` 从 `webDavConfig.items` 里滤掉；目录名改用 `WorkspaceManager.BASE_DIR_NAME` 与 `FILES_DIR`；归档条目名与 `filesDir` 下的布局一致（`workspaces/<root>/files/<relative>`），恢复侧因此复用已有的 `files/` 映射
+- 理由：工作区文件是用户产物，但工作区里还可能有整个 PRoot 根文件系统，体积与必要性都不适合默认进 WebDAV 备份；本地导出页由 C79 改为默认勾选，仍然排除 `linux/` 与 `tmp/`
 - 合并注意：只打包文件区，归档里出现 `workspaces/<root>/linux/...` 一律拒绝，避免写坏或被改过的归档覆盖根文件系统。恢复是叠加语义，不删 live 里多出来的工作区文件；附件那套替换语义没有套过来，这条有专门用例钉住。恢复要求导入时勾上工作区，条目在归档里但当前选择不含工作区时会被跳过，启动自检随后可能把这些工作区标成 BROKEN。`WORKSPACES` 是本仓库新增的枚举值，官方不认识，未知枚举值不像未知字段那样能被 `ignoreUnknownKeys` 忽略，所以官方出口必须把它从 settings 里去掉
 
 ### C30 官方兼容导出改写附件路径
@@ -595,3 +596,10 @@
 - 理由：C65 已经把工具错误收成给模型的可读摘要，但堆栈还在用 `printStackTrace` 打到 stderr，和 app 的日志体系分开；统一到 `Log.e` 后 logcat 能按 tag/等级过滤，模型仍只看到摘要。
 - 合并注意：只改 `ai/AgentLoop.kt` 的失败日志，不改工具输出、恢复结果、超时或 UI；`returnDefaultValues` 下 JVM 单测里的 `Log.e` 是空实现，现有测试用带 message 的工具异常断言摘要不含堆栈和异常类名，未覆盖 null-message 回退。output 的 NonCancellable 写入没有在这次做：在 `withContext(NonCancellable)` 里调用 `FlowCollector.emit` 会触发 FlowCollector 跨协程发射限制，15 条 AgentLoopTest 失败，需要改成 `channelFlow` 或单独的 NonCancellable 回调，留后续；移植上游 `AgentLoop.kt` 时保留 `Log.e` 取代 `printStackTrace`；`ai/provider` 里剩余的 `printStackTrace` 不属本项范围；不改 Room、Settings、备份。
 - 测试：`:ai:testDebugUnitTest` 324 条通过，`AgentLoopTest` 29 条含工具失败摘要和“停止时保留已跑工具结果”；`:app:testGithubDebugUnitTest` 786 条，7 条既有 Windows 失败未变；assemble、spotless、markdownlint 通过。设备上没有单独构造工具失败日志；C65 的工具超时/恢复手动验收已覆盖行为，本轮只改日志通道。
+
+### C79 本地导出默认包含工作区文件
+
+- 落点：`WebDavConfig.BackupItem` 新增 `LOCAL_DEFAULT_SELECTION = normalize(listOf(FILES, WORKSPACES))`；`BackupVM.localBackupItems` 从 `DEFAULT_SELECTION` 改为 `LOCAL_DEFAULT_SELECTION`。本地导出/导入页默认勾选附件与工作区文件；WebDAV 的 `webDavConfig.items` 默认仍是 `DEFAULT_SELECTION`（只带附件）；官方兼容出口继续在 `BackupManager` 里强制排除 `WORKSPACES`。
+- 理由：用户要求本地导出默认带上工作区文件，避免每次手动勾选；工作区里的 PRoot 根文件系统与临时目录仍不打包，WebDAV 备份仍默认不带工作区，避免默认备份体积过大。
+- 合并注意：本地导出和导入共用 `localBackupItems`，所以导入一份带工作区的备份时默认也会尝试恢复工作区文件；恢复仍是叠加语义，不删 live 里多出来的。官方出口的选择会被过滤，界面上勾着工作区也不会进官方归档。`Settings.webDavConfig.items` 的默认值没有变，旧设置解码不变；本地页的选择不写回设置，重新打开页面恢复默认勾选。不改 Room、Settings 序列化形状或备份格式。
+- 测试：`BackupItemTest` 钉住本地默认含 `DATABASE/FILES/WORKSPACES`、WebDAV 默认只含 `DATABASE/FILES`；全量 `:app:testGithubDebugUnitTest` 787 条，7 条既有 Windows 失败未变；assemble、spotless、markdownlint 通过。设备上未单独打开备份页点验（当前抽屉设置入口自动化不可达）；常量由 `BackupItemTest` 钉住，`BackupVM.localBackupItems` 使用该常量，未实例化 VM 测试。

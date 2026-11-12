@@ -21,6 +21,14 @@ class BackupItemTest {
     }
 
     @Test
+    fun localDefaultSelectionIncludesAttachmentsAndWorkspaces() {
+        assertEquals(
+            listOf(BackupItem.DATABASE, BackupItem.FILES, BackupItem.WORKSPACES),
+            BackupItem.LOCAL_DEFAULT_SELECTION
+        )
+    }
+
+    @Test
     fun defaultSelectionKeepsChatRecords() {
         assertEquals(listOf(BackupItem.DATABASE, BackupItem.FILES), BackupItem.DEFAULT_SELECTION)
     }

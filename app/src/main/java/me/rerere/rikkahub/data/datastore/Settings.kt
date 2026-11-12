@@ -221,7 +221,7 @@ data class WebDavConfig(
         DATABASE,
         FILES,
 
-        /** 工作区文件区（`workspaces/<root>/files`），不含 PRoot 根文件系统。默认不选。 */
+        /** 工作区文件区（`workspaces/<root>/files`），不含 PRoot 根文件系统。本地导出默认选；WebDAV 默认不选。 */
         WORKSPACES,
         ;
 
@@ -229,8 +229,11 @@ data class WebDavConfig(
             /** 可以在界面上关掉的两项。 */
             val SELECTABLE = listOf(FILES, WORKSPACES)
 
-            /** 默认选择：工作区需要用户明确勾选，体积与必要性都不适合默认打包。 */
+            /** WebDAV 备份默认只带附件；工作区体积大，仍由用户明确勾选。 */
             val DEFAULT_SELECTION = normalize(listOf(FILES))
+
+            /** 本地导出/导入页默认勾选附件与工作区文件。 */
+            val LOCAL_DEFAULT_SELECTION = normalize(listOf(FILES, WORKSPACES))
 
             /**
              * 归一成「聊天记录 + 选中的可选项」。
