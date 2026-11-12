@@ -304,6 +304,7 @@
 | C71 错误卡片持久化 | L3 | 无（错误卡片文件） |
 | C72 上下文压缩按 token 预算 | L3 | 无（压缩计划与请求参数） |
 | C73 发送前上下文裁剪 | L3 | 无（请求级裁剪） |
+| C74 上下文水位与压缩建议 | L3 | 无（chat page banner） |
 
 ### 依赖链
 
@@ -371,7 +372,7 @@ RikkaHub 现状：
 | P2 | `withoutUnresumableToolCalls` 删除整条消息（C65 已修） | C65 起逐 part 处理，只把不可恢复的 Tool part 换成恢复结果，保留文本、推理和其它 part，不再删除整条 assistant 消息。`Conversation.kt`。 | 已按此实现。 |
 | P2 | 进程死亡丢失重试与收尾状态（C67 已恢复半截回复，C70 已持久化队列，C71 已持久化错误卡片） | 只周期保存回复节点，5/15/30 秒分档，小节点最迟 60 秒；C67 的 `isGenerating` 随消息落库，加载时把半截回复补成 `INTERRUPTED` 并补工具结果；C70 把未出队消息落到 `noBackupFilesDir`，恢复为暂停态；C71 把错误卡片落到 `noBackupFilesDir`，启动时恢复。实时 `Retrying (n/m)` 状态仍不跨进程：进程死亡后没有在途请求，半截回复按 `INTERRUPTED` 恢复，重试倒计时恢复出来只会误导；首次保存前死亡仍会丢。C50 在节点漂移或含 base64 图片时静默跳过。`MessageSaveLoop.kt`、`ConversationSession.kt`、`ChatService.kt`、`ChatErrorStore.kt`。 | 继续持久化 turn 状态或时间戳心跳；保存失败要上报；live retrying 不跨进程，重试 attempt 的 UI 与用量归 P2 重试状态项。 |
 | P2 | 消息队列暂停后静默滞留（C66 已修派发与回插，C70 已持久化） | C66 前队列 paused 且非空时，新消息只 enqueue，`takeNext` 因 paused 返回 null，消息不发也不进正文；先 `takeNext` 出队再写历史，中间失败会丢消息。C66 起显式发送总是 resume，发送失败且未落库时回插队首。C70 起未出队消息按会话落到 `noBackupFilesDir`，恢复为暂停态，用队列 id 与已落库消息去重。`ChatService.kt`、`MessageQueue.kt`、`MessageQueueStore.kt`。 | 已按此实现派发恢复、失败回插和跨进程持久化；编辑占位与暂停状态不落盘。 |
-| P2 | 上下文压力只按条数，压缩能力有限（C72 已修计划对齐、摘要预算、部分摘要、范围检查，C73 已补发送前裁剪） | 发送前没有 token 估算或 usage 水位；摘要请求 `maxTokens = null`，截断即整次压缩失败；没有 tool result 裁剪和图片 offload；截断 keep=1 且末条是 assistant 时会丢掉产生它的 user。C72 起保留起点按 user 轮次对齐，摘要输出和输入都有保守 token 预算，超预算先提示截断/多保留，摘要被截断时退回部分摘要；C73 起 `buildStep` 对旧工具输出截断到前 2000 字符、旧图片换占位，最近 6 条不动，仍超预算交给 C63。精确 usage 水位和自动压缩建议仍未做。`ChatRequestFactory.kt`、`ContextPruning.kt`、`CompressionPlan.kt`、`ChatService.kt`。 | 剩余精确 usage 水位与自动压缩建议；C72/C73 已做计划对齐、摘要预算、部分摘要、范围检查、tool result 截断和图片占位。 |
+| P2 | 上下文压力与压缩管理（C72/C73/C74 已修） | C72 前发送前没有 token 估算或 usage 水位；摘要请求 `maxTokens = null`，截断即整次压缩失败；没有 tool result 裁剪和图片 offload；截断 keep=1 且末条是 assistant 时会丢掉产生它的 user。C72 起保留起点按 user 轮次对齐，摘要输出和输入都有保守 token 预算，超预算先提示截断/多保留，摘要被截断时退回部分摘要；C73 起 `buildStep` 对旧工具输出截断到前 2000 字符、旧图片换占位，最近 6 条不动，仍超预算交给 C63；C74 起当前窗口最近 usage 加尾部估算，达到 80% 在主聊天页底部显示压缩建议条，手动打开管理上下文，不自动压缩。`ChatRequestFactory.kt`、`ContextPruning.kt`、`CompressionPlan.kt`、`ContextPressure.kt`、`ChatPage.kt`、`ChatService.kt`。 | 剩余自动压缩仍不做；C72/C73/C74 已做计划对齐、摘要预算、部分摘要、范围检查、tool result 截断、图片占位和 usage 水位建议。 |
 | P2 | scratch 生命周期只靠调用点清理（C68 已清理崩溃对并过滤请求/导出/Web 快照/搜索） | 压缩失败或取消留下的 prompt 与半截回复只在发送、截断、再次压缩前清理；C68 起加载会话时删除回复仍为 `COMPLETE` 的崩溃对，失败/取消对标 `FAILED` 后跨 reload 保留，请求派生、导出、Web/SSE 的 `Conversation.toDto` 和 App/Web/agent 搜索结果会过滤；浮动窗口只预览当前回复，压缩轮次结束即清空，不列出孤儿对。`ChatService.kt`、`ConversationSession.kt`、`ConversationMessages.kt`、`ConversationRepository.kt`、`ai/ui/Message.kt`。 | 给 scratch 打逐 part 不可发送标记；C68 已做崩溃对载入清理、请求/导出/Web 快照/搜索过滤。 |
 
 修复顺序：
@@ -381,6 +382,6 @@ P1 分批：P1a 截断 SSE 与停止结算，P1b 审批分支与配置快照，P
 1. P0 失败 attempt 隔离已由 C58 完成；多步工具调用的 per-step 细化仍留 P2，工具恢复结果已由 C65 处理。
 2. P1a 截断 SSE 与停止结算已由 C59 完成；P1b 审批分支与配置快照已由 C60 完成。
 3. P1c 的稳定错误码重试已由 C61、idle watchdog 由 C62、overflow 兜底由 C63 完成；P1 收尾后进入 P2。
-4. P2 工具恢复结果和工具超时已由 C65 完成，队列派发与失败回插由 C66 完成，进程死亡半截回复由 C67 完成，scratch 加载清理与请求/导出/Web 快照/搜索过滤由 C68 完成，队列持久化由 C70 完成，错误卡片持久化由 C71 完成，压缩计划对齐、摘要预算、部分摘要和范围检查由 C72 完成，发送前工具输出/图片裁剪由 C73 完成；剩余精确 usage 水位与自动压缩建议、取消写入、重试状态 UI 与用量。
+4. P2 工具恢复结果和工具超时已由 C65 完成，队列派发与失败回插由 C66 完成，进程死亡半截回复由 C67 完成，scratch 加载清理与请求/导出/Web 快照/搜索过滤由 C68 完成，队列持久化由 C70 完成，错误卡片持久化由 C71 完成，压缩计划对齐、摘要预算、部分摘要和范围检查由 C72 完成，发送前工具输出/图片裁剪由 C73 完成，usage 水位建议条由 C74 完成；剩余自动压缩（不做）、取消写入、重试状态 UI 与用量。
 
 范围说明：C59 已逐行核对五个 decoder 的终止判定和五个 provider 接线点的 `onClosed`，并用 `:ai:testDebugUnitTest` 全量验证；工具并发没有展开，当前 RikkaHub 按顺序执行，未发现正确性问题，只是并发效率较低。

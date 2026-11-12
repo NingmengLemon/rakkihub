@@ -81,6 +81,7 @@
 | C71 | 错误卡片持久化 | 新增 |
 | C72 | 上下文压缩按 token 预算 | 新增 |
 | C73 | 发送前上下文裁剪 | 新增 |
+| C74 | 上下文水位与压缩建议 | 新增 |
 
 ## 明细
 
@@ -555,3 +556,10 @@
 - 理由：C72 只修了压缩计划本身，正常发送时旧 tool result 和图片仍会全部进入请求；模型上下文较小时，长工具输出和历史图片会先把窗口挤爆。请求级裁剪能保住最近上下文，又不必改存储或增加设置。
 - 合并注意：不改 Room、Settings、官方兼容导出或 `ai/`；只裁最近 6 条之外的工具输出和旧图片，最近工具链、用户刚发的图片、没有 output 的未执行/待审批工具不裁；工具输出保留前 2000 字符，消息级和工具输出内的图片都换成纯文本占位，模型会丢失部分细节，这是空间换信息；1025 到 2000 字符的输出不会为了加前缀而重写；预算依赖用户填写的模型 `contextLength`，默认 1M 时基本不会触发；2048 预留不精确覆盖系统提示词和工具定义；如果最近 6 条自己就超预算、或裁完仍超，不再继续处理，C63 和 provider 错误仍是兜底；Document 不参与裁剪，`DocumentAsPromptTransformer` 在裁剪之后还会把全文展开，超大文档仍可能把预算顶破；C72 的计划估算不调用这层裁剪，压缩的 `RangeTooLarge` 可能偏保守；没有新增设置字段，不需要数据层验收。
 - 测试：`ContextPruningTest` 覆盖预算内原样返回、旧工具输出截断且保留最近消息与原列表、两条可裁工具时只裁第一条（early stop）、1025 到 2000 字符不重写、旧图片占位且保留最近图片、工具输出内图片占位并计数、待审批无 output 工具不裁、恰好 6 条不裁、`contextLength <= 0` 原样返回、无工具/图片时原样返回；全量 `:app:testGithubDebugUnitTest` 762 条，7 条既有 Windows 失败未变；assemble、spotless、markdownlint 通过。没有设备验证：默认 1M 上下文很难触发，阈值靠 JVM 用例覆盖。
+
+### C74 上下文水位与压缩建议
+
+- 落点：新增 `ContextPressure`/`Conversation.contextPressure(limitTokens)`。只取当前可见窗口（`filterModelVisible().withoutCompressionScratch()`，从最后一个检查点起），窗口内最近一次真实 usage 必须晚于检查点的 `createdAt`，再加它之后消息的本地估算；没有可用 usage 时整窗估算；检查点之前的旧 usage 和保留段里创建更早的旧回复都不采用。比例达到 80% 时 `shouldSuggestCompression` 为真。`ChatPage` 底部栏在非预览、非生成/压缩时显示 `ContextPressureBanner`：百分比、used/limit、压缩按钮；按钮只打开管理上下文对话框，不自动压缩。文案加四份 locale。
+- 理由：C72/C73 解决的是压缩计划和发送前裁剪，但用户看不到上下文还剩多少；长会话要等到 provider overflow 或裁掉旧内容才有反馈。用最近一次真实 usage 加尾部估算做建议条，既比本地估算准，也不需要新增设置或自动改历史。
+- 合并注意：不改 Room、Settings、官方兼容导出或 `ai/`；不自动压缩，不写历史，只显示建议并打开现有对话框；最近一条 usage 为 0 时跳过，找不到可用 usage 才整窗估算；旧消息没有 `lastUsage` 时 `contextTokens()` 会退回累计 `usage`，比例可能偏高；last usage 必须在最后一个检查点之后且 `createdAt` 晚于检查点，否则压缩/截断保留段的旧回复会把建议条常亮；删除或编辑更早消息不会插检查点，最后一条 usage 仍可能偏高；比例是近似值，尾部用本地估算，整窗估算不含 system prompt 和工具定义；`currentChatModel` 没有 contextLength、生成/压缩中或预览模式时不显示；banner 只在 Android 主聊天页，Web、悬浮窗和导出没有；建议条没有 dismiss 状态，压力降下来或压缩/截断后自然消失。
+- 测试：`ContextPressureTest` 覆盖真实 usage 加尾部、无 usage 回退估算、检查点前 usage 忽略、保留段创建更早的 usage 忽略、多个 usage 取最后一个、legacy 累计 usage、80% 阈值、ratio>1、失败回复与压缩 scratch 不计入、空会话、非正 contextLength；全量 `:app:testGithubDebugUnitTest` 773 条，7 条既有 Windows 失败未变；assemble、spotless、markdownlint 通过。没有设备验证：样本会话 usage 很小、模型 contextLength 默认 1M，banner 阈值只由 JVM 用例覆盖。

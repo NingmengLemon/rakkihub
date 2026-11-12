@@ -267,6 +267,8 @@
   <string name="chat_page_compress_context_desc">Compress the conversation into a summary to save tokens</string>
   <string name="chat_page_compress_prompt_hint">The base instructions can be edited in Settings → Default Model and Prompt → Prompts</string>
   <string name="chat_page_manage_context">Manage Context</string>
+  <string name="chat_context_pressure_title">Context is getting full</string>
+  <string name="chat_context_pressure_message">About %1$d%% used (%2$s / %3$s tokens). Compress the conversation to keep replies working.</string>
   <string name="chat_page_manage_context_tab_compress">Compress</string>
   <string name="chat_page_manage_context_tab_truncate">Truncate</string>
   <string name="chat_page_truncate_desc">Drop older messages from later requests without calling the model. Useful when you already had the model write a handoff summary in the normal conversation.</string>

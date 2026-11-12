@@ -69,11 +69,13 @@ import me.rerere.rikkahub.data.datastore.findProvider
 import me.rerere.rikkahub.data.files.FilesManager
 import me.rerere.rikkahub.data.model.Assistant
 import me.rerere.rikkahub.data.model.Conversation
+import me.rerere.rikkahub.data.model.contextPressure
 import me.rerere.rikkahub.data.model.isAwaitingToolApproval
 import me.rerere.rikkahub.data.repository.WorkspaceRepository
 import me.rerere.rikkahub.service.ChatError
 import me.rerere.rikkahub.ui.components.ai.ChatAttachmentPickerActions
 import me.rerere.rikkahub.ui.components.ai.ChatInput
+import me.rerere.rikkahub.ui.components.ai.ContextPressureBanner
 import me.rerere.rikkahub.ui.components.ai.FilesPicker
 import me.rerere.rikkahub.ui.components.ai.SearchMode
 import me.rerere.rikkahub.ui.components.ai.StopAction
@@ -322,7 +324,10 @@ private fun ChatPageContent(
     val attachmentPickerActions = rememberChatAttachmentPickerActions(
         inputState = inputState,
         setting = setting,
-        onAttachmentAdded = { showFilesSheet = false },
+        onAttachmentAdded = {
+            showFilesSheet = false
+            openContextDialogOnOpen = false
+        },
     )
     val allowAudioVideoAttachments =
         currentChatModel?.findProvider(setting.providers) is ProviderSetting.Google
@@ -368,7 +373,23 @@ private fun ChatPageContent(
             },
             bottomBar = {
                 val messageQueue by vm.messageQueue.collectAsStateWithLifecycle()
-                ChatInput(
+                // 生成/压缩中 banner 不可用，不在这里按每个 chunk 重算；结束后再算一次。
+                val pressure = if (!previewMode && loadingJob == null) {
+                    currentChatModel?.contextLength?.let { conversation.contextPressure(it) }
+                } else {
+                    null
+                }
+                Column(modifier = Modifier.fillMaxWidth()) {
+                    if (pressure != null && pressure.shouldSuggestCompression) {
+                        ContextPressureBanner(
+                            pressure = pressure,
+                            onCompress = {
+                                openContextDialogOnOpen = true
+                                showFilesSheet = true
+                            },
+                        )
+                    }
+                    ChatInput(
                     state = inputState,
                     messageQueue = messageQueue,
                     onRemoveQueuedMessage = vm::removeQueuedMessage,
@@ -433,6 +454,7 @@ private fun ChatPageContent(
                         showFilesSheet = true
                     },
                 )
+                }
             },
             containerColor = Color.Transparent,
         ) { innerPadding ->

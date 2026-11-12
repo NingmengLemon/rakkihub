@@ -265,6 +265,8 @@
   <string name="chat_page_compress_context_desc">会話を要約して圧縮し、トークンを節約します</string>
   <string name="chat_page_compress_prompt_hint">基本の指示は「設定 → デフォルトモデルとプロンプト → プロンプト」で変更できます</string>
   <string name="chat_page_manage_context">コンテキスト管理</string>
+  <string name="chat_context_pressure_title">コンテキストが残りわずかです</string>
+  <string name="chat_context_pressure_message">約 %1$d%% 使用済み（%2$s / %3$s tokens）。会話を圧縮すると返信を続けられます。</string>
   <string name="chat_page_manage_context_tab_compress">圧縮</string>
   <string name="chat_page_manage_context_tab_truncate">切り捨て</string>
   <string name="chat_page_truncate_desc">モデルを呼ばずに、古いメッセージを以降のリクエストから外します。通常の会話でモデルに引き継ぎ用の要約を書かせた場合に使います。</string>

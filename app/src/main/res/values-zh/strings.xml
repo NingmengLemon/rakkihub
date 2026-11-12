@@ -267,6 +267,8 @@
   <string name="chat_page_compress_context_desc">将对话压缩为摘要以节省 Token</string>
   <string name="chat_page_compress_prompt_hint">基础指令可在「设置 → 默认模型和提示词 → 提示词」里修改</string>
   <string name="chat_page_manage_context">管理上下文</string>
+  <string name="chat_context_pressure_title">上下文快满了</string>
+  <string name="chat_context_pressure_message">已用约 %1$d%%（%2$s / %3$s tokens）。压缩对话可以继续正常回复。</string>
   <string name="chat_page_manage_context_tab_compress">压缩</string>
   <string name="chat_page_manage_context_tab_truncate">截断</string>
   <string name="chat_page_truncate_desc">不调用模型，只把更早的消息从后续请求里去掉。适合你已经用正常对话让模型写好交接摘要的情况。</string>
