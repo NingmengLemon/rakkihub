@@ -1274,7 +1274,8 @@
   <string name="chat_page_compression_delete">刪除</string>
   <string name="chat_page_compression_expand">展開</string>
   <string name="chat_page_compression_collapse">收合</string>
-  <string name="chat_page_compress_truncated">壓縮摘要被截斷，歷史未截斷</string>
+  <string name="chat_page_compress_truncated">壓縮摘要被截斷，已使用部分摘要</string>
+  <string name="chat_page_compress_range_too_large">歷史太大，無法一次壓縮完成。請先截斷歷史，或多保留最近訊息。</string>
   <string name="chat_page_compress_conversation_changed">對話在壓縮期間已變更。請再試一次。</string>
   <string name="sketch">草圖</string>
   <string name="sketch_draw_on_image">在圖片上繪圖</string>

@@ -60,6 +60,8 @@ import me.rerere.rikkahub.data.model.MessageNode
 import me.rerere.rikkahub.data.model.applyCompressionResult
 import me.rerere.rikkahub.data.model.bindConfig
 import me.rerere.rikkahub.data.model.cancelInterruptedTools
+import me.rerere.rikkahub.data.model.compressionInputBudget
+import me.rerere.rikkahub.data.model.compressionSummaryMaxTokens
 import me.rerere.rikkahub.data.model.contextWindowStart
 import me.rerere.rikkahub.data.model.deleteMessage
 import me.rerere.rikkahub.data.model.editMessage
@@ -995,10 +997,17 @@ class ChatService(
             // 上一轮失败的压缩对是 scratch：计划里先排除，否则它们会被当成普通历史，
             // 锚点还可能落在马上要删的节点上
             val conversation = session.state.value.removeCompressionPairs() ?: session.state.value
+            val turn = requestFactory.createContext(settings, conversation)
+            val summaryMaxTokens = compressionSummaryMaxTokens(
+                contextLength = turn.model.contextLength,
+                assistantMaxTokens = turn.assistant.maxTokens,
+            )
             val plan = when (
                 val result = conversation.planCompression(
                     windowStart = conversation.contextWindowStart(),
                     keepRecent = keepRecentMessages,
+                    maxInputTokens = compressionInputBudget(turn.model.contextLength, summaryMaxTokens),
+                    contextMessageLimit = turn.assistant.contextMessageLimit,
                 )
             ) {
                 CompressionPlanResult.NothingToCompress -> {
@@ -1023,10 +1032,17 @@ class ChatService(
                     return
                 }
 
+                CompressionPlanResult.RangeTooLarge -> {
+                    notifyCompression(
+                        context.getString(R.string.chat_page_compress_range_too_large),
+                        session.id,
+                    )
+                    return
+                }
+
                 is CompressionPlanResult.Ready -> result.plan
             }
 
-            val turn = requestFactory.createContext(settings, conversation)
             val compressPrompt = buildCompressPrompt(
                 template = settings.compressPrompt,
                 additionalPrompt = additionalPrompt,
@@ -1086,7 +1102,13 @@ class ChatService(
                         },
                     )
                     if (isTruncatedCompressionFinish(result.finishReason)) {
-                        error(context.getString(R.string.chat_page_compress_truncated))
+                        // 截断不再让整次压缩失败：用已经拿到的部分摘要，明确提示用户
+                        Log.w(TAG, "compression summary truncated; using partial summary")
+                        notifyCompression(
+                            context.getString(R.string.chat_page_compress_truncated),
+                            session.id,
+                            title = context.getString(R.string.chat_page_compression_title),
+                        )
                     }
                     summary = result.summary
                 } finally {
@@ -1140,11 +1162,15 @@ class ChatService(
         }
     }
 
-    private fun notifyCompression(message: String, conversationId: Uuid) {
+    private fun notifyCompression(
+        message: String,
+        conversationId: Uuid,
+        title: String = context.getString(R.string.error_title_compress_conversation),
+    ) {
         addError(
             error = IllegalStateException(message),
             conversationId = conversationId,
-            title = context.getString(R.string.error_title_compress_conversation),
+            title = title,
             persistable = false,
         )
     }

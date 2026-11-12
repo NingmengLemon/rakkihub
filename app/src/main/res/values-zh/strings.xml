@@ -1276,7 +1276,8 @@ mDNS 地址：使用 .local 主机名，同一网络中的其他设备可通过�
   <string name="chat_page_compression_delete">删除</string>
   <string name="chat_page_compression_expand">展开</string>
   <string name="chat_page_compression_collapse">收起</string>
-  <string name="chat_page_compress_truncated">压缩摘要被截断，历史未截断</string>
+  <string name="chat_page_compress_truncated">压缩摘要被截断，已使用部分摘要</string>
+  <string name="chat_page_compress_range_too_large">历史太大，无法一次压缩完成。请先截断历史，或多保留最近消息。</string>
   <string name="chat_page_compress_conversation_changed">对话在压缩期间发生变化，请重试</string>
   <string name="sketch">草图</string>
   <string name="sketch_draw_on_image">在图片上绘制</string>

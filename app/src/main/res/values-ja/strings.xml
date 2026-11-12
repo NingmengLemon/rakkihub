@@ -1276,7 +1276,8 @@ mDNSアドレス: .localホスト名を使用し、IPを知らなくても同じ
   <string name="chat_page_compression_delete">削除</string>
   <string name="chat_page_compression_expand">表示</string>
   <string name="chat_page_compression_collapse">隠す</string>
-  <string name="chat_page_compress_truncated">圧縮の要約が途中で切れました。履歴は切り詰めていません</string>
+  <string name="chat_page_compress_truncated">圧縮の要約が途中で切れたため、部分的な要約を使用します</string>
+  <string name="chat_page_compress_range_too_large">履歴が大きすぎて一度に圧縮できません。履歴を切り詰めるか、残すメッセージを増やしてください。</string>
   <string name="chat_page_compress_conversation_changed">圧縮中に会話が変更されました。もう一度お試しください。</string>
   <string name="sketch">スケッチ</string>
   <string name="sketch_draw_on_image">画像に描画</string>

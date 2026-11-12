@@ -48,6 +48,7 @@ import me.rerere.rikkahub.data.datastore.findProvider
 import me.rerere.rikkahub.data.model.Assistant
 import me.rerere.rikkahub.data.model.Conversation
 import me.rerere.rikkahub.data.model.MemoryFile
+import me.rerere.rikkahub.data.model.compressionSummaryMaxTokens
 import me.rerere.rikkahub.data.model.getAssistantOf
 import me.rerere.rikkahub.data.model.getChatModelOf
 import me.rerere.rikkahub.data.repository.MemoryRepository
@@ -195,9 +196,9 @@ class ChatRequestFactory(
     }
 
     /**
-     * 可见压缩轮次的流式请求。前缀与正常对话完全一致（系统提示词、工具定义、参数都不改），
-     * 提示词作为最后一条 user 消息追加；每次回调都带着同一条 assistant 消息（保留传进来的 id），
-     * 重试时从初始消息重置，避免分支或半截内容叠加。
+     * 可见压缩轮次的流式请求。前缀与正常对话完全一致（系统提示词、工具定义都不改；C72 起
+     * 摘要 `maxTokens` 按上下文预算显式设置），提示词作为最后一条 user 消息追加；每次回调都
+     * 带着同一条 assistant 消息（保留传进来的 id），重试时从初始消息重置，避免分支或半截内容叠加。
      */
     internal suspend fun streamCompressionSummary(
         turn: ChatTurnContext,
@@ -225,7 +226,12 @@ class ChatRequestFactory(
                 ).streamText(
                     providerSetting = turn.providerSetting,
                     messages = requestMessages + UIMessage.user(compressPrompt),
-                    params = params.copy(maxTokens = null),
+                    params = params.copy(
+                        maxTokens = compressionSummaryMaxTokens(
+                            contextLength = turn.model.contextLength,
+                            assistantMaxTokens = turn.assistant.maxTokens,
+                        )
+                    ),
                 ).collect { chunk ->
                     if (chunk is StreamChunk.Finish) finishReason = chunk.finishReason
                     current = handler.handle(listOf(current), chunk).last()
