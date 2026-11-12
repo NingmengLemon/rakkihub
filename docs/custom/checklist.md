@@ -85,6 +85,7 @@
 | C75 | 自动重试次数可调 | 新增 |
 | C76 | 重试 attempt 可见化 | 新增 |
 | C77 | 错误卡片重试本步 | 新增 |
+| C78 | 工具失败日志分级 | 改造 |
 
 ## 明细
 
@@ -498,9 +499,9 @@
 
 ### C65 工具中断恢复结果
 
-- 落点：`ConversationMessages.kt` 的 `recoverInterruptedTool` 按 `startedAt` 区分 `not_started` 与 `outcome_unknown`，`startedAt` 为空写未开始，有开始时间写结果未知；`cancelInterruptedTools` 和 `Conversation.withoutUnresumableToolCalls` 共用它。`withoutUnresumableToolCalls` 删除了整条消息的逻辑：消息里有可恢复工具（Approved/Denied/Answered）时整条不动，避免把同批 Auto 工具提前写成恢复结果；没有可恢复工具时才逐 part 替换不可恢复 Tool part，保留文本、推理和其它 part。`AgentRequest.toolTimeout` 默认 5 分钟，`AgentLoop.runTool` 用 `withTimeoutOrNull` 执行工具，超时返回模型可读的 `Tool execution timed out after Ns`；工具内部自己的 `TimeoutCancellationException` 先 `ensureActive()` 再转成工具错误，不会取消整轮。错误结果只给模型一行“Tool execution failed: ...”，堆栈只打到 stderr。
+- 落点：`ConversationMessages.kt` 的 `recoverInterruptedTool` 按 `startedAt` 区分 `not_started` 与 `outcome_unknown`，`startedAt` 为空写未开始，有开始时间写结果未知；`cancelInterruptedTools` 和 `Conversation.withoutUnresumableToolCalls` 共用它。`withoutUnresumableToolCalls` 删除了整条消息的逻辑：消息里有可恢复工具（Approved/Denied/Answered）时整条不动，避免把同批 Auto 工具提前写成恢复结果；没有可恢复工具时才逐 part 替换不可恢复 Tool part，保留文本、推理和其它 part。`AgentRequest.toolTimeout` 默认 5 分钟，`AgentLoop.runTool` 用 `withTimeoutOrNull` 执行工具，超时返回模型可读的 `Tool execution timed out after Ns`；工具内部自己的 `TimeoutCancellationException` 先 `ensureActive()` 再转成工具错误，不会取消整轮。错误结果只给模型一行“Tool execution failed: ...”，堆栈只进日志（C78 起 `Log.e`），模型结果只有摘要。
 - 理由：原来所有中断都写成 `cancelled by user`，分不清工具是否已经产生副作用；`withoutUnresumableToolCalls` 命中时会丢掉整条消息的文本和已执行结果；工具错误把内部堆栈发给模型，既浪费 token 也泄露实现细节。`workspace_shell` 自身允许 600 秒，而默认工具超时是 300 秒；用 shell 长任务时需要显式调大 `toolTimeout`，否则 300 秒会被中止并丢弃输出。
-- 合并注意：恢复结果仍然写进 `output`，所以 `isExecuted=true`、`isPending=false`，Pending 审批不会再显示；这是“本轮停止/放弃审批”的语义，不是用户点了拒绝。没有恢复 `ApprovalState`，如果后续要做“重新审批”需要另设状态。旧消息没有 `startedAt` 一律按 `not_started`，可能把实际执行过的旧工具写成未开始；进程死亡后才恢复的 `outcome_unknown` 不把恢复时刻当结束时间，`finishedAt` 沿用 `startedAt`。工具超时默认 5 分钟，可在 `AgentRequest` 覆盖或置空关闭；`withTimeoutOrNull` 是协作式取消，不挂起且不走 `runInterruptible` 的阻塞工具不会被按时打断；`toolTimeout <= 0` 会立即超时。output 的 NonCancellable 写入和错误日志分级还没做，仍是 roadmap P2 的剩余项。C65 使 `ai/` 分叉计数变为十一处，C67 之后为十二处。
+- 合并注意：恢复结果仍然写进 `output`，所以 `isExecuted=true`、`isPending=false`，Pending 审批不会再显示；这是“本轮停止/放弃审批”的语义，不是用户点了拒绝。没有恢复 `ApprovalState`，如果后续要做“重新审批”需要另设状态。旧消息没有 `startedAt` 一律按 `not_started`，可能把实际执行过的旧工具写成未开始；进程死亡后才恢复的 `outcome_unknown` 不把恢复时刻当结束时间，`finishedAt` 沿用 `startedAt`。工具超时默认 5 分钟，可在 `AgentRequest` 覆盖或置空关闭；`withTimeoutOrNull` 是协作式取消，不挂起且不走 `runInterruptible` 的阻塞工具不会被按时打断；`toolTimeout <= 0` 会立即超时。C78 已把工具错误堆栈改成 `Log.e`；output 的 NonCancellable 写入仍受 FlowCollector 跨协程发射限制，未做，仍是 roadmap P2 的剩余项。C65 使 `ai/` 分叉计数变为十一处，C67 之后为十二处，C68 之后十三处，C78 之后十四处。
 - 测试：`ConversationToolCallsTest` 覆盖不可恢复工具保留消息、startedAt 区分两种状态、文本/推理保留、只有工具调用的节点不删除、同消息里 resumable 工具不会误伤 Auto 兄弟、Pending+Auto 一起恢复；`ConversationMessagesTest` 覆盖停止的 `not_started` 和 `outcome_unknown`；`AgentLoopTest` 覆盖工具失败只给模型摘要、否定断言确认不含类名/堆栈、工具执行超时后继续下一轮（断言 after 1s、startedAt/finishedAt 和下一轮请求包含结果）、工具内部超时不取消整轮，以及默认 5 分钟下用户停止仍向上传播；`:app:testGithubDebugUnitTest`、`:ai:testDebugUnitTest` 对应测试通过。手动验收：停止在工具未开始/执行中两种时机，输出状态分别为 `not_started`/`outcome_unknown`；待审批工具被放弃后不会继续显示审批按钮；工具抛错时模型只看到摘要。
 
 ### C66 消息队列恢复与回插
@@ -587,3 +588,10 @@
 - 理由：C61/C75/C76 只自动重试网络错误，次数用尽或遇到不可自动重试的失败后，错误卡片只能看和关，用户得自己重新发一遍；给生成失败卡片一个明确的重试入口，恢复失败的那一轮。
 - 合并注意：普通发送只在仍是最后正常用户轮次时重试，会截断该轮之后的失败回复；如果用户已经继续对话（目标 USER 之后有新的 USER 节点），不启动，保留卡片并提示对话已继续，不删除后续消息。重新生成重试的是当时的目标消息所在节点，保留该节点的备选回复，不是精确恢复到失败的工具 step；生成中的旧错误卡片按钮禁用，选择模式下也不启动，避免并发；错误卡片只在生成真正开始后关闭，生成被挡住或目标被删时卡片保留，并可能另出现一条“先停止生成”的通知；失败压缩对的提示词会被 `removeCompressionPairs` 清掉，目标在清理后不存在时不会静默关卡片；错误文件在 `noBackupFilesDir`，不进备份；不改 Room、Settings、备份或 `ai/`。
 - 测试：`ChatErrorStoreTest` 覆盖 `retryable`/`retryMessageId` 持久化往返和旧 JSON 缺字段默认 false/null；`RetryTargetMessageIdTest` 覆盖重新生成取节点当前消息 id、该 id 能被 `getMessageNodeByMessageId` 命中、普通发送回退最后用户、后续已有 USER 轮次时判定陈旧；全量 `:app:testGithubDebugUnitTest` 786 条，7 条既有 Windows 失败未变；assemble、spotless、markdownlint 通过。设备上无效 provider 失败后出现 `Message generation failed` 和 `Retry`，点击后错误卡片消失并重新进入生成；重试后再次失败的卡片和陈旧轮次守卫未等到，测试数据已恢复 168/61。
+
+### C78 工具失败日志分级
+
+- 落点：`ai/AgentLoop.kt` 的工具执行 catch 从 `e.printStackTrace()` 改成 `Log.e(TAG, "Tool ${tool.toolName} failed", e)`，工具返回给模型的文本仍是 `Tool execution failed: <message>`；堆栈不会进入模型结果，但异常消息原样透传，没有消息时回退类名，可能包含路径；`TAG = "AgentLoop"`。
+- 理由：C65 已经把工具错误收成给模型的可读摘要，但堆栈还在用 `printStackTrace` 打到 stderr，和 app 的日志体系分开；统一到 `Log.e` 后 logcat 能按 tag/等级过滤，模型仍只看到摘要。
+- 合并注意：只改 `ai/AgentLoop.kt` 的失败日志，不改工具输出、恢复结果、超时或 UI；`returnDefaultValues` 下 JVM 单测里的 `Log.e` 是空实现，现有测试用带 message 的工具异常断言摘要不含堆栈和异常类名，未覆盖 null-message 回退。output 的 NonCancellable 写入没有在这次做：在 `withContext(NonCancellable)` 里调用 `FlowCollector.emit` 会触发 FlowCollector 跨协程发射限制，15 条 AgentLoopTest 失败，需要改成 `channelFlow` 或单独的 NonCancellable 回调，留后续；移植上游 `AgentLoop.kt` 时保留 `Log.e` 取代 `printStackTrace`；`ai/provider` 里剩余的 `printStackTrace` 不属本项范围；不改 Room、Settings、备份。
+- 测试：`:ai:testDebugUnitTest` 324 条通过，`AgentLoopTest` 29 条含工具失败摘要和“停止时保留已跑工具结果”；`:app:testGithubDebugUnitTest` 786 条，7 条既有 Windows 失败未变；assemble、spotless、markdownlint 通过。设备上没有单独构造工具失败日志；C65 的工具超时/恢复手动验收已覆盖行为，本轮只改日志通道。

@@ -1,5 +1,6 @@
 package me.rerere.ai.agent
 
+import android.util.Log
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.FlowPreview
 import kotlinx.coroutines.TimeoutCancellationException
@@ -30,6 +31,7 @@ import kotlin.time.TimeSource
 
 // 输出为空的工具会被当成没执行过，之后每一步都会再执行一次，所以换成占位文本
 private const val EMPTY_TOOL_OUTPUT = "(no output)"
+private const val TAG = "AgentLoop"
 
 private class StreamChunkHandlingException(override val cause: Throwable) : RuntimeException(cause)
 
@@ -251,7 +253,7 @@ internal class AgentLoop(
         throw e
     } catch (e: Throwable) {
         // 堆栈只留日志，不再塞进工具结果，避免把内部路径和实现细节发给模型
-        e.printStackTrace()
+        Log.e(TAG, "Tool ${tool.toolName} failed", e)
         errorOutput("Tool execution failed: ${e.message ?: e.javaClass.simpleName}")
     }
 
