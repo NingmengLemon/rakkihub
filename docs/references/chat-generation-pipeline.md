@@ -35,6 +35,8 @@ ChatService.sendMessage()
             │       ├── 构建 internalMessages
             │       │       ├── System message（系统提示 + 记忆 + tool.systemPrompt）
             │       │       ├── limitContext() 按 contextMessageLimit 阶梯式裁剪历史
+            │       │       ├── overflowWindow()（C63 overflow 恢复时缩到最后一条 user）
+            │       │       ├── pruneContextForRequest()（C73 截断旧工具输出、旧图片占位）
             │       │       └── InputTransformers 管道
             │       ├── 构建 TextGenerationParams
             │       └── 调用 Provider

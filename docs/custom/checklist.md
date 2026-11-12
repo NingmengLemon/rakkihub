@@ -80,6 +80,7 @@
 | C70 | 消息队列持久化 | 新增 |
 | C71 | 错误卡片持久化 | 新增 |
 | C72 | 上下文压缩按 token 预算 | 新增 |
+| C73 | 发送前上下文裁剪 | 新增 |
 
 ## 明细
 
@@ -545,5 +546,12 @@
 
 - 落点：`CompressionPlan` 的保留起点按 user 轮次对齐：`keepRecent` 落在 assistant/tool 消息上时向前找到产生它的 user，保留段只会变大，不会把唯一 user 压进摘要；范围为空时返回 `NothingToCompress`，找不到 user 时保留原起点（产生它的 user 已在窗口外）。新增本地估算 `estimateTokens`（CJK 按 1 token、其它非空白按 4 字符/token，图片/视频 1024，工具按内容，文档按固定 4096 加文件名），`compressionSummaryMaxTokens` 按模型 `contextLength` 的八分之一夹在 1024 到 4096，并尊重 assistant 的 `maxTokens`；`compressionInputBudget` 再预留 2048 给系统提示词、工具和格式开销。`planCompression` 增加 `maxInputTokens` 与 `contextMessageLimit`，预算从最后一个检查点（含）到 `endIndex`，按 `filterModelVisible` 和 `limitContext` 与摘要请求对齐，检查点之前的旧历史不计入；超过预算返回 `RangeTooLarge`，`runCompressionTurn` 提示先截断或多保留，不再把必然溢出的摘要请求发给 provider。`streamCompressionSummary` 用显式 `maxTokens` 替代原来的 `null`；finish reason 被截断时不再整次失败，改用已经拿到的部分摘要并弹非持久化通知。新增中英日繁中四条 `chat_page_compress_range_too_large`，并把 `chat_page_compress_truncated` 改成“已使用部分摘要”。
 - 理由：原来的压缩只按条数决定保留，`keepRecent=1` 且末条是 assistant 时会把产生它的 user 压掉；摘要请求的 `maxTokens = null` 由 provider 默认值决定，输出一截断就整次失败；旧历史超过模型上下文时又会直接把摘要请求发出去。按 user 轮次对齐、给摘要输出和输入都设预算、截断退回部分摘要，能让压缩在真实长会话里可预期。
-- 合并注意：不改 Room、Settings、官方兼容导出或 `ai/`；估算是保守近似，不是 provider tokenizer，`compressionInputBudget` 的 2048 预留也不精确覆盖所有系统提示词/工具/记忆；文档只按固定 4096 估算、不解析文件内容，大 PDF/OCR/提示词注入文本仍可能低估，工具结果裁剪和图片占位仍未做，归 C73；超大历史会被拒绝而不是分块摘要；部分摘要可能漏掉细节，但会明确提示；`keepRecent` 的 UI 含义仍是至少保留条数，实际会因 user 对齐多保留；摘要预算会受 assistant `maxTokens` 限制；4096 的默认上限是为了避免超过小输出模型的服务端上限，仍可能在更小的模型上失败；没有新增设置字段，不需要数据层验收。`chat_page_compress_truncated` 的含义从“历史未截断”变成“使用部分摘要”，四种语言同步。
-- 测试：`CompressionPlanTest` 覆盖保留起点对齐 user、单轮不压、找不到 user、超预算拒绝、预算内通过、检查点前旧历史不计入、`keepRecent=0` 带检查点、摘要 token 上限、assistant 上限为 0、输入预算、CJK/ASCII 与 Document 估算；全量 `:app:testGithubDebugUnitTest` 752 条，7 条既有 Windows 失败未变；assemble、spotless、markdownlint 通过。计划/预算纯函数由 JVM 覆盖；`ChatService` 的截断→部分摘要分支和 `RangeTooLarge` 通知没有服务层测试；provider key 无效，也没有真实摘要样本。
+- 合并注意：不改 Room、Settings、官方兼容导出或 `ai/`；估算是保守近似，不是 provider tokenizer，`compressionInputBudget` 的 2048 预留也不精确覆盖所有系统提示词/工具/记忆；文档只按固定 4096 估算、不解析文件内容，大 PDF/OCR/提示词注入文本仍可能低估；C73 已在请求装配时裁剪旧 tool result 和图片；超大历史会被拒绝而不是分块摘要；部分摘要可能漏掉细节，但会明确提示；`keepRecent` 的 UI 含义仍是至少保留条数，实际会因 user 对齐多保留；摘要预算会受 assistant `maxTokens` 限制；4096 的默认上限是为了避免超过小输出模型的服务端上限，仍可能在更小的模型上失败；没有新增设置字段，不需要数据层验收。`chat_page_compress_truncated` 的含义从“历史未截断”变成“使用部分摘要”，四种语言同步。
+- 测试：`CompressionPlanTest` 覆盖保留起点对齐 user、单轮不压、找不到 user、超预算拒绝、预算内通过、检查点前旧历史不计入、`keepRecent=0` 带检查点、摘要 token 上限、assistant 上限为 0、输入预算、CJK/ASCII 与 Document 估算；全量 `:app:testGithubDebugUnitTest` 752 条（C72 当时计数），7 条既有 Windows 失败未变；assemble、spotless、markdownlint 通过。计划/预算纯函数由 JVM 覆盖；`ChatService` 的截断→部分摘要分支和 `RangeTooLarge` 通知没有服务层测试；provider key 无效，也没有真实摘要样本。
+
+### C73 发送前上下文裁剪
+
+- 落点：新增 `pruneContextForRequest`，在 `ChatRequestFactory.buildStep` 的 `limitContext` 与 C63 overflow window 之后、输入变换之前，对这次请求的消息副本做预算裁剪。预算为 `(model.contextLength - 2048).coerceAtLeast(1024)`，`contextLength <= 0` 时原样返回；最近 6 条不动。先找最近 6 条之外的工具输出：只有截断后确实变短，或 output 里含图片等非文本 part 时才重写，重写成「前缀 + 前 2000 字符」加非文本占位；再把同一范围内的消息级旧图片换成占位文本。每裁一条就重新估算，降到预算内就停；裁完仍超预算时不再继续处理，裁剪结果照发，交给 C63 overflow 恢复或 provider 错误。压缩摘要也走 `buildStep`，同样使用这层裁剪。
+- 理由：C72 只修了压缩计划本身，正常发送时旧 tool result 和图片仍会全部进入请求；模型上下文较小时，长工具输出和历史图片会先把窗口挤爆。请求级裁剪能保住最近上下文，又不必改存储或增加设置。
+- 合并注意：不改 Room、Settings、官方兼容导出或 `ai/`；只裁最近 6 条之外的工具输出和旧图片，最近工具链、用户刚发的图片、没有 output 的未执行/待审批工具不裁；工具输出保留前 2000 字符，消息级和工具输出内的图片都换成纯文本占位，模型会丢失部分细节，这是空间换信息；1025 到 2000 字符的输出不会为了加前缀而重写；预算依赖用户填写的模型 `contextLength`，默认 1M 时基本不会触发；2048 预留不精确覆盖系统提示词和工具定义；如果最近 6 条自己就超预算、或裁完仍超，不再继续处理，C63 和 provider 错误仍是兜底；Document 不参与裁剪，`DocumentAsPromptTransformer` 在裁剪之后还会把全文展开，超大文档仍可能把预算顶破；C72 的计划估算不调用这层裁剪，压缩的 `RangeTooLarge` 可能偏保守；没有新增设置字段，不需要数据层验收。
+- 测试：`ContextPruningTest` 覆盖预算内原样返回、旧工具输出截断且保留最近消息与原列表、两条可裁工具时只裁第一条（early stop）、1025 到 2000 字符不重写、旧图片占位且保留最近图片、工具输出内图片占位并计数、待审批无 output 工具不裁、恰好 6 条不裁、`contextLength <= 0` 原样返回、无工具/图片时原样返回；全量 `:app:testGithubDebugUnitTest` 762 条，7 条既有 Windows 失败未变；assemble、spotless、markdownlint 通过。没有设备验证：默认 1M 上下文很难触发，阈值靠 JVM 用例覆盖。

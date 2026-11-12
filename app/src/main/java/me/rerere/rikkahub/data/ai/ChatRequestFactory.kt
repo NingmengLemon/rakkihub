@@ -283,7 +283,15 @@ class ChatRequestFactory(
                 add(UIMessage.system(prompt = system).copy(isSynthetic = true))
             }
             val limited = visibleMessages.limitContext(assistant.contextMessageLimit)
-            addAll(if (shrinkActive) overflowWindow(limited) ?: limited else limited)
+            val window = if (shrinkActive) overflowWindow(limited) ?: limited else limited
+            val pruned = pruneContextForRequest(window, turn.model.contextLength)
+            if (pruned.toolResultCount > 0 || pruned.imageCount > 0) {
+                Log.i(
+                    TAG,
+                    "Pruned ${pruned.toolResultCount} tool results and ${pruned.imageCount} images to fit the context window",
+                )
+            }
+            addAll(pruned.messages)
         }.transforms(
             transformers = inputTransformers,
             context = context,
