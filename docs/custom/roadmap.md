@@ -74,11 +74,11 @@
 
    这是要求 1 的对称面，也是「改了结构就回不去」的解药。它在备份页上是第二个出口，不是把现有导出改掉：自家的导出始终带全量数据，包括我们新增的表与字段；官方兼容的导出只带官方认识的部分。
 
-   当前双方 schema 都是 v32，附件目录也一致，官方兼容出口在这一步只改路径：把附件引用换成官方安装的位置（C30）。官方恢复只把附件搬进自己的 files 目录、不改库里的路径，所以路径必须在导出时换掉。schema 一旦分叉，这个出口就得真的裁表裁列，那时会直接失败。
+   当前 Room schema 是 v33、官方是 v32；C80 只对 `usage_record.outcome` 做已知裁剪，官方兼容出口仍要把附件引用换成官方安装的位置（C30）。官方恢复只把附件搬进自己的 files 目录、不改库里的路径，所以路径必须在导出时换掉。其它表或列一旦分叉，这个出口仍会直接失败。
 
    `settings.json` 不需要裁字段：官方恢复用的 `JsonInstant` 开着 `ignoreUnknownKeys`，多余字段会被忽略，归档里的 `launchCount` 就是先例。这个容忍度只覆盖不认识的 key，改已有字段的含义它救不了，往枚举里加值它也救不了（未知枚举值会让整份设置解码失败，所以官方出口会把官方不认识的选项去掉）。
 
-   裁剪逻辑和导入侧一样，要能在一份固定样本集上验证，判据是官方客户端恢复成功，且恢复后的会话条数与关键字段对得上。
+   已知裁剪和导入侧一样，要能在一份固定样本集上验证，判据是官方客户端恢复成功，且恢复后的会话条数与关键字段对得上；C80 已对 `usage_record.outcome` 落地，通用裁表裁列仍待后续。
 
 ### 验收
 
@@ -88,7 +88,7 @@
 
 冻结已解除，条件是导入器已实现并在真实样本上验到了主要判据；逐类缺口见 [`backup/acceptance.md`](backup/acceptance.md)。解除之后，数据层的门禁从「不许动」换成「动了要维护」：改 Room 结构要同时写迁移，改完要重跑验收样本；改已有字段的含义要先建写入侧的字段映射表，那是唯一能发现语义漂移的环节。仍然生效的约束列在 [`README.md`](README.md) 的「数据结构」一节。
 
-官方兼容导出（要求 8）与这次解除直接相连：双方结构分叉之后，那个出口会直接失败，直到裁剪逻辑落地。
+官方兼容导出（要求 8）与这次解除直接相连：C80 已对 `usage_record.outcome` 这一处分叉做裁剪，其它结构分叉仍会让那个出口直接失败，直到通用裁剪逻辑落地。
 
 ### 与后续阶段的衔接
 
@@ -310,6 +310,7 @@
 | C77 错误卡片重试本步 | L3 | 无（ChatError 与错误卡片） |
 | C78 工具失败日志分级 | L3 | 无（ai/AgentLoop.kt） |
 | C79 本地导出默认包含工作区文件 | L2 | C29 |
+| C80 用量成功失败区分与官方 schema 裁剪 | L2 | C18、C30 |
 
 ### 依赖链
 
@@ -352,14 +353,14 @@ RikkaHub 现状：
 - C61 把失败归一化为 `HttpException`/`LlmFailure`：流式和非流式的 2xx 之外的响应都带 HTTP status、错误码和 `Retry-After`；默认只重试 `RATE_LIMIT`、`SERVER`、`TIMEOUT`、`TRANSPORT`、`EMPTY_RESPONSE`，鉴权、配额、非法请求和 context overflow 不重试。空回复现在按 `EMPTY_RESPONSE` 进入同一策略，最多重试 `maxRetries` 次；默认 3 次，C75 起网络设置可调 0..10，基础间隔 1s/2s/4s，10% jitter，`Retry-After` 会被 `maxDelay` 截断；开关和次数仍是全局的。`retryOn` 保留为自定义逃生口。
 - C58 已给失败和用户停止的回复加 `FAILED`/`INTERRUPTED` 状态；请求组装、标题生成、记忆整理和 `read_conversations` 都过滤 `FAILED`，失败半截不会再作为普通回复进入下一轮。多步工具调用在中途失败时仍按整条消息隔离。
 - 停止或下一次发送时，未执行工具补恢复结果，按 `startedAt` 区分 `not_started`/`outcome_unknown`；审批恢复路径中的 Approved/Denied/Answered 工具仍交给 AgentLoop 继续执行。
-- UI 有失败/中断标记；C76 已补 attempt 行和倒计时，C77 已补错误卡片重试按钮；`usage_record` 每次尝试一行，但没有成功/失败状态。
+- UI 有失败/中断标记；C76 已补 attempt 行和倒计时，C77 已补错误卡片重试按钮；C80 给 `usage_record` 加 outcome，失败成本保留、缓存命中率排除失败。
 
 待办：
 
 - P0 失败 attempt 与成功消息分开：C58 已实现 `UIMessage.status` 标记、`FAILED` 消息从请求/标题/记忆/`read_conversations` 过滤、相邻 user 合并和 UI 失败/中断标签。剩余：多步工具调用在中途失败时目前整条隔离，per-step attempt 细化仍归 P2；工具恢复结果已由 C65 处理。
 - P1 稳定错误码与可配置策略。C61 已把 provider 非 2xx 和空回复统一成带 `code`、`status`、`retryAfterMs` 的失败类型，覆盖 `AUTH`、`QUOTA`、`RATE_LIMIT`、`SERVER`、`TIMEOUT`、`EMPTY_RESPONSE`、`CONTEXT_WINDOW_EXCEEDED`、`INVALID_REQUEST`、`UNKNOWN`；裸传输错误仍按 `IOException` 重试，`TRANSPORT` 留给调用方包装。策略是 normal mode：`maxRetries`、`retryableCodes`、`initialDelay`、`maxDelay`、`jitter`；默认只重试瞬时错误，读取 `Retry-After` 并设上限；C75 起 `maxRetries` 由 `NetworkSetting` 可调 0..10，默认 3，其余参数仍固定。保留 step 级重试，不做 prefill 续写。验收：429、5xx、空回复可重试；400、401、403、额度、上下文超限不重试；用户停止可取消等待；重试不重复工具副作用；重试请求与前缀缓存兼容。
-- P2 重试状态 UI。C75 已让自动重试次数可调，C76 在聊天列表加入 attempt 卡片：编号、失败原因、等待秒数和倒计时；C77 给生成失败卡片加手动重试，普通发送只在仍是最后正常用户轮次时回到该轮，已经继续对话时保留卡片并提示，不截断后续；重新生成回到当时的目标消息。剩余：把失败 attempt 与成功后内容一起展示，以及失败 attempt 的 usage 区分。
-- P3 用量区分成功与失败 attempt。`usage_record` 加 outcome、attempt、retryId 或等价字段，统计页不把失败尝试计入缓存命中率，但保留成本；消息卡片继续只显示成功 attempt 的 usage。验收：旧数据默认成功或未知，迁移可回滚。
+- P2 重试状态 UI。C75 已让自动重试次数可调，C76 在聊天列表加入 attempt 卡片：编号、失败原因、等待秒数和倒计时；C77 给生成失败卡片加手动重试，普通发送只在仍是最后正常用户轮次时回到该轮，已经继续对话时保留卡片并提示，不截断后续；重新生成回到当时的目标消息。剩余：把失败 attempt 与成功后内容一起展示。
+- P3 用量区分成功与失败 attempt。C80 已给 `usage_record` 加 `outcome`（SUCCESS/FAILED/CANCELLED/UNKNOWN，旧数据 UNKNOWN），失败成本保留、统计页缓存命中率排除 FAILED/CANCELLED；消息卡片继续只显示成功 attempt 的 usage。attempt/retryId 没有单独落列，按 outcome 收口。验收：Room 32 到 33 迁移、旧数据默认 UNKNOWN、真实 app 库迁移、data.sync 53 条和官方导出裁剪都通过。32 到 33 没有降级迁移，回退旧构建前要保留 v32 库副本或继续用新构建。
 
 ### DSH 对照检查记录
 

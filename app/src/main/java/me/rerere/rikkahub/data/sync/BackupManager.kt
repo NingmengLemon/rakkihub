@@ -363,8 +363,8 @@ class BackupManager(
             val plan = OfficialRestorePlanner.plan(
                 version = header.version,
                 identityHash = header.identityHash,
-                ourVersion = OfficialDatabaseSchema.VERSION,
-                ourIdentity = OfficialDatabaseSchema.IDENTITY_HASH,
+                ourVersion = OfficialDatabaseSchema.ROOM_VERSION,
+                ourIdentity = OfficialDatabaseSchema.ROOM_IDENTITY_HASH,
                 snapshots = OfficialSnapshots.BY_VERSION,
             )
             // 同版本的库会直接走迁移链，而迁移链不改数据；如果里面还带着别的安装

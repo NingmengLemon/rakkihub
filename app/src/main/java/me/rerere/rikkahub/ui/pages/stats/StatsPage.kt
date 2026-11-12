@@ -454,8 +454,8 @@ private fun UsageTotalsGrid(usage: UsageStats, modifier: Modifier = Modifier) {
                 modifier = Modifier.weight(1f),
                 icon = HugeIcons.PercentCircle,
                 label = stringResource(R.string.stats_page_cache_hit_rate),
-                value = if (totals.promptTokens > 0) {
-                    "%.1f%%".format(totals.cachedTokens * 100.0 / totals.promptTokens)
+                value = if (totals.cachePromptTokens > 0) {
+                    "%.1f%%".format(totals.cacheCachedTokens * 100.0 / totals.cachePromptTokens)
                 } else {
                     "-"
                 },

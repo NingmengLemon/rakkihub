@@ -284,9 +284,9 @@ fun ImportExportTab(
         CardGroup(
             title = { Text(stringResource(R.string.backup_page_group_official)) },
         ) {
-            // 产出官方客户端读得回去的备份。双方 schema 一致时库的形状不变，但附件路径
+            // 产出官方客户端读得回去的备份。C80 后 Room 33 与官方 v32 只差 usage outcome，
             // 会换成官方安装的位置，settings 里官方不认识的条目会被去掉；一旦我们改了
-            // 结构，这个出口会直接失败，直到裁剪逻辑落地。
+            // 这一列会先被已知裁剪去掉；其它结构分叉仍直接失败。
             item(
                 onClick = if (operation == null) {
                     { startExport(BackupTarget.OFFICIAL) }

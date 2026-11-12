@@ -65,10 +65,15 @@ internal class OfficialDatabaseReader private constructor(
 
         return when (val verdict = OfficialSchemaVerifier.verify(snapshot.tables, liveColumns)) {
             is OfficialSchemaVerifier.Verdict.Ok -> {
-                verdict.unexpectedColumns.forEach { (table, columns) ->
+                val unexpected = verdict.unexpectedColumns
+                    .mapValues { (table, columns) ->
+                        columns.filterNot { it in OfficialDatabaseSchema.KNOWN_EXTRA_COLUMNS[table].orEmpty() }
+                    }
+                    .filterValues { it.isNotEmpty() }
+                unexpected.forEach { (table, columns) ->
                     Log.w(TAG, "官方表 $table 有快照之外的列 ${columns.joinToString()}，已忽略")
                 }
-                verdict.unexpectedColumns
+                unexpected
             }
 
             is OfficialSchemaVerifier.Verdict.Failed -> error(verdict.reason)
@@ -127,7 +132,13 @@ internal class OfficialDatabaseReader private constructor(
             // 校验失败时要把刚打开的库关掉，否则 fd 要等 finalize 才释放
             return try {
                 val version = database.version
-                val snapshot = requireNotNull(OfficialSnapshots.forVersion(version)) {
+                val snapshot = OfficialSnapshots.forVersion(version)
+                    ?: if (version == OfficialDatabaseSchema.ROOM_VERSION) {
+                        OfficialSnapshots.forVersion(OfficialDatabaseSchema.VERSION)
+                    } else {
+                        null
+                    }
+                requireNotNull(snapshot) {
                     "未知的官方版本 v$version，已知：${OfficialSnapshots.BY_VERSION.keys.sorted()}"
                 }
                 OfficialDatabaseReader(database, snapshot)

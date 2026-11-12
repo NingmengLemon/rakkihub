@@ -1,6 +1,7 @@
 package me.rerere.rikkahub.data.sync.official
 
 import android.content.Context
+import android.database.sqlite.SQLiteDatabase
 import androidx.core.net.toUri
 import androidx.sqlite.db.SupportSQLiteDatabase
 import kotlinx.coroutines.Dispatchers
@@ -12,9 +13,10 @@ import java.io.File
 /**
  * 把官方库转换成当前版本的空库。
  *
- * 用于「版本相同但结构不同」的库：迁移链不会管，Room 的 identity 校验会直接拒绝，所以要用
- * 读取层按官方快照读出来、再写进一个新建的当前版本库。转换完交给现有的 `stageRestore` 流程
- * 继续走，附件、settings、publish 都不变。
+ * 用于「版本相同但结构不同」的官方库，以及 v33 自家库带外来附件路径的恢复：前者 Room 的
+ * identity 校验会拒绝，后者迁移链不会改写路径，所以要用读取层按官方快照读出来、再写进
+ * 一个新建的当前版本库。v33 源库的 usage outcome 在写完后按 id 补回。转换完交给现有的
+ * `stageRestore` 流程继续走。
  *
  * 只转换，不安装：目标文件写在 staging 下，由调用方决定怎么用。
  */
@@ -34,6 +36,7 @@ internal class OfficialDatabaseConverter(
                 val database = room.openHelper.writableDatabase
                 requireTargetCoversSnapshot(database, reader.tables)
                 OfficialDatabaseWriter(database, filesUriPrefix).write(reader)
+                preserveUsageOutcome(source, database)
                 // WAL 里可能还压着内容，先合进主文件再关，否则留下非空的 -wal 会让
                 // PendingRestore 对同一路径生成两条 entry
                 DatabaseBackup.checkpoint(database)
@@ -42,6 +45,38 @@ internal class OfficialDatabaseConverter(
             }
         }
         DatabaseBackup.removeSidecars(target)
+    }
+
+    /**
+     * 转换器按官方 v32 列写库，当前 Room 33 的 `usage_record.outcome` 不在官方快照里，
+     * 写完后会回默认 UNKNOWN。v33 自家库带外来附件路径时也会走这条转换器，所以要把
+     * outcome 按 id 从源库补回去；官方 v32 源没有这一列，跳过。
+     */
+    private fun preserveUsageOutcome(source: java.io.File, target: SupportSQLiteDatabase) {
+        val outcomes = SQLiteDatabase.openDatabase(
+            source.absolutePath,
+            null,
+            SQLiteDatabase.OPEN_READONLY,
+        ).use { db ->
+            val columns = db.rawQuery("PRAGMA table_info(usage_record)", null).use { cursor ->
+                buildList { while (cursor.moveToNext()) add(cursor.getString(1)) }
+            }
+            if ("outcome" !in columns) {
+                emptyList()
+            } else {
+                db.rawQuery("SELECT id, outcome FROM usage_record", null).use { cursor ->
+                    buildList {
+                        while (cursor.moveToNext()) add(cursor.getLong(0) to cursor.getString(1))
+                    }
+                }
+            }
+        }
+        for ((id, outcome) in outcomes) {
+            target.execSQL(
+                "UPDATE usage_record SET outcome = ? WHERE id = ?",
+                arrayOf(outcome, id),
+            )
+        }
     }
 
     /**

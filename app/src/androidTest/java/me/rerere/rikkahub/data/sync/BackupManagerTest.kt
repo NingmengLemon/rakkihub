@@ -116,10 +116,10 @@ class BackupManagerTest {
     }
 
     /**
-     * 官方兼容出口的核心安全属性：双方 schema 一致时改写附件路径后交出，分叉时直接失败。
+     * 官方兼容出口的核心安全属性：schema 一致时改写附件路径后交出，已知分叉裁剪，其它分叉失败。
      *
-     * 现在本仓库的 schema 与官方 v32 一致，所以这里只能验证「一致时能产出归档，且该归档能被
-     * 恢复流程接受」。分叉分支由 `OfficialDatabaseCompatibilityTest` 覆盖。
+     * 现在本仓库 Room 33、官方 v32；C80 的 usage_record.outcome 走已知裁剪，其它分叉的
+     * 负向用例在 `OfficialSchemaTrimmerTest`。
      */
     @Test fun officialTargetWritesArchiveThatStagingAccepts() = runBlocking {
         val archive = manager.createBackup(
@@ -224,8 +224,8 @@ class BackupManagerTest {
         assertEquals("live", probe(liveDatabase))
     }
 
-    /** 同版本但结构不同：迁移链不管，Room 会拒绝，必须先转成当前版本再发布 */
-    @Test fun sameVersionWithDifferentIdentityIsConvertedBeforePublishing() = runBlocking {
+    /** 当前版本但结构不同、又没有该版本的官方快照：无法安全转换，直接拒绝 */
+    @Test fun unknownIdentityAtTheCurrentVersionIsRejected() = runBlocking {
         val source = File(directory, "same-version")
         val archive = File(directory, "same-version.zip")
         withRoom(source) { room ->
@@ -234,7 +234,7 @@ class BackupManagerTest {
                 "INSERT INTO workspaces (id, name, root, shell_status, created_at, updated_at, type) " +
                     "VALUES ('w1', 'demo', '/tmp/demo', 'READY', 1, 2, 'LOCAL')"
             )
-            // 冒充「同版本但 schema 被改过」的库
+            // 当前版本但 identity 被改过，且没有该版本的官方快照
             db.execSQL("UPDATE room_master_table SET identity_hash = '00000000000000000000000000000000'")
             DatabaseBackup.checkpoint(db)
         }
@@ -243,21 +243,15 @@ class BackupManagerTest {
             addFile(zip, DatabaseBackup.ARCHIVE_DATABASE, source)
         }
 
-        manager.stageRestore(archive, includeFiles = false)
-
-        val staged = File(context.noBackupFilesDir, "backup-restore/pending/payload/database/rikka_hub")
-        assertTrue("转换结果应当已发布到 pending", staged.isFile)
-        SQLiteDatabase.openDatabase(staged.absolutePath, null, SQLiteDatabase.OPEN_READONLY).use { db ->
-            assertEquals(OfficialDatabaseSchema.VERSION, db.version)
-            OfficialDatabaseHeaders.readIdentityHash(db)?.let {
-                assertEquals("转换后应当是我们的结构", OfficialDatabaseSchema.IDENTITY_HASH, it)
-            } ?: error("转换结果应当带 schema 指纹")
-            db.rawQuery("SELECT name FROM workspaces WHERE id = 'w1'", null).use {
-                assertTrue("行数据应当被搬过去", it.moveToFirst())
-                assertEquals("demo", it.getString(0))
-            }
-        }
-        assertEquals("live 在重启前不动", "live", probe(liveDatabase))
+        val error = runCatching { manager.stageRestore(archive, includeFiles = false) }
+            .exceptionOrNull()
+        assertTrue("当前版本但结构不同必须拒绝，实际是 $error", error is IllegalStateException)
+        assertTrue(
+            "提示要说明没有该版本的官方快照，实际是 ${error?.message}",
+            error?.message.orEmpty().contains("没有该版本的官方快照"),
+        )
+        assertFalse(File(context.noBackupFilesDir, "backup-restore/pending").exists())
+        assertEquals("live", probe(liveDatabase))
     }
 
     /** 版本高于本应用：迁移链降不了，明确拒绝，不要回落到迁移链让 Room 报个看不懂的错 */
@@ -267,7 +261,7 @@ class BackupManagerTest {
         withRoom(source) { room ->
             val db = room.openHelper.writableDatabase
             DatabaseBackup.checkpoint(db)
-            db.execSQL("PRAGMA user_version = 33")
+            db.execSQL("PRAGMA user_version = 34")
         }
         ZipOutputStream(archive.outputStream()).use { zip ->
             addSettingsEntry(zip)
@@ -306,6 +300,10 @@ class BackupManagerTest {
                     "VALUES ('n1', 'c1', 0, ?, 0)",
                 arrayOf("""[{"type":"image","url":"$foreign"}]"""),
             )
+            db.execSQL(
+                "INSERT INTO usage_record (created_at, source, prompt_tokens, completion_tokens, cached_tokens, outcome) " +
+                    "VALUES (1, 'CHAT', 10, 1, 2, 'SUCCESS')"
+            )
             DatabaseBackup.checkpoint(db)
         }
         ZipOutputStream(archive.outputStream()).use { zip ->
@@ -325,6 +323,15 @@ class BackupManagerTest {
             val ours = localFileUrl("upload/abc.png")
             assertTrue("应当重写成本机路径，实际是 $messages", messages.contains(ours))
             assertFalse("不应残留官方包的路径，实际是 $messages", messages.contains("me.rerere.rikkahub/files/"))
+            val outcome = db.rawQuery("SELECT outcome FROM usage_record", null).use {
+                check(it.moveToFirst())
+                it.getString(0)
+            }
+            assertEquals("转换不能把 usage outcome 重置成 UNKNOWN", "SUCCESS", outcome)
+            assertEquals(
+                OfficialDatabaseSchema.ROOM_IDENTITY_HASH,
+                OfficialDatabaseHeaders.readIdentityHash(db),
+            )
         }
     }
 

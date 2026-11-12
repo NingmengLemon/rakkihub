@@ -1,7 +1,9 @@
 package me.rerere.rikkahub.data.ai
 
 import android.util.Log
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.TimeoutCancellationException
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.launch
@@ -14,6 +16,7 @@ import me.rerere.ai.provider.TextGenerationResult
 import me.rerere.ai.ui.StreamChunk
 import me.rerere.ai.ui.UIMessage
 import me.rerere.rikkahub.data.db.dao.UsageRecordDAO
+import me.rerere.rikkahub.data.db.entity.UsageOutcome
 import me.rerere.rikkahub.data.db.entity.UsageRecordEntity
 import kotlin.uuid.Uuid
 
@@ -50,7 +53,13 @@ class UsageRecorder(
     fun <T : ProviderSetting> wrap(provider: Provider<T>, tag: UsageTag): Provider<T> =
         UsageRecordingProvider(provider, tag)
 
-    private fun record(tag: UsageTag, providerSetting: ProviderSetting, params: TextGenerationParams, usage: TokenUsage) {
+    private fun record(
+        tag: UsageTag,
+        providerSetting: ProviderSetting,
+        params: TextGenerationParams,
+        usage: TokenUsage,
+        outcome: UsageOutcome,
+    ) {
         if (usage.promptTokens <= 0 && usage.completionTokens <= 0) return
         val record = UsageRecordEntity(
             createdAt = System.currentTimeMillis(),
@@ -63,6 +72,7 @@ class UsageRecorder(
             promptTokens = usage.promptTokens,
             completionTokens = usage.completionTokens,
             cachedTokens = usage.cachedTokens,
+            outcome = outcome.name,
         )
         // Room 的 suspend 写入自己会切到后台线程
         scope.launch {
@@ -80,7 +90,7 @@ class UsageRecorder(
             messages: List<UIMessage>,
             params: TextGenerationParams,
         ): TextGenerationResult = delegate.generateText(providerSetting, messages, params).also { result ->
-            result.usage?.let { record(tag, providerSetting, params, it) }
+            result.usage?.let { record(tag, providerSetting, params, it, UsageOutcome.SUCCESS) }
         }
 
         override suspend fun streamText(
@@ -92,13 +102,34 @@ class UsageRecorder(
             return flow {
                 // 同一次请求里的 usage 是逐步更新的快照，按 merge 合并；中途取消或出错时已经产生的用量也要记下
                 var usage: TokenUsage? = null
+                var outcome = UsageOutcome.SUCCESS
+                var downstreamFailure = false
                 try {
                     upstream.collect { chunk ->
                         if (chunk is StreamChunk.Usage) usage = usage.merge(chunk.usage)
-                        emit(chunk)
+                        try {
+                            emit(chunk)
+                        } catch (e: CancellationException) {
+                            // 下游主动结束（例如 take）是取消，不是读取层处理失败
+                            throw e
+                        } catch (e: Throwable) {
+                            // Provider 已经产出了这个 chunk，失败发生在读取层的下游处理
+                            downstreamFailure = true
+                            throw e
+                        }
                     }
+                } catch (e: CancellationException) {
+                    outcome = when {
+                        downstreamFailure -> UsageOutcome.SUCCESS
+                        e is TimeoutCancellationException -> UsageOutcome.FAILED
+                        else -> UsageOutcome.CANCELLED
+                    }
+                    throw e
+                } catch (e: Throwable) {
+                    outcome = if (downstreamFailure) UsageOutcome.SUCCESS else UsageOutcome.FAILED
+                    throw e
                 } finally {
-                    usage?.let { record(tag, providerSetting, params, it) }
+                    usage?.let { record(tag, providerSetting, params, it, outcome) }
                 }
             }
         }

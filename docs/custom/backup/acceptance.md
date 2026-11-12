@@ -7,7 +7,7 @@
 六类，至少各一份：
 
 1. 带附件引用的官方客户端备份。跨安装，会命中 C25 的探测而走转换器，验的是转换与附件路径重写。内容要覆盖多分支会话与重新生成、带附件与工具调用的消息、多 provider 与自定义 assistant、自定义主题与提示词。
-2. 构造样本：把官方备份的 identity 改掉，让它落进 `OfficialRestorePlanner` 的 Convert 分支。Convert 要求双方版本号相同、identity 不同且该版本有快照。官方目前发布的 v32 与本仓库同版本、同 identity，所以这条要等官方在同一个版本号上改结构才会被真实样本触发；在那之前只能用构造样本验证。
+2. 构造样本：把备份库的 identity 改掉，验证恢复分流。C80 后本仓库 Room 33、官方快照只到 v32；v33 同版本但 identity 未知且没有官方快照会被拒绝。Convert 分支要求双方版本号相同、identity 不同且该版本有快照，当前生产不可达，`OfficialRestorePlannerTest` 用显式的 v32 快照覆盖该分支。
 3. 本 fork 旧构建导出的备份（改包名前，包名还是 `me.rerere.rikkahub`，带附件引用）。同样跨安装、同样命中 C25 走转换器；与第 1 类的区别是版本更低、settings 更旧。
 4. 本应用自己导出、且与当前安装同一包名同一用户号的备份。不跨安装。消息引用里新写或重存过的是相对形态（C36），按当前安装解析；没重存过的仍是绝对路径，可能是当前安装的，也可能是官方或旧包名的，带这类引用的库按 [`README.md`](README.md) 的探测说明处理。设置仍是绝对路径。版本低于当前的自家备份没有样本或用例。
 5. 版本高于我们的库，必须明确报错。
@@ -117,13 +117,13 @@ v31 的样本推成 `rikkahub-sample-v31.db` 与 `backup-expectations-v31.json`�
 | 类别 | 样本或测试 | 状态 |
 | --- | --- | --- |
 | 官方客户端导出 | v32（官方 3.1.1，带附件引用） | 表数据与转换产物全量；附件逐个比；settings 的条数、id 集合、当前助手与模型 |
-| 构造样本 | `BackupManagerTest` 里改 identity 的用例 | 覆盖接线，无独立样本 |
+| 构造样本 | `BackupManagerTest` 里改 v33 identity 的拒绝用例、`OfficialRestorePlannerTest` 的 v32 Convert 用例 | 覆盖当前拒绝和未来 Convert 分支接线 |
 | 本 fork 旧构建 | v31（产出自 3.1.0 (193)，包名还是 `me.rerere.rikkahub`） | 表数据与内容摘要；settings 只手工核对过条数（经 migrate 与 decode 后不变），没有脚本或测试复现；附件未逐个比 |
 | 本应用自己导出 | `BackupManagerTest` 的常规恢复用例与 `foreignAttachmentPathsAreRewrittenOnSameVersionRestore`、`OfficialForeignAttachmentPathsTest`（探测判定） | 常规用例覆盖原路径，但没有插入引用，「引用都属于当前安装、恢复时不走转换器」这条恢复路径没有用例；探测判定由 `OfficialForeignAttachmentPathsTest` 覆盖（androidTest，不进 CI）。指向别的安装的旧绝对引用命中 C25，同版本也走转换器；新写或重存过的消息引用是相对形态，按当前安装解析；迁移链升级无样本或用例 |
 | 高版本库 | `BackupManagerTest` 的拒绝用例 | 验过 |
 | 缺条目拒绝 | `BackupManagerTest` 的缺库、缺设置、附件名带反斜杠三条用例 | 2026-11-04 设备上验过：三条都在解压之前失败，不留暂存，现有库与附件不动 |
 | 导入改名与去重 | `ImportedUploadFilesTest`（JVM）、`BackupManagerTest` 的改名与成链用例、`OfficialBackupRestoreAcceptanceTest`、`RestoreAppliedOutcomeTest` | 2026-11-04 设备上验过：v32 样本的附件按内容命名且集合一致；5GB 样本的 8080 个 upload 条目落成 682 个唯一内容 |
-| 官方兼容出口 | `BackupManagerTest` 的两条路径改写用例，外加一条「官方出口归档再恢复回本应用」 | 绝对与相对路径改写验过；设备上两次交给官方客户端恢复：v32 样本（170 会话 / 676 节点 / 98 个 upload 文件）与 5GB 数据（1664 会话 / 11483 节点 / 682 个内容名附件，图片与头像能显示）；schema 裁剪未实现 |
+| 官方兼容出口 | `BackupManagerTest` 的两条路径改写用例，外加一条「官方出口归档再恢复回本应用」 | 绝对与相对路径改写验过；设备上两次交给官方客户端恢复：v32 样本（170 会话 / 676 节点 / 98 个 upload 文件）与 5GB 数据（1664 会话 / 11483 节点 / 682 个内容名附件，图片与头像能显示）；`usage_record.outcome` 的已知裁剪已实现（C80），其它 schema 分叉仍待实现 |
 | 本应用自己导出、换包名恢复 | 临时 `.crosscheck` 包名的构建 | 170 会话 / 676 节点；2 个节点带相对引用，按新安装解析；64 个节点带官方绝对引用，经 C25 改写；98 个 upload 文件；测试图片显示 |
 
 ## 5GB 样本
@@ -163,3 +163,13 @@ C75 给 `NetworkSetting` 增加 `maxRetries`（默认 3）。这次只新增带�
 - `data.sync` 设备包 51 条全部通过（`BackupManagerTest` 26、`DatabaseBackupTest` 3、`OfficialBackupRestoreAcceptanceTest` 2、`RestoreAppliedOutcomeTest` 1、`OfficialDatabaseConverterTest` 2、`OfficialDatabaseReaderTest` 7、`OfficialDatabaseWriterTest` 4、`OfficialForeignAttachmentPathsTest` 4、`OfficialSampleAcceptanceTest` 2）。
 - v32/v31 官方样本读取与转换、同安装自家恢复、官方备份恢复、applied outcome 都通过；旧 settings JSON 没有 `maxRetries` 时按 3 解码，`SettingsRetryPolicyTest` 覆盖。
 - 官方 RikkaHub 3.1.1 手动恢复、5GB 和 `.crosscheck` 换包名恢复跳过，由请求方确认：官方 App 3.1.1 的设置入口在当前设备无法通过自动化进入（抽屉底部 Menu 只打开 Image Generation，右侧按钮是更新日志，Assistant 页只有 Back/Add，临时放大显示也未出现 Settings），而 C69 已用官方 3.1.1 恢复过同类自定义 Settings 字段，51 条已覆盖自家导出/恢复和官方样本；本次没有新增路径/附件/Room 变化，`.crosscheck` 的 C25 路径改写不受影响。设置页滑块也没有单独设备点验。
+
+## 2026-11-13 C80 重跑
+
+C80 给 `usage_record` 增加 `outcome`，Room 32 到 33，并在官方兼容导出时去掉这一列。这是 Room schema 变更，按上面的标准重跑设备数据验收：
+
+- `data.sync` 设备包 53 条全部通过（`BackupManagerTest` 26、`DatabaseBackupTest` 3、`OfficialBackupRestoreAcceptanceTest` 2、`RestoreAppliedOutcomeTest` 1、`OfficialDatabaseConverterTest` 2、`OfficialDatabaseReaderTest` 7、`OfficialDatabaseWriterTest` 4、`OfficialForeignAttachmentPathsTest` 4、`OfficialSampleAcceptanceTest` 2、`OfficialSchemaTrimmerTest` 2）。官方兼容出口的 v33 快照现在由 `OfficialSchemaTrimmer` 去掉 `usage_record.outcome`、写回官方 v32 identity，再由读取层按 v32 快照读回；带 usage 行的 trim 也验证了行数与 token 保留。v33 同版本但 identity 未知且没有官方快照的库会被拒绝，不再走“同版本转换”。
+- 数据库迁移/DAO/live 4 条通过：`Migration_32_33_Test` 验证旧行默认 UNKNOWN、新行默认 UNKNOWN；`UsageRecordDAOTest` 验证总成本含 FAILED/CANCELLED、缓存字段排除两者；`LiveDatabaseMigrationTest` 在设备上把真实 app 库迁到 33，旧 usage 行仍可读。
+- 真实 app 库迁移后仍是 168 会话、61 个 upload 文件、476 条 usage，全部旧行 outcome 为 UNKNOWN；主库头在未 checkpoint 时仍是 32，带 WAL 读出的逻辑库是 33，Room 打开时按 WAL 处理。32 到 33 没有降级迁移；回退到 C80 前的构建前要保留迁移前的 v32 数据库副本，或继续使用新构建。
+- 官方 RikkaHub 3.1.1 手动恢复和 5GB 没有重跑；C75 时已确认官方 App 3.1.1 的设置入口在当前设备无法通过自动化进入，且本次新增列只在自定义 `usage_record` 表，官方 v32 快照和官方兼容出口的裁剪由 53 条设备用例覆盖。若要把官方 App 手工恢复也补上，需要另找时间在能进入官方设置界面的设备上执行。
+- 全量 `:app:testGithubDebugUnitTest` 791 条，7 条既有 Windows 失败未变；`:ai:testDebugUnitTest` 324 条未变；assemble、spotless、markdownlint 通过。

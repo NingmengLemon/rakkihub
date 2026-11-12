@@ -7,7 +7,8 @@ import org.junit.Test
 /**
  * 官方兼容导出的前置判定：我们的库还在不在官方形状上。
  *
- * 分叉之后需要裁剪，而裁剪还没实现，所以这里只验证「能识别出分叉」，不验证转换。
+ * 分叉之后由 OfficialSchemaTrimmer 处理已登记的 usage_record.outcome；这里只验证
+ * 「能识别出分叉」，不验证转换。
  */
 class OfficialDatabaseCompatibilityTest {
 

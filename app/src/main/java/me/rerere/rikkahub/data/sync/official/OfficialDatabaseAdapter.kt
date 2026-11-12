@@ -8,7 +8,7 @@ import java.io.File
 internal const val OFFICIAL_APPLICATION_ID = "me.rerere.rikkahub"
 
 /**
- * 我们的数据库已经不在官方形状上，而官方兼容导出需要的裁剪逻辑还没实现。
+ * 我们的数据库已经不在官方形状上；C80 只对已登记的 `usage_record.outcome` 做已知裁剪，其它分叉仍失败。
  *
  * 用异常而不是返回空值，是为了让调用方只有一个失败分支；具体原因留给日志，界面上换成
  * 一条可翻译的提示。
@@ -20,7 +20,7 @@ internal class OfficialExportUnsupportedException(
 /**
  * 把我们的数据库快照转成官方客户端能打开的库。
  *
- * 双方 schema 一致时把附件引用改写成官方安装的路径再交出；一旦发现分叉就抛
+ * schema 一致时把附件引用改写成官方安装的路径再交出；C80 的已知分叉先裁剪，其它分叉仍抛
  * [OfficialExportUnsupportedException]。静默产出一份官方打不开的备份比直接失败更糟：失败
  * 当场就能看见，坏备份要等到恢复时才发现。
  */
@@ -38,11 +38,25 @@ internal object OfficialDatabaseAdapter {
         return when (val verdict = OfficialDatabaseCompatibility.compare(version, identityHash)) {
             OfficialDatabaseCompatibility.Verdict.Identical ->
                 rewriteAttachmentPaths(snapshot, attachmentPrefixRewrites)
-            is OfficialDatabaseCompatibility.Verdict.Diverged -> throw OfficialExportUnsupportedException(
-                "官方兼容导出还不能处理分叉的 schema：${verdict.reason}。裁剪逻辑尚未实现。"
-            )
+            is OfficialDatabaseCompatibility.Verdict.Diverged -> {
+                if (!canTrim(snapshot)) {
+                    throw OfficialExportUnsupportedException(
+                        "官方兼容导出还不能处理分叉的 schema：${verdict.reason}。该分叉不在已知裁剪范围内。"
+                    )
+                }
+                val trimmed = OfficialSchemaTrimmer.trim(
+                    snapshot,
+                    File(snapshot.parentFile, "trimmed-${snapshot.name}"),
+                )
+                rewriteAttachmentPaths(trimmed, attachmentPrefixRewrites)
+            }
         }
     }
+
+    private fun canTrim(snapshot: File): Boolean =
+        SQLiteDatabase.openDatabase(snapshot.absolutePath, null, SQLiteDatabase.OPEN_READONLY).use { database ->
+            OfficialSchemaTrimmer.canReadAsV32(database)
+        }
 
     /**
      * 逐表逐列做前缀替换，只碰快照里的 TEXT 列。

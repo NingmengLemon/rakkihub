@@ -3,9 +3,9 @@ package me.rerere.rikkahub.data.sync.official
 /**
  * 判断我们当前的数据库还在不在官方 v32 的形状上。
  *
- * 官方兼容导出只有在分叉时才需要裁剪，而裁剪逻辑还没实现。所以这里只负责说清楚
- * 「在不在同一形状上」，不负责转换：调用方拿到 [Verdict.Diverged] 时应当直接失败，
- * 而不是产出一份官方打不开的备份。
+ * 官方兼容导出只有在分叉时才需要裁剪；C80 已登记 `usage_record.outcome` 这一处可由
+ * [OfficialSchemaTrimmer] 裁剪，其它分叉仍直接失败。这里只负责说清楚「在不在同一形状上」，
+ * 不负责转换。
  */
 internal object OfficialDatabaseCompatibility {
 
@@ -13,7 +13,7 @@ internal object OfficialDatabaseCompatibility {
         /** 版本与 identity hash 都与官方一致，库的形状官方能直接打开 */
         data object Identical : Verdict
 
-        /** 已经分叉，需要裁剪，而裁剪还没实现 */
+        /** 已经分叉；已知列可由 OfficialSchemaTrimmer 裁剪，其它分叉仍失败 */
         data class Diverged(val reason: String) : Verdict
     }
 

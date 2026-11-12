@@ -10,6 +10,9 @@ import androidx.room.PrimaryKey
  *
  * 和消息分开存：删掉会话或消息后流水还在，统计不受影响；标题、翻译这类不落到消息里的请求也记在这里。
  * 引用的模型、助手和会话都可能已经被删除，所以不加外键。
+ *
+ * [outcome] 区分这次请求是成功、失败、被取消还是旧数据无法判断；失败/取消尝试的 token 仍然
+ * 计入成本，但统计页的缓存命中率只使用成功和未知行。
  */
 @Entity(
     tableName = "usage_record",
@@ -40,4 +43,15 @@ data class UsageRecordEntity(
     val completionTokens: Int,
     @ColumnInfo("cached_tokens")
     val cachedTokens: Int,
+    @ColumnInfo("outcome", defaultValue = "'UNKNOWN'")
+    val outcome: String = UsageOutcome.UNKNOWN.name,
 )
+
+enum class UsageOutcome {
+    SUCCESS,
+    FAILED,
+    CANCELLED,
+
+    /** 迁移前写入的旧行，无法判断成功还是失败。 */
+    UNKNOWN,
+}

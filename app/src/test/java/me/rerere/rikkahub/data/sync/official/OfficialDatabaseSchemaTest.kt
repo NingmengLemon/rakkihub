@@ -39,11 +39,35 @@ class OfficialDatabaseSchemaTest {
             )
         }
         if (highest > OfficialDatabaseSchema.VERSION) {
-            throw AssertionError(
-                "仓库里的 Room schema 已经到 v$highest，快照还停在 v${OfficialDatabaseSchema.VERSION}。" +
-                    "官方升级时同步更新快照；如果是我们自己升的版本，这条断言要改成对着官方来源校验，" +
-                    "而不是对着 app/schemas。"
+            // 高出来的 Room 版本必须只包含已知的自定义列，官方兼容导出会裁掉它们
+            assertEquals(OfficialDatabaseSchema.ROOM_VERSION, highest)
+            val officialColumns = tableColumns(schemaFile)
+            val latestColumns = tableColumns(File(schemaDir, "$highest.json"))
+            assertEquals(officialColumns.keys, latestColumns.keys)
+            val latest = Json.parseToJsonElement(File(schemaDir, "$highest.json").readText())
+                .jsonObject.getValue("database").jsonObject
+            assertEquals(
+                OfficialDatabaseSchema.ROOM_IDENTITY_HASH,
+                latest.getValue("identityHash").jsonPrimitive.content
             )
+            for (table in officialColumns.keys) {
+                assertEquals(
+                    "表 $table 的额外列没有登记到 KNOWN_EXTRA_COLUMNS",
+                    OfficialDatabaseSchema.KNOWN_EXTRA_COLUMNS[table].orEmpty(),
+                    latestColumns.getValue(table) - officialColumns.getValue(table).toSet(),
+                )
+            }
+        }
+    }
+
+    private fun tableColumns(file: File): Map<String, Set<String>> {
+        val database = Json.parseToJsonElement(file.readText()).jsonObject.getValue("database").jsonObject
+        return database.getValue("entities").jsonArray.associate { entity ->
+            val table = entity.jsonObject
+            table.getValue("tableName").jsonPrimitive.content to
+                table.getValue(
+                    "fields"
+                ).jsonArray.map { it.jsonObject.getValue("columnName").jsonPrimitive.content }.toSet()
         }
     }
 

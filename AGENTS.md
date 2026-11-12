@@ -130,8 +130,8 @@ This repository carries personal customizations on top of upstream `rikkahub/rik
   fields carry a default, existing field and DataStore key meanings do not change, and the acceptance samples are
   re-run afterwards. Changing a meaning would first need a field-mapping table, which does not exist yet. The
   data-structure section of `docs/custom/README.md` lists the constraints.
-- A Room schema change also makes the official-compatible export fail until its trimming logic exists (see C18). That
-  failure is deliberate, not a bug.
+- A Room schema change also makes the official-compatible export fail until its trimming logic exists. C80 implemented
+  the known `usage_record.outcome` trim (see C18/C80); other schema divergences still fail deliberately.
 - The branch is on independent updates: upstream is read, not merged. Read its commits, port feature or bugfix ideas
   by hand, and keep the C3 deletion in `ai/util/Request.kt` whenever upstream changes to that file are ported. The
   module reference table and the porting procedure live in the independent-update section of

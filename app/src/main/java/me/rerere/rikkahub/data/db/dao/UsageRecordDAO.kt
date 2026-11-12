@@ -13,7 +13,9 @@ interface UsageRecordDAO {
     @Query(
         "SELECT COALESCE(SUM(prompt_tokens), 0) AS promptTokens, " +
             "COALESCE(SUM(completion_tokens), 0) AS completionTokens, " +
-            "COALESCE(SUM(cached_tokens), 0) AS cachedTokens " +
+            "COALESCE(SUM(cached_tokens), 0) AS cachedTokens, " +
+            "COALESCE(SUM(CASE WHEN outcome NOT IN ('FAILED', 'CANCELLED') THEN prompt_tokens ELSE 0 END), 0) AS cachePromptTokens, " +
+            "COALESCE(SUM(CASE WHEN outcome NOT IN ('FAILED', 'CANCELLED') THEN cached_tokens ELSE 0 END), 0) AS cacheCachedTokens " +
             "FROM usage_record WHERE created_at >= :since"
     )
     suspend fun getTotals(since: Long = 0): UsageTotals
@@ -58,6 +60,9 @@ data class UsageTotals(
     val promptTokens: Long = 0,
     val completionTokens: Long = 0,
     val cachedTokens: Long = 0,
+    // 只统计成功和未知尝试，用来算缓存命中率；失败/取消的 token 仍计入成本
+    val cachePromptTokens: Long = 0,
+    val cacheCachedTokens: Long = 0,
 )
 
 data class DayCount(

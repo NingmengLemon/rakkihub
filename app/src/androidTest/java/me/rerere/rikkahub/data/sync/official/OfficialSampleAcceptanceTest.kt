@@ -1,5 +1,6 @@
 package me.rerere.rikkahub.data.sync.official
 
+import android.database.sqlite.SQLiteDatabase
 import androidx.core.net.toUri
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
@@ -119,8 +120,10 @@ class OfficialSampleAcceptanceTest {
             target.parentFile?.mkdirs()
             runBlocking { OfficialDatabaseConverter(context).convert(case.sample, target) }
             try {
+                SQLiteDatabase.openDatabase(target.absolutePath, null, SQLiteDatabase.OPEN_READONLY).use { db ->
+                    assertEquals("转换结果应当是当前 Room 版本", OfficialDatabaseSchema.ROOM_VERSION, db.version)
+                }
                 OfficialDatabaseReader.open(target).use { reader ->
-                    assertEquals("转换结果应当是当前版本", OfficialDatabaseSchema.VERSION, reader.snapshot.version)
                     assertTrue("转换结果不应有快照之外的列", reader.unexpectedColumns.isEmpty())
                     // 转换产物是当前版本的结构，源版本没有的列不参与比对：这里按**源版本**的列
                     // 集合算摘要，语义是「源里有的每一列都原样搬过来了」。

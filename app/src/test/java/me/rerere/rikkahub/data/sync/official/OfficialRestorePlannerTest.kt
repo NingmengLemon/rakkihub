@@ -12,15 +12,22 @@ import org.junit.Test
  */
 class OfficialRestorePlannerTest {
 
-    private val ourVersion = 32
-    private val ourIdentity = OfficialDatabaseSchema.IDENTITY_HASH
+    private val ourVersion = OfficialDatabaseSchema.ROOM_VERSION
+    private val ourIdentity = OfficialDatabaseSchema.ROOM_IDENTITY_HASH
     private val snapshots = OfficialSnapshots.BY_VERSION
 
-    private fun plan(version: Int, identity: String?) = OfficialRestorePlanner.plan(
+    private fun plan(version: Int, identity: String?) = planAt(ourVersion, ourIdentity, version, identity)
+
+    private fun planAt(
+        appVersion: Int,
+        appIdentity: String,
+        version: Int,
+        identity: String?,
+    ) = OfficialRestorePlanner.plan(
         version = version,
         identityHash = identity,
-        ourVersion = ourVersion,
-        ourIdentity = ourIdentity,
+        ourVersion = appVersion,
+        ourIdentity = appIdentity,
         snapshots = snapshots,
     )
 
@@ -30,14 +37,28 @@ class OfficialRestorePlannerTest {
 
     @Test fun `an older backup goes through the migration chain`() {
         assertEquals(OfficialRestorePlan.Migrate, plan(31, "a428043e3256791d9bc0855715c6355a"))
+        assertEquals(OfficialRestorePlan.Migrate, plan(32, OfficialDatabaseSchema.IDENTITY_HASH))
+        // 低于当前 Room 33 的库一律交给迁移链；identity 不能用来跳过迁移
+        assertEquals(OfficialRestorePlan.Migrate, plan(32, "00000000000000000000000000000000"))
         assertEquals(OfficialRestorePlan.Migrate, plan(16, null))
     }
 
-    @Test fun `same version but a different schema is converted`() {
-        // 官方 v32 的指纹与我们相同，所以这里用别的值模拟「同版本不同结构」
+    @Test fun `same version unknown identity is rejected without a snapshot`() {
         val result = plan(ourVersion, "00000000000000000000000000000000")
+        assertTrue("没有当前版本的官方快照时必须拒绝，实际是 $result", result is OfficialRestorePlan.Reject)
+        assertTrue((result as OfficialRestorePlan.Reject).reason.contains("没有该版本的官方快照"))
+    }
+
+    @Test fun `same version different identity still converts when a snapshot exists`() {
+        // 生产当前 Room 33 没有 v33 官方快照，这条覆盖转换器仍然支持的同期官方库分支
+        val result = planAt(
+            appVersion = OfficialDatabaseSchema.VERSION,
+            appIdentity = OfficialDatabaseSchema.IDENTITY_HASH,
+            version = OfficialDatabaseSchema.VERSION,
+            identity = "00000000000000000000000000000000",
+        )
         assertTrue("应当走转换，实际是 $result", result is OfficialRestorePlan.Convert)
-        assertEquals(ourVersion, (result as OfficialRestorePlan.Convert).snapshot.version)
+        assertEquals(OfficialDatabaseSchema.VERSION, (result as OfficialRestorePlan.Convert).snapshot.version)
     }
 
     @Test fun `same version without a schema fingerprint is rejected`() {

@@ -19,7 +19,13 @@ internal object OfficialForeignAttachmentPaths {
      */
     fun hasForeign(database: SQLiteDatabase, ourPrefix: String): Boolean {
         val version = database.version
-        val tables = OfficialSnapshots.forVersion(version)?.tables ?: return false
+        val tables = OfficialSnapshots.forVersion(version)?.tables
+            ?: if (version == OfficialDatabaseSchema.ROOM_VERSION) {
+                OfficialSnapshots.forVersion(OfficialDatabaseSchema.VERSION)?.tables
+            } else {
+                null
+            }
+            ?: return false
         for ((table, definition) in tables) {
             val columns = definition.columns
                 .filter { it.affinity == "TEXT" }

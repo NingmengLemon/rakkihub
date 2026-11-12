@@ -6,6 +6,7 @@ import androidx.test.platform.app.InstrumentationRegistry
 import io.requery.android.database.sqlite.RequerySQLiteOpenHelperFactory
 import kotlinx.coroutines.runBlocking
 import me.rerere.rikkahub.data.db.AppDatabase
+import me.rerere.rikkahub.data.db.entity.UsageOutcome
 import me.rerere.rikkahub.data.db.entity.UsageRecordEntity
 import org.junit.After
 import org.junit.Assert.assertEquals
@@ -47,7 +48,29 @@ class UsageRecordDAOTest {
         assertEquals(mapOf("2026-08-12" to 2, "2026-08-13" to 1), counts.associate { it.day to it.count })
     }
 
-    private suspend fun insert(localDateTime: String, source: String) {
+    @Test
+    fun totalsKeepFailedCostButExcludeItFromCacheRate() = runBlocking {
+        insert("2026-08-12T00:00:00", "CHAT", UsageOutcome.SUCCESS, prompt = 10, cached = 2)
+        insert("2026-08-12T00:01:00", "CHAT", UsageOutcome.FAILED, prompt = 10, cached = 1)
+        insert("2026-08-12T00:02:00", "CHAT", UsageOutcome.CANCELLED, prompt = 10, cached = 1)
+        insert("2026-08-12T00:03:00", "CHAT", UsageOutcome.UNKNOWN, prompt = 10, cached = 1)
+
+        val totals = dao.getTotals(epochMillis("2026-08-12T00:00:00"))
+
+        assertEquals(40, totals.promptTokens)
+        assertEquals(5, totals.cachedTokens)
+        // 成功与未知计入缓存率，FAILED 和 CANCELLED 只保留成本
+        assertEquals(20, totals.cachePromptTokens)
+        assertEquals(3, totals.cacheCachedTokens)
+    }
+
+    private suspend fun insert(
+        localDateTime: String,
+        source: String,
+        outcome: UsageOutcome = UsageOutcome.UNKNOWN,
+        prompt: Int = 10,
+        cached: Int = 0,
+    ) {
         dao.insert(
             UsageRecordEntity(
                 createdAt = epochMillis(localDateTime),
@@ -57,9 +80,10 @@ class UsageRecordDAOTest {
                 modelName = null,
                 assistantId = null,
                 conversationId = null,
-                promptTokens = 10,
+                promptTokens = prompt,
                 completionTokens = 1,
-                cachedTokens = 0,
+                cachedTokens = cached,
+                outcome = outcome.name,
             )
         )
     }

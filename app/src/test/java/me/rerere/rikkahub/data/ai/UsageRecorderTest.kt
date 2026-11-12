@@ -7,6 +7,7 @@ import kotlinx.coroutines.flow.take
 import kotlinx.coroutines.flow.toList
 import kotlinx.coroutines.test.TestScope
 import kotlinx.coroutines.test.runTest
+import kotlinx.coroutines.withTimeout
 import me.rerere.ai.core.TokenUsage
 import me.rerere.ai.provider.Model
 import me.rerere.ai.provider.Provider
@@ -21,6 +22,7 @@ import me.rerere.rikkahub.data.db.dao.SourceUsage
 import me.rerere.rikkahub.data.db.dao.UsageBucket
 import me.rerere.rikkahub.data.db.dao.UsageRecordDAO
 import me.rerere.rikkahub.data.db.dao.UsageTotals
+import me.rerere.rikkahub.data.db.entity.UsageOutcome
 import me.rerere.rikkahub.data.db.entity.UsageRecordEntity
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
@@ -51,6 +53,7 @@ class UsageRecorderTest {
         assertEquals(tag.assistantId.toString(), record.assistantId)
         assertEquals(tag.conversationId.toString(), record.conversationId)
         assertEquals(listOf(10, 2, 4), listOf(record.promptTokens, record.completionTokens, record.cachedTokens))
+        assertEquals(UsageOutcome.SUCCESS.name, record.outcome)
     }
 
     @Test
@@ -69,6 +72,7 @@ class UsageRecorderTest {
         assertEquals(3, chunks.size)
         val record = dao.records.single()
         assertEquals(listOf(10, 5, 3), listOf(record.promptTokens, record.completionTokens, record.cachedTokens))
+        assertEquals(UsageOutcome.SUCCESS.name, record.outcome)
     }
 
     @Test
@@ -84,7 +88,69 @@ class UsageRecorderTest {
         recorder().wrap(provider, tag).streamText(setting, emptyList(), params).take(2).toList()
         testScheduler.advanceUntilIdle()
 
-        assertEquals(10, dao.records.single().promptTokens)
+        val record = dao.records.single()
+        assertEquals(10, record.promptTokens)
+        assertEquals(UsageOutcome.CANCELLED.name, record.outcome)
+    }
+
+    @Test
+    fun `stream failure records the partial usage as failed`() = runTest {
+        val provider = FakeProvider(
+            chunks = flow {
+                emit(StreamChunk.Usage(TokenUsage(promptTokens = 10, cachedTokens = 2)))
+                throw IllegalStateException("network")
+            }
+        )
+
+        runCatching {
+            recorder().wrap(provider, tag).streamText(setting, emptyList(), params).toList()
+        }
+        testScheduler.advanceUntilIdle()
+
+        val record = dao.records.single()
+        assertEquals(listOf(10, 0, 2), listOf(record.promptTokens, record.completionTokens, record.cachedTokens))
+        assertEquals(UsageOutcome.FAILED.name, record.outcome)
+    }
+
+    @Test
+    fun `downstream failure keeps the provider usage successful`() = runTest {
+        val provider = FakeProvider(
+            chunks = flow {
+                emit(StreamChunk.Usage(TokenUsage(promptTokens = 10, cachedTokens = 2)))
+            }
+        )
+
+        runCatching {
+            recorder().wrap(provider, tag).streamText(setting, emptyList(), params).collect {
+                throw IllegalStateException("downstream")
+            }
+        }
+        testScheduler.advanceUntilIdle()
+
+        val record = dao.records.single()
+        assertEquals(10, record.promptTokens)
+        assertEquals(UsageOutcome.SUCCESS.name, record.outcome)
+    }
+
+    @Test
+    fun `stream timeout records the partial usage as failed`() = runTest {
+        val provider = FakeProvider(
+            chunks = flow {
+                emit(StreamChunk.Usage(TokenUsage(promptTokens = 10)))
+                awaitCancellation()
+            }
+        )
+
+        runCatching {
+            withTimeout(100) {
+                recorder().wrap(provider, tag).streamText(setting, emptyList(), params).toList()
+            }
+        }
+        testScheduler.advanceUntilIdle()
+
+        val record = dao.records.single()
+        assertEquals(10, record.promptTokens)
+        assertEquals(UsageOutcome.FAILED.name, record.outcome)
     }
 
     @Test

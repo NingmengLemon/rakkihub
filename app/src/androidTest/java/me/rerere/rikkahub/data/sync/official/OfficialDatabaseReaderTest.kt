@@ -93,7 +93,7 @@ class OfficialDatabaseReaderTest {
     fun failsWhenTheSchemaVersionIsUnknown() {
         val file = appDatabase("version.db") {}
         SQLiteDatabase.openDatabase(file.absolutePath, null, SQLiteDatabase.OPEN_READWRITE).use { database ->
-            database.version = 33
+            database.version = 34
         }
         val error = runCatching { OfficialDatabaseReader.open(file) }.exceptionOrNull()
         // 未知版本没有快照可读，读取层拒绝；分流要在更早的地方就把它挡下来
