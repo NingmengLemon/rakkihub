@@ -319,6 +319,7 @@ class ChatRequestFactory(
             settings = turn.settings,
             processingStatus = processingStatus,
             workspaceCwd = turn.workspaceCwd,
+            conversationId = turn.conversationId,
         ).mergeAdjacentUserMessages()
         val params = TextGenerationParams(
             model = turn.model,

@@ -1398,6 +1398,20 @@ class ChatService(
     }
 
     /**
+     * 把 OCR 文本写回会话里的图片 part，后续请求直接复用，不再重复识别。
+     *
+     * 图片本体和 UI 不变，只补 metadata；所有分支一起补，避免切分支后重新识别。
+     */
+    suspend fun attachOcrTexts(conversationId: Uuid, texts: Map<String, String>) {
+        if (texts.isEmpty()) return
+        withLoadedSession(conversationId) { session ->
+            // withOcrTexts 没有变化时返回原实例，flush 会跳过写入
+            session.update { conversation -> conversation.withOcrTexts(texts) }
+            session.flush()
+        }
+    }
+
+    /**
      * 用户在聊天页改的单列字段：已落库的会话只写这一列，生成中也不会顺带写入还没生成完的回复；
      * 还没落过库的新会话整份落库，留下记录（没有内容的新会话仍然不写）。
      */

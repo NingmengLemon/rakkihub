@@ -33,7 +33,7 @@ $env:JAVA_HOME='E:\WorkBench\Java\jdk-23.0.2'; $env:PATH="$env:JAVA_HOME\bin;$en
 
 `test` 覆盖所有模块，app 有 `github` 与 `play` 两个渠道，会按 debug 与 release 组合出 4 套变体各跑一遍，速度慢一些。
 
-判据是「没有新增失败」，不是「全部通过」。Windows 上有一批测试必然失败，属于测试本身假设类 Unix 环境，与代码改动无关。app 模块里固定失败 7 个：
+判据是「没有新增失败」，不是「全部通过」。Windows 上有一批测试必然失败，属于测试本身假设类 Unix 环境，与代码改动无关。app 模块里固定失败 7 个（用 Android Studio 自带 JBR 21 跑同一套测试时这 7 个会通过，比较时以同一 JDK 前后对比为准）：
 
 | 测试类 | 失败数 | 原因 |
 | --- | --- | --- |

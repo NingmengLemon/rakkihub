@@ -11,6 +11,8 @@ import me.rerere.ai.ui.ModelSnapshot
 import me.rerere.ai.ui.UIMessage
 import me.rerere.ai.ui.UIMessagePart
 import me.rerere.ai.ui.contextLimitStart
+import me.rerere.ai.ui.ocrText
+import me.rerere.ai.ui.withOcrText
 import me.rerere.ai.util.InstantSerializer
 import me.rerere.rikkahub.data.datastore.DEFAULT_ASSISTANT_ID
 import me.rerere.rikkahub.data.datastore.Settings
@@ -59,6 +61,43 @@ data class Conversation(
         return messageNodes.firstOrNull { node -> node.messages.any { it.id == messageId } }
     }
 
+    /**
+     * 把 OCR 文本写回所有分支里的图片 part，返回新的会话；没有变化时返回 this。
+     *
+     * 图片本体和 UI 不变，只补 metadata；所有分支一起补，避免切分支后重新识别。
+     */
+    fun withOcrTexts(texts: Map<String, String>): Conversation {
+        if (texts.isEmpty()) return this
+        var changed = false
+        val nodes = messageNodes.map { node ->
+            var nodeChanged = false
+            val messages = node.messages.map { message ->
+                var messageChanged = false
+                val parts = message.parts.map { part ->
+                    val text = (part as? UIMessagePart.Image)?.let { texts[it.url] }
+                    if (part is UIMessagePart.Image && text != null && part.ocrText() != text) {
+                        messageChanged = true
+                        part.withOcrText(text)
+                    } else {
+                        part
+                    }
+                }
+                if (messageChanged) {
+                    nodeChanged = true
+                    message.copy(parts = parts)
+                } else {
+                    message
+                }
+            }
+            if (nodeChanged) {
+                changed = true
+                node.copy(messages = messages)
+            } else {
+                node
+            }
+        }
+        return if (changed) copy(messageNodes = nodes) else this
+    }
     fun updateCurrentMessages(messages: List<UIMessage>): Conversation {
         val newNodes = this.messageNodes.toMutableList()
 

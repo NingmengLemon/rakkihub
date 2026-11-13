@@ -6,6 +6,7 @@ import me.rerere.ai.provider.Model
 import me.rerere.ai.ui.UIMessage
 import me.rerere.rikkahub.data.datastore.Settings
 import me.rerere.rikkahub.data.model.Assistant
+import kotlin.uuid.Uuid
 
 class TransformerContext(
     val context: Context,
@@ -14,6 +15,8 @@ class TransformerContext(
     val settings: Settings,
     val processingStatus: MutableStateFlow<String?> = MutableStateFlow(null),
     val workspaceCwd: String? = null,
+    /** 当前请求所属会话，OCR 结果要写回会话；输出转换等场景没有会话时为 null */
+    val conversationId: Uuid? = null,
 )
 
 interface MessageTransformer {
@@ -66,6 +69,7 @@ suspend fun List<UIMessage>.transforms(
     settings: Settings,
     processingStatus: MutableStateFlow<String?> = MutableStateFlow(null),
     workspaceCwd: String? = null,
+    conversationId: Uuid? = null,
 ): List<UIMessage> {
     val ctx = TransformerContext(
         context = context,
@@ -74,6 +78,7 @@ suspend fun List<UIMessage>.transforms(
         settings = settings,
         processingStatus = processingStatus,
         workspaceCwd = workspaceCwd,
+        conversationId = conversationId,
     )
     return transformers.fold(this) { acc, transformer ->
         transformer.transform(ctx, acc)

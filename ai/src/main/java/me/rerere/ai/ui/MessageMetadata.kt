@@ -123,6 +123,27 @@ data class DiffMetadata(
 ) : PartMetadata
 
 /**
+ * 图片的 OCR 文本，挂在图片 part 的 metadata 上。
+ *
+ * 纯文本模型每轮请求都要把历史图片换成文字；把识别结果落进会话后就不用重复识别，
+ * 缓存过期或被清理也不影响。图片本体仍然保留，UI 照常显示。
+ */
+@Serializable
+data class OcrMetadata(
+    @SerialName("ocr_text")
+    val text: String? = null,
+) : PartMetadata
+
+/** 给图片 part 挂上 OCR 文本，保留已有的其它 metadata。 */
+fun UIMessagePart.Image.withOcrText(text: String): UIMessagePart.Image {
+    val addition = OcrMetadata(text = text).toMetadata()
+    return copy(metadata = metadata?.let { JsonObject(it + addition) } ?: addition)
+}
+
+/** 读取图片 part 上的 OCR 文本。 */
+fun UIMessagePart.Image.ocrText(): String? = metadataAs<OcrMetadata>()?.text
+
+/**
  * 将 metadata 解析为类型化的 [PartMetadata], 解析失败或 metadata 为 null 时返回 null
  *
  * 由于 json 配置了 ignoreUnknownKeys, 不同 provider 的 metadata 互不干扰

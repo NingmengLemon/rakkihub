@@ -94,6 +94,7 @@
 | C84 | Gemini 独立 thoughtSignature 兼容 | 改造 |
 | C85 | Claude 思考块签名与 redacted_thinking 回放 | 改造 |
 | C86 | 关闭思考时省略 reasoning_effort | 改造 |
+| C87 | OCR 结果写回会话，历史图片不再重复识别 | 改造 |
 
 ## 明细
 
@@ -659,3 +660,10 @@
 - 理由：上游 #1644。OCR 走 `TextGenerationParams` 的默认 `reasoningLevel = OFF`，请求体带上 `reasoning_effort: "none"`；OpenCodeGo 网关（MIMO2.5）只接受 low/medium/high，直接 400，OCR 阶段失败并让主模型收到「OCR 错误」。关闭思考时省略字段，让网关用默认值
 - 合并注意：只改通用分支（opencode.ai 走 else）。deepseek/ark 用 `thinking.type`，nvidia 的 deepseek-v4 仍显式 `none`、其余 nvidia 模型把 OFF 映射成 `low`，openrouter 用 `reasoning.effort`，这些保留。代价是对默认开启思考的模型（o 系列等），省略字段不能真正关掉思考，只是不再发非法值；要真正关闭得在模型能力表里按 provider 声明。上游 `6188593c` 是同一思路，当时只改了 else 分支。`ResponseAPI`（`useResponseApi`）的 effort 映射没有动，那条路径上 OCR 仍可能发 `none`，留后续
 - 测试：`:ai:testDebugUnitTest` 345 条全过（新增 5 条：opencode OFF 省略、opencode MEDIUM 保留、通用网关 OFF 省略、通用网关 HIGH 保留、AUTO 不发）；app JVM 798 条，7 条既有 Windows 失败未变；assemble、spotless、markdownlint 通过。没有真实 OpenCodeGo 请求样本，判据是 issue 里的 400 报文和请求体断言
+
+### C87 OCR 结果写回会话，历史图片不再重复识别
+
+- 落点：`ai/src/main/java/me/rerere/ai/ui/MessageMetadata.kt` 新增 `OcrMetadata`（key 为 `ocr_text`）与 `withOcrText`/`ocrText`；`app/src/main/java/me/rerere/rikkahub/data/model/Conversation.kt` 新增 `withOcrTexts`，把文本写进所有分支的图片 part；`app/src/main/java/me/rerere/rikkahub/service/ChatService.kt` 新增 `attachOcrTexts`，更新会话并落库；`app/src/main/java/me/rerere/rikkahub/data/ai/transformers/OcrTransformer.kt` 先读 metadata，缓存命中或新识别的结果都写回会话，缓存改存原始文本并加 `v2:` key 前缀，处理状态只在真正调用 OCR 模型时出现；`Transformer.kt` 的 `TransformerContext`/`transforms` 增加 `conversationId`，`ChatRequestFactory.kt` 传入
+- 理由：上游 #1736/#1678。纯文本模型每轮请求都要把历史图片换成文字，识别结果只存在于当次请求里，缓存 3 天过期或超过 64 条被淘汰后，整段历史会重新识别，状态条每轮出现，OCR 用量和首字延迟都随轮数增长。写回会话后同一张图只识别一次，缓存过期或被系统清理也不影响；上传图片按内容寻址，同一张图在别的会话里复用 URL 时也不会重新识别
+- 合并注意：metadata 只加在图片 part 上，图片本体和 UI 不变；写回会 flush 整份会话，所以只在有新结果时调用，没有变化时 `withOcrTexts` 返回原实例、flush 跳过写入；识别失败和空输出都不写回，下一轮重试。没有配置 OCR 模型时保持原来的 `[Image]` 占位，不发请求也不报错。缓存 key 加了 `v2:` 前缀，旧版本存的格式化结果自然失效，升级后第一次会重新识别一次。切换成多模态模型后不再走 OCR，metadata 留着也不发送。`attachOcrTexts` 在请求构建期间调用，只更新会话状态并落库，不派发消息队列
+- 测试：app JVM 803 条（新增 `ConversationOcrTextTest` 5 条：只写匹配的图片、写所有分支、保留已有 metadata、幂等时返回原实例、空输入返回原实例）；ai 345 条全过；assemble、spotless、markdownlint 通过。Windows 上那 7 条既有失败与 JDK 有关：Oracle JDK 23.0.2 下复现，Android Studio JBR 21 下为 0 失败，比较时以同一 JDK 前后对比为准。没有在设备上跑完整链路（发图、杀进程、再发文字）验证「不再触发识别」
