@@ -29,4 +29,4 @@
 
 ## 许可证
 
-本仓库是官方项目的衍生作品，按 [GNU Affero General Public License v3.0](LICENSE)（AGPL-3.0）授权，修改过的源码都在本仓库里。`LICENSE` 保持上游原文不动，GitHub 才能识别出许可证类型；本仓库修改部分的版权归 NingmengLemon。
+本仓库是官方项目的衍生作品，按 [GNU Affero General Public License v3.0](LICENSE)（AGPL-3.0）授权，修改过的源码都在本仓库里；修改部分的版权归 NingmengLemon。
