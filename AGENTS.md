@@ -107,7 +107,7 @@ App 有一个 `distribution` 维度的 product flavor：`github`（默认）和 
 - Page-specific strings should use page prefix (e.g., `setting_page_`)
 - If the user does not explicitly request localization, prioritize implementing functionality without considering
   localization. (e.g `Text("Hello world")`)
-- Add, translate or clean up strings with the `tools/i18n` CLI (Bun); see the `i18n-localization` skill.
+- Add, translate or clean up strings with the `tools/i18n` CLI (Python, run with `uv run --project tools/i18n i18n <command>`); see the `i18n-localization` skill.
 
 ## Custom branch
 

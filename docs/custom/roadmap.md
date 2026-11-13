@@ -330,14 +330,14 @@
 - C1、C5 保留数据模型与序列化类，是为了让旧备份与官方兼容导出仍能解码；这是对移除项自身的约束，不构成对其它条目的依赖。
 - C12、C45、C48 同时是需求与前提；C31、C32 也是「本身是需求、同时作为清理与去重的前提」，所以放在前提表并注明。
 - C30、C36 是 C18 的扩展：C30 给导出加附件路径改写，C36 在此之上加相对路径；C36 又是 C40 导入的前提，所以同时出现在依赖里。
-- 这张表是当前实现的直接依赖视图，不是落地顺序；待办方向的计划项（默认提示词重写、压缩面板、`tools/i18n` Python 等）不预留编号，落地时再登记。
+- 这张表是当前实现的直接依赖视图，不是落地顺序；待办方向的计划项（默认提示词重写、压缩面板等）不预留编号，落地时再登记。
 
 ## 待办方向
 
 - 默认提示词重写（含压缩提示词和摘要文案）暂缓：现状、调研结论与草稿保留在 [`prompts.md`](prompts.md)，等压缩面板和交互稳定后再按同一套方法过标题、翻译、OCR。
 - Gemini 缓存控制已调研，结论是不做 explicit `cachedContents`：默认 generateContent 路径的 implicit caching 已自动生效并解析成 cachedTokens，explicit 只支持 Gemini 3/2.5 且是 Beta，有 4096/2048 token 下限和按小时计的存储费，约 18 到 60 次复用才回本，还会关闭同一请求的 implicit caching。剩余可选小项：给 OpenAI 兼容入口的 usage 解析补一个 cached token 字段的兜底。
 - 上游 issue 区已做一轮只读调研（2026-11-13，293 个 open）。优先候选：GoogleProvider 遇到独立 `thoughtSignature` 直接抛错（#2316）、Claude thinking 签名与 `redacted_thinking` 处理缺失（#2206/#1629，上游 3.2.0 的 `e1667163` 已移植，见 C85；上游标记 Fixes #2308）、OCR 默认 `reasoning_effort=none`（#1644，已修，见 C86）、Exa 正文没有长度上限（#1569，已修，见 C88）、历史图片每次请求重复 OCR（#1736/#1678，已修，见 C87）、workspace shell 超时后残留进程（#2225，已修前台命令，见 C89；后台命令未移植）。Phone Use 和自动压缩相关的一律不做；这批修复往后排。
-- 把 `tools/i18n` 从 Bun 重写成 Python：现在本机跑不起来（没有 bun 和 `.env`），新文案只能手翻；重写后接回同一套 config，保留缺条目与未使用条目的检查。
+- `tools/i18n` 已重写成 Python（C93）：用 `uv run --project tools/i18n i18n <command>` 运行，config、术语表、缺条目与未使用检查都保留；本机没有 `.env`，自动翻译仍需配 key。
 - 提示词注入与世界书按上游 #1542 重做（删除提示词注入，换成缓存友好的上下文方案）：本机配置里没有启用提示词注入，先记在待办，不排期。
 - 仓库改名为 `rakkihub` 已完成：GitHub 仓库名和本地 remote 已改，`docs/custom/README.md` 的 remote 表同步；上游链接不动。
 - 更换应用图标已完成（C90）：launcher 各密度用关于页同一张插画生成，monochrome 层去掉（插画剪影会变成黑块），README 的 `docs/icon.png` 同步；`web-ui/public/favicon.ico` 与 `docs/img/poster.png` 仍是旧图。

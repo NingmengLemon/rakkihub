@@ -6,7 +6,7 @@
 
 ## 增删文案
 
-删除或新增文案时四份同步。`tools/i18n` 用 Bun，本机暂时跑不起来（没有 bun，也没有 `.env`），当前是手翻；四份都不缺条目。把工具重写成 Python 记在 [`roadmap.md`](roadmap.md) 的待办方向里。
+删除或新增文案时四份同步。`tools/i18n` 是 Python 实现，用 `uv run --project tools/i18n i18n <command>` 运行，命令见 `tools/i18n/README.md`；API key 写在 `tools/i18n/.env`（不提交），没有 key 时只能手翻。四份都不缺条目。
 
 `app` 之外的 `search`、`oauth`、`ui` 三个模块也各有自己的 `strings.xml` 与这四份 locale，新增或删除文案时一起改。
 

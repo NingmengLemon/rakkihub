@@ -100,6 +100,7 @@
 | C90 | 应用图标与可见文案改名 RakkiHub | 改造 |
 | C91 | 关于页链接改指本仓库 | 改造 |
 | C92 | launcher 插画重新对位 | 改造 |
+| C93 | tools/i18n 重写成 Python | 改造 |
 
 ## 明细
 
@@ -707,3 +708,10 @@
 - 理由：70% 居中时眼睛落在圆形遮罩的右下，看起来没对正；按眼睛位置（画布 47.4%、69.6%）换算，78% 再左移 1.5%、上移 6% 后眼睛大致落在圆形遮罩中心
 - 合并注意：C90 里“前景缩放到 70%”的说法已由本项取代。圆形遮罩下耳朵尖和两侧头发仍会被裁掉；插画底部是裁切的人像，上移后底部裁切线接近遮罩下缘，再往上移就会露出来。legacy 圆角 20.8%、背景 `#F4EEEF` 不变
 - 测试：`:app:assembleGithubDebug` 通过并安装到设备；生成后的圆角方形、圆形和 96px 预览核对；没有在真实桌面上截图验证
+
+### C93 tools/i18n 重写成 Python
+
+- 落点：`tools/i18n/` 换成 Python 实现，新增 `pyproject.toml`、`uv.lock`、`src/i18n/{cli,config,strings_xml,validation,references,translator}.py`、`tests/`，`config.yml` 的简中/繁中加 `protected_terms`（`Token`）与 `token` 术语（日文不加，仍用トークン），`.gitignore` 改成 Python 的忽略项；删除 Bun/TypeScript 的 `package.json`、`bun.lock`、`tsconfig.json`、`.oxfmtrc.json`、`src/*.ts`、`test/*.ts`；`README.md`、`docs/README.md`、`docs/custom/locale.md`、`docs/custom/roadmap.md`、`AGENTS.md` 与 `.agents/skills/i18n-localization/SKILL.md` 的命令同步成 `uv run --project tools/i18n i18n`
+- 理由：本机没有 bun，工具跑不起来，新文案只能手翻；Python 用 uv 直接可跑，接回同一份 `config.yml`，保留缺条目与未使用条目的检查。官方版出现过把压缩语境里的 Token 译成「令牌」「權杖」的问题，本分支修过（C45），这里给简中/繁中加按语言配置的 `protected_terms` 校验：原文出现该术语而译文缺失时按校验失败重试，术语表里点明 Token 保持英文；边界按 ASCII 字母判断，所以「最大Token数」这类紧贴 CJK 的写法也算保留，日文不配这个列表，仍用トークン
+- 合并注意：上游改 `tools/i18n` 时按本项整体替换；`config.yml` 原有字段与语义不变，新增 `protected_terms`；`.env` 不提交，没有 key 时只能 `--skip-translate` 或手翻；`strings.xml` 读写仍然只改动涉及的 `<string>`，已有换行原样保留，追加的新行用 LF；校验时字面量 `\n` 与真实换行按同一数量比较，CDATA 里的 `&` 和未知实体不再误报
+- 测试：`uv run --project tools/i18n --group dev pytest tools/i18n/tests -q` 25 条通过；`list -m app --missing` 显示 0/1538，`list -m search` 显示 5/5，`unused -m app,search,oauth,ui` 输出 46 条与旧工具一致；用 `.env` 实测 `test-connection` 与一次简中/繁中的批量翻译，`Max Tokens`/`No token limit` 在简中/繁中都保留为 Token，日文输出トークン，三种语言都通过校验

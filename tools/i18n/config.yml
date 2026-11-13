@@ -34,6 +34,10 @@ languages:
       model: "模型"
       inference: "推理"
       dreaming: "做梦（后台整理记忆的功能名）"
+      token: "Token（保持英文，不要译为「令牌」）"
+    # 原文里出现这些英文术语时，译文必须原样保留（大小写不敏感，允许复数）
+    protected_terms:
+      - "Token"
   - code: "values-zh-rTW"
     name: "Chinese (Traditional)"
     glossary:
@@ -42,6 +46,9 @@ languages:
       model: "模型"
       inference: "推理"
       dreaming: "做夢（背景整理記憶的功能名）"
+      token: "Token（保持英文，不要譯為「權杖」）"
+    protected_terms:
+      - "Token"
   - code: "values-ja"
     name: "Japanese"
     glossary:
