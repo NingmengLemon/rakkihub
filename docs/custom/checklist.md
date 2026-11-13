@@ -90,6 +90,7 @@
 | C80 | 用量成功失败区分与官方 schema 裁剪 | 新增 |
 | C81 | 压缩面板：高级设置、临时模型与思考继承 | 改造 |
 | C82 | 消息 HTML 清洗与 Mermaid 版本统一 | 改造 |
+| C83 | 超长 diff 行崩溃修复 | 改造 |
 
 ## 明细
 
@@ -627,3 +628,10 @@
 - 理由：Web 正文原来自己传 `rehypePlugins`，把 Streamdown 默认的 raw -> sanitize -> harden 整条顶掉，`<script>`、`onload`、`<foreignObject>`、`javascript:` 链接都能进 DOM；`mark.html` 和 workspace 的 SVG 预览没有清洗，其中 workspace 是顶层 SVG 文档，`<script>` 会真的执行；Mermaid 三处版本分别是 11.16.0 / 10.6.1 / 浮动 `@11`，前两者命中 2026-08-06 那批安全通告，且两处 `securityLevel: loose` 允许 HTML 标签和点击回调
 - 合并注意：sanitize 必须排在 katex 之前，并且要放行 `span`/`div` 上以 `math` 开头的 class，否则公式不渲染；`hast-util-sanitize` 会把 `id` 加 `user-content-` 前缀，`rehypeSvgGuard` 负责把同文档的 `<use href="#x">` 以及 `fill`/`stroke`/`clip-path`/`mask`/`marker-*` 里的 `url(#x)`（含带引号和空白的写法）一起改前缀；SVG 只放静态元素，`style`/`foreignObject`/动画/滤镜和所有 `on*` 都不在 allowlist 里，`href` 允许 http/https/mailto/tel（`javascript:` 仍被拒），`xlink:href` 只允许 http/https；单块 SVG 超过 128 KiB（按字符数）或 1000 个元素时替换成提示文案，占位用 `span` 避免嵌在段落里产生非法嵌套。KaTeX 关掉 `trust` 后 `\href`/`\url` 会变成报错片段，这是有意的安全取舍。`style` 属性被移除会丢掉用户 HTML 的内联样式，这是刻意的。`mark.html` 为了 KaTeX 布局仍允许 `style` 属性，CSS 注入不在本轮范围；workspace 的 HTML 预览仍开 JavaScript（模型本来就能在工作区执行命令），SVG 改为静态。Web 正文的 Mermaid 仍未启用，`controls.mermaid=false` 只隐藏按钮。`mark.html` 仍依赖 esm.sh，离线不可用
 - 测试：`pnpm run check:markdown` 38 条，覆盖 allowlist（保留静态 SVG/math class/本地 `use`/mailto/tel，丢弃 script/style/foreignObject/事件属性/`javascript:`/`data:` 图片/style 属性/动画/iframe）、SVG 尺寸与代码块跳过、`use` 与 `url(#x)` 前缀改写、marker 属性、元素数上限与占位标签，以及完整 pipeline（标题、GFM 表格、行内代码、KaTeX 保留，脚本/事件/foreignObject 被清掉）；`pnpm run typecheck`、`pnpm run build` 通过；`:app:assembleGithubDebug` 与 `:app:testGithubDebugUnitTest` 798 条，7 条既有 Windows 失败未变；`data.sync` 53 条、数据库迁移/DAO/live 4 条不受影响；spotless、markdownlint 通过。设备上确认安装后能正常启动和打开聊天；Mermaid 图实际渲染、workspace SVG 的脚本不执行、`mark.html` 预览这三项没有在设备上逐项截图验证，原因是本轮环境里 provider 不可达、自动化输入和截图判读受限
+
+### C83 超长 diff 行崩溃修复
+
+- 落点：`ui/src/main/java/me/rerere/ui/richtext/DiffView.kt` 新增 `MAX_DIFF_LINE_CHARS = 2000` 与 `truncateDiffLine`，渲染前截断单行并加省略号；新增 `ui/src/test/java/me/rerere/ui/richtext/DiffViewTest.kt` 三条
+- 理由：`DiffView` 用 `Modifier.width(IntrinsicSize.Max)` 让每行背景铺满最宽的一行，横向滚动由外层提供。Intrinsic 宽度会变成 `Constraints` 的 maxWidth，而 Compose 的 Constraints 只有 18 位，超过 262143px 直接抛 `IllegalArgumentException`（崩溃日志里是 width 266179、height 0）。压缩过的 JS、base64、超长 JSON 单行很容易越过这个上限；小窗只是触发时机，根因是单行宽度没有上限
+- 合并注意：只截断显示，复制与导出的内容不受影响；省略号表示被截断。2000 字符在 11sp 等宽字体、4x 密度、2x 字体缩放下仍远低于上限。`DiffView` 是上游代码，移植上游改动时保留这段截断；如果以后把 `IntrinsicSize.Max` 换成别的铺满方案，要重新评估这个上限是否还需要
+- 测试：`DiffViewTest` 三条（短行不变、按上限截断并加省略号、50 万字符行仍在上限内）；`data.sync` 53 条、数据库迁移/DAO/live 4 条不受影响；spotless、markdownlint 通过。崩溃现场（小窗 + 超长单行 diff）没有在设备上复现验证，判据是 Constraints 上限与截断后的宽度估算

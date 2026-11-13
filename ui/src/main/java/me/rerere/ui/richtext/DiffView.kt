@@ -41,6 +41,21 @@ fun parseDiffStats(diff: String): DiffStats {
 }
 
 /**
+ * 单行 diff 最多渲染这么多字符。
+ *
+ * `DiffView` 用 `Modifier.width(IntrinsicSize.Max)` 让每行的背景铺满最宽的一行，横向滚动由外层
+ * 提供。Intrinsic 宽度最终会变成 `Constraints` 的 maxWidth，而 Compose 的 Constraints 只有 18 位，
+ * 超过 262143px 会直接抛 `IllegalArgumentException`；压缩过的 JS、base64、超长 JSON 单行很容易
+ * 越过这个上限。显示层截断既避免崩溃，也让这种行至少还能看。
+ * 2000 字符在 11sp 等宽字体、4x 密度、2x 字体缩放下仍远低于 262143px。
+ */
+internal const val MAX_DIFF_LINE_CHARS = 2000
+
+/** 截断超长 diff 行，保留可读的前缀并加省略号。 */
+internal fun truncateDiffLine(line: String, maxChars: Int = MAX_DIFF_LINE_CHARS): String =
+    if (line.length <= maxChars) line else line.take(maxChars) + "…"
+
+/**
  * 渲染 unified diff 文本, 按行前缀着色, 支持横向滚动; 纵向滚动由调用方容器提供
  *
  * @param maxLines 最多渲染的行数, 超出部分折叠为一行提示
@@ -75,7 +90,7 @@ fun DiffView(
             .padding(vertical = 4.dp),
     ) {
         lines.fastForEach { line ->
-            DiffLine(line)
+            DiffLine(truncateDiffLine(line))
         }
         if (truncated > 0) {
             Text(
