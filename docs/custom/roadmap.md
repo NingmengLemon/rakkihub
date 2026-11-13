@@ -339,6 +339,8 @@
 - 上游 issue 区已做一轮只读调研（2026-11-13，293 个 open）。优先候选：GoogleProvider 遇到独立 `thoughtSignature` 直接抛错（#2316）、Claude thinking 签名与 `redacted_thinking` 处理缺失（#2206/#1629，上游 3.2.0 的 `e1667163` 已移植，见 C85；上游标记 Fixes #2308）、OCR 默认 `reasoning_effort=none`（#1644）、Exa 正文没有长度上限（#1569）、历史图片每次请求重复 OCR（#1736/#1678）、workspace shell 超时后残留进程（#2225）。Phone Use 和自动压缩相关的一律不做；这批修复往后排。
 - 把 `tools/i18n` 从 Bun 重写成 Python：现在本机跑不起来（没有 bun 和 `.env`），新文案只能手翻；重写后接回同一套 config，保留缺条目与未使用条目的检查。
 - 提示词注入与世界书按上游 #1542 重做（删除提示词注入，换成缓存友好的上下文方案）：本机配置里没有启用提示词注入，先记在待办，不排期。
+- 仓库改名为 `rakkihub`：GitHub 仓库名、本地 remote、README 与文档里的链接、CI 缓存 key、release 产物命名一起改；旧链接靠 GitHub 重定向，脚本和 remote 里的地址要手动改。
+- 更换应用图标：替换 adaptive icon 的前景/背景/monochrome 层和各密度位图，同步启动图与 Play 商店素材；分支自用，不涉及商店审核。
 
 ### Markdown 渲染能力
 
