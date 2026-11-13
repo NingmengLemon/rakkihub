@@ -92,6 +92,7 @@
 | C82 | 消息 HTML 清洗与 Mermaid 版本统一 | 改造 |
 | C83 | 超长 diff 行崩溃修复 | 改造 |
 | C84 | Gemini 独立 thoughtSignature 兼容 | 改造 |
+| C85 | Claude 思考块签名与 redacted_thinking 回放 | 改造 |
 
 ## 明细
 
@@ -643,3 +644,10 @@
 - 理由：上游 issue #2316。Gemini 思考模型和多轮工具调用会返回只含 `thoughtSignature` 的独立 part，两个解析器的 `when` 都落到 `else -> error("unknown message part type")`，整个聊天请求直接失败。签名要留着，回传历史时 Gemini 会校验
 - 合并注意：挂到相邻 part 是启发式：优先挂前一个 part，前面还没有内容时排队给下一个；流式解码的队列挂在解码器实例上，签名可以跨事件保留，最终挂到事件里第一个出现的 part。part 已有签名时不覆盖。`metadata` 改成 `var` 只影响赋值能力，序列化形状不变。上游若重写 Google parts 解析，要保留这段判断，否则会退回崩溃
 - 测试：`:ai:testDebugUnitTest` 335 条全过（新增 11 条：helper 6 条覆盖识别、带内容、空对象、合并、新建、不覆盖；队列 5 条覆盖签名在前/在后、纯签名不产内容、跨事件保留、非字符串签名）；app JVM 798 条，7 条既有 Windows 失败未变；assemble、spotless、markdownlint 通过。没有真实 Gemini 响应样本，判据是 issue 里的 JSON 形状和解析路径
+
+### C85 Claude 思考块签名与 redacted_thinking 回放
+
+- 落点：`ai/src/main/java/me/rerere/ai/ui/MessageMetadata.kt` 的 `ClaudeReasoningMetadata` 增加 `redactedData`（序列化 key 为 `claude_redacted_data`）；`ClaudeProvider` 非流式解析把 `redacted_thinking` 存成带 `redactedData` 的 `Reasoning`（原来是 `println` 后丢弃），回传时遇到 `redactedData` 输出 `redacted_thinking` + `data`；`ClaudeStreamDecoder` 的 `content_block_start` 从 `data` 取 redacted 数据，`signature_delta` 接在同一块已收到的签名后面累加；`StreamChunkHandler.appendMessage` 不再把相邻推理块拼成一块；新增 `ClaudeThinkingReplayTest` 五条
+- 理由：上游 #2206/#1629，修复提交 `e1667163`。思考块必须连同签名原样回传，之前有三处会改动它：非流式把相邻思考块拼成一块、只留下后一块的签名；流式 `signature_delta` 分片到达时只保留最后一片；`redacted_thinking` 非流式直接丢弃、流式存成没有签名的空思考块。签名校验失败会让续轮请求直接报错
+- 合并注意：不再合并相邻推理块是有意的，每块的签名只对自己有效，代价是某些 provider 的非流式多步推理会分成多块显示。`claude_redacted_data` 是新 key，旧会话没有这个字段会反序列化成 null。流式签名累加依赖同一 `ClaudeStreamBlock` 的 metadata 更新，如果以后上游改成按 id 合并推理块，要保留累加逻辑
+- 测试：`:ai:testDebugUnitTest` 340 条全过（新增 5 条：非流式相邻块各自保留签名、pause_turn 续轮不合并不同响应的思考块、非流式与流式 redacted_thinking 回放、流式签名分片累加）；app JVM 798 条，7 条既有 Windows 失败未变；assemble、spotless、markdownlint 通过。没有真实 Claude 响应样本，判据是上游同款用例和构造的 SSE 事件
