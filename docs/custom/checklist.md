@@ -98,6 +98,7 @@
 | C88 | Exa 搜索正文长度上限 | 改造 |
 | C89 | workspace 前台命令超时后的孤儿进程清理 | 改造 |
 | C90 | 应用图标与可见文案改名 RakkiHub | 改造 |
+| C91 | 关于页链接改指本仓库 | 改造 |
 
 ## 明细
 
@@ -691,3 +692,10 @@
 - 理由：应用改名为 RakkiHub，图标换成和关于页一致的插画。插画是满幅人物，monochrome 层用它的 alpha 会变成一块黑色剪影，主题图标反而更差，所以去掉 monochrome 层，本应用不参与系统主题着色
 - 合并注意：图标由 `about_logo.webp` 生成，前景缩放到 108dp 画布的 70% 居中，主体落在圆形遮罩内，但四角和边缘的头发、耳朵尖会被圆形遮罩裁掉一点，满幅人像没有更小的构图可退；legacy 圆角 20.8%，背景取插画主色 `#F4EEEF`；插画底部是裁切的人像，方形图标底部会留一条浅色带。浮动窗口气泡、导出分享图、workspace 文档图标复用 `R.mipmap.ic_launcher` 或 `ic_launcher_foreground`，会跟着变，不需要单独改。通知栏小图标 `ic_stat_rikkahub` 仍是旧的兔子。mDNS 主机名改成 `rakkihub.local`，旧书签需要重填。`search-picker.tsx` 的 `rikkahub: "RikkaHub"`、备份导入导出的官方 RikkaHub 文案、官方 provider 描述都指官方服务，保留
 - 测试：`:app:assembleGithubDebug` 通过，设备上安装启动正常；图标用圆形、圆角方形和 96px 预览核对；app JVM 803 条（7 条既有 Windows 失败）、ai 345 条、search 18 条、mediagen 43 条、oauth 9 条全过，改动过的 workspace `ExampleUnitTest` 1 条通过；spotless、markdownlint 通过。没有在真实桌面上截图验证图标，也没有验证主题图标；`web-ui/public/favicon.ico` 和 `docs/img/poster.png` 仍是旧图，不在本项范围
+
+### C91 关于页链接改指本仓库
+
+- 落点：`app/src/main/java/me/rerere/rikkahub/ui/pages/setting/SettingAboutPage.kt` 删除 Website 入口，GitHub 与 License 链接从上游 `rikkahub/rikkahub` 换成 `NingmengLemon/rakkihub`，License 指向 `blob/main/LICENSE`；四个 locale 删除不再使用的 `about_page_website`；`README.md` 的许可证段落补一句说明
+- 理由：仓库改名后关于页仍指向官方官网和上游仓库；本仓库没有自己的网站，直接删掉入口，GitHub 和 License 指向本仓库
+- 合并注意：上游改关于页时保留这两处链接；`LICENSE` 文件保持纯 AGPL-3.0 文本，不加作者信息，否则 GitHub 识别不出许可证类型，fork 的修改版权在 README 的许可证段落里说明。C14 里「`rikka-ai.com`、GitHub、LICENSE 链接保留」的旧说法已由本项取代
+- 测试：`:app:compileGithubDebugKotlin` 通过；关于页 Website 入口消失，四个 locale 删除后没有残留引用；没有在设备上逐个点开链接验证
