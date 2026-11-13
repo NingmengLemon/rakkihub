@@ -335,13 +335,14 @@
 ## 待办方向
 
 - 默认提示词重写（含压缩提示词和摘要文案）暂缓：现状、调研结论与草稿保留在 [`prompts.md`](prompts.md)，等压缩面板和交互稳定后再按同一套方法过标题、翻译、OCR。
-- 调研 Gemini 协议的缓存控制：区分 implicit caching 与 explicit `cachedContents`，核对 Google/Interactions provider 的 usage cached tokens、TTL 与最小 token 限制、与 OpenAI 兼容入口的差异；评估是否在 Gemini 请求里透传缓存配置或自动建缓存，先出成本与安全边界，再决定实现。
+- Gemini 缓存控制已调研，结论是不做 explicit `cachedContents`：默认 generateContent 路径的 implicit caching 已自动生效并解析成 cachedTokens，explicit 只支持 Gemini 3/2.5 且是 Beta，有 4096/2048 token 下限和按小时计的存储费，约 18 到 60 次复用才回本，还会关闭同一请求的 implicit caching。剩余可选小项：给 OpenAI 兼容入口的 usage 解析补一个 cached token 字段的兜底。
+- 上游 issue 区已做一轮只读调研（2026-11-13，293 个 open）。优先候选：GoogleProvider 遇到独立 `thoughtSignature` 直接抛错（#2316）、Claude thinking 签名与 `redacted_thinking` 处理缺失（#2206/#1629，上游 3.2.0 的 `e1667163` 未移植）、OCR 默认 `reasoning_effort=none`（#1644）、Exa 正文没有长度上限（#1569）、历史图片每次请求重复 OCR（#1736/#1678）、workspace shell 超时后残留进程（#2225）。Phone Use 和自动压缩相关的一律不做；这批修复往后排。
 - 把 `tools/i18n` 从 Bun 重写成 Python：现在本机跑不起来（没有 bun 和 `.env`），新文案只能手翻；重写后接回同一套 config，保留缺条目与未使用条目的检查。
 
 ### Markdown 渲染能力
 
-- 调研 HTML `<svg>` 标签支持：分别看 Android 的 `MarkdownBlock`/BetterText、Web 的 Streamdown + `rehype-raw`、HTML 预览 WebView 三处是否保留内联 SVG、是否做清洗与尺寸约束、外链和工作区文件引用怎么解析；先查清安全边界和渲染差异，再决定是否放开、放开到哪一层。
-- Mermaid 支持版本升级：Web 端 `workbench-host.tsx` 目前从 `esm.sh/mermaid@11` 动态加载，`streamdown` 自带 mermaid 但 `controls.mermaid=false`，锁文件里另有一个 `mermaid@11.15.0`；Android 已有 `assets/html/mermaid.min.js` 11.16.0（含 DOMPurify 3.4.0），并通过 Mermaid 组件在正文代码块渲染，版本清单实际有三个。调研统一到哪个版本、是否在 Web 正文里直接渲染 mermaid、升级后的语法兼容、安全配置和导出回归。
+- HTML `<svg>` 支持已定：Web 正文保留静态 SVG，但改走显式 allowlist（`svg-schema.ts`）并限制尺寸，Android 正文继续不渲染（BetterText 丢弃），Android 侧以整条消息预览和 workspace 预览作为 SVG 入口。剩余可做项：Android 正文检测到 `<svg` 时给一个「打开预览」入口，而不是静默丢弃；workspace 相对资源引用（`<image href>`）目前没有解析。
+- Mermaid 版本已统一到 11.17.2：Android 资产换成官方 IIFE（DOMPurify 3.4.12）、Web workbench 和 `mark.html` 的 CDN 版本钉死，三处都改成 `securityLevel: strict` + `htmlLabels: false`；`controls.mermaid=false` 只隐藏按钮，不控制渲染，Web 正文目前仍是代码块。剩余可做项：Web 正文接入 `@streamdown/mermaid`（需要恢复 sanitize 后单独做，注意插件会静态引入整个引擎）；`mark.html` 仍依赖 esm.sh，离线不可用。
 
 ### 重试、失败尝试与用量
 
