@@ -265,6 +265,8 @@
   <string name="chat_page_compress_model">Model</string>
   <string name="chat_page_compress_model_none">No chat model</string>
   <string name="chat_page_compress_reasoning">Reasoning</string>
+  <string name="chat_page_compress_advanced">Advanced</string>
+  <string name="chat_page_compress_reasoning_inherit_value">Inherit (%1$s)</string>
   <string name="chat_page_compress_temporary_hint">Only applies to this compression and is not saved.</string>
   <string name="chat_page_compress_preview_ready">Will summarize %1$d messages and keep %2$d.</string>
   <string name="chat_page_compress_preview_loading">Calculating compression range…</string>

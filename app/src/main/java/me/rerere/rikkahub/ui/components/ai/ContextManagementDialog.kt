@@ -1,7 +1,7 @@
 package me.rerere.rikkahub.ui.components.ai
 
+import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.FlowRow
@@ -12,14 +12,11 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.AlertDialog
-import androidx.compose.material3.DropdownMenu
-import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.FilledTonalIconButton
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.SegmentedButton
 import androidx.compose.material3.SegmentedButtonDefaults
@@ -49,6 +46,8 @@ import me.rerere.ai.provider.ModelType
 import me.rerere.ai.provider.ProviderSetting
 import me.rerere.hugeicons.HugeIcons
 import me.rerere.hugeicons.stroke.Add01
+import me.rerere.hugeicons.stroke.ArrowDown01
+import me.rerere.hugeicons.stroke.ArrowUp01
 import me.rerere.hugeicons.stroke.Remove01
 import me.rerere.hugeicons.stroke.TriangleAlert
 import me.rerere.rikkahub.R
@@ -96,7 +95,9 @@ fun ContextManagementDialog(
     val currentModel = remember(settings, conversation) { settings.getChatModelOf(conversation) }
     val currentModelId = currentModel?.id
     var selectedModelId by remember { mutableStateOf(currentModelId) }
-    var reasoningLevel by remember { mutableStateOf(assistant.reasoningLevel) }
+    var reasoningLevel by remember { mutableStateOf<ReasoningLevel?>(null) }
+    var advancedExpanded by rememberSaveable { mutableStateOf(false) }
+    val inheritedReasoning = assistant.reasoningLevel
 
     // 失败/停止的压缩会留下 scratch 对，不在请求里；窗口和保留条数按清理后的节点算
     val requestConversation = remember(conversation) {
@@ -127,6 +128,10 @@ fun ContextManagementDialog(
     }
     val compressionReady = compressionPlan is CompressionPlanResult.Ready
     val reasoningSupported = selectedModel?.abilities?.contains(ModelAbility.REASONING) == true
+    val advancedSummary = buildList {
+        if (selectedModelId != currentModelId) selectedModel?.displayName?.let(::add)
+        reasoningLevel?.let { add(it.reasoningLevelName()) }
+    }.takeIf { it.isNotEmpty() }?.joinToString(" · ")
     val truncateKeep = truncateInput.toIntOrNull()
     val truncateValid = truncateKeep != null && truncateKeep in 1 until windowSize
     val firstKeptRole = truncateKeep
@@ -172,10 +177,13 @@ fun ContextManagementDialog(
                         providers = settings.providers,
                         selectedModelId = selectedModelId,
                         onSelectModel = { selectedModelId = it },
-                        fallbackModelId = currentModelId,
                         reasoningLevel = reasoningLevel,
+                        inheritedReasoning = inheritedReasoning,
                         reasoningSupported = reasoningSupported,
                         onReasoningLevelChange = { reasoningLevel = it },
+                        advancedExpanded = advancedExpanded,
+                        onAdvancedToggle = { advancedExpanded = !advancedExpanded },
+                        advancedSummary = advancedSummary,
                         plan = compressionPlan,
                         planLoading = planLoading,
                         counts = compressionCounts,
@@ -271,42 +279,18 @@ private fun CompressionPane(
     providers: List<ProviderSetting>,
     selectedModelId: Uuid?,
     onSelectModel: (Uuid) -> Unit,
-    fallbackModelId: Uuid?,
-    reasoningLevel: ReasoningLevel,
+    reasoningLevel: ReasoningLevel?,
+    inheritedReasoning: ReasoningLevel,
     reasoningSupported: Boolean,
-    onReasoningLevelChange: (ReasoningLevel) -> Unit,
+    onReasoningLevelChange: (ReasoningLevel?) -> Unit,
+    advancedExpanded: Boolean,
+    onAdvancedToggle: () -> Unit,
+    advancedSummary: String?,
     plan: CompressionPlanResult?,
     planLoading: Boolean,
     counts: CompressionPlanCounts?,
 ) {
     Text(stringResource(R.string.chat_page_compress_context_desc))
-
-    Text(
-        text = stringResource(R.string.chat_page_compress_model),
-        style = MaterialTheme.typography.labelLarge,
-    )
-    CompressionModelPicker(
-        providers = providers,
-        selectedModelId = selectedModelId,
-        fallbackModelId = fallbackModelId,
-        onSelect = onSelectModel,
-    )
-    Text(
-        text = stringResource(R.string.chat_page_compress_temporary_hint),
-        style = MaterialTheme.typography.bodySmall,
-        color = MaterialTheme.colorScheme.onSurfaceVariant,
-    )
-
-    if (reasoningSupported) {
-        Text(
-            text = stringResource(R.string.chat_page_compress_reasoning),
-            style = MaterialTheme.typography.labelLarge,
-        )
-        ReasoningLevelChips(
-            selected = reasoningLevel,
-            onSelect = onReasoningLevelChange,
-        )
-    }
 
     OutlinedTextField(
         value = additionalPrompt,
@@ -337,60 +321,58 @@ private fun CompressionPane(
     )
 
     CompressionPlanPreview(plan = plan, planLoading = planLoading, counts = counts)
-}
 
-@Composable
-private fun CompressionModelPicker(
-    providers: List<ProviderSetting>,
-    selectedModelId: Uuid?,
-    fallbackModelId: Uuid?,
-    onSelect: (Uuid) -> Unit,
-) {
-    val models = remember(providers) {
-        providers
-            .filter { it.enabled }
-            .flatMap { provider ->
-                provider.models
-                    .filter { it.type == ModelType.CHAT }
-                    .map { provider to it }
-            }
-    }
-    val allModels = remember(providers) {
-        providers.flatMap { provider -> provider.models.map { provider to it } }
-    }
-    val selected = models.firstOrNull { it.second.id == selectedModelId }?.second
-        ?: allModels.firstOrNull { it.second.id == fallbackModelId }?.second
-    var expanded by remember { mutableStateOf(false) }
-
-    Box(modifier = Modifier.fillMaxWidth()) {
-        OutlinedButton(
-            onClick = { expanded = true },
-            modifier = Modifier.fillMaxWidth(),
-        ) {
+    TextButton(
+        onClick = onAdvancedToggle,
+        modifier = Modifier.fillMaxWidth(),
+    ) {
+        Icon(
+            imageVector = if (advancedExpanded) HugeIcons.ArrowUp01 else HugeIcons.ArrowDown01,
+            contentDescription = null,
+            modifier = Modifier.size(18.dp),
+        )
+        Text(stringResource(R.string.chat_page_compress_advanced))
+        advancedSummary?.let { summary ->
             Text(
-                text = selected?.displayName?.ifBlank { selected.modelId }
-                    ?: stringResource(R.string.chat_page_compress_model_none),
+                text = " · $summary",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis,
             )
         }
-        DropdownMenu(
-            expanded = expanded,
-            onDismissRequest = { expanded = false },
+    }
+
+    AnimatedVisibility(visible = advancedExpanded) {
+        Column(
+            modifier = Modifier.fillMaxWidth(),
+            verticalArrangement = Arrangement.spacedBy(12.dp),
         ) {
-            models.forEach { (provider, model) ->
-                DropdownMenuItem(
-                    text = {
-                        Text(
-                            text = "${model.displayName.ifBlank { model.modelId }} · ${provider.name}",
-                            maxLines = 1,
-                            overflow = TextOverflow.Ellipsis,
-                        )
-                    },
-                    onClick = {
-                        onSelect(model.id)
-                        expanded = false
-                    },
+            Text(
+                text = stringResource(R.string.chat_page_compress_model),
+                style = MaterialTheme.typography.labelLarge,
+            )
+            ModelSelector(
+                modelId = selectedModelId,
+                providers = providers,
+                type = ModelType.CHAT,
+                onSelect = { onSelectModel(it.id) },
+            )
+            Text(
+                text = stringResource(R.string.chat_page_compress_temporary_hint),
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+
+            if (reasoningSupported) {
+                Text(
+                    text = stringResource(R.string.chat_page_compress_reasoning),
+                    style = MaterialTheme.typography.labelLarge,
+                )
+                ReasoningLevelChips(
+                    selected = reasoningLevel,
+                    inherited = inheritedReasoning,
+                    onSelect = onReasoningLevelChange,
                 )
             }
         }
@@ -400,10 +382,23 @@ private fun CompressionModelPicker(
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
 private fun ReasoningLevelChips(
-    selected: ReasoningLevel,
-    onSelect: (ReasoningLevel) -> Unit,
+    selected: ReasoningLevel?,
+    inherited: ReasoningLevel,
+    onSelect: (ReasoningLevel?) -> Unit,
 ) {
     FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+        FilterChip(
+            selected = selected == null,
+            onClick = { onSelect(null) },
+            label = {
+                Text(
+                    stringResource(
+                        R.string.chat_page_compress_reasoning_inherit_value,
+                        inherited.reasoningLevelName(),
+                    )
+                )
+            },
+        )
         ReasoningLevel.entries.forEach { level ->
             FilterChip(
                 selected = level == selected,

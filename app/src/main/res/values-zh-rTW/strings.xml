@@ -263,6 +263,8 @@
   <string name="chat_page_compress_model">本次壓縮使用的模型</string>
   <string name="chat_page_compress_model_none">未選擇模型</string>
   <string name="chat_page_compress_reasoning">本次壓縮的思考強度</string>
+  <string name="chat_page_compress_advanced">進階設定</string>
+  <string name="chat_page_compress_reasoning_inherit_value">繼承（%1$s）</string>
   <string name="chat_page_compress_temporary_hint">只影響這次壓縮，不會儲存。</string>
   <string name="chat_page_compress_preview_ready">將總結 %1$d 則訊息，保留 %2$d 則。</string>
   <string name="chat_page_compress_preview_loading">正在計算壓縮範圍…</string>
