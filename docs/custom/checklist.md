@@ -95,6 +95,7 @@
 | C85 | Claude 思考块签名与 redacted_thinking 回放 | 改造 |
 | C86 | 关闭思考时省略 reasoning_effort | 改造 |
 | C87 | OCR 结果写回会话，历史图片不再重复识别 | 改造 |
+| C88 | Exa 搜索正文长度上限 | 改造 |
 
 ## 明细
 
@@ -667,3 +668,10 @@
 - 理由：上游 #1736/#1678。纯文本模型每轮请求都要把历史图片换成文字，识别结果只存在于当次请求里，缓存 3 天过期或超过 64 条被淘汰后，整段历史会重新识别，状态条每轮出现，OCR 用量和首字延迟都随轮数增长。写回会话后同一张图只识别一次，缓存过期或被系统清理也不影响；上传图片按内容寻址，同一张图在别的会话里复用 URL 时也不会重新识别
 - 合并注意：metadata 只加在图片 part 上，图片本体和 UI 不变；写回会 flush 整份会话，所以只在有新结果时调用，没有变化时 `withOcrTexts` 返回原实例、flush 跳过写入；识别失败和空输出都不写回，下一轮重试。没有配置 OCR 模型时保持原来的 `[Image]` 占位，不发请求也不报错。缓存 key 加了 `v2:` 前缀，旧版本存的格式化结果自然失效，升级后第一次会重新识别一次。切换成多模态模型后不再走 OCR，metadata 留着也不发送。`attachOcrTexts` 在请求构建期间调用，只更新会话状态并落库，不派发消息队列
 - 测试：app JVM 803 条（新增 `ConversationOcrTextTest` 5 条：只写匹配的图片、写所有分支、保留已有 metadata、幂等时返回原实例、空输入返回原实例）；ai 345 条全过；assemble、spotless、markdownlint 通过。Windows 上那 7 条既有失败与 JDK 有关：Oracle JDK 23.0.2 下复现，Android Studio JBR 21 下为 0 失败，比较时以同一 JDK 前后对比为准。没有在设备上跑完整链路（发图、杀进程、再发文字）验证「不再触发识别」
+
+### C88 Exa 搜索正文长度上限
+
+- 落点：`search/src/main/java/me/rerere/search/ExaSearchService.kt` 普通搜索的 `contents.text` 从 `true` 改成 `{maxCharacters: 2000}`，`mapSearchResult` 增加 `maxTextCharacters` 参数并在映射时截断，`mapScrapedResult` 截到 8000，抽出 `hasEvidenceOptions` 供请求与映射共用；`search/src/test/java/me/rerere/search/ExaSearchServiceTest.kt` 补三条并更新两条旧断言
+- 理由：上游 #1569。普通搜索请求 `contents.text = true` 时 Exa 返回整页正文，10 条结果可达数十万字符；`SearchTools` 原样序列化给模型，超出上下文后被截断，模型解析失败会反复搜索，浪费 token 和搜索配额。请求侧限制是主修复，映射侧截断是兜底（API 不认 `maxCharacters` 时 `items[].text` 也不会失控；`answer` 和 `highlights` 不在这层限制内，highlights 由服务端按 URL 限 1200，`answer` 只来自 `type=deep`）
+- 合并注意：普通搜索只要摘要，全文交给 `scrape`；带日期、域名或 `maxAgeHours` 的 evidence 搜索仍请求 8000 字符，映射时也按 8000 截断。截断标记是 `…[truncated]`，模型能看出内容被截。上游若改 Exa 请求体或结果映射，要保留这两处上限
+- 测试：`:search:testDebugUnitTest` 18 条全过（新增两条并重写一条：普通搜索请求带上 2000 上限（由旧用例改写）、搜索映射截断超长正文、scrape 映射截断超长内容；三条旧断言从 `text == true` 改成 `text.maxCharacters == 2000`）；assemble、spotless、markdownlint 通过。没有真实 Exa 响应样本，判据是请求体断言和映射单元测试

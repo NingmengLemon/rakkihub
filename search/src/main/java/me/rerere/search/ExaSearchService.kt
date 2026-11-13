@@ -30,6 +30,7 @@ import okhttp3.RequestBody.Companion.toRequestBody
 
 object ExaSearchService : SearchService<SearchServiceOptions.ExaOptions> {
     private const val MAX_EVIDENCE_TEXT_CHARACTERS = 8_000
+    private const val MAX_SEARCH_TEXT_CHARACTERS = 2_000
     private const val MAX_EVIDENCE_HIGHLIGHT_CHARACTERS = 1_200
     private const val MIN_MAX_AGE_HOURS = -1
     private const val MAX_MAX_AGE_HOURS = 720
@@ -56,7 +57,10 @@ object ExaSearchService : SearchService<SearchServiceOptions.ExaOptions> {
                 })
                 put("type", buildJsonObject {
                     put("type", "string")
-                    put("description", "Search type: fast (quick results), auto (default, balanced), deep (synthesized answer with citations)")
+                    put(
+                        "description",
+                        "Search type: fast (quick results), auto (default, balanced), deep (synthesized answer with citations)"
+                    )
                     put("enum", buildJsonArray {
                         add("fast")
                         add("auto")
@@ -65,17 +69,26 @@ object ExaSearchService : SearchService<SearchServiceOptions.ExaOptions> {
                 })
                 put("startPublishedDate", buildJsonObject {
                     put("type", "string")
-                    put("description", "Optional ISO-8601 publication date lower bound; results are published after this date")
+                    put(
+                        "description",
+                        "Optional ISO-8601 publication date lower bound; results are published after this date"
+                    )
                 })
                 put("endPublishedDate", buildJsonObject {
                     put("type", "string")
-                    put("description", "Optional ISO-8601 publication date upper bound; results are published before this date")
+                    put(
+                        "description",
+                        "Optional ISO-8601 publication date upper bound; results are published before this date"
+                    )
                 })
                 put("includeDomains", domainArraySchema("Optional domains to include"))
                 put("excludeDomains", domainArraySchema("Optional domains to exclude"))
                 put("maxAgeHours", buildJsonObject {
                     put("type", "integer")
-                    put("description", "Optional maximum age in hours for fetched page content; use only when content freshness matters")
+                    put(
+                        "description",
+                        "Optional maximum age in hours for fetched page content; use only when content freshness matters"
+                    )
                     put("minimum", MIN_MAX_AGE_HOURS)
                     put("maximum", MAX_MAX_AGE_HOURS)
                 })
@@ -126,7 +139,12 @@ object ExaSearchService : SearchService<SearchServiceOptions.ExaOptions> {
                     error("Failed to decode response: $bodyRaw")
                 }.getOrThrow()
 
-                return@withContext Result.success(mapSearchResult(response))
+                val maxTextCharacters = if (hasEvidenceOptions(params)) {
+                    MAX_EVIDENCE_TEXT_CHARACTERS
+                } else {
+                    MAX_SEARCH_TEXT_CHARACTERS
+                }
+                return@withContext Result.success(mapSearchResult(response, maxTextCharacters))
             } else {
                 println(response.body.string())
                 error("response failed #${response.code}")
@@ -234,11 +252,6 @@ object ExaSearchService : SearchService<SearchServiceOptions.ExaOptions> {
     ) = buildJsonObject {
         val query = params["query"]?.jsonPrimitive?.content ?: error("query is required")
         val maxAgeHours = optionalMaxAgeHours(params)
-        val hasEvidenceOptions = hasOptionalString(params, "startPublishedDate") ||
-            hasOptionalString(params, "endPublishedDate") ||
-            hasOptionalStringArray(params, "includeDomains") ||
-            hasOptionalStringArray(params, "excludeDomains") ||
-            maxAgeHours != null
 
         put("query", JsonPrimitive(query))
         put("numResults", JsonPrimitive(resultSize))
@@ -248,7 +261,7 @@ object ExaSearchService : SearchService<SearchServiceOptions.ExaOptions> {
         putOptionalStringArray(this, params, "includeDomains")
         putOptionalStringArray(this, params, "excludeDomains")
         put("contents", buildJsonObject {
-            if (hasEvidenceOptions) {
+            if (hasEvidenceOptions(params)) {
                 put("text", buildJsonObject {
                     put("maxCharacters", JsonPrimitive(MAX_EVIDENCE_TEXT_CHARACTERS))
                 })
@@ -256,7 +269,10 @@ object ExaSearchService : SearchService<SearchServiceOptions.ExaOptions> {
                     put("maxCharacters", JsonPrimitive(MAX_EVIDENCE_HIGHLIGHT_CHARACTERS))
                 })
             } else {
-                put("text", JsonPrimitive(true))
+                // 普通搜索只要摘要，全文交给 scrape；不限制时 Exa 会返回整页文本（#1569）
+                put("text", buildJsonObject {
+                    put("maxCharacters", JsonPrimitive(MAX_SEARCH_TEXT_CHARACTERS))
+                })
             }
             maxAgeHours?.let { put("maxAgeHours", it) }
         })
@@ -273,13 +289,16 @@ object ExaSearchService : SearchService<SearchServiceOptions.ExaOptions> {
         optionalMaxAgeHours(params)?.let { put("maxAgeHours", it) }
     }
 
-    internal fun mapSearchResult(data: ExaData): SearchResult = SearchResult(
+    internal fun mapSearchResult(
+        data: ExaData,
+        maxTextCharacters: Int = MAX_SEARCH_TEXT_CHARACTERS,
+    ): SearchResult = SearchResult(
         answer = data.output?.content,
         items = data.results.map {
             SearchResultItem(
                 title = it.title,
                 url = it.url,
-                text = it.text ?: "",
+                text = it.text.capped(maxTextCharacters),
                 publishedDate = it.publishedDate,
                 highlights = it.highlights.orEmpty(),
             )
@@ -291,7 +310,7 @@ object ExaSearchService : SearchService<SearchServiceOptions.ExaOptions> {
         urls = data.results.map {
             ScrapedResultUrl(
                 url = it.url,
-                content = it.text ?: "",
+                content = it.text.capped(MAX_EVIDENCE_TEXT_CHARACTERS),
                 metadata = ScrapedResultMetadata(
                     title = it.title,
                     publishedDate = it.publishedDate,
@@ -299,6 +318,19 @@ object ExaSearchService : SearchService<SearchServiceOptions.ExaOptions> {
             )
         },
     )
+
+    private fun hasEvidenceOptions(params: JsonObject): Boolean =
+        hasOptionalString(params, "startPublishedDate") ||
+            hasOptionalString(params, "endPublishedDate") ||
+            hasOptionalStringArray(params, "includeDomains") ||
+            hasOptionalStringArray(params, "excludeDomains") ||
+            optionalMaxAgeHours(params) != null
+
+    /** 超出上限的正文截断，避免一次搜索把上下文撑爆 */
+    private fun String?.capped(maxCharacters: Int): String {
+        val text = this ?: return ""
+        return if (text.length <= maxCharacters) text else text.take(maxCharacters) + "\n…[truncated]"
+    }
 
     private fun domainArraySchema(description: String) = buildJsonObject {
         put("type", "array")

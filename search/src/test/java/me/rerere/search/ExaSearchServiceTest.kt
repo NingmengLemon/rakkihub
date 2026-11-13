@@ -1,14 +1,14 @@
 package me.rerere.search
 
+import kotlinx.serialization.json.JsonNull
+import kotlinx.serialization.json.JsonPrimitive
+import kotlinx.serialization.json.boolean
 import kotlinx.serialization.json.buildJsonArray
 import kotlinx.serialization.json.buildJsonObject
-import kotlinx.serialization.json.boolean
 import kotlinx.serialization.json.int
-import kotlinx.serialization.json.JsonNull
 import kotlinx.serialization.json.jsonArray
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
-import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.put
 import me.rerere.ai.core.InputSchema
 import org.junit.Assert.assertEquals
@@ -83,11 +83,12 @@ class ExaSearchServiceTest {
 
         assertEquals(
             listOf("old", "undated", "new"),
-            result.items.map { it.url.substringAfterLast('/') })
+            result.items.map { it.url.substringAfterLast('/') }
+        )
     }
 
     @Test
-    fun `normal search request keeps legacy contents shape`() {
+    fun `normal search request caps text length`() {
         val body = ExaSearchService.buildSearchRequestBody(
             params = buildJsonObject {
                 put("query", "stable knowledge")
@@ -95,9 +96,52 @@ class ExaSearchServiceTest {
             resultSize = 10,
         )
 
-        assertEquals(true, body["contents"]!!.jsonObject["text"]!!.jsonPrimitive.boolean)
+        assertEquals(
+            2_000,
+            body["contents"]!!.jsonObject["text"]!!.jsonObject["maxCharacters"]!!.jsonPrimitive.int,
+        )
         assertTrue("startPublishedDate should be absent", "startPublishedDate" !in body)
         assertTrue("includeDomains should be absent", "includeDomains" !in body)
+    }
+
+    @Test
+    fun `search mapping truncates oversized text`() {
+        val result = ExaSearchService.mapSearchResult(
+            ExaSearchService.ExaData(
+                results = listOf(
+                    ExaSearchService.ExaResult(
+                        id = "result-1",
+                        title = "Long page",
+                        url = "https://example.com/long",
+                        text = "x".repeat(5_000),
+                    )
+                )
+            ),
+            maxTextCharacters = 100,
+        )
+
+        val text = result.items.single().text
+        assertTrue(text.endsWith("…[truncated]"))
+        assertEquals(100 + "\n…[truncated]".length, text.length)
+    }
+
+    @Test
+    fun `scrape mapping truncates oversized content`() {
+        val result = ExaSearchService.mapScrapedResult(
+            ExaSearchService.ExaData(
+                results = listOf(
+                    ExaSearchService.ExaResult(
+                        id = "result-1",
+                        title = "Long page",
+                        url = "https://example.com/long",
+                        text = "y".repeat(20_000),
+                    )
+                )
+            )
+        )
+
+        assertTrue(result.urls.single().content.endsWith("…[truncated]"))
+        assertTrue(result.urls.single().content.length < 20_000)
     }
 
     @Test
@@ -157,7 +201,7 @@ class ExaSearchServiceTest {
         )
 
         val contents = body["contents"]!!.jsonObject
-        assertEquals(true, contents["text"]!!.jsonPrimitive.boolean)
+        assertEquals(2_000, contents["text"]!!.jsonObject["maxCharacters"]!!.jsonPrimitive.int)
         assertTrue("empty start date should be absent", "startPublishedDate" !in body)
         assertTrue("null end date should be absent", "endPublishedDate" !in body)
         assertTrue("empty include domains should be absent", "includeDomains" !in body)
@@ -178,7 +222,7 @@ class ExaSearchServiceTest {
 
         val contents = body["contents"]!!.jsonObject
         assertTrue("out of range max age should be absent", "maxAgeHours" !in contents)
-        assertEquals(true, contents["text"]!!.jsonPrimitive.boolean)
+        assertEquals(2_000, contents["text"]!!.jsonObject["maxCharacters"]!!.jsonPrimitive.int)
         assertTrue("out of range max age should not enable evidence mode", "highlights" !in contents)
     }
 
