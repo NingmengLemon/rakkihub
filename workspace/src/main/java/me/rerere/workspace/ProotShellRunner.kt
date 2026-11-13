@@ -1,6 +1,7 @@
 package me.rerere.workspace
 
 import java.io.File
+import java.util.UUID
 
 data class WorkspaceBindMount(
     val source: File,
@@ -45,7 +46,10 @@ class ProotShellRunner(
 
         context.tempDir.mkdirs()
         patcher.patch(context.linuxDir)
-        val process = ProcessBuilder(buildCommand(context, proot))
+        // 进程号写进 Rootfs 里的 pid 文件, 超时或取消时据此结束 PRoot 跟踪的整组进程
+        val pidFile = File(context.linuxDir, "${EXEC_DIR.trimStart('/')}/${UUID.randomUUID()}.pid")
+        pidFile.parentFile?.mkdirs()
+        val process = ProcessBuilder(buildCommand(context, proot, "$EXEC_DIR/${pidFile.name}"))
             .directory(context.filesDir)
             .redirectErrorStream(false)
             .apply {
@@ -60,7 +64,12 @@ class ProotShellRunner(
             }
             .start()
 
-        return process.readResult(context.timeoutMillis, context.stdin)
+        return try {
+            // 超时或取消时直接结束, 不留宽限期: 调用方已经不再等这条命令
+            process.readResult(context.timeoutMillis, context.stdin) { terminateProot(this, pidFile) }
+        } finally {
+            pidFile.delete()
+        }
     }
 
     override fun terminalLaunch(context: WorkspaceTerminalContext): WorkspaceTerminalLaunch {
@@ -90,9 +99,10 @@ class ProotShellRunner(
         )
     }
 
-    private fun buildCommand(
+    internal fun buildCommand(
         context: WorkspaceShellContext,
         proot: File,
+        pidPath: String,
     ): List<String> {
         val command = mutableListOf(proot.absolutePath)
         command += prootArgs(context.linuxDir, context.filesDir, context.prootCwd(), context.bindMounts)
@@ -106,10 +116,11 @@ class ProotShellRunner(
             "-l",
             "-c",
             // 命令通过位置参数传入, 避免任何转义; eval "$2" 对命令文本只求值一次, 等价于 bash -c "$cmd"
-            "cd -- \"\$1\" && eval \"\$2\"",
+            TRACKED_SCRIPT,
             "rikkahub",
             context.prootCwd(),
             context.command,
+            pidPath,
         )
         return command
     }
@@ -162,6 +173,12 @@ class ProotShellRunner(
         private const val PROOT_EXEC = "libproot_exec.so"
         private const val PROOT_LOADER = "libproot_loader.so"
         private val WORKSPACE_DIR = WorkspaceManager.ROOTFS_WORKSPACE_DIR
+
+        /** Rootfs 内存放前台命令进程号的目录 */
+        private const val EXEC_DIR = "/tmp/rikkahub/exec"
+
+        // 先把 shell 与 PRoot 的进程号写入 $3, 终止时据此给整组进程发信号, 见 terminateProot
+        private const val TRACKED_SCRIPT = "echo \"\$\$ \$PPID\" > \"\$3\"; cd -- \"\$1\" && eval \"\$2\""
 
         /** 清空宿主机环境变量后 Rootfs 内的基础环境 */
         private val ROOTFS_ENV = listOf(

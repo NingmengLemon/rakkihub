@@ -96,6 +96,7 @@
 | C86 | 关闭思考时省略 reasoning_effort | 改造 |
 | C87 | OCR 结果写回会话，历史图片不再重复识别 | 改造 |
 | C88 | Exa 搜索正文长度上限 | 改造 |
+| C89 | workspace 前台命令超时后的孤儿进程清理 | 改造 |
 
 ## 明细
 
@@ -675,3 +676,10 @@
 - 理由：上游 #1569。普通搜索请求 `contents.text = true` 时 Exa 返回整页正文，10 条结果可达数十万字符；`SearchTools` 原样序列化给模型，超出上下文后被截断，模型解析失败会反复搜索，浪费 token 和搜索配额。请求侧限制是主修复，映射侧截断是兜底（API 不认 `maxCharacters` 时 `items[].text` 也不会失控；`answer` 和 `highlights` 不在这层限制内，highlights 由服务端按 URL 限 1200，`answer` 只来自 `type=deep`）
 - 合并注意：普通搜索只要摘要，全文交给 `scrape`；带日期、域名或 `maxAgeHours` 的 evidence 搜索仍请求 8000 字符，映射时也按 8000 截断。截断标记是 `…[truncated]`，模型能看出内容被截。上游若改 Exa 请求体或结果映射，要保留这两处上限
 - 测试：`:search:testDebugUnitTest` 18 条全过（新增两条并重写一条：普通搜索请求带上 2000 上限（由旧用例改写）、搜索映射截断超长正文、scrape 映射截断超长内容；三条旧断言从 `text == true` 改成 `text.maxCharacters == 2000`）；assemble、spotless、markdownlint 通过。没有真实 Exa 响应样本，判据是请求体断言和映射单元测试
+
+### C89 workspace 前台命令超时后的孤儿进程清理
+
+- 落点：新增 `workspace/src/main/java/me/rerere/workspace/ProotTermination.kt`（`terminateProot`）；`workspace/src/main/java/me/rerere/workspace/ProotShellRunner.kt` 在前台命令启动前把 shell 与 PRoot 的进程号写进 Rootfs 的 `/tmp/rikkahub/exec/<uuid>.pid`，超时或取消时按 pid 文件结束整组进程；`workspace/src/main/java/me/rerere/workspace/WorkspaceShellRunner.kt` 的 `readResult` 增加 `terminate` 回调，默认仍是 `destroyForcibly`；新增 `workspace/src/test/java/me/rerere/workspace/ProotShellRunnerCommandTest.kt`
+- 理由：上游 #2225。前台命令超时或线程被中断时 `destroyForcibly()` 直接 SIGKILL PRoot，它跟踪的进程会脱离跟踪继续运行，命令本身和 `&` 启动的子进程都会残留。改成在 PRoot 还活着时扫 `/proc` 的 `TracerPid`，多轮 SIGKILL 它跟踪的所有进程，最后一个退出后 PRoot 自己退出；不能靠 PRoot 收到 SIGQUIT 清理，它从应用进程继承了屏蔽 SIGQUIT 的信号掩码
+- 合并注意：只覆盖前台命令；上游的后台命令（`4ebfde22` 的 `workspace_shell` 后台运行、`workspace_shell_output`、`workspace_shell_kill`）没有移植，也没有对应的后台命令面板。`HostShellRunner` 仍用 `destroyForcibly`。pid 文件放在 Rootfs 的 `/tmp/rikkahub/exec` 下，结束时删除；刚启动时 shell 可能还没写入，`terminateProot` 最多等 1 秒再退回 `destroyForcibly`。workspace 模块有 25 条 Unix-only 测试在 Windows 上必然失败（`ExampleUnitTest` 4、`RootfsInstallerTest` 1、`SshWorkspaceBackendTest` 20；`/bin/sh` 不存在、路径要求绝对 Unix 路径），与本次改动无关
+- 测试：新增 `ProotShellRunnerCommandTest` 2 条（启动脚本先写 `$$ $PPID`、命令文本作为位置参数传入）；workspace 模块测试在 Windows 上 25 条既有失败（新增 2 条通过）；app JVM 803 条、ai 345 条不受影响；assemble、spotless、markdownlint 通过。真机上「超时后进程确实不再残留」没有验证，判据是 pid 文件与 `/proc` 扫描逻辑和上游同款实现
