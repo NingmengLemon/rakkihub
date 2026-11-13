@@ -99,6 +99,7 @@
 | C89 | workspace 前台命令超时后的孤儿进程清理 | 改造 |
 | C90 | 应用图标与可见文案改名 RakkiHub | 改造 |
 | C91 | 关于页链接改指本仓库 | 改造 |
+| C92 | launcher 插画重新对位 | 改造 |
 
 ## 明细
 
@@ -699,3 +700,10 @@
 - 理由：仓库改名后关于页仍指向官方官网和上游仓库；本仓库没有自己的网站，直接删掉入口，GitHub 和 License 指向本仓库
 - 合并注意：上游改关于页时保留这两处链接；`LICENSE` 文件保持纯 AGPL-3.0 文本，不加作者信息，否则 GitHub 识别不出许可证类型，fork 的修改版权在 README 的许可证段落里说明。C14 里「`rikka-ai.com`、GitHub、LICENSE 链接保留」的旧说法已由本项取代
 - 测试：`:app:compileGithubDebugKotlin` 通过；关于页 Website 入口消失，四个 locale 删除后没有残留引用；没有在设备上逐个点开链接验证
+
+### C92 launcher 插画重新对位
+
+- 落点：重新生成 `app/src/main/res/mipmap-*/` 的 `ic_launcher.png`、`ic_launcher_foreground.png` 与 `docs/icon.png`（`ic_launcher_background.png` 不变），插画占 108dp 画布 78%，并相对画布中心左移 1.5%、上移 6%
+- 理由：70% 居中时眼睛落在圆形遮罩的右下，看起来没对正；按眼睛位置（画布 47.4%、69.6%）换算，78% 再左移 1.5%、上移 6% 后眼睛大致落在圆形遮罩中心
+- 合并注意：C90 里“前景缩放到 70%”的说法已由本项取代。圆形遮罩下耳朵尖和两侧头发仍会被裁掉；插画底部是裁切的人像，上移后底部裁切线接近遮罩下缘，再往上移就会露出来。legacy 圆角 20.8%、背景 `#F4EEEF` 不变
+- 测试：`:app:assembleGithubDebug` 通过并安装到设备；生成后的圆角方形、圆形和 96px 预览核对；没有在真实桌面上截图验证
