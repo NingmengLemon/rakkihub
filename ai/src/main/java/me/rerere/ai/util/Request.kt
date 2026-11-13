@@ -40,7 +40,7 @@ fun Request.Builder.configureReferHeaders(url: String): Request.Builder {
         // OpenRouter 用这两个头做调用来源标识
         "openrouter.ai" -> {
             this
-                .addHeader("X-Title", "RikkaHub")
+                .addHeader("X-Title", "RakkiHub")
                 .addHeader("HTTP-Referer", "https://rikka-ai.com")
         }
 

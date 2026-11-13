@@ -27,7 +27,7 @@
 
 | 远端 | 仓库 | 用途 |
 | --- | --- | --- |
-| `origin` | NingmengLemon/rikkahub | 本仓库，可推送；已从 GitHub 的 fork network 脱离 |
+| `origin` | NingmengLemon/rakkihub | 本仓库，可推送；已从 GitHub 的 fork network 脱离 |
 | `upstream` | rikkahub/rikkahub | 官方仓库，只读；push 地址是 `DISABLED_no_push_to_upstream`，误推会直接失败 |
 
 远端默认分支是 `main`，`origin/HEAD` 指向它；缓存过期时用 `git remote set-head origin -a` 刷新。

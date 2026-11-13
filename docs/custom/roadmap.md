@@ -339,8 +339,8 @@
 - 上游 issue 区已做一轮只读调研（2026-11-13，293 个 open）。优先候选：GoogleProvider 遇到独立 `thoughtSignature` 直接抛错（#2316）、Claude thinking 签名与 `redacted_thinking` 处理缺失（#2206/#1629，上游 3.2.0 的 `e1667163` 已移植，见 C85；上游标记 Fixes #2308）、OCR 默认 `reasoning_effort=none`（#1644，已修，见 C86）、Exa 正文没有长度上限（#1569，已修，见 C88）、历史图片每次请求重复 OCR（#1736/#1678，已修，见 C87）、workspace shell 超时后残留进程（#2225，已修前台命令，见 C89；后台命令未移植）。Phone Use 和自动压缩相关的一律不做；这批修复往后排。
 - 把 `tools/i18n` 从 Bun 重写成 Python：现在本机跑不起来（没有 bun 和 `.env`），新文案只能手翻；重写后接回同一套 config，保留缺条目与未使用条目的检查。
 - 提示词注入与世界书按上游 #1542 重做（删除提示词注入，换成缓存友好的上下文方案）：本机配置里没有启用提示词注入，先记在待办，不排期。
-- 仓库改名为 `rakkihub`：GitHub 仓库名、本地 remote、README 与文档里的 fork 链接一起改；上游链接不改，旧仓库链接靠 GitHub 重定向，脚本和 remote 里的地址要手动改。CI 缓存 key 用的是 runner.os 加 lockfile 哈希，不受仓库名影响。
-- 更换应用图标：替换 adaptive icon 的前景/背景/monochrome 层和各密度位图，同步启动图与 Play 商店素材；这会覆盖 C7 的 180 度旋转图标，改的时候一起处理；分支自用，不涉及商店审核。
+- 仓库改名为 `rakkihub` 已完成：GitHub 仓库名和本地 remote 已改，`docs/custom/README.md` 的 remote 表同步；上游链接不动。
+- 更换应用图标已完成（C90）：launcher 各密度用关于页同一张插画生成，monochrome 层去掉（插画剪影会变成黑块），README 的 `docs/icon.png` 同步；`web-ui/public/favicon.ico` 与 `docs/img/poster.png` 仍是旧图。
 
 ### Markdown 渲染能力
 

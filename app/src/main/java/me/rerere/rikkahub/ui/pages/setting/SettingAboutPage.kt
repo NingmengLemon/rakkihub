@@ -88,7 +88,7 @@ fun SettingAboutPage() {
                     )
 
                     Text(
-                        text = "RikkaHub",
+                        text = stringResource(R.string.app_name),
                         style = MaterialTheme.typography.headlineLargeEmphasized.copy(
                             fontWeight = FontWeight.Black,
                         ),

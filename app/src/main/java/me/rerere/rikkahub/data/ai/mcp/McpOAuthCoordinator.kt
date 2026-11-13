@@ -5,8 +5,8 @@ import android.util.Log
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
-import kotlinx.coroutines.launch
 import kotlinx.coroutines.NonCancellable
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
@@ -25,6 +25,7 @@ internal const val MCP_OAUTH_CALLBACK_PORT = 52_134
 internal const val MCP_OAUTH_CALLBACK_PATH = "/oauth/callback"
 internal const val MCP_OAUTH_REDIRECT_URI =
     "http://localhost:$MCP_OAUTH_CALLBACK_PORT$MCP_OAUTH_CALLBACK_PATH"
+
 // 托管在 GitHub Pages 上的 Client ID Metadata Document，其 redirect_uris 必须与 MCP_OAUTH_REDIRECT_URI 一致
 internal const val MCP_OAUTH_CLIENT_METADATA_URL = "https://rikkahub.github.io/oauth/client.json"
 private val OAUTH_CALLBACK_TIMEOUT = 5.minutes
@@ -180,7 +181,7 @@ internal class McpOAuthCoordinator(
                 val registration = oauthClient.registerClient(
                     registrationEndpoint = registrationEndpoint,
                     request = OAuthHttpClient.ClientRegistrationRequest(
-                        clientName = config.commonOptions.name.ifBlank { "RikkaHub" },
+                        clientName = config.commonOptions.name.ifBlank { "RakkiHub" },
                         redirectUris = listOf(redirectUri),
                         scope = scope,
                     ),
@@ -264,8 +265,11 @@ internal class McpOAuthCoordinator(
         settingsStore.update { old ->
             old.copy(
                 mcpServers = old.mcpServers.map { server ->
-                    if (server.id != configId) server
-                    else server.clone(commonOptions = server.commonOptions.copy(oauth = oauth))
+                    if (server.id != configId) {
+                        server
+                    } else {
+                        server.clone(commonOptions = server.commonOptions.copy(oauth = oauth))
+                    }
                 }
             )
         }

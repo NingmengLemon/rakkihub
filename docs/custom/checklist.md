@@ -97,6 +97,7 @@
 | C87 | OCR 结果写回会话，历史图片不再重复识别 | 改造 |
 | C88 | Exa 搜索正文长度上限 | 改造 |
 | C89 | workspace 前台命令超时后的孤儿进程清理 | 改造 |
+| C90 | 应用图标与可见文案改名 RakkiHub | 改造 |
 
 ## 明细
 
@@ -145,7 +146,7 @@
 
 - 落点：`app/src/main/res/mipmap-{mdpi,hdpi,xhdpi,xxhdpi,xxxhdpi}/` 下的 `ic_launcher.png`、`ic_launcher_background.png`、`ic_launcher_foreground.png`、`ic_launcher_monochrome.png`，5 个密度共 20 个 png 各旋转 180 度；`mipmap-anydpi-v26/ic_launcher.xml` 的结构不变
 - 理由：让桌面上装的这个版本与官方版一眼区分开，造型变成倒着的兔子
-- 合并注意：用 hflip 加 vflip 逐像素翻转，没有重采样，尺寸与 alpha 通道保持不变。上游的背景是浅上深下的纵向渐变，转后变成深上浅下，必须跟着转：legacy 的 `ic_launcher.png` 把背景与兔子烤在同一张图里，整图旋转后渐变必然反转，自适应路径下只有一起转两条路径的观感才一致。`monochrome` 必须一起做，否则 Android 13 的主题图标会退回官方样式。设置-关于页直接复用 `R.mipmap.ic_launcher`，无需单独改。上游 3.1.0 的 `bf04cde9` 调整过图标配色，此后上游再改这些 png 时会与本项冲突，处理方式一律保留我们旋转后的版本。它同时改了 `web-ui/public/favicon.ico`、`docs/icon.png`、`docs/img/poster.png`，这几处不在本项范围内
+- 已被 C90 覆盖：图标整组换成插画，monochrome 层删除，180 度旋转不再适用。原记录如下。合并注意：用 hflip 加 vflip 逐像素翻转，没有重采样，尺寸与 alpha 通道保持不变。上游的背景是浅上深下的纵向渐变，转后变成深上浅下，必须跟着转：legacy 的 `ic_launcher.png` 把背景与兔子烤在同一张图里，整图旋转后渐变必然反转，自适应路径下只有一起转两条路径的观感才一致。`monochrome` 必须一起做，否则 Android 13 的主题图标会退回官方样式。设置-关于页直接复用 `R.mipmap.ic_launcher`，无需单独改。上游 3.1.0 的 `bf04cde9` 调整过图标配色，此后上游再改这些 png 时会与本项冲突，处理方式一律保留我们旋转后的版本。它同时改了 `web-ui/public/favicon.ico`、`docs/icon.png`、`docs/img/poster.png`，这几处不在本项范围内
 
 ### C8 移除 Chatbox 与 Cherry Studio 导入
 
@@ -187,7 +188,7 @@
 
 - 落点：`SettingPage.kt`（about 分组里的分享 item、`shareText`/`share`/`noShareApp` 三个局部变量与三个失效 import）、7 个 locale 的 `setting_page_share`、`setting_page_share_desc`、`setting_page_share_text`、`setting_page_no_share_app`；品牌文案：`setting_page_web_server_desc`（7 个 locale）、`oauth` 模块的 4 条回调提示（7 个 locale）、`web-ui` 的 `page.json` 标题与描述、`conversation-sidebar.tsx` 的侧边栏标题
 - 理由：分享出去还自称官方品牌并指向上游官网，没有意义；其余文案跟着应用名一起改成 RakkiHub
-- 合并注意：`search-picker.tsx` 里的 `rikkahub: "RikkaHub"` 是搜索服务的显示名，指官方接口，保留；`backup_page_import_from_official` 的「Import from RikkaHub」指官方应用，同样保留。`SettingAboutPage` 的 `RikkaHub` 标题与 `rikka-ai.com`、GitHub、LICENSE 链接保留，设置根页的 `docs.rikka-ai.com` 链接已由 C64 移除，`web-ui` 页脚的官方站链接同样保留，作为上游出处标注，没有改成自己的品牌
+- 合并注意：`search-picker.tsx` 里的 `rikkahub: "RikkaHub"` 是搜索服务的显示名，指官方接口，保留；`backup_page_import_from_official` 的「Import from RikkaHub」指官方应用，同样保留。`SettingAboutPage` 的标题在 C90 起改用 `app_name`（RakkiHub），`rikka-ai.com`、GitHub、LICENSE 链接保留，设置根页的 `docs.rikka-ai.com` 链接已由 C64 移除，`web-ui` 页脚的官方站链接同样保留，作为上游出处标注，没有改成自己的品牌
 
 ### C15 移除更新检查
 
@@ -440,7 +441,7 @@
 ### C55 关于页独立图标
 
 - 落点：新增 `app/src/main/res/drawable-nodpi/about_logo.webp`（1254×1240，来自 `rikka_icon.webp`），`SettingAboutPage` 用 `Image` 加 `ContentScale.Crop` 和 `RoundedCornerShape(28.dp)` 绘制，替代原来的 `rememberAppLogoLayers`/`drawAppLogo`；launcher 图标和浮动窗口不变，浮动窗口仍用 `rememberAppLogoLayers`。
-- 理由：关于页想用自己的图标，同时不动应用 launcher。
+- 已被 C90 覆盖：launcher 也换成这张插画，关于页与 launcher 一致。原记录如下。理由：关于页想用自己的图标，同时不动应用 launcher。
 - 合并注意：上游改 `SettingAboutPage` 时按这个；换图直接替换 `about_logo.webp`；C54 的彩蛋移除保持不变。
 - 测试：编译通过；关于页显示新图标，launcher 与浮动窗口仍用原图标。
 
@@ -683,3 +684,10 @@
 - 理由：上游 #2225。前台命令超时或线程被中断时 `destroyForcibly()` 直接 SIGKILL PRoot，它跟踪的进程会脱离跟踪继续运行，命令本身和 `&` 启动的子进程都会残留。改成在 PRoot 还活着时扫 `/proc` 的 `TracerPid`，多轮 SIGKILL 它跟踪的所有进程，最后一个退出后 PRoot 自己退出；不能靠 PRoot 收到 SIGQUIT 清理，它从应用进程继承了屏蔽 SIGQUIT 的信号掩码
 - 合并注意：只覆盖前台命令；上游的后台命令（`4ebfde22` 的 `workspace_shell` 后台运行、`workspace_shell_output`、`workspace_shell_kill`）没有移植，也没有对应的后台命令面板。`HostShellRunner` 仍用 `destroyForcibly`。pid 文件放在 Rootfs 的 `/tmp/rikkahub/exec` 下，结束时删除；刚启动时 shell 可能还没写入，`terminateProot` 最多等 1 秒再退回 `destroyForcibly`。workspace 模块有 25 条 Unix-only 测试在 Windows 上必然失败（`ExampleUnitTest` 4、`RootfsInstallerTest` 1、`SshWorkspaceBackendTest` 20；`/bin/sh` 不存在、路径要求绝对 Unix 路径），与本次改动无关
 - 测试：新增 `ProotShellRunnerCommandTest` 2 条（启动脚本先写 `$$ $PPID`、命令文本作为位置参数传入）；workspace 模块测试在 Windows 上 25 条既有失败（新增 2 条通过）；app JVM 803 条、ai 345 条不受影响；assemble、spotless、markdownlint 通过。真机上「超时后进程确实不再残留」没有验证，判据是 pid 文件与 `/proc` 扫描逻辑和上游同款实现
+
+### C90 应用图标与可见文案改名 RakkiHub
+
+- 落点：`app/src/main/res/mipmap-*/` 的 `ic_launcher.png`、`ic_launcher_foreground.png`、`ic_launcher_background.png` 全部换成关于页那张插画（`drawable-nodpi/about_logo.webp`）生成的图；`mipmap-anydpi-v26/ic_launcher.xml` 去掉 `<monochrome>`，删除五个 `ic_launcher_monochrome.png`；`docs/icon.png`（README 图标）同步；可见文案：`SettingAboutPage.kt` 标题改用 `stringResource(R.string.app_name)`，`NsdServiceRegistrar.kt` 的 `DEFAULT_SERVICE_NAME` 改成 `rakkihub`（mDNS 地址变成 `rakkihub.local`）与 NSD 描述，`SettingPreferencesNetworkPage.kt` 的默认 User-Agent，`ContextUtil.kt` 的导出文件名，`McpOAuthCoordinator.kt` 的 OAuth clientName，`oauth` 模块 `OAuthLoopbackCallbackServer.kt` 的回调页标题、品牌与四条提示，`DataSourceModule.kt`、`ai/util/Request.kt`、`mediagen` 的 `X-Title`，`RootfsPatcher.kt` 的生成标记
+- 理由：应用改名为 RakkiHub，图标换成和关于页一致的插画。插画是满幅人物，monochrome 层用它的 alpha 会变成一块黑色剪影，主题图标反而更差，所以去掉 monochrome 层，本应用不参与系统主题着色
+- 合并注意：图标由 `about_logo.webp` 生成，前景缩放到 108dp 画布的 70% 居中，主体落在圆形遮罩内，但四角和边缘的头发、耳朵尖会被圆形遮罩裁掉一点，满幅人像没有更小的构图可退；legacy 圆角 20.8%，背景取插画主色 `#F4EEEF`；插画底部是裁切的人像，方形图标底部会留一条浅色带。浮动窗口气泡、导出分享图、workspace 文档图标复用 `R.mipmap.ic_launcher` 或 `ic_launcher_foreground`，会跟着变，不需要单独改。通知栏小图标 `ic_stat_rikkahub` 仍是旧的兔子。mDNS 主机名改成 `rakkihub.local`，旧书签需要重填。`search-picker.tsx` 的 `rikkahub: "RikkaHub"`、备份导入导出的官方 RikkaHub 文案、官方 provider 描述都指官方服务，保留
+- 测试：`:app:assembleGithubDebug` 通过，设备上安装启动正常；图标用圆形、圆角方形和 96px 预览核对；app JVM 803 条（7 条既有 Windows 失败）、ai 345 条、search 18 条、mediagen 43 条、oauth 9 条全过，改动过的 workspace `ExampleUnitTest` 1 条通过；spotless、markdownlint 通过。没有在真实桌面上截图验证图标，也没有验证主题图标；`web-ui/public/favicon.ico` 和 `docs/img/poster.png` 仍是旧图，不在本项范围
