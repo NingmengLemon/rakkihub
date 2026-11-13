@@ -40,6 +40,15 @@ import me.rerere.ui.webview.WebView
 import me.rerere.ui.webview.WebViewContentCache
 import me.rerere.ui.webview.rememberWebViewState
 
+/**
+ * 消息里的 mermaid 代码块渲染器。
+ *
+ * 渲染脚本是 `assets/html/mermaid.min.js`：mermaid 11.17.2 官方 IIFE 构建（内含
+ * DOMPurify 3.4.12，SHA-256 `581ED7D74BD9048D0E3A91363927D72EF22942D7722546B27F7CC29E35390EB8`），
+ * 从 `https://rikkahub.local/assets/` 离线加载。DOMPurify 版本由 mermaid 打包决定，有已知通告但
+ * 默认配置不走受影响路径，升级 mermaid 时一并更新。升级时同时更新这份资产、这里的
+ * `securityLevel`/`htmlLabels` 配置，以及 `mark.html` 里的 CDN 版本。
+ */
 @Composable
 fun Mermaid(
     code: String,
@@ -212,6 +221,11 @@ private fun buildMermaidHtml(
               mermaid.initialize({
                     startOnLoad: true,
                     theme: 'base',
+                    // 静态渲染：不执行标签里的 HTML，也不允许点击回调
+                    securityLevel: 'strict',
+                    htmlLabels: false,
+                    maxTextSize: 50000,
+                    maxEdges: 500,
                     themeVariables: {
                         primaryColor: '${primaryColor}',
                         primaryTextColor: '${onPrimary}',

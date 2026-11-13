@@ -6,7 +6,7 @@
     <title>Markdown Preview</title>
 
     <!-- KaTeX for LaTeX math rendering -->
-    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.8/dist/katex.min.css">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.47/dist/katex.min.css">
 
     <!-- Highlight.js for syntax highlighting -->
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/highlight.js@11.9.0/styles/atom-one-dark.min.css">
@@ -174,15 +174,16 @@
     <script type="module">
         // Import markdown-it and plugins using esm.sh
         import MarkdownIt from 'https://esm.sh/markdown-it@14.0.0';
-        import vscodemarkdownItKatex from 'https://esm.sh/@vscode/markdown-it-katex'
+        import vscodemarkdownItKatex from 'https://esm.sh/@vscode/markdown-it-katex@1.1.2'
         import markdownItTaskLists from 'https://esm.sh/markdown-it-task-lists@2.1.1';
 
-        import katex from 'https://esm.sh/katex@0.16.8';
+        import katex from 'https://esm.sh/katex@0.16.47';
         // mhchem 扩展: 支持 \ce{} 等化学公式语法
-        import 'https://esm.sh/katex@0.16.8/dist/contrib/mhchem.mjs';
-        import hljs from 'https://esm.sh/highlight.js@11.9.0';
-        import mermaid from 'https://esm.sh/mermaid@10.6.1';
+        import 'https://esm.sh/katex@0.16.47/dist/contrib/mhchem.mjs';
+        import hljs from 'https://esm.sh/highlight.js@11.11.1';
+        import mermaid from 'https://esm.sh/mermaid@11.17.2';
         import { Base64 } from 'https://esm.sh/js-base64@3.7.5';
+        import DOMPurify from 'https://esm.sh/dompurify@3.4.17';
 
         // Configure markdown-it
         const md = new MarkdownIt({
@@ -227,7 +228,8 @@
 
             if (info === 'mermaid') {
                 const id = 'mermaid-' + Math.random().toString(36).substr(2, 9);
-                return `<div class="mermaid" id="${id}">${token.content.trim()}</div>\n`;
+                // 转义后再交给 mermaid：浏览器不会把它当 HTML 解析，mermaid 自己会 entityDecode
+                return `<div class="mermaid" id="${id}">${md.utils.escapeHtml(token.content.trim())}</div>\n`;
             }
 
             return defaultFenceRenderer(tokens, idx, options, env, renderer);
@@ -237,7 +239,10 @@
         mermaid.initialize({
             startOnLoad: false,
             theme: window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'default',
-            securityLevel: 'loose',
+            securityLevel: 'strict',
+            htmlLabels: false,
+            maxTextSize: 50000,
+            maxEdges: 500,
             fontFamily: 'inherit'
         });
 
@@ -257,13 +262,21 @@
             try {
                 // Process with markdown-it
                 const html = md.render(markdownContent);
-                document.getElementById('content').innerHTML = html;
+                // Message HTML is untrusted: strip scripts, event handlers,
+                // foreignObject and similar before it reaches the DOM.
+                const clean = DOMPurify.sanitize(html, {
+                    USE_PROFILES: { html: true, svg: true, svgFilters: false },
+                    FORBID_TAGS: ['style', 'foreignObject', 'iframe', 'object', 'embed', 'form', 'button', 'textarea', 'select', 'link', 'meta', 'base', 'template', 'animate', 'animateMotion', 'animateTransform', 'set'],
+                });
+                document.getElementById('content').innerHTML = clean;
 
                 // Render mermaid diagrams
                 const mermaidElements = document.querySelectorAll('.mermaid');
                 if (mermaidElements.length > 0) {
+                    // 单张图失败时保留其它内容；错误由 mermaid 自己渲染在节点里
                     await mermaid.run({
-                        nodes: mermaidElements
+                        nodes: mermaidElements,
+                        suppressErrors: true
                     });
                 }
 
@@ -273,7 +286,7 @@
                         katex.render(el.textContent, el, {
                             throwOnError: false,
                             errorColor: '#cc0000',
-                            trust: true
+                            trust: false
                         });
                     } catch (e) {
                         console.warn('KaTeX inline render error:', e);
@@ -286,7 +299,7 @@
                             displayMode: true,
                             throwOnError: false,
                             errorColor: '#cc0000',
-                            trust: true
+                            trust: false
                         });
                     } catch (e) {
                         console.warn('KaTeX block render error:', e);
@@ -300,7 +313,12 @@
                 });
             } catch (error) {
                 console.error('Error rendering markdown:', error);
-                document.getElementById('content').innerHTML = '<p>Error rendering markdown content: ' + error.message + '</p>';
+                // 错误文本可能来自消息内容，只能用 textContent，不能再拼 innerHTML
+                const container = document.getElementById('content');
+                container.replaceChildren();
+                const paragraph = document.createElement('p');
+                paragraph.textContent = 'Error rendering markdown content: ' + error.message;
+                container.appendChild(paragraph);
             }
         }
 

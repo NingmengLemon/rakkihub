@@ -1027,6 +1027,7 @@
   <string name="assistant_page_workspace">工作區</string>
   <string name="assistant_page_workspace_desc">綁定後，Agent可以使用此工作區的檔案和沙箱功能</string>
   <string name="assistant_page_workspace_unbound">未綁定</string>
+  <string name="workspace_preview_too_large">這個 SVG 太大，無法預覽。請用外部檢視器開啟。</string>
   <string name="workspace_page_title">工作區</string>
   <string name="workspace_page_create">創建工作區</string>
   <string name="workspace_page_rename">重新命名工作區</string>

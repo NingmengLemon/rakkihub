@@ -11,6 +11,7 @@
     "download": "Download"
   },
   "markdown": {
-    "code_preview_title": "{{language}} preview"
+    "code_preview_title": "{{language}} preview",
+    "svg_too_large": "This SVG is too large to display here. Open the message preview to inspect it."
   }
 }

@@ -1029,6 +1029,7 @@ mDNSアドレス: .localホスト名を使用し、IPを知らなくても同じ
   <string name="assistant_page_workspace">ワークスペース</string>
   <string name="assistant_page_workspace_desc">バインド後、エージェントはこのワークスペースのファイルとサンドボックス機能を使用できます</string>
   <string name="assistant_page_workspace_unbound">未バインド</string>
+  <string name="workspace_preview_too_large">この SVG は大きすぎるためプレビューできません。外部ビューアで開いてください。</string>
   <string name="workspace_page_title">ワークスペース</string>
   <string name="workspace_page_create">ワークスペースを作成</string>
   <string name="workspace_page_rename">ワークスペースの名前を変更</string>

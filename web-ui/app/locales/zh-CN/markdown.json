@@ -11,6 +11,7 @@
     "download": "下载"
   },
   "markdown": {
-    "code_preview_title": "{{language}} 预览"
+    "code_preview_title": "{{language}} 预览",
+    "svg_too_large": "这段 SVG 太大，无法在这里显示。可以打开整条消息预览查看。"
   }
 }

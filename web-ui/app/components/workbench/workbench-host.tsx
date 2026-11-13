@@ -49,7 +49,7 @@ function CodePreviewPanel({ panel }: { panel: WorkbenchPanel }) {
     }
 
     if (normalizedLanguage === "svg") {
-      return `<!doctype html><html><body style="margin:0;display:flex;align-items:center;justify-content:center;padding:16px;">${code}</body></html>`;
+      return `<!doctype html><html><head><meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'; img-src data:"></head><body style="margin:0;display:flex;align-items:center;justify-content:center;padding:16px;">${code}</body></html>`;
     }
 
     if (normalizedLanguage === "mermaid") {
@@ -96,7 +96,7 @@ function CodePreviewPanel({ panel }: { panel: WorkbenchPanel }) {
       <pre id="error"></pre>
     </div>
     <script type="module">
-      import mermaid from "https://esm.sh/mermaid@11";
+      import mermaid from "https://esm.sh/mermaid@11.17.2";
 
       const source = decodeURIComponent("${encodedCode}");
       const diagram = document.getElementById("diagram");
@@ -104,7 +104,10 @@ function CodePreviewPanel({ panel }: { panel: WorkbenchPanel }) {
 
       mermaid.initialize({
         startOnLoad: false,
-        securityLevel: "loose",
+        securityLevel: "strict",
+        htmlLabels: false,
+        maxTextSize: 50000,
+        maxEdges: 500,
       });
 
       try {
@@ -162,7 +165,7 @@ function CodePreviewPanel({ panel }: { panel: WorkbenchPanel }) {
           ) : (
             <iframe
               title={panel.title}
-              sandbox="allow-scripts allow-same-origin"
+              sandbox="allow-scripts"
               srcDoc={iframeDoc}
               className="h-full w-full border-0"
             />

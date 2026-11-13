@@ -26,11 +26,13 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import me.rerere.ui.toast.ToastType
 import kotlinx.coroutines.launch
 import me.rerere.rikkahub.data.repository.WorkspaceRepository
+import me.rerere.rikkahub.R
 import me.rerere.rikkahub.ui.components.nav.BackButton
 import me.rerere.rikkahub.ui.context.LocalToaster
 import me.rerere.rikkahub.ui.theme.CustomColors
@@ -182,6 +184,19 @@ private fun WorkspaceWebPreview(
     isSvg: Boolean,
     modifier: Modifier = Modifier,
 ) {
+    // SVG 预览按静态图片看待：工作区文件是模型可写的，不能当可执行文档加载
+    if (isSvg && content.length > MAX_SVG_PREVIEW_CHARS) {
+        Box(modifier = modifier, contentAlignment = Alignment.Center) {
+            Text(
+                text = stringResource(R.string.workspace_preview_too_large),
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.padding(24.dp),
+            )
+        }
+        return
+    }
+
     val state = rememberWebViewState(
         data = content,
         baseUrl = "https://workspace-preview.invalid/",
@@ -194,6 +209,13 @@ private fun WorkspaceWebPreview(
             useWideViewPort = true
             loadWithOverviewMode = true
         },
-    )
+    ).also { webViewState ->
+        // 必须在组合期间就定死：AndroidView 的 update 会同步读这个字段并立即加载内容，
+        // 放到 SideEffect 里就晚了一步，首帧仍可能执行 SVG 里的脚本
+        if (isSvg) webViewState.javaScriptEnabled = false
+    }
     WebView(state = state, modifier = modifier)
 }
+
+/** SVG 预览上限，超过后只给提示，不把整份文件交给 WebView。 */
+private const val MAX_SVG_PREVIEW_CHARS = 1_000_000

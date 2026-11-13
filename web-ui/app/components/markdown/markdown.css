@@ -292,6 +292,15 @@
   @apply my-4 rounded-lg border border-border max-w-full h-auto;
 }
 
+/* Inline SVG: keep diagrams inside the message column */
+.markdown svg {
+  @apply max-w-full h-auto;
+}
+
+.markdown .svg-rejected {
+  @apply my-4 inline-block rounded-lg border border-border bg-muted/50 px-4 py-2 text-sm text-muted-foreground;
+}
+
 /* Strikethrough (GFM) */
 .markdown del {
   @apply text-muted-foreground line-through;
