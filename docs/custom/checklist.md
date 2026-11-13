@@ -93,6 +93,7 @@
 | C83 | 超长 diff 行崩溃修复 | 改造 |
 | C84 | Gemini 独立 thoughtSignature 兼容 | 改造 |
 | C85 | Claude 思考块签名与 redacted_thinking 回放 | 改造 |
+| C86 | 关闭思考时省略 reasoning_effort | 改造 |
 
 ## 明细
 
@@ -651,3 +652,10 @@
 - 理由：上游 #2206/#1629（提交 `e1667163` 标记 Fixes #2308）。思考块必须连同签名原样回传，之前有三处会改动它：非流式把相邻思考块拼成一块、只留下后一块的签名；流式 `signature_delta` 分片到达时只保留最后一片；`redacted_thinking` 非流式直接丢弃、流式存成没有签名的空思考块。签名校验失败会让续轮请求直接报错
 - 合并注意：不再合并相邻推理块是有意的，每块的签名只对自己有效，代价是某些 provider 的非流式多步推理会分成多块显示。`claude_redacted_data` 是新 key，旧会话没有这个字段会反序列化成 null。流式签名累加依赖同一 `ClaudeStreamBlock` 的 metadata 更新，如果以后上游改成按 id 合并推理块，要保留累加逻辑
 - 测试：`:ai:testDebugUnitTest` 340 条全过（新增 5 条：非流式相邻块各自保留签名、pause_turn 续轮不合并不同响应的思考块、非流式与流式 redacted_thinking 回放、流式签名分片累加）；app JVM 798 条，7 条既有 Windows 失败未变；assemble、spotless、markdownlint 通过。没有真实 Claude 响应样本，判据是上游同款用例和构造的 SSE 事件
+
+### C86 关闭思考时省略 reasoning_effort
+
+- 落点：`ai/src/main/java/me/rerere/ai/provider/providers/openai/ChatCompletionsAPI.kt` 的通用 `else` 分支（`opencode.ai` 也走这里），在 `ReasoningLevel.OFF` 时不再写 `reasoning_effort`；新增 `ChatCompletionsReasoningEffortTest` 五条
+- 理由：上游 #1644。OCR 走 `TextGenerationParams` 的默认 `reasoningLevel = OFF`，请求体带上 `reasoning_effort: "none"`；OpenCodeGo 网关（MIMO2.5）只接受 low/medium/high，直接 400，OCR 阶段失败并让主模型收到「OCR 错误」。关闭思考时省略字段，让网关用默认值
+- 合并注意：只改通用分支（opencode.ai 走 else）。deepseek/ark 用 `thinking.type`，nvidia 的 deepseek-v4 仍显式 `none`、其余 nvidia 模型把 OFF 映射成 `low`，openrouter 用 `reasoning.effort`，这些保留。代价是对默认开启思考的模型（o 系列等），省略字段不能真正关掉思考，只是不再发非法值；要真正关闭得在模型能力表里按 provider 声明。上游 `6188593c` 是同一思路，当时只改了 else 分支。`ResponseAPI`（`useResponseApi`）的 effort 映射没有动，那条路径上 OCR 仍可能发 `none`，留后续
+- 测试：`:ai:testDebugUnitTest` 345 条全过（新增 5 条：opencode OFF 省略、opencode MEDIUM 保留、通用网关 OFF 省略、通用网关 HIGH 保留、AUTO 不发）；app JVM 798 条，7 条既有 Windows 失败未变；assemble、spotless、markdownlint 通过。没有真实 OpenCodeGo 请求样本，判据是 issue 里的 400 报文和请求体断言

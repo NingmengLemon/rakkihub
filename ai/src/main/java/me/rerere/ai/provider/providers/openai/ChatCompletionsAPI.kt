@@ -413,14 +413,10 @@ class ChatCompletionsAPI(
                         }
                     }
 
-                    "opencode.ai" -> {
-                        if (level != ReasoningLevel.AUTO) {
-                            put("reasoning_effort", level.effort)
-                        }
-                    }
-
                     else -> {
-                        if (level != ReasoningLevel.AUTO) {
+                        // 通用 OpenAI 兼容网关（含 opencode.ai）多数只接受 low/medium/high，
+                        // 关闭思考时省略字段，不要发 "none"（#1644）
+                        if (level != ReasoningLevel.AUTO && level != ReasoningLevel.OFF) {
                             put("reasoning_effort", level.effort)
                         }
                     }
