@@ -557,12 +557,19 @@ class GoogleProvider(private val client: OkHttpClient, context: Context? = null)
         return chunks
     }
 
-    private fun parseMessageParts(parts: JsonArray?): List<UIMessagePart> = buildList {
-        parts.orEmpty().forEachIndexed { index, element ->
-            val part = parseMessagePart(element.jsonObject, index)
+    private fun parseMessageParts(parts: JsonArray?): List<UIMessagePart> {
+        val parsed = parseGoogleParts(parts, GoogleThoughtSignatureQueue()) { jsonObject, index ->
+            parseMessagePart(jsonObject, index)
+        }
+        return mergeServerToolParts(parsed)
+    }
+
+    /** Gemini 会把同一个 server tool 的调用和结果拆成多个 part，按 toolCallId 合并。 */
+    private fun mergeServerToolParts(parts: List<UIMessagePart>): List<UIMessagePart> = buildList {
+        parts.forEach { part ->
             if (part !is UIMessagePart.ServerTool) {
                 add(part)
-                return@forEachIndexed
+                return@forEach
             }
 
             val existingIndex = indexOfFirst {

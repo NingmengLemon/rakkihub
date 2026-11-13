@@ -91,6 +91,7 @@
 | C81 | 压缩面板：高级设置、临时模型与思考继承 | 改造 |
 | C82 | 消息 HTML 清洗与 Mermaid 版本统一 | 改造 |
 | C83 | 超长 diff 行崩溃修复 | 改造 |
+| C84 | Gemini 独立 thoughtSignature 兼容 | 改造 |
 
 ## 明细
 
@@ -634,4 +635,11 @@
 - 落点：`ui/src/main/java/me/rerere/ui/richtext/DiffView.kt` 新增 `MAX_DIFF_LINE_CHARS = 2000` 与 `truncateDiffLine`，渲染前截断单行并加省略号；新增 `ui/src/test/java/me/rerere/ui/richtext/DiffViewTest.kt` 三条
 - 理由：`DiffView` 用 `Modifier.width(IntrinsicSize.Max)` 让每行背景铺满最宽的一行，横向滚动由外层提供。Intrinsic 宽度会变成 `Constraints` 的 maxWidth，而 Compose 的 Constraints 只有 18 位，超过 262143px 直接抛 `IllegalArgumentException`（崩溃日志里是 width 266179、height 0）。压缩过的 JS、base64、超长 JSON 单行很容易越过这个上限；小窗只是触发时机，根因是单行宽度没有上限
 - 合并注意：只截断显示，复制与导出的内容不受影响；省略号表示被截断。2000 字符在 11sp 等宽字体、4x 密度、2x 字体缩放下仍远低于上限。`DiffView` 是上游代码，移植上游改动时保留这段截断；如果以后把 `IntrinsicSize.Max` 换成别的铺满方案，要重新评估这个上限是否还需要
-- 测试：`DiffViewTest` 三条（短行不变、按上限截断并加省略号、50 万字符行仍在上限内）；`data.sync` 53 条、数据库迁移/DAO/live 4 条不受影响；spotless、markdownlint 通过。崩溃现场（小窗 + 超长单行 diff）没有在设备上复现验证，判据是 Constraints 上限与截断后的宽度估算
+- 测试：`DiffViewTest` 三条（短行不变、按上限截断并加省略号、50 万字符行仍在上限内）；`:ui:testDebugUnitTest` 通过；app JVM 798 条，7 条既有 Windows 失败未变；spotless、markdownlint 通过。崩溃现场（小窗 + 超长单行 diff）没有在设备上复现验证，判据是 Constraints 上限与截断后的宽度估算
+
+### C84 Gemini 独立 thoughtSignature 兼容
+
+- 落点：`ai/src/main/java/me/rerere/ai/ui/MessageMetadata.kt` 新增 `standaloneGoogleThoughtSignature()` 与 `attachGoogleThoughtSignature()`（已有签名不覆盖）；`UIMessagePart.metadata` 从 `abstract val` 改成 `abstract var`，让基类扩展能直接挂签名；新增 `provider/providers/google/GoogleThoughtSignature.kt`，用 `GoogleThoughtSignatureQueue` + `parseGoogleParts` 统一处理相邻挂载，`GoogleProvider.parseMessageParts` 与 `GoogleStreamDecoder.parseMessage` 都改走它，后者把队列放在解码器实例上以跨 SSE 事件保留签名；新增 `GoogleThoughtSignatureTest` 六条与 `GoogleThoughtSignatureQueueTest` 五条
+- 理由：上游 issue #2316。Gemini 思考模型和多轮工具调用会返回只含 `thoughtSignature` 的独立 part，两个解析器的 `when` 都落到 `else -> error("unknown message part type")`，整个聊天请求直接失败。签名要留着，回传历史时 Gemini 会校验
+- 合并注意：挂到相邻 part 是启发式：优先挂前一个 part，前面还没有内容时排队给下一个；流式解码的队列挂在解码器实例上，签名可以跨事件保留，最终挂到事件里第一个出现的 part。part 已有签名时不覆盖。`metadata` 改成 `var` 只影响赋值能力，序列化形状不变。上游若重写 Google parts 解析，要保留这段判断，否则会退回崩溃
+- 测试：`:ai:testDebugUnitTest` 335 条全过（新增 11 条：helper 6 条覆盖识别、带内容、空对象、合并、新建、不覆盖；队列 5 条覆盖签名在前/在后、纯签名不产内容、跨事件保留、非字符串签名）；app JVM 798 条，7 条既有 Windows 失败未变；assemble、spotless、markdownlint 通过。没有真实 Gemini 响应样本，判据是 issue 里的 JSON 形状和解析路径

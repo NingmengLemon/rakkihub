@@ -68,11 +68,14 @@ internal class GoogleStreamDecoder(
         return streamState.finish(finishReason, responseId, model)
     }
 
+    /** 独立签名可能单独占一个 SSE 事件，队列放在解码器上才能跨事件保留。 */
+    private val thoughtSignatures = GoogleThoughtSignatureQueue()
+
     private fun parseMessage(content: JsonObject, groundingMetadata: JsonObject?): UIMessage = UIMessage(
         role = MessageRole.ASSISTANT,
-        parts = content["parts"]?.jsonArray?.mapIndexed { index, part ->
-            parsePart(part.jsonObject, index)
-        }.orEmpty(),
+        parts = parseGoogleParts(content["parts"]?.jsonArray, thoughtSignatures) { part, index ->
+            parsePart(part, index)
+        },
         annotations = parseAnnotations(groundingMetadata),
     )
 

@@ -71,7 +71,7 @@ enum class ReasoningType {
 
 @Serializable
 sealed class UIMessagePart {
-    abstract val metadata: JsonObject?
+    abstract var metadata: JsonObject?
 
     @Serializable
     @SerialName("text")

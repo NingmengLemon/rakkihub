@@ -4,6 +4,8 @@ import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.json.JsonPrimitive
+import kotlinx.serialization.json.contentOrNull
 import kotlinx.serialization.json.decodeFromJsonElement
 import kotlinx.serialization.json.encodeToJsonElement
 import kotlinx.serialization.json.jsonObject
@@ -133,3 +135,26 @@ inline fun <reified T : PartMetadata> UIMessagePart.metadataAs(): T? = metadata?
  */
 inline fun <reified T : PartMetadata> T.toMetadata(): JsonObject =
     json.encodeToJsonElement(this).jsonObject
+
+/**
+ * Gemini 偶尔把 `thoughtSignature` 单独作为一个 part 下发（思考模型、多轮工具调用）。
+ *
+ * 这种 part 没有任何内容，直接当未知类型会让解析抛异常。返回签名，由调用方挂到相邻 part 上，
+ * 回传历史时才不会丢掉。值不是 JSON 基本类型时不认，交给调用方按未知类型处理。
+ */
+internal fun JsonObject.standaloneGoogleThoughtSignature(): String? {
+    if (keys.isEmpty() || keys.any { it != "thoughtSignature" }) return null
+    return (this["thoughtSignature"] as? JsonPrimitive)?.contentOrNull
+}
+
+/**
+ * 把 `thoughtSignature` 合并进 part 的 metadata。
+ *
+ * part 已经有签名时不覆盖：独立签名通常只是同一段思考的补充，覆盖掉原有的会让回传的签名对不上。
+ */
+internal fun UIMessagePart.attachGoogleThoughtSignature(signature: String) {
+    val existing = (metadata?.get("thoughtSignature") as? JsonPrimitive)?.contentOrNull
+    if (existing != null) return
+    val addition = GoogleThoughtMetadata(thoughtSignature = signature).toMetadata()
+    metadata = metadata?.let { JsonObject(it + addition) } ?: addition
+}
