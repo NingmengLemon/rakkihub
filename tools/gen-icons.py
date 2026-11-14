@@ -2,7 +2,9 @@
 
 用法（在仓库根目录）：
 
-    uv run --with pillow python tools/gen-icons.py
+    uv run --with pillow python -P tools/gen-icons.py
+
+`-P` 让脚本目录不进 sys.path，避免 tools/ 下的文件撞上标准库模块名。
 
 写入：
 
@@ -15,8 +17,9 @@
 改插画或参数后重跑一遍，再按 docs/custom/checklist.md 的 C90、C92、C94 核对。
 """
 
-from PIL import Image, ImageDraw
 import os
+
+from PIL import Image, ImageDraw
 
 SRC = r"app/src/main/res/drawable-nodpi/about_logo.webp"
 GLYPH = r"app/src/main/res/drawable-xxxhdpi/ic_stat_rikkahub.png"
@@ -32,15 +35,17 @@ GLYPH_SCALE = 0.86
 img = Image.open(SRC).convert("RGBA")
 w, h = img.size
 side = min(w, h)
-img = img.crop(((w - side) // 2, (h - side) // 2, (w - side) // 2 + side, (h - side) // 2 + side))
+img = img.crop(
+    ((w - side) // 2, (h - side) // 2, (w - side) // 2 + side, (h - side) // 2 + side)
+)
 
 
 def art_layer(size):
     s = size * SS
-    art = img.resize((int(round(s * SCALE)),) * 2, Image.LANCZOS)
+    art = img.resize((round(s * SCALE),) * 2, Image.LANCZOS)
     layer = Image.new("RGBA", (s, s), (0, 0, 0, 0))
-    x = int(round(s * (0.5 + DX) - art.width / 2))
-    y = int(round(s * (0.5 + DY) - art.height / 2))
+    x = round(s * (0.5 + DX) - art.width / 2)
+    y = round(s * (0.5 + DY) - art.height / 2)
     layer.alpha_composite(art, (x, y))
     return layer
 
@@ -48,7 +53,9 @@ def art_layer(size):
 def round_out(canvas, size, radius_px):
     s = canvas.width
     mask = Image.new("L", (s, s), 0)
-    ImageDraw.Draw(mask).rounded_rectangle((0, 0, s - 1, s - 1), radius=radius_px, fill=255)
+    ImageDraw.Draw(mask).rounded_rectangle(
+        (0, 0, s - 1, s - 1), radius=radius_px, fill=255
+    )
     out = Image.new("RGBA", (s, s), (0, 0, 0, 0))
     out.paste(canvas, (0, 0), mask)
     return out.resize((size, size), Image.LANCZOS)
@@ -57,9 +64,9 @@ def round_out(canvas, size, radius_px):
 def icon(size):
     s = size * 2
     canvas = Image.new("RGBA", (s, s), BG)
-    art = img.resize((int(round(s * SCALE)),) * 2, Image.LANCZOS)
-    x = int(round(s * (0.5 + DX) - art.width / 2))
-    y = int(round(s * (0.5 + DY) - art.height / 2))
+    art = img.resize((round(s * SCALE),) * 2, Image.LANCZOS)
+    x = round(s * (0.5 + DX) - art.width / 2)
+    y = round(s * (0.5 + DY) - art.height / 2)
     canvas.alpha_composite(art, (x, y))
     return round_out(canvas, size, int(s * RADIUS))
 
@@ -68,7 +75,7 @@ def legacy(size):
     s = size * SS
     canvas = Image.new("RGBA", (s, s), BG)
     canvas.alpha_composite(art_layer(size))
-    return round_out(canvas, size, int(round(RADIUS * s)))
+    return round_out(canvas, size, round(RADIUS * s))
 
 
 def foreground(size):
@@ -83,19 +90,25 @@ def glyph_mark(size):
     s = size * 8
     canvas = Image.new("RGBA", (s, s), BG)
     mark = Image.open(GLYPH).convert("RGBA")
-    mark = mark.resize((int(round(s * GLYPH_SCALE)),) * 2, Image.LANCZOS)
+    mark = mark.resize((round(s * GLYPH_SCALE),) * 2, Image.LANCZOS)
     tint = Image.new("RGBA", mark.size, INK)
     tint.putalpha(mark.split()[3])
     canvas.alpha_composite(tint, ((s - mark.width) // 2, (s - mark.height) // 2))
-    return round_out(canvas, size, int(round(RADIUS * s)))
+    return round_out(canvas, size, round(RADIUS * s))
 
 
-for name, scale in {"mdpi": 1, "hdpi": 1.5, "xhdpi": 2, "xxhdpi": 3, "xxxhdpi": 4}.items():
+for name, scale in {
+    "mdpi": 1,
+    "hdpi": 1.5,
+    "xhdpi": 2,
+    "xxhdpi": 3,
+    "xxxhdpi": 4,
+}.items():
     d = f"app/src/main/res/mipmap-{name}"
     os.makedirs(d, exist_ok=True)
-    legacy(int(round(48 * scale))).save(f"{d}/ic_launcher.png")
-    foreground(int(round(108 * scale))).save(f"{d}/ic_launcher_foreground.png")
-    background(int(round(108 * scale))).save(f"{d}/ic_launcher_background.png")
+    legacy(round(48 * scale)).save(f"{d}/ic_launcher.png")
+    foreground(round(108 * scale)).save(f"{d}/ic_launcher_foreground.png")
+    background(round(108 * scale)).save(f"{d}/ic_launcher_background.png")
 
 icon(512).save(r"docs/icon.png")
 icon(256).save(r"web-ui/public/icon.png")
@@ -103,5 +116,7 @@ icon(256).save(r"web-ui/public/icon.png")
 # favicon：16/32 用兔子头剪影，插画在这个尺寸上认不出来；48 及以上用插画图标
 FAVICON = [(16, 16), (32, 32), (48, 48), (64, 64), (128, 128), (256, 256)]
 frames = [glyph_mark(s) if s <= 32 else icon(s) for s, _ in FAVICON]
-frames[-1].save(r"web-ui/public/favicon.ico", format="ICO", sizes=FAVICON, append_images=frames[:-1])
+frames[-1].save(
+    r"web-ui/public/favicon.ico", format="ICO", sizes=FAVICON, append_images=frames[:-1]
+)
 print("done")
