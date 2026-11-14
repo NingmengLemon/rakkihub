@@ -340,7 +340,7 @@
 - `tools/i18n` 已重写成 Python（C93）：用 `uv run --project tools/i18n i18n <command>` 运行，config、术语表、缺条目与未使用检查都保留；本机没有 `.env`，自动翻译仍需配 key。
 - 提示词注入与世界书按上游 #1542 重做（删除提示词注入，换成缓存友好的上下文方案）：本机配置里没有启用提示词注入，先记在待办，不排期。
 - 仓库改名为 `rakkihub` 已完成：GitHub 仓库名和本地 remote 已改，`docs/custom/README.md` 的 remote 表同步；上游链接不动。
-- 更换应用图标已完成（C90）：launcher 各密度用关于页同一张插画生成，monochrome 层去掉（插画剪影会变成黑块），README 的 `docs/icon.png` 同步；`web-ui/public/favicon.ico` 与 `docs/img/poster.png` 仍是旧图。
+- 更换应用图标已完成（C90、C92、C94）：launcher 各密度用关于页同一张插画生成，monochrome 层去掉（插画剪影会变成黑块），README 的 `docs/icon.png` 同步；`web-ui/public/favicon.ico` 按尺寸分两套（16/32 用兔子头剪影，48 以上用插画），Web UI 新会话空状态改用 `web-ui/public/icon.png`，旧插画的 `docs/img/poster.png` 已删除。通知栏小图标 `ic_stat_rikkahub` 是有意保留的兔子头剪影：插画在 24dp 下是一团色块，这枚单色剪影反而清楚
 
 ### Markdown 渲染能力
 
