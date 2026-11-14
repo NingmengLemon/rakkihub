@@ -179,8 +179,9 @@ internal val SETTINGS_FIELDS: List<SettingsField<*, *>> = with(SettingsStore) {
 /**
  * key 不存在时各字段的取值。
  *
- * 和 [Settings] 构造函数的默认值只有一处不同，沿用的是一直以来的读取行为：没选过的模型指向 [DEFAULT_MODEL_ID]，
- * 这个 ID 不对应任何模型，用户选过之后就会被覆盖。
+ * 和 [Settings] 构造函数的默认值只有一处不同，沿用的是一直以来的读取行为：聊天、快速、翻译三处的模型
+ * 在缺 key 时指向 [DEFAULT_MODEL_ID]（图片生成与 OCR 的模型 id 仍取构造函数里的随机值），这个 ID 在当前
+ * 预置列表里没有对应模型，用户选过之后就会被覆盖。
  */
 private val MISSING_KEY_DEFAULTS = Settings(
     chatModelId = DEFAULT_MODEL_ID,

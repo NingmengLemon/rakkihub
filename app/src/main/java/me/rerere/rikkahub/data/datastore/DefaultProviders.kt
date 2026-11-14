@@ -17,9 +17,10 @@ import kotlin.uuid.Uuid
 /**
  * 没选过模型时的占位 ID。
  *
- * 它不对应任何真实模型：原先内置的自动模型随 RikkaHub 提供商一起下线了。首启读到的设置里
- * 聊天、快速、翻译三处的模型都指向它，用户选过模型后即被覆盖；`app/baselineprofile/mock-provider.patch`
- * 也靠这个固定值把默认模型挂到假接口上，所以它必须保持稳定。
+ * 当前的 [DEFAULT_PROVIDERS] 里没有这个 ID 对应的模型：原先内置的自动模型随 RikkaHub 提供商一起下线了。
+ * 首启读到的设置里聊天、快速、翻译三处的模型都指向它，用户选过模型后即被覆盖；老设置里如果还留着那个
+ * 提供商，它的 `models` 会原样保留，auto 模型的 id 也是这个值。`app/baselineprofile/mock-provider.patch`
+ * 靠这个固定值把默认模型挂到假接口上，所以它必须保持稳定。
  */
 val DEFAULT_MODEL_ID = Uuid.parse("b7055fb4-39f9-4042-a88a-0d80ed76cf08")
 
