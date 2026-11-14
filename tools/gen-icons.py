@@ -11,7 +11,7 @@
 - app/src/main/res/mipmap-*/ 的 ic_launcher、ic_launcher_foreground、ic_launcher_background
 - docs/icon.png（README 用，512）
 - web-ui/public/icon.png（Web UI 空状态用，256）
-- web-ui/public/favicon.ico（16/32 用通知栏那枚兔子头剪影，48 及以上用插画）
+- web-ui/public/favicon.ico（48/64/128/256，全部用插画）
 
 插画占 108dp 画布的 78%，相对画布中心左移 1.5%、上移 6%；圆角 20.8%，背景取插画主色 #F4EEEF。
 改插画或参数后重跑一遍，再按 docs/custom/checklist.md 的 C90、C92、C94 核对。
@@ -22,15 +22,12 @@ import os
 from PIL import Image, ImageDraw
 
 SRC = r"app/src/main/res/drawable-nodpi/about_logo.webp"
-GLYPH = r"app/src/main/res/drawable-xxxhdpi/ic_stat_rikkahub.png"
 BG = (244, 238, 239, 255)
-INK = (43, 41, 43, 255)
 SCALE = 0.78
 DX = -0.015
 DY = -0.06
 SS = 4
 RADIUS = 0.208
-GLYPH_SCALE = 0.86
 
 img = Image.open(SRC).convert("RGBA")
 w, h = img.size
@@ -86,17 +83,6 @@ def background(size):
     return Image.new("RGBA", (size, size), BG)
 
 
-def glyph_mark(size):
-    s = size * 8
-    canvas = Image.new("RGBA", (s, s), BG)
-    mark = Image.open(GLYPH).convert("RGBA")
-    mark = mark.resize((round(s * GLYPH_SCALE),) * 2, Image.LANCZOS)
-    tint = Image.new("RGBA", mark.size, INK)
-    tint.putalpha(mark.split()[3])
-    canvas.alpha_composite(tint, ((s - mark.width) // 2, (s - mark.height) // 2))
-    return round_out(canvas, size, round(RADIUS * s))
-
-
 for name, scale in {
     "mdpi": 1,
     "hdpi": 1.5,
@@ -113,9 +99,9 @@ for name, scale in {
 icon(512).save(r"docs/icon.png")
 icon(256).save(r"web-ui/public/icon.png")
 
-# favicon：16/32 用兔子头剪影，插画在这个尺寸上认不出来；48 及以上用插画图标
-FAVICON = [(16, 16), (32, 32), (48, 48), (64, 64), (128, 128), (256, 256)]
-frames = [glyph_mark(s) if s <= 32 else icon(s) for s, _ in FAVICON]
+# favicon：统一用插画，标签页那枚 16px 由浏览器从 48 帧缩下去
+FAVICON = [(48, 48), (64, 64), (128, 128), (256, 256)]
+frames = [icon(s) for s, _ in FAVICON]
 frames[-1].save(
     r"web-ui/public/favicon.ico", format="ICO", sizes=FAVICON, append_images=frames[:-1]
 )
