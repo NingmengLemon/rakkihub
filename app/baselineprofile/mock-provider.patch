@@ -16,7 +16,7 @@ index 4581cd91..f94bf8b3 100644
 +            me.rerere.ai.provider.Model(
 +                modelId = "mock-model",
 +                displayName = "Mock Model",
-+                id = DEFAULT_AUTO_MODEL_ID,
++                id = DEFAULT_MODEL_ID,
 +            )
 +        ),
 +    ),

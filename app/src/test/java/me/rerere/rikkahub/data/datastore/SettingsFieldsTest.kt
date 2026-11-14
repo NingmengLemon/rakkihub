@@ -69,9 +69,9 @@ class SettingsFieldsTest {
     fun `missing keys read as first launch values`() {
         val settings = emptyPreferences().toSettings()
 
-        assertEquals(DEFAULT_AUTO_MODEL_ID, settings.chatModelId)
-        assertEquals(DEFAULT_AUTO_MODEL_ID, settings.fastModelId)
-        assertEquals(DEFAULT_AUTO_MODEL_ID, settings.translateModeId)
+        assertEquals(DEFAULT_MODEL_ID, settings.chatModelId)
+        assertEquals(DEFAULT_MODEL_ID, settings.fastModelId)
+        assertEquals(DEFAULT_MODEL_ID, settings.translateModeId)
         assertEquals(DEFAULT_MODE_INJECTIONS, settings.modeInjections)
         assertEquals(DEFAULT_ASSISTANT_ID, settings.assistantId)
         assertEquals(DEFAULT_SYSTEM_TTS_ID, settings.selectedTTSProviderId)

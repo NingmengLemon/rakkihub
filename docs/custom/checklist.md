@@ -102,6 +102,7 @@
 | C92 | launcher 插画重新对位 | 改造 |
 | C93 | tools/i18n 重写成 Python | 改造 |
 | C94 | 图标收尾：favicon、Web 空状态 logo、删除旧海报 | 改造 |
+| C95 | 清理 RikkaHub 提供商残留 | 移除 |
 
 ## 明细
 
@@ -723,3 +724,10 @@
 - 理由：C90 只换了 launcher 与 README 图标，浏览器标签页、Web UI 新会话空状态、海报三处还是旧兔子；海报在本分支没有任何引用（根 README 是 fork 说明，见 C39，只有上游 README 用它），留着只是一份 1 MB 的旧品牌素材
 - 合并注意：favicon 的小尺寸不用缩小的插画，16px 下五官糊成一块，兔子头剪影与插画是同一套耳朵造型，小尺寸反而认得出，48 及以上仍是插画；`web-ui/public/` 由 `web` 模块 preBuild 的 `pnpm run build` 拷进 `web/src/main/resources/static`（该目录 gitignored），只改 `web-ui/public` 而不重新构建 APK 不会生效；`docs/icon.png` 保持 512（README 用），`web-ui/public/icon.png` 取 256，够 64px 显示的四倍屏；通知栏小图标 `ic_stat_rikkahub` 是有意保留的兔子头剪影（见 C90）
 - 测试：六个尺寸逐帧导出核对；`pnpm run typecheck` 通过，oxfmt 对改动的两个文件通过（整棵 `web-ui/app` 在 oxfmt 默认配置下另有 65 个既有格式差异，与本次无关，CI 也不跑这项）；`:app:assembleGithubDebug` 通过，解包 APK 后 `assets/static/favicon.ico`（75065 字节）与 `assets/static/icon.png`（43496 字节）和 `web-ui/public` 下的文件哈希一致，打包产物里能看到 `<img src="/icon.png" alt="RakkiHub">`；用本地静态服务器把构建产物打开，新会话空状态显示插画图标，`/favicon.ico` 与 `/icon.png` 都返回 200。设备上的 Web 服务器开关要在设置里手动打开，本次没开，所以没在真机浏览器里核对标签页图标
+
+### C95 清理 RikkaHub 提供商残留
+
+- 落点：删除 `app/src/main/assets/icons/rikkahub.svg`；`app/src/main/java/me/rerere/rikkahub/utils/AIIconMatcher.kt` 去掉 `PATTERN_RIKKAHUB`（`rikka|auto`）分支；四个 locale 删除 `rikkahub_provider_description`；`DEFAULT_AUTO_MODEL_ID` 改名 `DEFAULT_MODEL_ID` 并补注释，涉及 `DefaultProviders.kt`、`SettingsFields.kt`、`SettingsFieldsTest.kt` 与 `app/baselineprofile/mock-provider.patch`；新增 `app/src/test/java/me/rerere/rikkahub/utils/AIIconMatcherTest.kt`
+- 理由：上游 `0533acde` 已把默认 RikkaHub 提供商（`api.rikka-ai.com`，含 `auto` 模型）从 `DEFAULT_PROVIDERS` 删掉，本分支跟着不再预置；但官方图标、`rikka|auto` 匹配规则和描述文案还留着，任何名字里带 rikka 或 auto 的提供商都会拿到官方图标
+- 合并注意：老设置里若还有这个提供商，`withBuiltInDefaults` 按 id 在 `DEFAULT_PROVIDERS` 里找不到对应项，就原样留成一个普通提供商，不补回预置，也没有专属图标；`DEFAULT_MODEL_ID` 是不对应任何模型的占位 id，首启的聊天、快速、翻译模型都指向它，`baselineprofile/mock-provider.patch` 靠这个固定值把默认模型挂到假接口上，所以只改名不删；`search-picker.tsx` 的 `rikkahub: "RikkaHub"` 属于搜索服务（`RikkaHubSearchService`，走 `api.rikka-ai.com/v1/search`），`ai/util/Request.kt` 给 OpenRouter 的 `HTTP-Referer` 仍是 `https://rikka-ai.com`，两者都指官方服务，不在本项范围
+- 测试：`AIIconMatcherTest` 2 条通过（名字含 rikka/auto 不再命中，OpenAI、DeepSeek 仍命中）；`:app:testGithubDebugUnitTest` 805 条全过（JBR 21），spotless 通过；`git apply --check app/baselineprofile/mock-provider.patch` 仍可应用；`i18n list -m app --missing` 显示 0/1537，`unused -m app,search,oauth,ui` 从 46 条降到 45 条（少掉的就是这条没有引用的文案）
