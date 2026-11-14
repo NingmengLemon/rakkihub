@@ -342,6 +342,7 @@
 - 仓库改名为 `rakkihub` 已完成：GitHub 仓库名和本地 remote 已改，`docs/custom/README.md` 的 remote 表同步；上游链接不动。
 - 更换应用图标已完成（C90、C92、C94）：launcher 各密度用关于页同一张插画生成，monochrome 层去掉（插画剪影会变成黑块），README 的 `docs/icon.png` 同步；`web-ui/public/favicon.ico` 统一用插画（48/64/128/256 四帧，16px 标签页由浏览器缩），Web UI 新会话空状态改用 `web-ui/public/icon.png`，没有引用的 `docs/img/` 整个目录已删除。通知栏小图标 `ic_stat_rikkahub` 是有意保留的兔子头剪影：插画在 24dp 下是一团色块，这枚单色剪影反而清楚
 - RikkaHub 提供商残留已清理（C95）：上游 `0533acde` 删掉默认提供商后，本分支删掉 `assets/icons/rikkahub.svg`、`AIIconMatcher` 的 `rikka|auto` 分支、四份 `rikkahub_provider_description`，以及只给它用的空 `RikkaHubAPI` 与指向 `api.rikka-ai.com` 的 Retrofit 单例；`DEFAULT_AUTO_MODEL_ID` 改名 `DEFAULT_MODEL_ID` 并注明当前预置里没有对应模型（老设置里那个提供商的 auto 模型仍是这个 id）。搜索服务 `RikkaHubSearchService` 仍保留，但它的选项里 `displayName` 是 `RikkaHub`，同样走这个 matcher，图标回退成首字母
+- 发给 OpenRouter 的来源标识头已移除（C96）：`configureReferHeaders` 只在 host 是 `openrouter.ai` 时加 `X-Title` 与 `HTTP-Referer`，Referer 指官方站点，等于把本分支的调用算成官方 app；函数、十一处调用与 `mediagen` 生图那两行一并删掉，用户自定义请求头不受影响
 
 ### Markdown 渲染能力
 

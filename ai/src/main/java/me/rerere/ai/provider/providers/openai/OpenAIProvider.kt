@@ -31,7 +31,6 @@ import me.rerere.ai.ui.ImageGenerationItem
 import me.rerere.ai.ui.StreamChunk
 import me.rerere.ai.ui.UIMessage
 import me.rerere.ai.util.KeyRoulette
-import me.rerere.ai.util.configureReferHeaders
 import me.rerere.ai.util.json
 import me.rerere.ai.util.mergeCustomBody
 import me.rerere.ai.util.mergeCustomHeaders
@@ -216,7 +215,6 @@ class OpenAIProvider(
             .addHeader("Authorization", "Bearer $key")
             .addHeader("Content-Type", "application/json")
             .post(requestBody.toRequestBody("application/json".toMediaType()))
-            .configureReferHeaders(providerSetting.baseUrl)
             .build()
 
         val items = withContext(Dispatchers.IO) {
@@ -287,7 +285,6 @@ class OpenAIProvider(
             .headers(providerSetting.mergeCustomHeaders(params.customHeaders))
             .addHeader("Authorization", "Bearer $key")
             .post(bodyBuilder.build())
-            .configureReferHeaders(providerSetting.baseUrl)
             .build()
 
         val items = withContext(Dispatchers.IO) {
@@ -342,7 +339,6 @@ class OpenAIProvider(
             .addHeader("Authorization", "Bearer $key")
             .addHeader("Content-Type", "application/json")
             .post(requestBody.toRequestBody("application/json".toMediaType()))
-            .configureReferHeaders(providerSetting.baseUrl)
             .build()
 
         val response = client.newCall(request).await()

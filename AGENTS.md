@@ -133,12 +133,12 @@ This repository carries personal customizations on top of upstream `rikkahub/rik
 - A Room schema change also makes the official-compatible export fail until its trimming logic exists. C80 implemented
   the known `usage_record.outcome` trim (see C18/C80); other schema divergences still fail deliberately.
 - The branch is on independent updates: upstream is read, not merged. Read its commits, port feature or bugfix ideas
-  by hand, and keep the C3 deletion in `ai/util/Request.kt` whenever upstream changes to that file are ported. The
+  by hand, and keep the C3 and C96 deletions in `ai/util/Request.kt` whenever upstream changes to that file are ported. The
   module reference table and the porting procedure live in the independent-update section of
   `docs/custom/roadmap.md`.
 - The merge-cost concessions are gone now that the branch is on independent updates: inside `app/`, delete
   implementations outright instead of leaving entry-point shells, and edit the hot files freely. Keep changes small
-  inside `ai/`, which is still read against upstream (C3's deletion, C52's standard cache breakpoints, C53's per-provider cache strategy, C59's terminal-event guard, C61's typed failures/retry policy, C62's stream idle watchdog, C63's context-overflow shrink hook, C65's tool-error summary/timeout, C67's `isGenerating` recovery flag, C68's `withoutCompressionScratch`, C85's Claude thinking-signature replay, C86's omit-reasoning_effort-when-off, and the C47/C51/C58 `ai/ui/Message.kt` additions are the behavior changes there; C35's `filterByKeywords` matches upstream).
+  inside `ai/`, which is still read against upstream (C3's and C96's deletions, C52's standard cache breakpoints, C53's per-provider cache strategy, C59's terminal-event guard, C61's typed failures/retry policy, C62's stream idle watchdog, C63's context-overflow shrink hook, C65's tool-error summary/timeout, C67's `isGenerating` recovery flag, C68's `withoutCompressionScratch`, C85's Claude thinking-signature replay, C86's omit-reasoning_effort-when-off, and the C47/C51/C58 `ai/ui/Message.kt` additions are the behavior changes there; C35's `filterByKeywords` matches upstream).
 - Before pushing a batch of customizations, run an independent review: dispatch a fresh-context `subagent` (not
   `subagent_fork`) and have it load the `code-review` skill, reviewing `origin/main..main` (the batch; use `ref..main`
   to audit every customization). Fix what it finds and re-run until it passes; only then `git push origin main`.

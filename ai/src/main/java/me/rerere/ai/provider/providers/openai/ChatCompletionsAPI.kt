@@ -49,7 +49,6 @@ import me.rerere.ai.ui.UIMessagePart
 import me.rerere.ai.ui.metadataAs
 import me.rerere.ai.ui.toMetadata
 import me.rerere.ai.util.KeyRoulette
-import me.rerere.ai.util.configureReferHeaders
 import me.rerere.ai.util.configureSessionHeaders
 import me.rerere.ai.util.encodeBase64
 import me.rerere.ai.util.json
@@ -100,7 +99,6 @@ class ChatCompletionsAPI(
                 "Authorization",
                 "Bearer ${keyRoulette.next(providerSetting.apiKey, providerSetting.id.toString())}"
             )
-            .configureReferHeaders(providerSetting.baseUrl)
             .configureSessionHeaders(providerSetting.baseUrl, params.sessionId)
             .build()
 
@@ -155,7 +153,6 @@ class ChatCompletionsAPI(
                 "Bearer ${keyRoulette.next(providerSetting.apiKey, providerSetting.id.toString())}"
             )
             .addHeader("Content-Type", "application/json")
-            .configureReferHeaders(providerSetting.baseUrl)
             .configureSessionHeaders(providerSetting.baseUrl, params.sessionId)
             .build()
 

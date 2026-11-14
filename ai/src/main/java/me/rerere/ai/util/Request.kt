@@ -34,20 +34,6 @@ fun ProviderSetting.mergeCustomHeaders(headers: List<CustomHeader> = emptyList()
     return (providerHeaders + headers).toHeaders()
 }
 
-fun Request.Builder.configureReferHeaders(url: String): Request.Builder {
-    val httpUrl = url.toHttpUrl()
-    return when (httpUrl.host) {
-        // OpenRouter 用这两个头做调用来源标识
-        "openrouter.ai" -> {
-            this
-                .addHeader("X-Title", "RakkiHub")
-                .addHeader("HTTP-Referer", "https://rikka-ai.com")
-        }
-
-        else -> this
-    }
-}
-
 fun Request.Builder.configureSessionHeaders(url: String, sessionId: String?): Request.Builder = apply {
     if (sessionId != null) {
         header("X-Session-ID", sessionId)

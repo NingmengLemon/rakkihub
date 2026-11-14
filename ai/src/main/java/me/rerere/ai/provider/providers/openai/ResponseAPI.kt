@@ -51,7 +51,6 @@ import me.rerere.ai.ui.UIMessagePart
 import me.rerere.ai.ui.metadataAs
 import me.rerere.ai.ui.toMetadata
 import me.rerere.ai.util.KeyRoulette
-import me.rerere.ai.util.configureReferHeaders
 import me.rerere.ai.util.configureSessionHeaders
 import me.rerere.ai.util.encodeBase64
 import me.rerere.ai.util.json
@@ -111,7 +110,6 @@ class ResponseAPI(
         configureRequest = {
             headers(mergeCustomHeaders(params.customHeaders))
             addHeader("Authorization", "Bearer ${keyRoulette.next(apiKey, id.toString())}")
-            configureReferHeaders(baseUrl)
             configureSessionHeaders(baseUrl, params.sessionId)
         },
     )
