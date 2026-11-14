@@ -173,7 +173,7 @@
 | `speech/` | C5 删掉了全部运行时实现，只留两个序列化类与它们的序列化测试 | 不看 |
 | `mediagen/` | C1 保留模块以维持数据兼容，界面不使用 | 不主动看，改到 `MediaGenerationProviderSetting` 这类持久化类型时复核 |
 
-`ai/` 下有十四处改动：C3 删掉了 `ai/util/Request.kt` 里给 aihubmix.com 加 `APP-Code` 请求头的分支；C52 把 `ClaudeProvider` 的缓存断点收敛到官方标准；C53 把 Claude 缓存策略改成按 provider 切换，默认保留上游原来的 4 个断点；C47 在 `ai/ui/Message.kt` 新增了只读的 `contextLimitStart`，不改 `limitContext`；C51 在 `ai/ui/Message.kt` 新增了序列化字段 `isCompressionPrompt`，用于标记压缩提示词；C58 在 `ai/ui/Message.kt` 新增了 `status`、`isModelVisible`、`filterModelVisible` 和 `mergeAdjacentUserMessages`；C59 让五个 `StreamChunkDecoder` 在未见终止事件时抛 `IOException`，并在五个 provider 接线点的 `onClosed` 里 `close(e)`；C61 在 `ErrorParser.kt` 增加 `LlmFailureCode`/`HttpException` 错误码和 `Retry-After`，`RetryPolicy` 按码表、jitter 和 `maxDelay` 重试，`AgentLoop` 把空回复转成 `EMPTY_RESPONSE`；C62 给 `AgentRequest` 增加 `streamIdleTimeout`，`AgentLoop` 用 `Flow.timeout` 把流内空闲转成 `TIMEOUT`；C63 给 `AgentHooks` 增加 `onContextOverflow`，`AgentLoop` 捕获 `CONTEXT_WINDOW_EXCEEDED` 后允许 hook 缩窗重试一次；C65 让工具错误结果只带摘要，堆栈只进日志（C78 起 `Log.e`），并给 `AgentRequest` 增加 `toolTimeout`，`AgentLoop` 用 `withTimeoutOrNull` 执行工具；C78 把工具失败日志从 `printStackTrace` 改成 `Log.e`；C67 在 `UIMessage` 增加 `isGenerating`，加载时据此把进程死亡留下的半截回复补成 `INTERRUPTED`；C68 增加 `withoutCompressionScratch`，把压缩提示词和紧随回复从请求与导出里过滤掉。C35 的 `filterByKeywords` 与上游 `5ad19405` 逐字一致，不算分叉。移植上游对这些文件的改动时保留这十四处。
+`ai/` 下有这些改动：C3 删掉了 `ai/util/Request.kt` 里给 aihubmix.com 加 `APP-Code` 请求头的分支；C52 把 `ClaudeProvider` 的缓存断点收敛到官方标准；C53 把 Claude 缓存策略改成按 provider 切换，默认保留上游原来的 4 个断点；C47 在 `ai/ui/Message.kt` 新增了只读的 `contextLimitStart`，不改 `limitContext`；C51 在 `ai/ui/Message.kt` 新增了序列化字段 `isCompressionPrompt`，用于标记压缩提示词；C58 在 `ai/ui/Message.kt` 新增了 `status`、`isModelVisible`、`filterModelVisible` 和 `mergeAdjacentUserMessages`；C59 让五个 `StreamChunkDecoder` 在未见终止事件时抛 `IOException`，并在五个 provider 接线点的 `onClosed` 里 `close(e)`；C61 在 `ErrorParser.kt` 增加 `LlmFailureCode`/`HttpException` 错误码和 `Retry-After`，`RetryPolicy` 按码表、jitter 和 `maxDelay` 重试，`AgentLoop` 把空回复转成 `EMPTY_RESPONSE`；C62 给 `AgentRequest` 增加 `streamIdleTimeout`，`AgentLoop` 用 `Flow.timeout` 把流内空闲转成 `TIMEOUT`；C63 给 `AgentHooks` 增加 `onContextOverflow`，`AgentLoop` 捕获 `CONTEXT_WINDOW_EXCEEDED` 后允许 hook 缩窗重试一次；C65 让工具错误结果只带摘要，堆栈只进日志（C78 起 `Log.e`），并给 `AgentRequest` 增加 `toolTimeout`，`AgentLoop` 用 `withTimeoutOrNull` 执行工具；C78 把工具失败日志从 `printStackTrace` 改成 `Log.e`；C67 在 `UIMessage` 增加 `isGenerating`，加载时据此把进程死亡留下的半截回复补成 `INTERRUPTED`；C68 增加 `withoutCompressionScratch`，把压缩提示词和紧随回复从请求与导出里过滤掉；C85 让 Claude 的 `redacted_thinking` 与思考块签名可以回放；C86 在 `ReasoningLevel.OFF` 时不再写 `reasoning_effort`；C96 删掉了 `configureReferHeaders`（OpenRouter 的 `X-Title` 与 `HTTP-Referer`）。C35 的 `filterByKeywords` 与上游 `5ad19405` 逐字一致，不算分叉。移植上游对这些文件的改动时保留这些改动。
 
 上游从 3.0.0 起把多步生成循环放进 `ai/`（`ai/src/main/java/me/rerere/ai/agent/AgentLoop.kt`），3.1.1 又把工具执行计时与 models.dev 的模型能力数据放进去。现在还值得看 `ai/` 吗，取决于它是不是一块能单独参考的区域：如果它继续吸收 `app/` 侧的耦合，读改动的成本会变高。
 
@@ -188,7 +188,7 @@
    ```
 
 2. 按模块参考表筛出要看的提交：保命层读 diff 自己移植，能力层评估后自己实现，地基层跳过。
-3. 移植时不许覆盖登记过的定制（尤其 C3 的删除）；落进 `app/` 的改动不受合并成本限制。
+3. 移植时不许覆盖登记过的定制（尤其 C3 与 C96 的删除）；落进 `app/` 的改动不受合并成本限制。
 4. 跑测试，判据是没有新增失败。
 5. 在 `checklist.md` 里记一条，写明参考的上游提交。
 
@@ -199,7 +199,7 @@
 - 在 `app/` 里，该删的实现直接删掉，不必为了可合并性留一整段死代码
 - `ChatVM.kt`、`ChatService.kt` 这类高频文件可以随手改，不必专门绕开
 
-`ai/` 仍要参考上游，C3 的删除在移植上游对 `ai/util/Request.kt` 的改动时要带回来，「改动尽量小」在那里仍然成立。
+`ai/` 仍要参考上游，C3 与 C96 的删除在移植上游对 `ai/util/Request.kt` 的改动时要带回来，「改动尽量小」在那里仍然成立。
 
 同类的合并成本让步还有几处：把删掉的文件路径记进定制清单以便合并时逐项核对；新定制避开上游重构期；定制清单里那些「刻意保留」的条目，比如 C1 留下未删的实现，留着都是为了不与上游产生 modify/delete 冲突。这些让步不再需要；清单本身仍然保留，用途从「合并时逐项重放」变成「移植上游改动时核对」。
 
