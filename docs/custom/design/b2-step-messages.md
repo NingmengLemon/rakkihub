@@ -269,7 +269,7 @@ RUNNING 会出现在当前请求里：AgentLoop 把正在生成的 assistant 消
 - Web/SSE：`MessageDto` 新增可选的 `status` 与 `steps`；`MessageDto.parts` 直接序列化 `UIMessagePart`，`callComplete` 会自动出现在 Web JSON 里，不需要额外字段。Web 的删除、分支、重新生成仍按节点操作；SSE 的 `node_update` 机制不变。
 - 浮动窗口、Markdown 导出、长图、通知：仍按消息处理，不按 step 拆分。
 - 官方兼容导出：行结构与 JSON 字段保留，`OfficialDatabaseAdapter` 的附件路径改写不变；`steps` 作为 `UIMessage` 的未知字段，容忍路径与现有 `status`、`isGenerating` 相同。上游 `ref` 的 `JsonInstant` 已经开了 `ignoreUnknownKeys`，验收仍要用官方 3.1.1 恢复普通消息与带 steps 的消息，样本记入 `docs/custom/backup/acceptance.md`。
-- 官方兜底：如果官方客户端拒绝未知字段，不只会是 `steps`，`status`、`isGenerating`、`isCompressionPrompt` 这些分叉字段同样会被拒绝。兜底方案是在 `OfficialDatabaseAdapter` 对 `messages` JSON 做一次投影，剔除所有官方不认识的字段（至少 `status`、`isGenerating`、`isCompressionPrompt`、`steps`，以及 Tool part 里嵌套的 `callComplete`），保留 JSON 树里的官方未知键；字段清单按本分支对 `UIMessage` 与 `UIMessagePart` 的新增字段派生，不靠手工记忆；导入侧的 raw copy 不变量不改变，导出侧说明写进 C18 的登记与 `docs/custom/backup/acceptance.md`。
+- 官方兜底：上游 `ref` 的 `JsonInstant` 已开启 `ignoreUnknownKeys`，消息节点也用同一解码器；`steps`、`status`、`isGenerating`、`isCompressionPrompt` 和 Tool part 里的 `callComplete` 先按未知字段容忍，不做 JSON 投影。官方 3.1.1 样本确认前不写猜测性的裁剪；若样本拒绝，再在 `OfficialDatabaseAdapter` 对 `messages` JSON 投影，剔除所有官方不认识的字段（至少上述几项），保留 JSON 树里的官方未知键。字段清单按本分支对 `UIMessage` 与 `UIMessagePart` 的新增字段派生，不靠手工记忆；导入侧的 raw copy 不变量不改变，导出侧说明写进 C18 的登记与 `docs/custom/backup/acceptance.md`。
 - 错误卡片（C71）：`ChatErrorStore` 的私有 `StoredError` 也要加 `retryNodeId`、`retryStepId`，旧 `chat-errors.json` 解码为 null，按陈旧卡片处理。
 - 消息队列（C70）：只存 user 消息，不受 steps 影响。
 - 进程死亡（C67）：只处理 `isGenerating = true` 的消息；审批暂停的消息不参与。

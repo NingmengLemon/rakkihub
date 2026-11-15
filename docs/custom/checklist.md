@@ -219,7 +219,7 @@
 
 - 落点：新增 `BackupTarget`（`SELF` / `OFFICIAL`）、`OfficialDatabaseCompatibility`（判定我们的库还在不在官方形状上，比较版本与 identity hash，配 `OfficialDatabaseCompatibilityTest`）、`OfficialDatabaseAdapter`（一致时把附件路径改写成官方安装的位置再交出，已知分叉裁剪，其它分叉抛 `OfficialExportUnsupportedException`）；`BackupManager.createBackup` 与 `WebDavSync.prepareBackupFile` 加目标参数，`BackupVM.exportToFile` 透传，只有 `SELF` 会更新备份提醒的时间戳；`ImportExportTab` 加第二个导出入口，落在官方 RikkaHub 分组里（C42），与自家导出的区别在数据库与其中的路径，目标用 `rememberSaveable` 存，避免选择文件期间被回收后退回自家格式；8 个 locale 新增 `backup_page_export_official`、`backup_page_export_official_desc`、`backup_page_export_failed`、`backup_page_export_schema_diverged`；`BackupManagerTest` 补一条官方目标的 androidTest
 - 理由：改结构之后自家备份官方读不了，需要一个能把数据交回官方的出口；它和自家导出并列，不是把现有导出改掉
-- 合并注意：C80 后本仓库 Room 33、官方 v32；适配层对一致形状改写路径，对已登记的 `usage_record.outcome` 做已知裁剪，其它分叉仍失败。失败是刻意的，静默产出官方打不开的备份要等到恢复时才发现；分叉走单独的提示文案，技术原因只进日志。导出失败时会尝试删掉选择位置时建出的空文档，尽量不留 0 字节文件（删除本身可能被 provider 拒绝，是 best-effort）。`settings.json` 不裁字段，官方解码器的 `ignoreUnknownKeys` 会忽略多余字段，这一点由 `OfficialSettingsCompatibilityTest` 钉住；但官方不认识的枚举值它吞不掉，所以官方出口会把工作区选项去掉（C29）。WebDAV 出口暂时只产出 `SELF` 格式。上游若改 `createBackup` 的签名或备份页的导出分组，第二个入口要跟着调整
+- 合并注意：C80 后本仓库 Room 33、官方 v32；适配层对一致形状改写路径，对已登记的 `usage_record.outcome` 做已知裁剪，其它分叉仍失败。失败是刻意的，静默产出官方打不开的备份要等到恢复时才发现；分叉走单独的提示文案，技术原因只进日志。导出失败时会尝试删掉选择位置时建出的空文档，尽量不留 0 字节文件（删除本身可能被 provider 拒绝，是 best-effort）。`settings.json` 不裁字段，官方解码器的 `ignoreUnknownKeys` 会忽略多余字段，这一点由 `OfficialSettingsCompatibilityTest` 钉住；但官方不认识的枚举值它吞不掉，所以官方出口会把工作区选项去掉（C29）。WebDAV 出口暂时只产出 `SELF` 格式。上游若改 `createBackup` 的签名或备份页的导出分组，第二个入口要跟着调整。消息 JSON 的 `steps`/`callComplete` 依赖官方解码器的 `ignoreUnknownKeys` 容忍，上游 `ref` 的 `JsonInstant` 已开启；是否要为官方 3.1.1 做 JSON 投影兜底，等样本确认后再定，见 [`backup/acceptance.md`](backup/acceptance.md) 的 B1 待验证。
 
 ### C19 附件按替换语义导入，导入的原始备份留底
 
