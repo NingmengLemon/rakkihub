@@ -64,6 +64,18 @@ export interface ConversationListInvalidateEventDto {
  * Message DTO (for API response)
  * @see app/src/main/java/me/rerere/rikkahub/web/dto/WebDto.kt - MessageDto
  */
+export type MessageStatus = "complete" | "interrupted" | "failed";
+export type StepStatus = "running" | "tools" | "succeeded" | "failed" | "cancelled";
+
+export interface MessageStepDto {
+  status: StepStatus;
+  startPartIndex: number;
+  endPartIndex: number;
+  startedAt: string;
+  finishedAt?: string | null;
+  legacy: boolean;
+}
+
 export interface MessageDto {
   id: string;
   role: string;
@@ -79,6 +91,8 @@ export interface MessageDto {
   translation?: string | null;
   /** 上下文检查点：之前的消息不再发送给模型；非空内容是摘要，空内容是历史截断边界 */
   isContextCheckpoint?: boolean;
+  status?: MessageStatus;
+  steps?: MessageStepDto[];
 }
 
 export interface MessageNodeDto {

@@ -12,7 +12,9 @@ import me.rerere.ai.ui.UIMessage
 import me.rerere.ai.ui.UIMessagePart
 import me.rerere.ai.ui.contextLimitStart
 import me.rerere.ai.ui.ocrText
+import me.rerere.ai.ui.projectForRequest
 import me.rerere.ai.ui.withOcrText
+import me.rerere.ai.ui.withoutCompressionScratch
 import me.rerere.ai.util.InstantSerializer
 import me.rerere.rikkahub.data.datastore.DEFAULT_ASSISTANT_ID
 import me.rerere.rikkahub.data.datastore.Settings
@@ -281,11 +283,20 @@ internal fun Conversation.planHistoryTruncation(keep: Int): HistoryTruncation {
 internal fun Conversation.contextLimitBoundaryIndex(limit: Int): Int? {
     if (limit <= 0) return null
     val messages = currentMessages
+    // 压缩提示词必须在 withoutCompressionScratch 之前判断，否则 scratch 已被删掉，永远看不到
     if (messages.any { it.isCompressionPrompt }) return null
+    val projected = messages.projectForRequest()
+        .filter { it.parts.isNotEmpty() || it.isContextCheckpoint || it.isHistoryTruncationMarker }
+        .withoutCompressionScratch()
     val requestMessages =
-        if (messages.lastOrNull()?.role == MessageRole.ASSISTANT) messages.dropLast(1) else messages
+        if (projected.lastOrNull()?.role == MessageRole.ASSISTANT) projected.dropLast(1) else projected
     val start = requestMessages.contextLimitStart(limit)
-    return start.takeIf { it > contextWindowStart() }
+    val tailStart = requestMessages.indexOfLast { it.isContextCheckpoint } + 1
+    if (start <= tailStart) return null
+    val startMessageId = requestMessages.getOrNull(start)?.id ?: return null
+    // 投影可能丢掉整条失败消息或空消息，下标已不能和节点下标直接比较，按 id 映射回去
+    return messageNodes.indexOfFirst { it.currentMessage.id == startMessageId }
+        .takeIf { it >= 0 }
 }
 
 /** 有工具调用在等待用户审批：新消息只看最后一条 assistant，旧消息仍扫描全部 */

@@ -4,6 +4,8 @@ import kotlinx.serialization.Serializable
 import me.rerere.ai.core.MessageRole
 import me.rerere.ai.core.ReasoningLevel
 import me.rerere.ai.core.TokenUsage
+import me.rerere.ai.ui.MessageStatus
+import me.rerere.ai.ui.MessageStep
 import me.rerere.ai.ui.ModelSnapshot
 import me.rerere.ai.ui.UIMessage
 import me.rerere.ai.ui.UIMessageAnnotation
@@ -234,6 +236,8 @@ data class MessageDto(
     val generationTimeMs: Long? = null,
     val translation: String? = null,
     val isContextCheckpoint: Boolean = false,
+    val status: MessageStatus = MessageStatus.COMPLETE,
+    val steps: List<MessageStep> = emptyList(),
 )
 
 @Serializable
@@ -387,4 +391,6 @@ fun UIMessage.toDto() = MessageDto(
     generationTimeMs = generationTimeMs,
     translation = translation,
     isContextCheckpoint = isContextCheckpoint,
+    status = status,
+    steps = steps,
 )

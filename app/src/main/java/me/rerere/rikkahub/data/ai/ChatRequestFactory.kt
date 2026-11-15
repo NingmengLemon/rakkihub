@@ -52,6 +52,7 @@ import me.rerere.rikkahub.data.model.MemoryFile
 import me.rerere.rikkahub.data.model.compressionSummaryMaxTokens
 import me.rerere.rikkahub.data.model.getAssistantOf
 import me.rerere.rikkahub.data.model.getChatModelOf
+import me.rerere.rikkahub.data.model.isHistoryTruncationMarker
 import me.rerere.rikkahub.data.repository.MemoryRepository
 import me.rerere.rikkahub.data.repository.WorkspaceRepository
 import me.rerere.rikkahub.data.repository.memoryId
@@ -252,7 +253,9 @@ class ChatRequestFactory(
         processingStatus: MutableStateFlow<String?> = MutableStateFlow(null),
     ): StepRequest {
         val assistant = turn.assistant
-        val visibleMessages = messages.projectForRequest().withoutCompressionScratch()
+        val visibleMessages = messages.projectForRequest()
+            .filter { it.parts.isNotEmpty() || it.isContextCheckpoint || it.isHistoryTruncationMarker }
+            .withoutCompressionScratch()
         val requestMessages = buildList {
             val system = buildString {
                 val effectiveSystemPrompt =

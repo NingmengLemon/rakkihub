@@ -1,8 +1,12 @@
 package me.rerere.rikkahub.data.model
 
+import me.rerere.ai.ui.MessageStatus
 import me.rerere.ai.ui.UIMessage
+import me.rerere.ai.ui.contextLimitStart
+import me.rerere.ai.ui.projectForRequest
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
+import org.junit.Assert.assertTrue
 import org.junit.Test
 import kotlin.uuid.Uuid
 
@@ -61,6 +65,30 @@ class ConversationContextLimitTest {
 
         // 上限 3：去掉回复后正好 3 条，不截断
         assertNull(conversation.contextLimitBoundaryIndex(3))
+    }
+
+    @Test
+    fun `boundary maps projected message id back to node index`() {
+        val failed = UIMessage.assistant("failed").copy(status = MessageStatus.FAILED)
+        val conversation = Conversation(
+            assistantId = Uuid.random(),
+            messageNodes = (
+                listOf(UIMessage.user("message 0"), failed) +
+                    List(11) { index -> UIMessage.user("message ${index + 1}") }
+                ).map { it.toMessageNode() },
+        )
+        val projected = conversation.currentMessages
+            .projectForRequest()
+            .filter { it.parts.isNotEmpty() }
+        val start = projected.contextLimitStart(5)
+
+        val boundary = conversation.contextLimitBoundaryIndex(5)
+
+        assertEquals(
+            conversation.messageNodes.indexOfFirst { it.currentMessage.id == projected[start].id },
+            boundary,
+        )
+        assertTrue(boundary != start)
     }
 
     @Test
