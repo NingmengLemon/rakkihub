@@ -148,22 +148,33 @@ internal fun Conversation.withNodeFavorite(nodeId: Uuid, favorite: Boolean): Con
  * 当前分支里没有这个还在等待审批的工具调用时返回 null，用来忽略重复点击和对已完成或非当前分支工具的过期审批。
  */
 internal fun Conversation.withToolApproval(toolCallId: String, approvalState: ToolApprovalState): Conversation? {
-    if (currentMessages.none { message ->
-            message.getTools().any { it.toolCallId == toolCallId && it.isPending }
-        }) {
-        return null
+    val lastAssistant = currentMessages.lastOrNull { it.role == MessageRole.ASSISTANT }
+    val targetId = if (lastAssistant != null && lastAssistant.steps.isNotEmpty()) {
+        lastAssistant.id
+    } else {
+        null
     }
+    val target = targetId?.let { id -> currentMessages.firstOrNull { it.id == id } }
+    val source = target ?: currentMessages.firstOrNull { message ->
+        message.getTools().any { it.toolCallId == toolCallId && it.isPending }
+    } ?: return null
+    if (source.getTools().none { it.toolCallId == toolCallId && it.isPending }) return null
+    val updatedSource = source.copy(
+        parts = source.parts.map { part ->
+            if (part is UIMessagePart.Tool && part.toolCallId == toolCallId) {
+                part.copy(approvalState = approvalState)
+            } else {
+                part
+            }
+        }
+    )
     return copy(
         messageNodes = messageNodes.map { node ->
-            node.copy(messages = node.messages.map { message ->
-                message.copy(parts = message.parts.map { part ->
-                    if (part is UIMessagePart.Tool && part.toolCallId == toolCallId) {
-                        part.copy(approvalState = approvalState)
-                    } else {
-                        part
-                    }
-                })
-            })
+            if (node.messages.none { it.id == source.id }) {
+                node
+            } else {
+                node.copy(messages = node.messages.map { if (it.id == source.id) updatedSource else it })
+            }
         }
     )
 }

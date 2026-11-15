@@ -1,8 +1,8 @@
 # B1：step 级提交与失败投影
 
-- 状态：step 记录、Claude step 级请求投影、失败工具事实已落地；审批/取消结算部分落地，最后节点审批、完整状态机与自动重试恢复待后续阶段
+- 状态：step 记录、Claude step 级请求投影、失败工具事实、审批/取消结算与最后节点审批已落地；完整状态机与自动重试恢复待后续阶段
 - 日期：2026-11-15
-- 范围：step 记录、失败投影、自动重试恢复，以及重试恢复后自动重现的 C76 内存态卡片。手动重试、错误卡片重试、搜索过滤、Web DTO 扩展与官方导出兜底归 B2
+- 范围：step 记录、失败投影、自动重试恢复，以及重试恢复后自动重现的 C76 内存态卡片。手动 step 重试、搜索过滤、Web DTO 扩展与官方导出兜底归 B2；错误卡片重试永久取消
 - 对齐参考：DSH `dsh-v0.2.2-rc.1`（tag 指向 commit `66491b05e3f05ad35bcdd4f6cd7ed26041d9e3db`，2026-11-04；本地 clone `E:\MyWorkspace\deepseek-harness` 的 HEAD 是 `dsh-v0.2.1-rc.5`，0.2.2 事实均用 `git show dsh-v0.2.2-rc.1:<path>` 读取）
 - 前置：`docs/custom/roadmap.md` 的「失败恢复与上下文的返工」冻结记录
 
@@ -214,7 +214,7 @@ val callComplete: Boolean = true
 - C67：加载恢复扫描非终态 step，跳过审批暂停但清 `isGenerating`。
 - C68：压缩 scratch 过滤保持不变。
 - C71：B1 不动，归 B2。
-- C77：B1 保持撤销，B2 再定错误卡片重试。
+- C77：永久取消，错误卡片只做信息提示，B2 不再恢复。
 - C76：卡片随重试恢复自动重现，B1 只接受内存态，不改持久化。
 - C80：用量仍按请求记录。
 - 新增 C97：step 级提交与失败投影（B1），索引行与明细在同一个提交里登记。计数口径按 ai/ 文件：现状 13 处，B1 动 `AgentLoop`、`Agent`、`Message`、`UIMessagePart`、`StreamChunkHandler` 五个文件，`Message.kt` 内新增两个投影函数不额外计文件，`filterModelVisible`/`isModelVisible` 保留所以不减少，C97 明细写 18 处。`docs/custom/README.md` 只加 design/ 文档行与降级说明，不承担 ai/ 计数。

@@ -288,13 +288,31 @@ internal fun Conversation.contextLimitBoundaryIndex(limit: Int): Int? {
     return start.takeIf { it > contextWindowStart() }
 }
 
-/** 有工具调用在等待用户审批：这一轮还没结束，排队的消息要等审批完成后再发 */
+/** 有工具调用在等待用户审批：新消息只看最后一条 assistant，旧消息仍扫描全部 */
 internal val Conversation.isAwaitingToolApproval: Boolean
-    get() = currentMessages.any { message -> message.getTools().any { it.isPending } }
+    get() {
+        val lastAssistant = currentMessages.lastOrNull { it.role == MessageRole.ASSISTANT }
+        return if (lastAssistant != null && lastAssistant.steps.isNotEmpty()) {
+            lastAssistant.getTools().any { it.isPending }
+        } else {
+            currentMessages.any { message -> message.getTools().any { it.isPending } }
+        }
+    }
 
 /** 等待用户审批的工具调用，和 [isAwaitingToolApproval] 的判断一致 */
 internal val Conversation.pendingToolCalls: List<UIMessagePart.Tool>
-    get() = currentMessages.flatMap { message -> message.getTools().filter { it.isPending } }
+    get() {
+        val lastAssistant = currentMessages.lastOrNull { it.role == MessageRole.ASSISTANT }
+        return if (lastAssistant != null && lastAssistant.steps.isNotEmpty()) {
+            lastAssistant.getTools().filter { it.isPending }
+        } else {
+            currentMessages.flatMap { message -> message.getTools().filter { it.isPending } }
+        }
+    }
+
+/** 这条消息是否持有当前可见的 Pending 工具；审批控件只挂到这些消息上。 */
+internal fun UIMessage.hasVisiblePendingTool(pendingToolIds: Set<String>): Boolean =
+    getTools().any { it.isPending && it.toolCallId in pendingToolIds }
 
 /**
  * 给无法继续执行的工具调用补恢复结果，避免把没有结果的 tool call 发给模型。

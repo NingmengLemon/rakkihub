@@ -8,12 +8,83 @@ import me.rerere.ai.ui.UIMessage
 import me.rerere.ai.ui.UIMessagePart
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
+import org.junit.Assert.assertNotNull
+import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
 import kotlin.time.Clock
 import kotlin.uuid.Uuid
 
 class ConversationToolCallsTest {
+    @Test
+    fun `legacy last assistant keeps an earlier pending tool reachable`() {
+        val oldPending = toolReply(ToolApprovalState.Pending)
+        val last = UIMessage.assistant("done")
+        val conversation = Conversation.ofId(Uuid.random()).copy(
+            messageNodes = listOf(
+                UIMessage.user("first").toMessageNode(),
+                oldPending.toMessageNode(),
+                last.toMessageNode(),
+            )
+        )
+
+        assertTrue(conversation.isAwaitingToolApproval)
+        assertEquals(
+            listOf(oldPending.getTools().single().toolCallId),
+            conversation.pendingToolCalls.map { it.toolCallId },
+        )
+        val pendingIds = conversation.pendingToolCalls.mapTo(mutableSetOf()) { it.toolCallId }
+        assertTrue(oldPending.hasVisiblePendingTool(pendingIds))
+        assertNotNull(
+            conversation.withToolApproval(
+                oldPending.getTools().single().toolCallId,
+                ToolApprovalState.Approved,
+            )
+        )
+    }
+
+    @Test
+    fun `stepped last assistant ignores pending tools on an earlier node`() {
+        val oldPending = toolReply(ToolApprovalState.Pending).copy(
+            steps = listOf(MessageStep(StepStatus.TOOLS, 0, 1, Clock.System.now())),
+        )
+        val last = UIMessage.assistant("done").copy(
+            steps = listOf(MessageStep(StepStatus.SUCCEEDED, 0, 1, Clock.System.now())),
+        )
+        val conversation = Conversation.ofId(Uuid.random()).copy(
+            messageNodes = listOf(
+                UIMessage.user("first").toMessageNode(),
+                oldPending.toMessageNode(),
+                last.toMessageNode(),
+            )
+        )
+
+        assertFalse(conversation.isAwaitingToolApproval)
+        assertTrue(conversation.pendingToolCalls.isEmpty())
+        assertFalse(oldPending.hasVisiblePendingTool(emptySet()))
+        assertNull(conversation.withToolApproval(oldPending.getTools().single().toolCallId, ToolApprovalState.Approved))
+    }
+
+    @Test
+    fun `stepped last assistant keeps its own pending tool approval`() {
+        val pending = toolReply(ToolApprovalState.Pending).copy(
+            steps = listOf(MessageStep(StepStatus.TOOLS, 0, 1, Clock.System.now())),
+        )
+        val conversation = Conversation.ofId(Uuid.random()).copy(
+            messageNodes = listOf(
+                UIMessage.user("run it").toMessageNode(),
+                pending.toMessageNode(),
+            )
+        )
+
+        assertTrue(conversation.isAwaitingToolApproval)
+        assertEquals(
+            listOf(pending.getTools().single().toolCallId),
+            conversation.pendingToolCalls.map { it.toolCallId }
+        )
+        assertNotNull(conversation.withToolApproval(pending.getTools().single().toolCallId, ToolApprovalState.Approved))
+    }
+
     @Test
     fun `unresumable tools get a recovery result instead of deleting the message`() {
         val user = UIMessage.user("run it")

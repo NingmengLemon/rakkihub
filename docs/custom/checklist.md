@@ -84,7 +84,7 @@
 | C74 | 上下文水位与压缩建议 | 新增 |
 | C75 | 自动重试次数可调 | 下线（B1 设计中恢复） |
 | C76 | 重试 attempt 可见化 | 下线（B1 设计中恢复内存态） |
-| C77 | 错误卡片重试本步 | 撤销 |
+| C77 | 错误卡片重试本步 | 永久取消 |
 | C78 | 工具失败日志分级 | 改造 |
 | C79 | 本地导出默认包含工作区文件 | 改造 |
 | C80 | 用量成功失败区分与官方 schema 裁剪 | 新增 |
@@ -504,7 +504,7 @@
 
 ### C63 上下文超限自动缩窗
 
-- 现状：已撤销（2026-11-14）。`AgentHooks.onContextOverflow`、`overflowWindow`、`shrinkActive`、`contextOverflowRetried` 与相关测试都已删除；provider 返回上下文超限时只按 `CONTEXT_WINDOW_EXCEEDED` 出错误卡片，由用户自己压缩或截断，不再静默改请求。
+- 现状：已撤销（2026-11-14）；2026-11-15 用户确认不恢复，错误卡片只保留信息提示。`AgentHooks.onContextOverflow`、`overflowWindow`、`shrinkActive`、`contextOverflowRetried` 与相关测试都已删除；provider 返回上下文超限时只按 `CONTEXT_WINDOW_EXCEEDED` 出错误卡片，由用户自己压缩或截断，不再静默改请求。
 - 理由：原实现把请求缩到最后一条 user 起，等于把整段历史从这一次请求里丢掉，而且每一轮都会重演，界面没有任何提示；这条又是在 DSH 审计里按重型 harness 的场景补的，和聊天客户端的定位不符。
 - 合并注意：上游若在 `AgentHooks` 或 `AgentLoop` 里增加类似的 overflow 恢复入口，不要直接搬回来；是否恢复、以什么形式恢复，等失败恢复与消息模型重做时一起定，见 `roadmap.md` 的「失败恢复与上下文的返工」。
 - 测试：`ChatRequestFactoryContextTest` 已删除，`AgentLoopTest` 的 4 条 overflow 用例已删除；`:ai:testDebugUnitTest` 通过。
@@ -575,7 +575,7 @@
 
 ### C73 发送前上下文裁剪
 
-- 现状：已撤销（2026-11-14）。`ContextPruning.kt`、`buildStep` 里的调用、日志与 `ContextPruningTest` 都已删除；发送前只做 `limitContext` 的条数截断，超限交给错误卡片。
+- 现状：已撤销（2026-11-14）；2026-11-15 用户确认不恢复，错误卡片只保留信息提示。`ContextPruning.kt`、`buildStep` 里的调用、日志与 `ContextPruningTest` 都已删除；发送前只做 `limitContext` 的条数截断，超限交给错误卡片。
 - 理由：静默改写模型输入且没有开关，改到较早的消息会破坏消息段的前缀缓存，最近几轮要整段重算；这条是从 DSH 审计借来的，真正的长期方案是压缩计划与显式压缩，不是替用户悄悄删历史。
 - 合并注意：`buildStep` 的输入变换顺序恢复成 `limitContext` 之后直接进 `transforms`；不要再在请求装配里加隐式的消息改写。`DocumentAsPromptTransformer` 仍按原样在变换阶段展开文档。
 - 测试：`ContextPruningTest` 已删除；`:app:testGithubDebugUnitTest` 全量通过。
@@ -603,9 +603,9 @@
 
 ### C77 错误卡片重试本步
 
-- 现状：已撤销（2026-11-14）。`ChatError.retryable`、`retryMessageId`、`retryTargetMessageId`、`hasLaterUserTurn`、`ChatVM.retryError`、错误卡片上的 Retry 按钮、`ChatErrorStore` 的对应字段与 `ChatErrorStoreTest`/`RetryTargetMessageIdTest` 的相关用例都已删除；错误卡片只显示错误信息、复制与关闭。
+- 现状：已撤销（2026-11-14）；2026-11-15 用户确认不恢复，错误卡片只保留信息提示。`ChatError.retryable`、`retryMessageId`、`retryTargetMessageId`、`hasLaterUserTurn`、`ChatVM.retryError`、错误卡片上的 Retry 按钮、`ChatErrorStore` 的对应字段与 `ChatErrorStoreTest`/`RetryTargetMessageIdTest` 的相关用例都已删除；错误卡片只显示错误信息、复制与关闭。
 - 理由：重试语义依赖整条消息重放，和 C75 下线重试的决定一致；用户已习惯按轮判断后自己重新生成或让模型继续。
-- 合并注意：旧错误文件里的 `retryable`/`retryMessageId` 字段由 `JsonInstant` 的 `ignoreUnknownKeys` 忽略，`ChatErrorStoreTest` 有一条旧文件用例钉住；恢复重试时按新的消息模型重做，不要把旧字段直接搬回来。
+- 合并注意：旧错误文件里的 `retryable`/`retryMessageId` 字段由 `JsonInstant` 的 `ignoreUnknownKeys` 忽略，`ChatErrorStoreTest` 有一条旧文件用例钉住；C77 永久取消，B2 不再恢复错误卡片重试，也不要把旧字段搬回来。
 - 测试：`ChatErrorStoreTest` 的旧文件用例通过；`:app:testGithubDebugUnitTest` 全量通过。
 
 ### C78 工具失败日志分级
@@ -744,7 +744,7 @@
 
 ### C97 Claude step 级请求投影与失败工具事实
 
-- 落点：`ai/ui/Message.kt` 增加 `MessageStep`、`StepStatus` 与 `UIMessage.steps`；`AgentRequest.allowToolApproval` 与 `AgentFinishReason.ApprovalUnavailable` 让中间节点生成不进入审批，`ChatService` 用 `settleUnavailableTools()` 给未执行工具补恢复结果、丢掉 `callComplete=false` 的半截调用、把消息置 COMPLETE 并把 step 记 SUCCEEDED；无 job 的审批停止会先加载会话，按最后一条 assistant 的 id 标 INTERRUPTED 后一次 flush；`isAwaitingToolApproval`/`pendingToolCalls` 仍扫描全部消息，最后节点审批的 UI 收口留后续；`UIMessagePart.Tool` 增加 `callComplete`，流式 `ToolCallStart` 置 false、`ToolCallEnd` 置 true，`merge` 取逻辑或；`AgentLoop` 在每次请求成功后追加 step，记录 part 范围与 RUNNING/TOOLS/SUCCEEDED/FAILED 终态；`ClaudeProvider` 对带 step 的消息按 step 拆分 assistant/user 消息，thinking 只随同一 step 的 tool_use 回放，旧消息和带 `legacy` 前缀的消息在自定义中转下不回放 thinking；`projectForRequest()` 替代聊天请求里的 `filterModelVisible()`，失败消息只保留已执行的 Tool parts；`ConversationMessages` 的取消/加载恢复关闭未终结 step，工具都已执行时收 SUCCEEDED，否则 CANCELLED
+- 落点：`ai/ui/Message.kt` 增加 `MessageStep`、`StepStatus` 与 `UIMessage.steps`；`AgentRequest.allowToolApproval` 与 `AgentFinishReason.ApprovalUnavailable` 让中间节点生成不进入审批，`ChatService` 用 `settleUnavailableTools()` 给未执行工具补恢复结果、丢掉 `callComplete=false` 的半截调用、把消息置 COMPLETE 并把 step 记 SUCCEEDED；无 job 的审批停止会先加载会话，按最后一条 assistant 的 id 标 INTERRUPTED 后一次 flush；`isAwaitingToolApproval`/`pendingToolCalls` 对有 steps 的消息只看最后一条 assistant，旧消息仍扫描全部；`withToolApproval`、聊天列表的审批回调与悬浮窗同步收口；`UIMessagePart.Tool` 增加 `callComplete`，流式 `ToolCallStart` 置 false、`ToolCallEnd` 置 true，`merge` 取逻辑或；`AgentLoop` 在每次请求成功后追加 step，记录 part 范围与 RUNNING/TOOLS/SUCCEEDED/FAILED 终态；`ClaudeProvider` 对带 step 的消息按 step 拆分 assistant/user 消息，thinking 只随同一 step 的 tool_use 回放，旧消息和带 `legacy` 前缀的消息在自定义中转下不回放 thinking；`projectForRequest()` 替代聊天请求里的 `filterModelVisible()`，失败消息只保留已执行的 Tool parts；`ConversationMessages` 的取消/加载恢复关闭未终结 step，工具都已执行时收 SUCCEEDED，否则 CANCELLED
 - 理由：一个 turn 仍是一条 assistant 消息，多个原生响应追加在同一条 parts 里。中转层按原生思考缓存校验时，前一步的 thinking 和后一步的 tool_use 拼在同一条消息里会被判成关联不匹配；失败消息整条过滤又会把已经执行的写入和查询从模型历史里抹掉。step 范围让请求重建能恢复原生配对，失败投影让“继续”还能看到失败前的工具事实
-- 合并注意：`steps`、`callComplete` 都是带默认值的字段，旧消息解码为空 steps、true；`MessageStep.legacy` 只用于接管旧消息时补的前缀范围，带 legacy 的消息不做原生 pairing 回放。自定义中转（非 `api.anthropic.com`）的旧消息不回放 thinking；官方域名保持原行为。投影后消息清空 steps，原始消息不受影响。本阶段只做 step 记录、请求投影、失败工具事实与审批/取消结算；最后节点审批、自动重试、C75/C76 恢复、手动重试与消费方收尾仍按设计文档后续阶段处理；C58 的摘要过滤、C67 的加载恢复语义不变
-- 测试：`AgentLoopTest` 覆盖中间节点 `ApprovalUnavailable`；`ConversationMessagesTest` 覆盖中间节点按 messageId 补结果、丢弃半截调用、置 COMPLETE 并收 SUCCEEDED；`ClaudeThinkingReplayTest` 覆盖 legacy 全剥离、step 内 thinking 与 tool_use 配对、跨 step 的纯文本 step 不把 thinking 带到下一步；`UIMessageSerializationTest` 覆盖旧 JSON 空 steps、steps/callComplete 往返、FAILED 请求投影保留已执行工具并丢掉正文；`ConversationMessagesTest`、`ConversationToolCallsTest` 覆盖停止/加载恢复关闭 RUNNING/TOOLS step 与已执行工具收 SUCCEEDED；`:ai:testDebugUnitTest`、`:app:testGithubDebugUnitTest`、`assembleGithubRelease`、spotless 通过。设备上长工具链连续 48 次请求、8510 条消息无 `native_thinking_replay_mismatch`，消息序列无连续 assistant、无 thinking 落在 tool_use 之后；U+FFFD 单独另案
+- 合并注意：`steps`、`callComplete` 都是带默认值的字段，旧消息解码为空 steps、true；`MessageStep.legacy` 只用于接管旧消息时补的前缀范围，带 legacy 的消息不做原生 pairing 回放。自定义中转（非 `api.anthropic.com`）的旧消息不回放 thinking；官方域名保持原行为。投影后消息清空 steps，原始消息不受影响。本阶段做 step 记录、请求投影、失败工具事实、审批/取消结算与最后节点审批；自动重试、C75/C76 恢复、手动重试与消费方收尾仍按设计文档后续阶段处理；C58 的摘要过滤、C67 的加载恢复语义不变
+- 测试：`AgentLoopTest` 覆盖中间节点 `ApprovalUnavailable`；`ConversationMessagesTest` 覆盖中间节点按 messageId 补结果、丢弃半截调用、置 COMPLETE 并收 SUCCEEDED；`ClaudeThinkingReplayTest` 覆盖 legacy 全剥离、step 内 thinking 与 tool_use 配对、跨 step 的纯文本 step 不把 thinking 带到下一步；`UIMessageSerializationTest` 覆盖旧 JSON 空 steps、steps/callComplete 往返、FAILED 请求投影保留已执行工具并丢掉正文；`ConversationMessagesTest`、`ConversationToolCallsTest` 覆盖停止/加载恢复关闭 RUNNING/TOOLS step、已执行工具收 SUCCEEDED 和最后一条 assistant 的审批收口；`:ai:testDebugUnitTest`、`:app:testGithubDebugUnitTest`、`assembleGithubRelease`、spotless 通过。设备上长工具链连续 48 次请求、8510 条消息无 `native_thinking_replay_mismatch`，消息序列无连续 assistant、无 thinking 落在 tool_use 之后；U+FFFD 单独另案

@@ -72,6 +72,7 @@ import me.rerere.rikkahub.data.model.getStoredAssistantOf
 import me.rerere.rikkahub.data.model.isAwaitingToolApproval
 import me.rerere.rikkahub.data.model.isTruncatedCompressionFinish
 import me.rerere.rikkahub.data.model.localFileUrls
+import me.rerere.rikkahub.data.model.pendingToolCalls
 import me.rerere.rikkahub.data.model.planCompressionFor
 import me.rerere.rikkahub.data.model.planHistoryTruncation
 import me.rerere.rikkahub.data.model.removeCompressionPair
@@ -670,9 +671,8 @@ class ChatService(
             if (session.isCompressing) return
             val previousJob = session.getJob()
 
-            val hasOtherPendingTools = session.state.value.currentMessages.any { message ->
-                message.getTools().any { it.isPending && it.toolCallId != toolCallId }
-            }
+            val hasOtherPendingTools = session.state.value.pendingToolCalls
+                .any { it.toolCallId != toolCallId }
 
             val job = launchGenerationJob(
                 conversationId = conversationId,

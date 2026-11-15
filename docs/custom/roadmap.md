@@ -307,7 +307,7 @@
 | C74 上下文水位与压缩建议 | L3 | 无（chat page banner） |
 | C75 自动重试次数可调（已下线，B1 恢复） | L3 | 无（网络设置） |
 | C76 重试 attempt 可见化（已下线，B1 恢复内存态） | L3 | 无（会话内存状态与聊天列表卡片） |
-| C77 错误卡片重试本步（已撤销） | L3 | 无（ChatError 与错误卡片） |
+| C77 错误卡片重试本步（永久取消） | L3 | 无（ChatError 与错误卡片） |
 | C78 工具失败日志分级 | L3 | 无（ai/AgentLoop.kt） |
 | C79 本地导出默认包含工作区文件 | L2 | C29 |
 | C80 用量成功失败区分与官方 schema 裁剪 | L2 | C18、C30 |
@@ -344,9 +344,14 @@
 - RikkaHub 提供商残留已清理（C95）：上游 `0533acde` 删掉默认提供商后，本分支删掉 `assets/icons/rikkahub.svg`、`AIIconMatcher` 的 `rikka|auto` 分支、四份 `rikkahub_provider_description`，以及只给它用的空 `RikkaHubAPI` 与指向 `api.rikka-ai.com` 的 Retrofit 单例；`DEFAULT_AUTO_MODEL_ID` 改名 `DEFAULT_MODEL_ID` 并注明当前预置里没有对应模型（老设置里那个提供商的 auto 模型仍是这个 id）。搜索服务 `RikkaHubSearchService` 仍保留，但它的选项里 `displayName` 是 `RikkaHub`，同样走这个 matcher，图标回退成首字母
 - 发给 OpenRouter 的来源标识头已移除（C96）：`configureReferHeaders` 只在 host 是 `openrouter.ai` 时加 `X-Title` 与 `HTTP-Referer`，Referer 指官方站点，等于把本分支的调用算成官方 app；函数、十一处调用与 `mediagen` 生图那两行一并删掉，用户自定义请求头不受影响
 
+### B 系列完成之后
+
+- 错误请求日志里打出完整响应体：provider 失败路径目前只记录摘要/错误体，且 logcat 长行会截断；后续把完整响应体落到受控日志，注意凭据、体积和敏感内容。
+- MCP 工具失败无感重试：在 MCP 面板由用户逐工具标注是否可重试、是否可重入；运行时只对标记过的工具自动重试，未标记的工具保持现状。非幂等工具默认不重试。
+
 ### 失败恢复与上下文的返工
 
-冻结已解除（2026-11-15）：B1 第一阶段已落地（C97），step 记录与请求投影、失败消息保留已执行工具都已在设备上验证；自动重试仍保持关闭，C75/C76 的运行时恢复、手动重试与消费方收尾按 B1 后续阶段和 B2 另行安排；审批/取消的 step 结算已部分落地，最后节点审批收口仍待后续阶段。B1 设计稿在 [`design/b1-step-commits.md`](design/b1-step-commits.md)，B2 草稿在 [`design/b2-step-messages.md`](design/b2-step-messages.md)。
+冻结已解除（2026-11-15）：B1 第一阶段已落地（C97），step 记录与请求投影、失败消息保留已执行工具都已在设备上验证；自动重试仍保持关闭，C75/C76 的运行时恢复、手动重试与消费方收尾按 B1 后续阶段和 B2 另行安排；审批/取消的 step 结算已落地，最后节点审批收口也已完成。B1 设计稿在 [`design/b1-step-commits.md`](design/b1-step-commits.md)，B2 草稿在 [`design/b2-step-messages.md`](design/b2-step-messages.md)。
 
 2026-11-14 本轮已落地：
 
@@ -358,7 +363,7 @@
 
 仍挂起：
 
-- 重试恢复与消息模型 B1：已完成 step 记录、Claude step 级请求投影、失败工具事实与部分审批/取消 step 结算（C97）；最后节点审批、自动重试恢复、C75/C76 与 B2 留后续阶段，设计见 [design/b1-step-commits.md](design/b1-step-commits.md)。B2 的手动重试与消费方收尾见 [design/b2-step-messages.md](design/b2-step-messages.md)。
+- 重试恢复与消息模型 B1：已完成 step 记录、Claude step 级请求投影、失败工具事实、审批/取消 step 结算与最后节点审批收口（C97）；自动重试恢复、C75/C76 与 B2 留后续阶段，设计见 [design/b1-step-commits.md](design/b1-step-commits.md)。B2 的手动重试与消费方收尾见 [design/b2-step-messages.md](design/b2-step-messages.md)。
 - C58 半途失败投影已由 B1 第一阶段落地（C97）：聊天请求投影保留失败前已执行的工具事实，失败 step 的正文与推理不进请求；标题、记忆与摘要投影仍整条丢弃失败消息。B2 只收尾搜索、Web 与错误卡片等消费方。
 - C86 思考强度（讨论中）：`OFF` 保留为明确关闭，新增 `NOTSET` 表示不发参数，OCR、翻译、标题、记忆这类内部调用改用 `NOTSET`；官方兼容导出把 `NOTSET` 归一化成 `OFF`，避免未知枚举让官方设置解码失败。deepseek 已支持 `reasoning_effort`，各家现状后续派子代理调研。
 - C87 OCR 文本归属（讨论中）：采用 `file_derivations` 派生表，`file_id` 指向 `managed_files.id`，`kind`、`text`、`producer`、`edited`、时间戳；Room 升到 v34，官方导出登记并裁掉这张表。附件管理入口待定，先做聊天里的就近入口。
@@ -384,7 +389,7 @@ RikkaHub 现状：
 
 - P0 失败 attempt 与成功消息分开：C58 已实现 `UIMessage.status` 标记、`FAILED` 消息从请求/标题/记忆/`conversation_read` 过滤、相邻 user 合并和 UI 失败/中断标签。剩余：失败消息的 step 级请求投影已由 C97 落地，标题、记忆与摘要仍整条隔离；完整审批/取消 step 状态机与自动重试留给 B1 后续阶段。工具恢复结果已由 C65 处理。
 - P1 稳定错误码与可配置策略。C61 已把 provider 非 2xx 和空回复统一成带 `code`、`status`、`retryAfterMs` 的失败类型，覆盖 `AUTH`、`QUOTA`、`RATE_LIMIT`、`SERVER`、`TIMEOUT`、`EMPTY_RESPONSE`、`CONTEXT_WINDOW_EXCEEDED`、`INVALID_REQUEST`、`UNKNOWN`；裸传输错误仍按 `IOException` 重试，`TRANSPORT` 留给调用方包装。策略是 normal mode：`maxRetries`、`retryableCodes`、`initialDelay`、`maxDelay`、`jitter`；默认只重试瞬时错误，读取 `Retry-After` 并设上限；C75 曾把 `maxRetries` 放到网络设置，现已下线：`Settings.retryPolicy()` 恒返回 `RetryPolicy.NONE`，字段与已保存 JSON 保留。保留 step 级重试的实现，不做 prefill 续写。验收：429、5xx、空回复可重试；400、401、403、额度、上下文超限不重试；用户停止可取消等待；重试不重复工具副作用；重试请求与前缀缓存兼容。
-- P2 重试状态 UI。C75 与 C76 已下线：网络设置入口与 attempt 卡片不再出现，代码保留；C77 的错误卡片 Retry 已撤销，错误卡片只提示错误信息。B1 恢复 C75 与 C76 的内存态卡片，C77 的错误卡片重试归 B2；见「失败恢复与上下文的返工」。
+- P2 重试状态 UI。C75 与 C76 已下线：网络设置入口与 attempt 卡片不再出现，代码保留；C77 的错误卡片 Retry 已撤销，错误卡片只提示错误信息。B1 恢复 C75 与 C76 的内存态卡片，C77 的错误卡片重试永久取消，错误卡片只做信息提示；见「失败恢复与上下文的返工」。
 - P3 用量区分成功与失败 attempt。C80 已给 `usage_record` 加 `outcome`（SUCCESS/FAILED/CANCELLED/UNKNOWN，旧数据 UNKNOWN），失败成本保留、统计页缓存命中率排除 FAILED/CANCELLED；消息卡片继续只显示成功 attempt 的 usage。attempt/retryId 没有单独落列，按 outcome 收口。验收：Room 32 到 33 迁移、旧数据默认 UNKNOWN、真实 app 库迁移、data.sync 53 条和官方导出裁剪都通过。32 到 33 没有降级迁移，回退旧构建前要保留 v32 库副本或继续用新构建。
 
 ### DSH 对照检查记录
@@ -413,6 +418,6 @@ P1 分批：P1a 截断 SSE 与停止结算，P1b 审批分支与配置快照，P
 1. P0 失败 attempt 隔离已由 C58 完成；多步工具调用的 per-step 细化并入 B1，工具恢复结果已由 C65 处理。
 2. P1a 截断 SSE 与停止结算已由 C59 完成；P1b 审批分支与配置快照已由 C60 完成。
 3. P1c 的稳定错误码重试已由 C61、idle watchdog 由 C62（含心跳与开关）完成；overflow 兜底（C63）与发送前裁剪（C73）已撤销，超限只出错误卡片；自动重试（C75）已整体下线，P1 收尾后进入 P2。
-4. P2 工具恢复结果、工具声明超时与超时设置由 C65 完成，队列派发与失败回插由 C66 完成，进程死亡半截回复由 C67 完成，scratch 加载清理与请求/导出/Web 快照/搜索过滤由 C68 完成，队列持久化由 C70 完成，错误卡片持久化由 C71 完成，压缩计划对齐、摘要预算、部分摘要和范围检查由 C72 完成，usage 水位建议条由 C74 完成；C76 的 attempt 卡片随重试下线、C77 的错误卡片重试撤销；B1 恢复重试与 C76 内存态卡片，B2 做 C76 持久化、手动重试与 C77；剩余自动压缩（不做）、取消写入、失败 attempt 的 usage 区分、C58 的投影与新消息模型（B1/B2）。
+4. P2 工具恢复结果、工具声明超时与超时设置由 C65 完成，队列派发与失败回插由 C66 完成，进程死亡半截回复由 C67 完成，scratch 加载清理与请求/导出/Web 快照/搜索过滤由 C68 完成，队列持久化由 C70 完成，错误卡片持久化由 C71 完成，压缩计划对齐、摘要预算、部分摘要和范围检查由 C72 完成，usage 水位建议条由 C74 完成；C76 的 attempt 卡片随重试下线、C77 的错误卡片重试撤销；B1 恢复重试与 C76 内存态卡片，B2 做 C76 持久化与手动 step 重试，C77 永久取消；剩余自动压缩（不做）、取消写入、失败 attempt 的 usage 区分、C58 的投影与新消息模型（B1/B2）。
 
 范围说明：C59 已逐行核对五个 decoder 的终止判定和五个 provider 接线点的 `onClosed`，并用 `:ai:testDebugUnitTest` 全量验证；工具并发没有展开，当前 RikkaHub 按顺序执行，未发现正确性问题，只是并发效率较低。

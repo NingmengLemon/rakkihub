@@ -253,10 +253,10 @@ RUNNING 会出现在当前请求里：AgentLoop 把正在生成的 assistant 消
 - 每次重试开始时，preview 只重建当前 step 的 part 范围，之前的 step parts 不参与重置；消息 id 与 step id 在整个重试期间保持不变。
 - 重试成功：本 step 提交成功，之前的 step 不动；失败 attempt 只留摘要。
 - 重试耗尽：本 step FAILED，消息 FAILED；下一轮请求保留之前 SUCCEEDED step 的内容与工具事实，失败 step 只保留 Tool parts，正文与推理丢弃；摘要与 `conversation_search` 按整条消息丢弃。
-- 手动重试（C77 恢复）：`ChatError` 与 `ChatErrorStore` 增加带默认值的 `retryNodeId`、`retryStepId`；`ChatService` 把消息 parts 截断到该 step 的 `startPartIndex`，删除该 step 及其后的 step 记录，把消息状态重置为 `COMPLETE`，然后复用现有 `runTurn` 从这条 assistant 消息继续。AgentLoop 从最后一条 assistant 消息接着跑，拿到新的 `maxSteps` 预算，继续整个循环直到本轮结束、进入审批或达到步数上限；`stepCount` 继续累计。
-- 手动重试的陈旧判据：目标节点必须仍是最后一个节点，目标消息仍是该节点当前候选，目标 step 仍存在；任一不满足就按陈旧处理。会话 `updateAt` 与错误卡片时间戳只用于辅助判断，不作为唯一判据。
+- 手动 step 重试不通过错误卡片：C77 已永久取消，错误卡片只做信息提示。手动重试如果需要，入口放在消息操作或独立面板；`ChatError` 不增加 retry 字段。具体入口未定，落地前重新设计。
+- 手动重试入口未定；若落地，目标节点必须仍是最后一个节点，目标消息仍是该节点当前候选，目标 step 仍存在；任一不满足就按陈旧处理。会话 `updateAt` 只用于辅助判断，不作为唯一判据。
 - 重新生成整轮仍然新建候选消息；手动 step 重试不新建候选，这是 step 生命周期内的原位更新，并对消息状态做一次显式复位。
-- 错误卡片如果找不到目标、目标消息已切换分支或会话已继续，按陈旧处理，不执行；失败发生在 step 开始之前的错误没有 step 目标，不提供重试。
+- 错误卡片没有重试语义，不再需要目标校验；手动 step 重试如果后续落地，再单独定义入口、目标与陈旧处理。
 
 ## 9. 会话操作与消费方
 
@@ -297,16 +297,16 @@ RUNNING 会出现在当前请求里：AgentLoop 把正在生成的 assistant 消
 - C72：`contextMessageLimit` 仍按消息条数。
 - C74：`ContextPressure` 按 token 水位，投影改为请求投影，不按条数。
 - C76：attempt 卡片使用 step 里的 attempts 与 maxRetries；实时倒计时仍用会话内存。
-- C77：错误卡片重试恢复为 step 级。
+- C77：永久取消，错误卡片只做信息提示。
 - C80：用量仍按请求记录。
 - C63/C73：保持撤销。
-- 新增 C97：step 级提交与失败投影（B 项），索引行与明细在本批次登记；C18、C47、C58、C60、C61、C65、C67、C68、C70、C71、C72、C74、C75、C76、C77、C80、C97 的明细同步更新。
+- 新增 C97：step 级提交与失败投影（B 项），索引行与明细在本批次登记；C18、C47、C58、C60、C61、C65、C67、C68、C70、C71、C72、C74、C75、C76、C80、C97 的明细同步更新；C77 永久取消。
 
 ## 12. 实施阶段
 
 1. 模型与投影：`steps`、`callComplete`、两个投影函数、空消息与检查点规则、序列化与旧数据测试。
 2. 生命周期与结算：step 记录、范围重算、失败/取消/审批/进程死亡的收尾、工具事实保留；仍不恢复自动重试。
-3. 重试恢复：聊天轮次接回 `RetryPolicy`、C75 设置入口、C76 attempt 卡片、C77 step 级手动重试。
+3. 重试恢复：聊天轮次接回 `RetryPolicy`、C75 设置入口、C76 attempt 卡片；手动 step 重试入口待定；C77 不再恢复。
 4. 消费方与验收：Web DTO、搜索过滤、导出与官方兼容验收、设备验收、`docs/custom/README.md`（文档表补 design/ 一行与降级说明）、`docs/custom/backup/importer.md`（导入 raw copy 不变量保持）、`docs/custom/backup/acceptance.md`（官方恢复样本）、`docs/custom/checklist.md`（含上节列出的 C 项与 C97 明细）、`docs/custom/roadmap.md` 同步。
 
 阶段 1 到 4 作为一个批次推送，不发布中间态。
@@ -316,7 +316,7 @@ RUNNING 会出现在当前请求里：AgentLoop 把正在生成的 assistant 消
 - 序列化：旧 JSON 默认空 steps 与 `callComplete=true`；新 JSON 往返；attempts 截断到 20 条；`maxRetries` 与时间字段往返；StepStatus 的小写序列名。
 - 投影：成功 step 全保留；失败 step 只留 Tool；纯文本失败投影为空后整条丢弃；取消 step 保留前缀；旧 FAILED 消息整条丢弃且不套用单 step 规则；空 steps 加 FAILED 的新 turn 整条丢弃；压缩失败留下的空 steps 回复先由 `withoutCompressionScratch` 移除；相邻 user 在空消息丢弃后仍能合并；空文本截断标记不被丢弃；TOOLS step 的请求与摘要投影；RUNNING 出现在当前请求时的投影；多 step FAILED 消息的 `conversation_search` 过滤且 UI 搜索仍可见；跨多个会话的 `conversation_search` 结果都按各自会话状态过滤；`ServerTool` 的 COMPLETED 与 IN_PROGRESS 在每张投影表下的处理。
 - 生命周期：模型成功无工具直接完成；空回复重试耗尽；工具失败继续；审批暂停与恢复；审批恢复不被 runTurn 开头结算破坏；审批暂停后进程重启仍可恢复；重新生成中间 assistant 节点时出现需要审批的调用，turn 结束直接结算为 not_started、不进入 AwaitingApproval；Web（`/api/conversations/{id}/stop`）在审批等待时停止，step 关闭为 CANCELLED、消息 INTERRUPTED、pendingApprovalTurn 清理；前台服务超时在审批等待时不可达；重新生成中间 assistant 节点后停止，结算命中该节点而不是会话末尾；用户取消；工具执行一半；首 token 前取消仍有 step 可结算；生成中进程死亡恢复；跨 step 死亡时最后一个 SUCCEEDED 保持成功；终态失败时 Auto/Approved/Answered 工具收口；半截 ToolCall 被删除；`ToolCallEnd` 按 id 置位、`Tool.merge` 单调合并、`executeTools` 与主循环都过滤未完成调用；`handleToolApproval` 的 Accepted/Conflict/Stale 三种返回；输出变换插入 Reasoning 后 step 范围重算正确；取消时 preview 的视觉变换与 Reasoning 插入同时发生仍正确；最终失败消息保留最后一次 attempt 的 partial parts。
-- 重试：只在聊天轮次生效；压缩与记忆传 NONE；attempt 摘要与 maxRetries；手动重试从失败 step 继续到本轮结束且拿到新 maxSteps；陈旧错误卡片拒绝执行；`stepCount` 继续累计。
+- 重试：只在聊天轮次生效；压缩与记忆传 NONE；attempt 摘要与 maxRetries；手动重试从失败 step 继续到本轮结束且拿到新 maxSteps；手动重试入口待定，不做错误卡片重试；`stepCount` 继续累计。
 - 上下文：失败消息占用与不占用 `contextMessageLimit` 两种路径；边界下标分三组断言：没有截断时返回 null，有压缩 scratch 时返回 null，窗口前有被丢弃消息但确实发生截断时返回映射后的节点下标；截断时与请求投影一致；最后一条 assistant 去掉与丢空消息的先后顺序；`keepRecent` 不变的压缩计划。
 - 压缩：估算与请求使用同一投影、同一窗口的用例。
 - 消费方：Web DTO、FTS、搜索跳转、`conversation_search` 不返回失败正文、浮动窗口、Markdown 导出、官方兼容导出（普通消息空 steps 与带 steps 两种样本）。
@@ -342,4 +342,4 @@ RUNNING 会出现在当前请求里：AgentLoop 把正在生成的 assistant 消
 ## 16. 参考
 
 - DSH：`dsh-v0.2.2-rc.1`，commit `66491b05e3f05ad35bcdd4f6cd7ed26041d9e3db`；`packages/core/session/src/types.ts`、`packages/core/agent-loop/src/agent.ts`、`packages/core/agent-loop/README.md`、`packages/core/session/README.md`、`packages/llm/llm/src/retry-policy.ts`。
-- 本仓库：`ai/src/main/java/me/rerere/ai/ui/Message.kt`、`ai/src/main/java/me/rerere/ai/ui/UIMessagePart.kt`、`ai/src/main/java/me/rerere/ai/ui/StreamChunkHandler.kt`、`ai/src/main/java/me/rerere/ai/agent/AgentLoop.kt`、`ai/src/main/java/me/rerere/ai/agent/Retry.kt`、`ai/src/main/java/me/rerere/ai/agent/Agent.kt`、`app/src/main/java/me/rerere/rikkahub/data/repository/ConversationRepository.kt`、`app/src/main/java/me/rerere/rikkahub/data/db/entity/MessageNodeEntity.kt`、`app/src/main/java/me/rerere/rikkahub/service/ConversationSession.kt`、`app/src/main/java/me/rerere/rikkahub/service/ChatErrorStore.kt`、`app/src/main/java/me/rerere/rikkahub/data/ai/ChatRequestFactory.kt`、`app/src/main/java/me/rerere/rikkahub/data/model/Conversation.kt`、`app/src/main/java/me/rerere/rikkahub/data/model/ConversationMessages.kt`、`docs/custom/checklist.md` 的 C47、C58、C61、C65、C67、C68、C70、C71、C72、C74、C75、C76、C77、C80。
+- 本仓库：`ai/src/main/java/me/rerere/ai/ui/Message.kt`、`ai/src/main/java/me/rerere/ai/ui/UIMessagePart.kt`、`ai/src/main/java/me/rerere/ai/ui/StreamChunkHandler.kt`、`ai/src/main/java/me/rerere/ai/agent/AgentLoop.kt`、`ai/src/main/java/me/rerere/ai/agent/Retry.kt`、`ai/src/main/java/me/rerere/ai/agent/Agent.kt`、`app/src/main/java/me/rerere/rikkahub/data/repository/ConversationRepository.kt`、`app/src/main/java/me/rerere/rikkahub/data/db/entity/MessageNodeEntity.kt`、`app/src/main/java/me/rerere/rikkahub/service/ConversationSession.kt`、`app/src/main/java/me/rerere/rikkahub/service/ChatErrorStore.kt`、`app/src/main/java/me/rerere/rikkahub/data/ai/ChatRequestFactory.kt`、`app/src/main/java/me/rerere/rikkahub/data/model/Conversation.kt`、`app/src/main/java/me/rerere/rikkahub/data/model/ConversationMessages.kt`、`docs/custom/checklist.md` 的 C47、C58、C61、C65、C67、C68、C70、C71、C72、C74、C75、C76、C80；C77 永久取消。

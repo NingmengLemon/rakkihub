@@ -103,8 +103,10 @@ import me.rerere.rikkahub.data.model.Conversation
 import me.rerere.rikkahub.data.model.MessageNode
 import me.rerere.rikkahub.data.model.contextLimitBoundaryIndex
 import me.rerere.rikkahub.data.model.getAssistantOf
+import me.rerere.rikkahub.data.model.hasVisiblePendingTool
 import me.rerere.rikkahub.data.model.withConversation
 import me.rerere.rikkahub.data.model.isAwaitingToolApproval
+import me.rerere.rikkahub.data.model.pendingToolCalls
 import me.rerere.rikkahub.service.ChatError
 import me.rerere.rikkahub.service.RecordedRetryAttempt
 import me.rerere.rikkahub.ui.components.ai.RetryAttemptsCard
@@ -314,6 +316,7 @@ private fun ChatListNormal(
             .associateBy { it.id }
     }
     val lastMessageIndex = conversation.messageNodes.lastIndex
+    val pendingToolIds = conversation.pendingToolCalls.mapTo(mutableSetOf()) { it.toolCallId }
 
     Box(
         modifier = Modifier
@@ -446,8 +449,12 @@ private fun ChatListNormal(
                             },
                             onTranslate = onTranslate,
                             onClearTranslation = onClearTranslation,
-                            onToolApproval = onToolApproval,
-                            onToolAnswer = onToolAnswer,
+                            onToolApproval = onToolApproval.takeIf {
+                                node.currentMessage.hasVisiblePendingTool(pendingToolIds)
+                            },
+                            onToolAnswer = onToolAnswer.takeIf {
+                                node.currentMessage.hasVisiblePendingTool(pendingToolIds)
+                            },
                             lastMessage = index == lastMessageIndex,
                             isLatestCheckpoint = node.id == latestCheckpointId,
                         )
