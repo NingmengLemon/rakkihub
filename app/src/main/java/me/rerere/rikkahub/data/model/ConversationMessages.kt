@@ -281,6 +281,18 @@ internal fun Conversation.settleUnavailableTools(messageId: Uuid? = null): Conve
 }
 
 /**
+ * 停止等待审批的轮次：只处理存在 Pending 工具的会话，关闭最后节点里未终结的 step，
+ * 给未执行工具补结果，再把最后一条 assistant 标成 INTERRUPTED。没有 Pending 时返回 null。
+ */
+internal fun Conversation.settleStoppedApproval(): Conversation? {
+    if (currentMessages.none { message -> message.getTools().any { it.isPending } }) return null
+    val targetId = currentMessages.lastOrNull { it.role == MessageRole.ASSISTANT }?.id ?: return null
+    val settled = cancelInterruptedTools() ?: this
+    val interrupted = settled.updateMessageStatus(targetId, MessageStatus.INTERRUPTED) ?: settled
+    return interrupted.takeIf { it !== this }
+}
+
+/**
  * 取消或进程死亡时关闭最后一个未终结 step。传入结算前算出的状态时以它为准；
  * 已经有终态的 step 不覆盖。
  */

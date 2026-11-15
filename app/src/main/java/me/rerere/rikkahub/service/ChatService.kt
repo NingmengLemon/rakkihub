@@ -78,9 +78,9 @@ import me.rerere.rikkahub.data.model.planHistoryTruncation
 import me.rerere.rikkahub.data.model.removeCompressionPair
 import me.rerere.rikkahub.data.model.removeCompressionPairs
 import me.rerere.rikkahub.data.model.replaceUserRegexes
+import me.rerere.rikkahub.data.model.settleStoppedApproval
 import me.rerere.rikkahub.data.model.settleUnavailableTools
 import me.rerere.rikkahub.data.model.toMessageNode
-import me.rerere.rikkahub.data.model.updateMessageStatus
 import me.rerere.rikkahub.data.model.withAssistantUpdate
 import me.rerere.rikkahub.data.model.withNodeFavorite
 import me.rerere.rikkahub.data.model.withToolApproval
@@ -1719,16 +1719,7 @@ class ChatService(
                 session.initialize(load = { loaded }, create = { loaded })
             }
             if (session.state.value.isAwaitingToolApproval) {
-                val targetId = session.state.value.currentMessages
-                    .lastOrNull { it.role == MessageRole.ASSISTANT }?.id
-                session.update { conversation ->
-                    val settled = conversation.cancelInterruptedTools() ?: conversation
-                    if (targetId != null) {
-                        settled.updateMessageStatus(targetId, MessageStatus.INTERRUPTED) ?: settled
-                    } else {
-                        settled
-                    }
-                }
+                session.update { it.settleStoppedApproval() ?: it }
                 session.flush()
             } else if (jobs.isNotEmpty()) {
                 finishInterruptedPendingTools(session)

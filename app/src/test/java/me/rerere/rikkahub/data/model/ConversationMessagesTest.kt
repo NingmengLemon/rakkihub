@@ -118,6 +118,37 @@ class ConversationMessagesTest {
     }
 
     @Test
+    fun `stopped approval settles tools and interrupts the message`() {
+        val reply = toolReply(ToolApprovalState.Pending).copy(
+            steps = listOf(MessageStep(StepStatus.TOOLS, 0, 1, Clock.System.now())),
+        )
+        val conversation = conversationOf(
+            UIMessage.user("run it").toMessageNode(),
+            reply.toMessageNode(),
+        )
+
+        val settled = conversation.settleStoppedApproval()!!.currentMessages.last()
+
+        assertEquals(MessageStatus.INTERRUPTED, settled.status)
+        assertEquals(StepStatus.CANCELLED, settled.steps.single().status)
+        assertTrue(settled.getTools().single().isExecuted)
+        assertTrue(
+            (settled.getTools().single().output.single() as UIMessagePart.Text)
+                .text.contains("not_started")
+        )
+    }
+
+    @Test
+    fun `stopped approval with no pending tool is a no-op`() {
+        val conversation = conversationOf(
+            UIMessage.user("hi").toMessageNode(),
+            UIMessage.assistant("done").toMessageNode(),
+        )
+
+        assertNull(conversation.settleStoppedApproval())
+    }
+
+    @Test
     fun `middle node settlement drops half calls and completes the message`() {
         val reply = UIMessage(
             role = MessageRole.ASSISTANT,
