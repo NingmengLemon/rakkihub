@@ -35,7 +35,7 @@ internal object OfficialDatabaseAdapter {
      */
     fun adaptForOfficial(snapshot: File, attachmentPrefixRewrites: List<Pair<String, String>>): File {
         val (version, identityHash) = readHeader(snapshot)
-        return when (val verdict = OfficialDatabaseCompatibility.compare(version, identityHash)) {
+        val adapted = when (val verdict = OfficialDatabaseCompatibility.compare(version, identityHash)) {
             OfficialDatabaseCompatibility.Verdict.Identical ->
                 rewriteAttachmentPaths(snapshot, attachmentPrefixRewrites)
             is OfficialDatabaseCompatibility.Verdict.Diverged -> {
@@ -51,7 +51,48 @@ internal object OfficialDatabaseAdapter {
                 rewriteAttachmentPaths(trimmed, attachmentPrefixRewrites)
             }
         }
+        return normalizeNotSetReasoning(adapted)
     }
+
+    /**
+     * 官方客户端不认识 `NOTSET` 这个枚举值。会话级推理配置存在 `conversationentity.config`
+     * 的 JSON 里，导出前把值换成官方认识的 `OFF`；自家备份不经过这里。
+     */
+    private fun normalizeNotSetReasoning(snapshot: File): File {
+        val target = File(snapshot.parentFile, "official-notset-${snapshot.name}")
+        snapshot.copyTo(target, overwrite = true)
+        SQLiteDatabase.openDatabase(target.absolutePath, null, SQLiteDatabase.OPEN_READWRITE).use { database ->
+            database.beginTransaction()
+            try {
+                if (hasConfigColumn(database)) {
+                    database.execSQL(
+                        "UPDATE `conversationentity` SET `config` = REPLACE(`config`, ?, ?) " +
+                            "WHERE `config` LIKE ? ESCAPE '\\'",
+                        arrayOf(
+                            "\"reasoningLevel\":\"notset\"",
+                            "\"reasoningLevel\":\"off\"",
+                            "%\"reasoningLevel\":\"notset\"%",
+                        ),
+                    )
+                }
+                database.setTransactionSuccessful()
+            } finally {
+                database.endTransaction()
+            }
+        }
+        DatabaseBackup.removeSidecars(target)
+        return target
+    }
+
+    private fun hasConfigColumn(database: SQLiteDatabase): Boolean =
+        database.rawQuery("PRAGMA table_info(`conversationentity`)", null).use { cursor ->
+            val nameIndex = cursor.getColumnIndex("name")
+            if (nameIndex < 0) return@use false
+            while (cursor.moveToNext()) {
+                if (cursor.getString(nameIndex) == "config") return@use true
+            }
+            false
+        }
 
     private fun canTrim(snapshot: File): Boolean =
         SQLiteDatabase.openDatabase(snapshot.absolutePath, null, SQLiteDatabase.OPEN_READONLY).use { database ->

@@ -3,9 +3,11 @@ package me.rerere.rikkahub.data.sync.official
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.jsonObject
+import me.rerere.ai.core.ReasoningLevel
 import me.rerere.rikkahub.data.datastore.Settings
 import me.rerere.rikkahub.utils.JsonInstant
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertTrue
 import org.junit.Test
 
 /**
@@ -37,5 +39,22 @@ class OfficialSettingsCompatibilityTest {
             baseline,
             JsonInstant.encodeToJsonElement(Settings.serializer(), decoded),
         )
+    }
+
+    @Test
+    fun `notset reasoning is normalized to off for official export`() {
+        val settings = Settings().let { base ->
+            base.copy(
+                fastModelReasoningLevel = ReasoningLevel.NOTSET,
+                memoryModelReasoningLevel = ReasoningLevel.NOTSET,
+                assistants = base.assistants.map { it.copy(reasoningLevel = ReasoningLevel.NOTSET) },
+            )
+        }
+
+        val official = settings.forOfficialExport()
+
+        assertEquals(ReasoningLevel.OFF, official.fastModelReasoningLevel)
+        assertEquals(ReasoningLevel.OFF, official.memoryModelReasoningLevel)
+        assertTrue(official.assistants.all { it.reasoningLevel == ReasoningLevel.OFF })
     }
 }

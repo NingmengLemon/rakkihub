@@ -93,7 +93,7 @@
 | C83 | 超长 diff 行崩溃修复 | 改造 |
 | C84 | Gemini 独立 thoughtSignature 兼容 | 改造 |
 | C85 | Claude 思考块签名与 redacted_thinking 回放 | 改造 |
-| C86 | 关闭思考时省略 reasoning_effort | 改造 |
+| C86 | 思考强度 NOTSET 与 OFF 分离 | 改造 |
 | C87 | OCR 结果写回会话，历史图片不再重复识别 | 改造 |
 | C88 | Exa 搜索正文长度上限 | 改造 |
 | C89 | workspace 前台命令超时后的孤儿进程清理 | 改造 |
@@ -665,12 +665,12 @@
 - 测试：`:ai:testDebugUnitTest` 340 条全过（新增 5 条：非流式相邻块各自保留签名、pause_turn 续轮不合并不同响应的思考块、非流式与流式 redacted_thinking 回放、流式签名分片累加）；app JVM 798 条，7 条既有 Windows 失败未变；assemble、spotless、markdownlint 通过。没有真实 Claude 响应样本，判据是上游同款用例和构造的 SSE 事件
 - 追加（C97）：中转层按原生思考缓存校验时，历史 assistant 的 thinking 与当前 step 的 tool_use 拼在一条消息里会报 `native_thinking_replay_mismatch`。有 step 范围的消息现在按 step 拆分回放，thinking 只和同一 step 的 tool_use 配对；旧消息没有 step 范围时，自定义中转不再回放 thinking，官方域名保持原行为。测试见 C97
 
-### C86 关闭思考时省略 reasoning_effort
+### C86 思考强度 NOTSET 与 OFF 分离
 
-- 落点：`ai/src/main/java/me/rerere/ai/provider/providers/openai/ChatCompletionsAPI.kt` 的通用 `else` 分支（`opencode.ai` 也走这里），在 `ReasoningLevel.OFF` 时不再写 `reasoning_effort`；新增 `ChatCompletionsReasoningEffortTest` 五条
-- 理由：上游 #1644。OCR 走 `TextGenerationParams` 的默认 `reasoningLevel = OFF`，请求体带上 `reasoning_effort: "none"`；OpenCodeGo 网关（MIMO2.5）只接受 low/medium/high，直接 400，OCR 阶段失败并让主模型收到「OCR 错误」。关闭思考时省略字段，让网关用默认值
-- 合并注意：只改通用分支（opencode.ai 走 else）。deepseek/ark 用 `thinking.type`，nvidia 的 deepseek-v4 仍显式 `none`、其余 nvidia 模型把 OFF 映射成 `low`，openrouter 用 `reasoning.effort`，这些保留。代价是对默认开启思考的模型（o 系列等），省略字段不能真正关掉思考，只是不再发非法值；要真正关闭得在模型能力表里按 provider 声明。上游 `6188593c` 是同一思路，当时只改了 else 分支。`ResponseAPI`（`useResponseApi`）的 effort 映射没有动，那条路径上 OCR 仍可能发 `none`，留后续
-- 测试：`:ai:testDebugUnitTest` 345 条全过（新增 5 条：opencode OFF 省略、opencode MEDIUM 保留、通用网关 OFF 省略、通用网关 HIGH 保留、AUTO 不发）；app JVM 798 条，7 条既有 Windows 失败未变；assemble、spotless、markdownlint 通过。没有真实 OpenCodeGo 请求样本，判据是 issue 里的 400 报文和请求体断言
+- 落点：`ReasoningLevel` 增加 `NOTSET`（序列名 `notset`），表示请求里不发档位/强度参数（`include`、`thinking_summaries` 这类配套字段不在此列）；`OFF` 保留为明确关闭。`TextGenerationParams.reasoningLevel` 默认改为 `NOTSET`，OCR 和 Qwen MT 翻译这类不指定档位的内部调用不再带上 `OFF`。ChatCompletions、ResponseAPI、Claude、Google、Interactions、Grok 都先处理 `NOTSET` 为省略，ResponseAPI 的 reasoning summary 也一并省略；OFF 在支持显式关闭的 provider 上继续发 disabled/none，通用 OpenAI 兼容网关（含 `opencode.ai`）仍按 C86 原结论省略，避免 MIMO 只接受 low/medium/high 时 400。`ReasoningPicker` 与 Web reasoning picker 都增加默认档位与对应文案；`NOTSET` 的 budget 哨兵是 `-2`，`fromBudgetTokens` 先识别哨兵再排除它，翻译设置仍能选中默认档；标题/记忆直接存枚举，不受影响。
+- 理由：上游 #1644。OCR 原来走默认 `OFF`，请求体带 `reasoning_effort: "none"`，OpenCodeGo 网关（MIMO2.5）直接 400。把“不设置”和“明确关闭”拆开后，内部调用不再猜 provider 的默认值，用户仍能显式关闭思考。
+- 合并注意：`NOTSET` 是 `Settings` 和会话 config 都会遇到的枚举值，官方客户端不认识；官方兼容出口用 `Settings.forOfficialExport()` 把 assistant、fast、memory 三处归一化成 `OFF`，`OfficialDatabaseAdapter` 同时把 `conversationentity.config` 里的 `"reasoningLevel":"notset"` 替换成 `"off"`。自家备份不经过归一化。通用网关对 `OFF` 仍是省略，这是 C86 的既有取舍；要真正关闭默认开启思考的模型，仍需按 provider 在模型能力表里声明。`ResponseAPI` 的自定义 `reasoningEffort` 回调也排除 `NOTSET`。上游 `6188593c` 只处理了 else 分支，移植时保留本分支的六处 provider 判断和官方归一化。官方 DB 侧的 `conversationentity.config` 用紧凑 JSON 的 REPLACE 匹配，带空白/pretty JSON 不在现有写入路径上，尚无 androidTest。
+- 测试：`ChatCompletionsReasoningEffortTest` 七条（opencode/generic 的 OFF 与 NOTSET 省略、MEDIUM/HIGH 保留、AUTO 不发、openrouter 的 NOTSET 无 reasoning 块且 OFF 发 none）；`ReasoningLevelTest` 覆盖 `-2` 哨兵、AUTO 与 OFF 的 budget 映射；`ChatGPTProviderTest` 覆盖 NOTSET 省略 reasoning 块；`OfficialSettingsCompatibilityTest` 增加 NOTSET 归一化成 OFF 的用例；`:ai:testDebugUnitTest`、`:app:testGithubDebugUnitTest`、assemble、spotless、markdownlint、`pnpm run typecheck` 通过。官方客户端对归一化后 JSON 的真实恢复仍按 `backup/acceptance.md` 的样本待验。
 
 ### C87 OCR 结果写回会话，历史图片不再重复识别
 

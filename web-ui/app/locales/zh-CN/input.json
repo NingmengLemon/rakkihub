@@ -38,6 +38,10 @@
         "label": "关闭",
         "description": "关闭推理功能，模型将直接回答问题。"
       },
+      "notset": {
+        "label": "默认",
+        "description": "不发送推理参数，由提供商决定。"
+      },
       "auto": {
         "label": "自动",
         "description": "让模型自动决定推理级别。"

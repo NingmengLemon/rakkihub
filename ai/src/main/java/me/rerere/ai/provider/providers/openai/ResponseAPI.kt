@@ -277,7 +277,9 @@ class ResponseAPI(
             val reasoningModel = params.model.abilities.contains(ModelAbility.REASONING)
             if (reasoningModel) {
                 val reasoning = buildJsonObject {
-                    if (capabilities.supportsReasoningSummary) {
+                    if (params.reasoningLevel != ReasoningLevel.NOTSET &&
+                        capabilities.supportsReasoningSummary
+                    ) {
                         put("summary", "auto")
                     }
                     capabilities.reasoningEffort(params.reasoningLevel, params.model.modelId)?.let { put("effort", it) }
@@ -794,7 +796,9 @@ internal data class ResponseProviderCapabilities(
     val reasoningEffort: (
         ReasoningLevel,
         String,
-    ) -> String? = { level, _ -> level.effort.takeIf { level != ReasoningLevel.AUTO } },
+    ) -> String? = { level, _ ->
+        level.effort.takeIf { level != ReasoningLevel.AUTO && level != ReasoningLevel.NOTSET }
+    },
 )
 
 internal fun resolveResponseProviderCapabilities(host: String): ResponseProviderCapabilities {

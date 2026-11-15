@@ -25,9 +25,9 @@ import { Popover, PopoverContent, PopoverTrigger } from "~/components/ui/popover
 
 import { PickerErrorAlert } from "./picker-error-alert";
 
-type ReasoningLevel = "off" | "auto" | "low" | "medium" | "high" | "xhigh" | "max";
+type ReasoningLevel = "off" | "notset" | "auto" | "low" | "medium" | "high" | "xhigh" | "max";
 
-const REASONING_LEVELS: ReasoningLevel[] = ["off", "auto", "low", "medium", "high", "xhigh", "max"];
+const REASONING_LEVELS: ReasoningLevel[] = ["off", "notset", "auto", "low", "medium", "high", "xhigh", "max"];
 
 // Thumb size in px, keep in sync with `size-7` on the thumb below
 const THUMB_SIZE = 28;
@@ -54,6 +54,8 @@ function ReasoningIcon({ level, className }: { level: ReasoningLevel; className?
   switch (level) {
     case "off":
       return <LightbulbOff {...props} />;
+    case "notset":
+      return <Sparkles {...props} />;
     case "auto":
       return <Sparkles {...props} />;
     case "low":
@@ -138,6 +140,11 @@ export function ReasoningPickerButton({
         description: t("reasoning.presets.off.description"),
       },
       {
+        key: "notset",
+        label: t("reasoning.presets.notset.label"),
+        description: t("reasoning.presets.notset.description"),
+      },
+      {
         key: "auto",
         label: t("reasoning.presets.auto.label"),
         description: t("reasoning.presets.auto.description"),
@@ -176,7 +183,8 @@ export function ReasoningPickerButton({
       | ReasoningLevel
       | null
       | undefined) ?? "auto";
-  const currentIndex = Math.max(0, REASONING_LEVELS.indexOf(currentLevel));
+  const levelIndex = REASONING_LEVELS.indexOf(currentLevel);
+  const currentIndex = levelIndex >= 0 ? levelIndex : REASONING_LEVELS.indexOf("auto");
 
   const [localIndex, setLocalIndex] = React.useState(currentIndex);
 

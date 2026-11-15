@@ -512,6 +512,8 @@ class ClaudeProvider(private val client: OkHttpClient, context: Context? = null)
                         })
                     }
 
+                    ReasoningLevel.NOTSET -> {}
+
                     else -> {
                         put("thinking", buildJsonObject {
                             put("type", "adaptive")

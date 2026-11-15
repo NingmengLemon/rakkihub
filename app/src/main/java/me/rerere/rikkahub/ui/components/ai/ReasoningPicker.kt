@@ -185,6 +185,7 @@ fun ReasoningPicker(
 
 private fun ReasoningLevel.icon(): ImageVector = when (this) {
     ReasoningLevel.OFF -> HugeIcons.Idea
+    ReasoningLevel.NOTSET -> HugeIcons.Idea01
     ReasoningLevel.AUTO -> HugeIcons.Idea01
     ReasoningLevel.LOW -> ReasoningLow
     ReasoningLevel.MEDIUM -> ReasoningMedium
@@ -195,6 +196,7 @@ private fun ReasoningLevel.icon(): ImageVector = when (this) {
 
 private fun ReasoningLevel.shape(): RoundedPolygon = when (this) {
     ReasoningLevel.OFF -> MaterialShapes.Circle
+    ReasoningLevel.NOTSET -> MaterialShapes.Cookie4Sided
     ReasoningLevel.AUTO -> MaterialShapes.Cookie4Sided
     ReasoningLevel.LOW -> MaterialShapes.Cookie6Sided
     ReasoningLevel.MEDIUM -> MaterialShapes.Cookie7Sided
@@ -206,6 +208,7 @@ private fun ReasoningLevel.shape(): RoundedPolygon = when (this) {
 @Composable
 internal fun ReasoningLevel.reasoningLevelName(): String = when (this) {
     ReasoningLevel.OFF -> stringResource(R.string.reasoning_off)
+    ReasoningLevel.NOTSET -> stringResource(R.string.reasoning_notset)
     ReasoningLevel.AUTO -> stringResource(R.string.reasoning_auto)
     ReasoningLevel.LOW -> stringResource(R.string.reasoning_light)
     ReasoningLevel.MEDIUM -> stringResource(R.string.reasoning_medium)

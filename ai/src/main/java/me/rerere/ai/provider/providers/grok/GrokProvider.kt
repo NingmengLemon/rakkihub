@@ -70,6 +70,7 @@ private val MODELS_WITHOUT_REASONING_EFFORT = Regex("""^grok-4\.20(-\d{4})?-(non
 private fun grokEffort(level: ReasoningLevel, modelId: String): String? {
     if (MODELS_WITHOUT_REASONING_EFFORT.matches(modelId)) return null
     return when (level) {
+        ReasoningLevel.NOTSET -> null
         ReasoningLevel.AUTO -> null
         ReasoningLevel.OFF -> "none"
         ReasoningLevel.LOW -> "low"

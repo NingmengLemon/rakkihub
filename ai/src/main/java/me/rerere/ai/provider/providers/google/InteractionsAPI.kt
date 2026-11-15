@@ -262,6 +262,7 @@ internal class InteractionsAPI(
 
     // Interactions API 只接受 thinking_level，没有 thinkingBudget
     private fun thinkingLevel(params: TextGenerationParams): String? = when (params.reasoningLevel) {
+        ReasoningLevel.NOTSET -> null
         ReasoningLevel.AUTO -> null
         ReasoningLevel.OFF -> {
             val supportsMinimal = ModelRegistry.GEMINI_3_SERIES.match(modelId = params.model.modelId) ||

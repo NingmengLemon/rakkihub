@@ -3,6 +3,7 @@ package me.rerere.ai.provider.providers.chatgpt
 import kotlinx.serialization.json.jsonArray
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
+import me.rerere.ai.core.ReasoningLevel
 import me.rerere.ai.provider.Modality
 import me.rerere.ai.provider.Model
 import me.rerere.ai.provider.ModelAbility
@@ -102,6 +103,7 @@ class ChatGPTProviderTest {
             messages = listOf(UIMessage.user("hello")),
             params = TextGenerationParams(
                 model = Model(modelId = "gpt-5.5", abilities = listOf(ModelAbility.REASONING)),
+                reasoningLevel = ReasoningLevel.AUTO,
             ),
             sessionId = null,
         )
@@ -109,6 +111,21 @@ class ChatGPTProviderTest {
         assertEquals(1, body["include"]!!.jsonArray.size)
         assertTrue("reasoning" in body)
         assertNull(body["prompt_cache_key"])
+    }
+
+    @Test
+    fun `notset reasoning omits the reasoning block but keeps include`() {
+        val body = codexBody(
+            messages = listOf(UIMessage.user("hello")),
+            params = TextGenerationParams(
+                model = Model(modelId = "gpt-5.5", abilities = listOf(ModelAbility.REASONING)),
+                reasoningLevel = ReasoningLevel.NOTSET,
+            ),
+            sessionId = null,
+        )
+
+        assertEquals(1, body["include"]!!.jsonArray.size)
+        assertFalse("reasoning" in body)
     }
 
     @Test

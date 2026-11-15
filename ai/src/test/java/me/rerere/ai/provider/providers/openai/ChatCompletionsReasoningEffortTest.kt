@@ -1,6 +1,7 @@
 package me.rerere.ai.provider.providers.openai
 
 import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
 import me.rerere.ai.core.ReasoningLevel
 import me.rerere.ai.provider.Model
@@ -77,6 +78,24 @@ class ChatCompletionsReasoningEffortTest {
         val request = buildRequest("https://api.example.com/v1", ReasoningLevel.HIGH)
 
         assertEquals("high", request["reasoning_effort"]?.jsonPrimitive?.content)
+    }
+
+    @Test
+    fun `notset omits reasoning effort on generic and opencode gateways`() {
+        val generic = buildRequest("https://api.example.com/v1", ReasoningLevel.NOTSET)
+        val opencode = buildRequest("https://opencode.ai/v1", ReasoningLevel.NOTSET)
+
+        assertFalse(generic.containsKey("reasoning_effort"))
+        assertFalse(opencode.containsKey("reasoning_effort"))
+    }
+
+    @Test
+    fun `notset omits openrouter reasoning block`() {
+        val notSet = buildRequest("https://openrouter.ai/api/v1", ReasoningLevel.NOTSET)
+        val off = buildRequest("https://openrouter.ai/api/v1", ReasoningLevel.OFF)
+
+        assertFalse(notSet.containsKey("reasoning"))
+        assertEquals("none", off["reasoning"]?.jsonObject?.get("effort")?.jsonPrimitive?.content)
     }
 
     @Test

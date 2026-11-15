@@ -11,6 +11,9 @@ enum class ReasoningLevel(
     @SerialName("off")
     OFF(0, "none"),
 
+    @SerialName("notset")
+    NOTSET(-2, "auto"),
+
     @SerialName("auto")
     AUTO(-1, "auto"),
 
@@ -30,11 +33,12 @@ enum class ReasoningLevel(
     MAX(32_000, "max");
 
     val isEnabled: Boolean
-        get() = this != OFF
+        get() = this != OFF && this != NOTSET
 
     companion object {
         fun fromBudgetTokens(budgetTokens: Int?): ReasoningLevel {
-            return entries.minByOrNull {
+            if (budgetTokens == NOTSET.budgetTokens) return NOTSET
+            return entries.filterNot { it == NOTSET }.minByOrNull {
                 kotlin.math.abs(
                     it.budgetTokens - (budgetTokens ?: AUTO.budgetTokens)
                 )

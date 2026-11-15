@@ -550,6 +550,8 @@
   <string name="reasoning_max">Max</string>
   <string name="reasoning_off">Off</string>
   <string name="reasoning_off_desc">Turn off reasoning functionality, the model will directly answer questions.</string>
+  <string name="reasoning_notset">Default</string>
+  <string name="reasoning_notset_desc">Do not send a reasoning parameter; let the provider decide.</string>
   <string name="reasoning_picker_hint">Not all models support depth adjustment. Refer to the model and provider documentation.</string>
   <string name="reasoning_picker_title">Adjust Thinking Depth</string>
   <string name="reasoning_xhigh">XHigh</string>

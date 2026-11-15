@@ -384,6 +384,7 @@ class GoogleProvider(private val client: OkHttpClient, context: Context? = null)
                             ModelRegistry.GEMINI_4.match(modelId = params.model.modelId)
 
                     when (params.reasoningLevel) {
+                        ReasoningLevel.NOTSET -> {} // 不设置参数，沿用服务端默认
                         ReasoningLevel.AUTO -> {} // 自动模式，不设置参数
 
                         ReasoningLevel.OFF -> {

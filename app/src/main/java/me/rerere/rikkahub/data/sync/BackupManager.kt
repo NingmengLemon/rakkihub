@@ -37,6 +37,7 @@ import me.rerere.rikkahub.data.sync.official.OfficialRestorePlan
 import me.rerere.rikkahub.data.sync.official.OfficialRestorePlanner
 import me.rerere.rikkahub.data.sync.official.OfficialSnapshots
 import me.rerere.rikkahub.data.sync.official.OfficialUrlRewriter
+import me.rerere.rikkahub.data.sync.official.forOfficialExport
 import me.rerere.workspace.WorkspaceManager
 import java.io.File
 import java.io.FileOutputStream
@@ -82,9 +83,14 @@ class BackupManager(
             // 官方兼容出口要能被官方客户端恢复。官方那个版本的 BackupItem 只有 DATABASE
             // 与 FILES，未知枚举值不像未知字段那样能被 ignoreUnknownKeys 吞掉，会让整份设置
             // 解码失败，所以这一项必须从 settings.json 里去掉，光不打包条目不够。
-            val encodedSettings = settings.copy(
-                webDavConfig = settings.webDavConfig.copy(
-                    items = WebDavConfig.BackupItem.normalize(settings.webDavConfig.items)
+            val exportSettings = if (backupTarget == BackupTarget.OFFICIAL) {
+                settings.forOfficialExport()
+            } else {
+                settings
+            }
+            val encodedSettings = exportSettings.copy(
+                webDavConfig = exportSettings.webDavConfig.copy(
+                    items = WebDavConfig.BackupItem.normalize(exportSettings.webDavConfig.items)
                         .filter {
                             backupTarget != BackupTarget.OFFICIAL || it != WebDavConfig.BackupItem.WORKSPACES
                         },

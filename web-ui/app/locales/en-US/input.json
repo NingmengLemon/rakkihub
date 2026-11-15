@@ -38,6 +38,10 @@
         "label": "Off",
         "description": "Disable reasoning and answer directly."
       },
+      "notset": {
+        "label": "Default",
+        "description": "Do not send a reasoning parameter; let the provider decide."
+      },
       "auto": {
         "label": "Auto",
         "description": "Let the model decide the reasoning level automatically."

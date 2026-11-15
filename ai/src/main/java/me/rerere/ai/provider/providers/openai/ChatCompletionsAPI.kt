@@ -281,28 +281,33 @@ class ChatCompletionsAPI(
                 when (host) {
                     "openrouter.ai" -> {
                         // https://openrouter.ai/docs/use-cases/reasoning-tokens
-                        put("reasoning", buildJsonObject {
-                            when (level) {
-                                ReasoningLevel.OFF -> put("effort", "none")
-                                ReasoningLevel.AUTO -> put("enabled", true)
-                                else -> put("effort", level.effort)
-                            }
-                        })
+                        if (level != ReasoningLevel.NOTSET) {
+                            put("reasoning", buildJsonObject {
+                                when (level) {
+                                    ReasoningLevel.OFF -> put("effort", "none")
+                                    ReasoningLevel.AUTO -> put("enabled", true)
+                                    ReasoningLevel.NOTSET -> {}
+                                    else -> put("effort", level.effort)
+                                }
+                            })
+                        }
                     }
 
                     "dashscope.aliyuncs.com" -> {
                         // 阿里云百炼
                         // https://help.aliyun.com/zh/model-studio/qwen-api-via-openai-chat-completions
-                        if (level != ReasoningLevel.AUTO) {
+                        if (level != ReasoningLevel.AUTO && level != ReasoningLevel.NOTSET) {
                             put("reasoning_effort", level.effort)
                         }
                     }
 
                     "ark.cn-beijing.volces.com" -> {
                         // 豆包 (火山)
-                        put("thinking", buildJsonObject {
-                            put("type", if (!level.isEnabled) "disabled" else "enabled")
-                        })
+                        if (level != ReasoningLevel.NOTSET) {
+                            put("thinking", buildJsonObject {
+                                put("type", if (!level.isEnabled) "disabled" else "enabled")
+                            })
+                        }
                     }
 
                     "api.mistral.ai" -> {
@@ -312,7 +317,9 @@ class ChatCompletionsAPI(
                     "chat.intern-ai.org.cn" -> {
                         // 书生
                         // https://internlm.intern-ai.org.cn/api/document?lang=zh
-                        put("thinking_mode", level.isEnabled)
+                        if (level != ReasoningLevel.NOTSET) {
+                            put("thinking_mode", level.isEnabled)
+                        }
                     }
 
                     "api.siliconflow.cn" -> {
@@ -345,75 +352,90 @@ class ChatCompletionsAPI(
                             "deepseek-ai/DeepSeek-V4-Pro",
                             "Pro/deepseek-ai/DeepSeek-V4-Pro",
                         )
-                        if (modelId in siliconflowThinkingModels) {
+                        if (level != ReasoningLevel.NOTSET && modelId in siliconflowThinkingModels) {
                             put("enable_thinking", level.isEnabled)
                         }
                     }
 
                     "aiping.cn" -> {
-                        put("enable_thinking", level.isEnabled)
+                        if (level != ReasoningLevel.NOTSET) {
+                            put("enable_thinking", level.isEnabled)
+                        }
                     }
 
                     "open.bigmodel.cn" -> {
-                        put("thinking", buildJsonObject {
-                            put("type", if (!level.isEnabled) "disabled" else "enabled")
-                        })
+                        if (level != ReasoningLevel.NOTSET) {
+                            put("thinking", buildJsonObject {
+                                put("type", if (!level.isEnabled) "disabled" else "enabled")
+                            })
+                        }
                     }
 
                     "api.xiaomimimo.com", "token-plan-cn.xiaomimimo.com" -> {
                         // 小米 MiMo
                         // https://mimo.mi.com/docs/zh-CN/api/chat/openai-api
-                        put("thinking", buildJsonObject {
-                            put("type", if (!level.isEnabled) "disabled" else "enabled")
-                        })
+                        if (level != ReasoningLevel.NOTSET) {
+                            put("thinking", buildJsonObject {
+                                put("type", if (!level.isEnabled) "disabled" else "enabled")
+                            })
+                        }
                     }
 
                     "api.moonshot.cn" -> {
-                        put("thinking", buildJsonObject {
-                            put("type", if (!level.isEnabled) "disabled" else "enabled")
-                            // K2.6 的 thinking.keep 默认为 null（忽略历史思考），思考开启时
-                            // 需显式传 "all" 才是保留式思考；文档推荐与 enabled 搭配（#1586）
-                            if (level.isEnabled && ModelRegistry.KIMI_K2_6.match(params.model.modelId)) {
-                                put("keep", "all")
-                            }
-                        })
+                        if (level != ReasoningLevel.NOTSET) {
+                            put("thinking", buildJsonObject {
+                                put("type", if (!level.isEnabled) "disabled" else "enabled")
+                                // K2.6 的 thinking.keep 默认为 null（忽略历史思考），思考开启时
+                                // 需显式传 "all" 才是保留式思考；文档推荐与 enabled 搭配（#1586）
+                                if (level.isEnabled && ModelRegistry.KIMI_K2_6.match(params.model.modelId)) {
+                                    put("keep", "all")
+                                }
+                            })
+                        }
                     }
 
                     "api.deepseek.com" -> {
-                        put("thinking", buildJsonObject {
-                            put("type", if (!level.isEnabled) "disabled" else "enabled")
-                        })
-                        if (level.isEnabled && level != ReasoningLevel.AUTO) {
-                            val effort = when (level) {
-                                ReasoningLevel.MEDIUM, ReasoningLevel.HIGH -> "high"
-                                ReasoningLevel.MAX -> "max"
-                                else -> level.effort
+                        if (level != ReasoningLevel.NOTSET) {
+                            put("thinking", buildJsonObject {
+                                put("type", if (!level.isEnabled) "disabled" else "enabled")
+                            })
+                            if (level.isEnabled && level != ReasoningLevel.AUTO) {
+                                val effort = when (level) {
+                                    ReasoningLevel.MEDIUM, ReasoningLevel.HIGH -> "high"
+                                    ReasoningLevel.MAX -> "max"
+                                    else -> level.effort
+                                }
+                                put("reasoning_effort", effort)
                             }
-                            put("reasoning_effort", effort)
                         }
                     }
 
                     "integrate.api.nvidia.com" -> {
-                        if ("deepseek-v4" in params.model.modelId.lowercase()) {
-                            if (level != ReasoningLevel.AUTO) {
-                                val effort = when (level) {
-                                    ReasoningLevel.XHIGH, ReasoningLevel.MAX -> "max"
-                                    ReasoningLevel.OFF -> "none"
-                                    else -> "high"
+                        if (level != ReasoningLevel.NOTSET) {
+                            if ("deepseek-v4" in params.model.modelId.lowercase()) {
+                                if (level != ReasoningLevel.AUTO) {
+                                    val effort = when (level) {
+                                        ReasoningLevel.XHIGH, ReasoningLevel.MAX -> "max"
+                                        ReasoningLevel.OFF -> "none"
+                                        else -> "high"
+                                    }
+                                    put("reasoning_effort", effort)
                                 }
-                                put("reasoning_effort", effort)
-                            }
-                        } else {
-                            if (level != ReasoningLevel.AUTO) {
-                                put("reasoning_effort", if (level.effort == "none") "low" else level.effort)
+                            } else {
+                                if (level != ReasoningLevel.AUTO) {
+                                    put("reasoning_effort", if (level.effort == "none") "low" else level.effort)
+                                }
                             }
                         }
                     }
 
                     else -> {
                         // 通用 OpenAI 兼容网关（含 opencode.ai）多数只接受 low/medium/high，
-                        // 关闭思考时省略字段，不要发 "none"（#1644）
-                        if (level != ReasoningLevel.AUTO && level != ReasoningLevel.OFF) {
+                        // 关闭思考或未设置时省略字段，不要发 "none"（#1644）
+                        if (level != ReasoningLevel.AUTO &&
+                            level != ReasoningLevel.OFF &&
+                            level != ReasoningLevel.NOTSET
+                        ) {
                             put("reasoning_effort", level.effort)
                         }
                     }

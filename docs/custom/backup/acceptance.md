@@ -176,7 +176,7 @@ C80 给 `usage_record` 增加 `outcome`，Room 32 到 33，并在官方兼容导
 
 ## 2026-11-14 C62/C65 设置字段
 
-C62 给 `NetworkSetting` 增加 `streamIdleTimeoutEnabled`（默认 true），C65 给 `Settings` 增加 `agentSetting`（工具超时 300 秒、工作区命令默认 30 秒、最大 600 秒，都带默认值）。只新增自定义设置字段，不改 Room/schema、数据库表、附件和官方兼容出口结构；官方兼容出口照旧写整份 settings，因此 `settings.json` 会多出 `agentSetting` 与 `networkSetting.streamIdleTimeoutEnabled` 两个官方不认识的键，容忍方式与 C69、C75 相同。`OfficialSettingsCompatibilityTest` 用的是本应用的 `JsonInstant`，官方客户端对未知字段的真实容忍仍按 C18 的假设处理，本轮没有在官方客户端上重新验证。
+C62 给 `NetworkSetting` 增加 `streamIdleTimeoutEnabled`（默认 true），C65 给 `Settings` 增加 `agentSetting`（工具超时 300 秒、工作区命令默认 30 秒、最大 600 秒，都带默认值）。只新增自定义设置字段，不改 Room/schema、数据库表、附件和官方兼容出口结构；官方兼容出口照旧写整份 settings，因此 `settings.json` 会多出 `agentSetting` 与 `networkSetting.streamIdleTimeoutEnabled` 两个官方不认识的键，容忍方式与 C69、C75 相同。C86 的 `reasoningLevel=notset` 是枚举值，官方不认识，出口已归一化成 `off`，不会进入官方 settings 或会话 config。`OfficialSettingsCompatibilityTest` 用的是本应用的 `JsonInstant`，官方客户端对未知字段的真实容忍仍按 C18 的假设处理，本轮没有在官方客户端上重新验证。
 
 设备数据验收：
 
