@@ -27,6 +27,8 @@ enum class MessageSearchSort(val orderBy: String) {
 }
 
 private const val TAG = "MessageFtsManager"
+private const val DEFAULT_SEARCH_LIMIT = 50
+private const val MAX_SEARCH_LIMIT = 200
 
 /**
  * 建立消息索引用到的表，每次打开数据库时调用。
@@ -178,10 +180,12 @@ class MessageFtsManager(private val database: AppDatabase) {
         sort: MessageSearchSort = MessageSearchSort.RELEVANCE,
         // 只搜这些助手的对话，null 表示不限
         assistantIds: Collection<String>? = null,
+        limit: Int = DEFAULT_SEARCH_LIMIT,
     ): List<MessageSearchResult> = withContext(Dispatchers.IO) {
         val results = mutableListOf<MessageSearchResult>()
         if (assistantIds != null && assistantIds.isEmpty()) return@withContext results
         val matchQuery = buildFtsMatchQuery(keyword, ::simpleQuery) ?: return@withContext results
+        val safeLimit = limit.coerceIn(1, MAX_SEARCH_LIMIT)
         val assistantFilter = if (assistantIds != null) {
             "AND conversation.assistant_id IN (${assistantIds.joinToString { "?" }})"
         } else {
@@ -198,9 +202,13 @@ class MessageFtsManager(private val database: AppDatabase) {
             WHERE message_fts.text MATCH ?
             $assistantFilter
             ORDER BY ${sort.orderBy}
-            LIMIT 50
+            LIMIT ?
             """.trimIndent(),
-            arrayOf(matchQuery, *assistantIds.orEmpty().toTypedArray())
+            arrayOf(
+                matchQuery,
+                *assistantIds.orEmpty().toTypedArray(),
+                safeLimit.toString(),
+            )
         )
         Log.i(TAG, "search: $keyword")
         cursor.use {

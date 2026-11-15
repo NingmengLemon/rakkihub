@@ -105,8 +105,44 @@ class MessageFtsManagerTest {
         assertEquals(listOf(second.id.toString()), fts.search("legacy").map { it.conversationId })
     }
 
-    private fun conversation(title: String, vararg messages: UIMessage) = Conversation(
-        assistantId = assistantId,
+    @Test
+    fun searchClampsLimitAndDefaultsToFifty() = runBlocking {
+        val messages = Array(205) { index -> UIMessage.user("limitword $index") }
+        save(conversation("many", *messages), insert = true)
+
+        assertEquals(50, fts.search("limitword").size)
+        assertEquals(1, fts.search("limitword", limit = 0).size)
+        assertEquals(200, fts.search("limitword", limit = 201).size)
+    }
+
+    @Test
+    fun searchAppliesAssistantFilterAndLimit() = runBlocking {
+        val otherAssistant = Uuid.random()
+        val first = conversation("first", UIMessage.user("shared word first"))
+        val second = conversation(
+            "second",
+            UIMessage.user("shared word second"),
+            owner = otherAssistant,
+        )
+        save(first, insert = true)
+        save(second, insert = true)
+
+        val results = fts.search(
+            "shared",
+            assistantIds = listOf(first.assistantId.toString()),
+            limit = 1,
+        )
+
+        assertEquals(1, results.size)
+        assertEquals(first.id.toString(), results.single().conversationId)
+    }
+
+    private fun conversation(
+        title: String,
+        vararg messages: UIMessage,
+        owner: Uuid = assistantId,
+    ) = Conversation(
+        assistantId = owner,
         title = title,
         messageNodes = messages.map { MessageNode.of(it) },
     )

@@ -219,7 +219,7 @@ RUNNING 会出现在当前请求里：AgentLoop 把正在生成的 assistant 消
 - 投影顺序之后仍接 `withoutCompressionScratch()`（C68），再 `limitContext`，再输入变换，最后 `mergeAdjacentUserMessages`。
 - 失败步骤的 Tool parts 缺结果时先 `settleToolParts` 再投影，保证配对。
 - 多 step 消息的 FAILED 口径：请求投影按每步状态拼接，前面 SUCCEEDED step 的正文与工具事实保留，失败 step 只留 Tool parts；摘要投影与 `conversation_search` 对整条 `status = FAILED` 的消息丢弃，不再逐 step 判断。
-- `conversation_search` 的工具边界过滤：结果可能跨多个会话与助手，必须先按结果里的 `conversationId` 分组再查状态，不能只按当前会话建映射。`ConversationRepository.filterSearch` 对每个 `conversationId` 只加载一次会话，同一次读取产出 scratch 集合与 `messageId -> status` 映射（`SearchConversationContext`，按会话缓存到本次调用结束），再交给 `filterSearchResults`。工具搜索走 `searchMessagesForModel`/`searchMessagesOfAssistantsForModel`（`dropFailed = true`），snippet 所属消息 `status = FAILED`、node 已删、分支已切走或会话缺失时整条丢弃；UI 与 Web 搜索走 `searchMessages`/`searchMessagesOfAssistants`（`dropFailed = false`），只隐藏 scratch，仍能看到失败正文。多 step 消息只要最后一步失败就整条不返回。
+- `conversation_search` 的工具边界过滤：结果可能跨多个会话与助手，必须先按结果里的 `conversationId` 分组再查状态，不能只按当前会话建映射。`ConversationRepository.filterSearch` 对每个 `conversationId` 只加载一次会话，同一次读取产出 scratch 集合与 `messageId -> status` 映射（`SearchConversationContext`，按会话缓存到本次调用结束），再交给 `filterSearchResults`。工具搜索走 `searchMessagesForModel`/`searchMessagesOfAssistantsForModel`（`dropFailed = true`），snippet 所属消息 `status = FAILED`、node 已删、分支已切走或会话缺失时整条丢弃；UI 与 Web 搜索走 `searchMessages`/`searchMessagesOfAssistants`（`dropFailed = false`），只隐藏 scratch，仍能看到失败正文。工具搜索先取最多 200 条候选，再过滤、最后按调用方 limit 截断；UI 与 Web 搜索仍按原来的 50 条上限。多 step 消息只要最后一步失败就整条不返回。
 
 各调用方的投影选择：
 

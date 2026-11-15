@@ -44,6 +44,9 @@ class ConversationRepository(
     companion object {
         private const val PAGE_SIZE = 20
         private const val INITIAL_LOAD_SIZE = 40
+
+        // 工具搜索结果先过滤掉失败/删除/scratch，再按调用方 limit 截断；多取候选避免过滤后不足
+        private const val MODEL_SEARCH_RESULT_LIMIT = 200
     }
 
     suspend fun getRecentConversations(assistantId: Uuid, limit: Int = 10): List<Conversation> {
@@ -407,7 +410,12 @@ class ConversationRepository(
         sort: MessageSearchSort = MessageSearchSort.RELEVANCE,
         assistantId: Uuid? = null,
     ) = filterSearch(
-        messageFtsManager.search(keyword, sort, assistantId?.let { listOf(it.toString()) }),
+        messageFtsManager.search(
+            keyword,
+            sort,
+            assistantId?.let { listOf(it.toString()) },
+            limit = MODEL_SEARCH_RESULT_LIMIT,
+        ),
         dropFailed = true,
     )
 
@@ -417,6 +425,7 @@ class ConversationRepository(
                 keyword,
                 MessageSearchSort.RELEVANCE,
                 assistantIds.map { it.toString() },
+                limit = MODEL_SEARCH_RESULT_LIMIT,
             ),
             dropFailed = true,
         )
