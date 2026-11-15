@@ -1,6 +1,6 @@
 # B2：step 级提交与失败投影（完整版草稿）
 
-- 状态：部分落地。Web DTO 的 status/steps、conversation_search 的失败消息过滤、contextLimitBoundaryIndex 的投影对齐已完成；手动 step 重试、官方导出兜底、C76 持久化与剩余消费方待后续。
+- 状态：部分落地。Web DTO 的 status/steps、conversation_search 的失败消息过滤（scratch 与状态共用一次会话加载）、contextLimitBoundaryIndex 的投影对齐已完成；手动 step 重试、官方导出兜底、C76 持久化与剩余消费方待后续。
 - 日期：2026-11-15
 - 前置：先完成 [`b1-step-commits.md`](b1-step-commits.md)；本文档保留手动重试、错误卡片、C76、搜索过滤、Web/导出兜底等 B2 内容
 - 对齐参考：DSH `dsh-v0.2.2-rc.1`（tag 指向 commit `66491b05e3f05ad35bcdd4f6cd7ed26041d9e3db`，2026-11-04；本地 clone `E:\MyWorkspace\deepseek-harness` 的 HEAD 是 `dsh-v0.2.1-rc.5`，本文档的 0.2.2 事实均用 `git show dsh-v0.2.2-rc.1:<path>` 读取）
@@ -219,7 +219,7 @@ RUNNING 会出现在当前请求里：AgentLoop 把正在生成的 assistant 消
 - 投影顺序之后仍接 `withoutCompressionScratch()`（C68），再 `limitContext`，再输入变换，最后 `mergeAdjacentUserMessages`。
 - 失败步骤的 Tool parts 缺结果时先 `settleToolParts` 再投影，保证配对。
 - 多 step 消息的 FAILED 口径：请求投影按每步状态拼接，前面 SUCCEEDED step 的正文与工具事实保留，失败 step 只留 Tool parts；摘要投影与 `conversation_search` 对整条 `status = FAILED` 的消息丢弃，不再逐 step 判断。
-- `conversation_search` 的工具边界过滤：结果可能跨多个会话与助手，必须先按结果里的 `conversationId` 分组再查状态，不能只按当前会话建映射。`ConversationTools` 对结果里出现的 `conversationId` 逐个取该会话的当前消息，建立 `messageId -> status` 映射（按会话缓存到本次工具调用结束），snippet 所属消息 `status = FAILED`、node 已删或分支已切走时整条丢弃；不放在共享 `ConversationRepository.searchMessages` 里，UI 与 Web 搜索仍能看到失败正文。多 step 消息只要最后一步失败就整条不返回。
+- `conversation_search` 的工具边界过滤：结果可能跨多个会话与助手，必须先按结果里的 `conversationId` 分组再查状态，不能只按当前会话建映射。`ConversationRepository.filterSearch` 对每个 `conversationId` 只加载一次会话，同一次读取产出 scratch 集合与 `messageId -> status` 映射（`SearchConversationContext`，按会话缓存到本次调用结束），再交给 `filterSearchResults`。工具搜索走 `searchMessagesForModel`/`searchMessagesOfAssistantsForModel`（`dropFailed = true`），snippet 所属消息 `status = FAILED`、node 已删、分支已切走或会话缺失时整条丢弃；UI 与 Web 搜索走 `searchMessages`/`searchMessagesOfAssistants`（`dropFailed = false`），只隐藏 scratch，仍能看到失败正文。多 step 消息只要最后一步失败就整条不返回。
 
 各调用方的投影选择：
 

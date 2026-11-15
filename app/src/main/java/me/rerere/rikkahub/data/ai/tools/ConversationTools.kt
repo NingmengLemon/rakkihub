@@ -10,7 +10,6 @@ import kotlinx.serialization.json.put
 import me.rerere.ai.core.InputSchema
 import me.rerere.ai.core.MessageRole
 import me.rerere.ai.core.Tool
-import me.rerere.ai.ui.MessageStatus
 import me.rerere.ai.ui.UIMessage
 import me.rerere.ai.ui.UIMessagePart
 import me.rerere.ai.ui.filterModelVisible
@@ -72,8 +71,7 @@ fun createConversationTools(
         }
     ),
     conversationSearchTool { query ->
-        conversationRepo.searchMessages(query, MessageSearchSort.RELEVANCE)
-            .filterFailedSearchResults(conversationRepo)
+        conversationRepo.searchMessagesForModel(query, MessageSearchSort.RELEVANCE)
     },
 )
 
@@ -134,8 +132,7 @@ fun createMemoryConversationTools(
     assistantIds: Set<Uuid>,
 ): List<Tool> = listOf(
     conversationSearchTool { query ->
-        conversationRepo.searchMessagesOfAssistants(query, assistantIds)
-            .filterFailedSearchResults(conversationRepo)
+        conversationRepo.searchMessagesOfAssistantsForModel(query, assistantIds)
     },
     Tool(
         name = "conversation_read",
@@ -200,32 +197,3 @@ internal fun Conversation.dialogueMessages(): List<UIMessage> =
     currentMessages.filter {
         (it.role == MessageRole.USER || it.role == MessageRole.ASSISTANT) && !it.isHistoryTruncationMarker
     }.filterModelVisible().withoutCompressionScratch()
-
-/**
- * FTS 结果只作为工具输入过滤：失败消息、已删除节点和已切走分支的 snippet 不进入模型上下文，
- * UI 与 Web 搜索仍直接使用 repository 的结果。
- */
-internal fun List<MessageSearchResult>.filterVisibleSearchResults(
-    statusByConversation: Map<String, Map<String, MessageStatus>>,
-): List<MessageSearchResult> = filter { result ->
-    statusByConversation[result.conversationId]
-        ?.get(result.messageId)
-        ?.let { it != MessageStatus.FAILED } == true
-}
-
-private suspend fun List<MessageSearchResult>.filterFailedSearchResults(
-    conversationRepo: ConversationRepository,
-): List<MessageSearchResult> {
-    if (isEmpty()) return this
-    val statusByConversation = mutableMapOf<String, Map<String, MessageStatus>>()
-    for (result in this) {
-        statusByConversation.getOrPut(result.conversationId) {
-            val conversation = runCatching { Uuid.parse(result.conversationId) }.getOrNull()
-                ?.let { conversationRepo.getConversationById(it) }
-            conversation?.currentMessages
-                ?.associate { it.id.toString() to it.status }
-                .orEmpty()
-        }
-    }
-    return filterVisibleSearchResults(statusByConversation)
-}

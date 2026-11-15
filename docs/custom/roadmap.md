@@ -363,7 +363,7 @@
 
 仍挂起：
 
-- 重试恢复与消息模型 B1：已完成 step 记录、Claude step 级请求投影、失败工具事实、审批/取消 step 结算与最后节点审批收口（C97）；自动重试恢复、C75/C76 与 B2 留后续阶段，设计见 [design/b1-step-commits.md](design/b1-step-commits.md)。B2 已开始：Web DTO 的 status/steps、conversation_search 的失败消息过滤、上下文边界投影对齐已落地；官方导出按上游 `ignoreUnknownKeys` 容忍未知字段，3.1.1 样本待补；手动 step 重试与搜索加载优化见 [design/b2-step-messages.md](design/b2-step-messages.md)。
+- 重试恢复与消息模型 B1：已完成 step 记录、Claude step 级请求投影、失败工具事实、审批/取消 step 结算与最后节点审批收口（C97）；自动重试恢复、C75/C76 与 B2 留后续阶段，设计见 [design/b1-step-commits.md](design/b1-step-commits.md)。B2 已开始：Web DTO 的 status/steps、conversation_search 的失败消息过滤（单次会话加载）、上下文边界投影对齐已落地；官方导出按上游 `ignoreUnknownKeys` 容忍未知字段，3.1.1 样本待补；手动 step 重试与搜索加载优化见 [design/b2-step-messages.md](design/b2-step-messages.md)。
 - C58 半途失败投影已由 B1 第一阶段落地（C97）：聊天请求投影保留失败前已执行的工具事实，失败 step 的正文与推理不进请求；标题、记忆与摘要投影仍整条丢弃失败消息。B2 只收尾搜索、Web 与错误卡片等消费方。
 - C86 思考强度（讨论中）：`OFF` 保留为明确关闭，新增 `NOTSET` 表示不发参数，OCR、翻译、标题、记忆这类内部调用改用 `NOTSET`；官方兼容导出把 `NOTSET` 归一化成 `OFF`，避免未知枚举让官方设置解码失败。deepseek 已支持 `reasoning_effort`，各家现状后续派子代理调研。
 - C87 OCR 文本归属（讨论中）：采用 `file_derivations` 派生表，`file_id` 指向 `managed_files.id`，`kind`、`text`、`producer`、`edited`、时间戳；Room 升到 v34，官方导出登记并裁掉这张表。附件管理入口待定，先做聊天里的就近入口。

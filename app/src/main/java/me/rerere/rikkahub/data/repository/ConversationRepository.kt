@@ -11,6 +11,7 @@ import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
+import me.rerere.ai.ui.MessageStatus
 import me.rerere.ai.ui.UIMessage
 import me.rerere.rikkahub.data.datastore.ConversationSortOrder
 import me.rerere.rikkahub.data.db.AppDatabase
@@ -384,31 +385,65 @@ class ConversationRepository(
         keyword: String,
         sort: MessageSearchSort = MessageSearchSort.RELEVANCE,
         assistantId: Uuid? = null,
-    ) = filterScratch(messageFtsManager.search(keyword, sort, assistantId?.let { listOf(it.toString()) }))
+    ) = filterSearch(
+        messageFtsManager.search(keyword, sort, assistantId?.let { listOf(it.toString()) }),
+        dropFailed = false,
+    )
 
     /** 只在 [assistantIds] 这些助手的对话里搜索 */
     suspend fun searchMessagesOfAssistants(keyword: String, assistantIds: Set<Uuid>) =
-        filterScratch(
+        filterSearch(
             messageFtsManager.search(
                 keyword,
                 MessageSearchSort.RELEVANCE,
                 assistantIds.map { it.toString() },
-            )
+            ),
+            dropFailed = false,
         )
 
-    /** FTS 索引里仍会有历史 scratch 行；结果按会话当前消息过滤，避免搜到提示词和半截回复。 */
-    private suspend fun filterScratch(results: List<MessageSearchResult>): List<MessageSearchResult> {
+    /** 工具搜索：不返回失败消息、已删除节点和已切走分支的 snippet。 */
+    suspend fun searchMessagesForModel(
+        keyword: String,
+        sort: MessageSearchSort = MessageSearchSort.RELEVANCE,
+        assistantId: Uuid? = null,
+    ) = filterSearch(
+        messageFtsManager.search(keyword, sort, assistantId?.let { listOf(it.toString()) }),
+        dropFailed = true,
+    )
+
+    suspend fun searchMessagesOfAssistantsForModel(keyword: String, assistantIds: Set<Uuid>) =
+        filterSearch(
+            messageFtsManager.search(
+                keyword,
+                MessageSearchSort.RELEVANCE,
+                assistantIds.map { it.toString() },
+            ),
+            dropFailed = true,
+        )
+
+    /**
+     * FTS 索引里仍会有历史 scratch 行；结果按会话当前消息过滤，避免搜到提示词和半截回复。
+     * 每个会话只读一次完整消息树，scratch 集合与失败状态共用这次读取。
+     */
+    private suspend fun filterSearch(
+        results: List<MessageSearchResult>,
+        dropFailed: Boolean,
+    ): List<MessageSearchResult> {
         if (results.isEmpty()) return results
-        val scratchByConversation = mutableMapOf<String, Set<String>>()
-        return results.filter { result ->
-            val scratchIds = scratchByConversation[result.conversationId] ?: run {
+        val contextByConversation = mutableMapOf<String, SearchConversationContext>()
+        for (result in results) {
+            contextByConversation.getOrPut(result.conversationId) {
                 val conversationId = runCatching { Uuid.parse(result.conversationId) }.getOrNull()
-                val ids = conversationId?.let { getConversationById(it)?.scratchMessageIds() }.orEmpty()
-                scratchByConversation[result.conversationId] = ids
-                ids
+                val conversation = conversationId?.let { getConversationById(it) }
+                SearchConversationContext(
+                    scratchIds = conversation?.scratchMessageIds().orEmpty(),
+                    statuses = conversation?.currentMessages
+                        ?.associate { it.id.toString() to it.status }
+                        .orEmpty(),
+                )
             }
-            result.messageId !in scratchIds
         }
+        return results.filterSearchResults(contextByConversation, dropFailed)
     }
 
     suspend fun rebuildAllIndexes(onProgress: (current: Int, total: Int) -> Unit = { _, _ -> }) {
@@ -640,3 +675,24 @@ data class ConversationPageResult(
     val items: List<Conversation>,
     val nextOffset: Int?,
 )
+
+/** 搜索过滤所需的单会话快照：scratch 集合与消息状态来自同一次加载。 */
+internal data class SearchConversationContext(
+    val scratchIds: Set<String>,
+    val statuses: Map<String, MessageStatus>,
+)
+
+/**
+ * 搜索结果边界：scratch 行永远不返回；[dropFailed] 为 true 时只返回当前分支里仍存在且非 FAILED 的消息。
+ * UI 与 Web 搜索走 false，保留失败正文；工具搜索走 true。
+ */
+internal fun List<MessageSearchResult>.filterSearchResults(
+    contextByConversation: Map<String, SearchConversationContext>,
+    dropFailed: Boolean,
+): List<MessageSearchResult> = filter { result ->
+    val context = contextByConversation[result.conversationId]
+    val hiddenByScratch = context?.scratchIds?.contains(result.messageId) == true
+    if (hiddenByScratch) return@filter false
+    if (!dropFailed) return@filter true
+    context?.statuses?.get(result.messageId)?.let { it != MessageStatus.FAILED } == true
+}
