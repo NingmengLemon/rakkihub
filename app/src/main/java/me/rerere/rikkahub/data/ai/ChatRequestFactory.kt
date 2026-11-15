@@ -156,6 +156,7 @@ class ChatRequestFactory(
         turn: ChatTurnContext,
         messages: List<UIMessage>,
         processingStatus: MutableStateFlow<String?>,
+        allowToolApproval: Boolean = true,
     ): Pair<AgentRequest, AgentHooks> {
         val request = AgentRequest(
             provider = usageRecorder.wrap(
@@ -169,6 +170,7 @@ class ChatRequestFactory(
             retry = turn.settings.retryPolicy(),
             toolTimeout = turn.settings.toolExecutionTimeout(),
             streamIdleTimeout = turn.settings.streamIdleWatchdog(),
+            allowToolApproval = allowToolApproval,
         )
         val hooks = object : AgentHooks {
             override suspend fun prepareStep(messages: List<UIMessage>): StepRequest {

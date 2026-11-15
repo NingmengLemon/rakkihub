@@ -1,5 +1,7 @@
 package me.rerere.rikkahub.data.model
 
+import kotlinx.serialization.json.buildJsonObject
+import kotlinx.serialization.json.put
 import me.rerere.ai.core.MessageRole
 import me.rerere.ai.ui.MessageStatus
 import me.rerere.ai.ui.StepStatus
@@ -190,7 +192,7 @@ internal fun Conversation.recoverAbandonedGeneration(): Conversation? {
                 changed = true
                 val closeStatus = message.stepCloseStatus()
                 val settled = message
-                    .finishPendingTools(::recoverInterruptedTool)
+                    .finishPendingTools(::recoverStoppedTool)
                     .copy(
                         status = if (message.status ==
                             MessageStatus.FAILED) {
@@ -218,7 +220,7 @@ internal fun Conversation.cancelInterruptedTools(): Conversation? {
     val before = lastNode.currentMessage
     val closeStatus = before.stepCloseStatus()
     // stop 后没有入口再执行这些工具，一律补恢复结果；startedAt 区分未开始和执行中
-    val updatedMessage = before.finishPendingTools(::recoverInterruptedTool)
+    val updatedMessage = before.finishPendingTools(::recoverStoppedTool)
     val closedMessage = updatedMessage.closeLastStep(closeStatus)
     if (closedMessage === lastNode.currentMessage) return null
     return upsertMessage(lastNode.id, closedMessage)
@@ -233,6 +235,38 @@ internal fun UIMessage.stepCloseStatus(): StepStatus? {
     } else {
         StepStatus.CANCELLED
     }
+}
+
+/**
+ * 中间节点重新生成时不允许进入审批：本轮所有未执行工具补恢复结果，step 记为 SUCCEEDED，
+ * 消息保持 COMPLETE，避免留下没有结果的 tool call。
+ */
+internal fun Conversation.settleUnavailableTools(messageId: Uuid? = null): Conversation? {
+    val targetNode = if (messageId != null) {
+        messageNodes.lastOrNull { node -> node.messages.any { it.id == messageId } }
+    } else {
+        messageNodes.lastOrNull()
+    } ?: return null
+    val message = if (messageId != null) {
+        targetNode.messages.firstOrNull { it.id == messageId }
+    } else {
+        targetNode.currentMessage
+    } ?: return null
+    if (message.role != MessageRole.ASSISTANT) return null
+    // 半截 ToolCall 没有完整参数，结算时直接丢弃，避免把半成品当已执行结果
+    val cleanedParts = message.parts.filterNot { it is UIMessagePart.Tool && !it.callComplete }
+    val cleaned = message.copy(parts = cleanedParts)
+    val settled = cleaned
+        .finishPendingTools(::recoverStoppedTool)
+        .closeLastStep(StepStatus.SUCCEEDED)
+        .copy(status = MessageStatus.COMPLETE, isGenerating = false)
+    if (settled == message) return null
+    val messages = targetNode.messages.map { if (it.id == message.id) settled else it }
+    return copy(
+        messageNodes = messageNodes.map { node ->
+            if (node.id == targetNode.id) node.copy(messages = messages) else node
+        }
+    )
 }
 
 /**
@@ -273,3 +307,31 @@ internal fun recoverInterruptedTool(tool: UIMessagePart.Tool): UIMessagePart.Too
         finishedAt = tool.finishedAt ?: tool.startedAt,
     )
 }
+
+/**
+ * 停止或不可审批时结算工具：用户已经做出的拒绝和回答保留原输出形状，
+ * 只有未决定或已批准但未执行的调用才补 not_started/outcome_unknown。
+ */
+internal fun recoverStoppedTool(tool: UIMessagePart.Tool): UIMessagePart.Tool =
+    when (val state = tool.approvalState) {
+        is ToolApprovalState.Denied -> tool.copy(
+            output = listOf(
+                UIMessagePart.Text(
+                    buildJsonObject {
+                        put(
+                            "error",
+                            "Tool execution denied by user. Reason: ${state.reason.ifBlank { "No reason provided" }}"
+                        )
+                    }.toString()
+                )
+            ),
+            finishedAt = tool.finishedAt ?: tool.startedAt,
+        )
+
+        is ToolApprovalState.Answered -> tool.copy(
+            output = listOf(UIMessagePart.Text(state.answer)),
+            finishedAt = tool.finishedAt ?: tool.startedAt,
+        )
+
+        else -> recoverInterruptedTool(tool)
+    }

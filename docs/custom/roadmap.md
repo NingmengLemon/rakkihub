@@ -346,7 +346,7 @@
 
 ### 失败恢复与上下文的返工
 
-冻结已解除（2026-11-15）：B1 第一阶段已落地（C97），step 记录与请求投影、失败消息保留已执行工具都已在设备上验证；自动重试仍保持关闭，C75/C76 的运行时恢复、完整审批/取消状态机、手动重试与消费方收尾按 B1 后续阶段和 B2 另行安排。B1 设计稿在 [`design/b1-step-commits.md`](design/b1-step-commits.md)，B2 草稿在 [`design/b2-step-messages.md`](design/b2-step-messages.md)。
+冻结已解除（2026-11-15）：B1 第一阶段已落地（C97），step 记录与请求投影、失败消息保留已执行工具都已在设备上验证；自动重试仍保持关闭，C75/C76 的运行时恢复、手动重试与消费方收尾按 B1 后续阶段和 B2 另行安排；审批/取消的 step 结算已部分落地，最后节点审批收口仍待后续阶段。B1 设计稿在 [`design/b1-step-commits.md`](design/b1-step-commits.md)，B2 草稿在 [`design/b2-step-messages.md`](design/b2-step-messages.md)。
 
 2026-11-14 本轮已落地：
 
@@ -358,7 +358,7 @@
 
 仍挂起：
 
-- 重试恢复与消息模型 B1：第一阶段已完成 step 记录、Claude step 级请求投影与失败工具事实（C97）；自动重试恢复、完整审批/取消 step 状态机与 C75/C76 留第二阶段，设计见 [design/b1-step-commits.md](design/b1-step-commits.md)。B2 的手动重试与消费方收尾见 [design/b2-step-messages.md](design/b2-step-messages.md)。
+- 重试恢复与消息模型 B1：已完成 step 记录、Claude step 级请求投影、失败工具事实与部分审批/取消 step 结算（C97）；最后节点审批、自动重试恢复、C75/C76 与 B2 留后续阶段，设计见 [design/b1-step-commits.md](design/b1-step-commits.md)。B2 的手动重试与消费方收尾见 [design/b2-step-messages.md](design/b2-step-messages.md)。
 - C58 半途失败投影已由 B1 第一阶段落地（C97）：聊天请求投影保留失败前已执行的工具事实，失败 step 的正文与推理不进请求；标题、记忆与摘要投影仍整条丢弃失败消息。B2 只收尾搜索、Web 与错误卡片等消费方。
 - C86 思考强度（讨论中）：`OFF` 保留为明确关闭，新增 `NOTSET` 表示不发参数，OCR、翻译、标题、记忆这类内部调用改用 `NOTSET`；官方兼容导出把 `NOTSET` 归一化成 `OFF`，避免未知枚举让官方设置解码失败。deepseek 已支持 `reasoning_effort`，各家现状后续派子代理调研。
 - C87 OCR 文本归属（讨论中）：采用 `file_derivations` 派生表，`file_id` 指向 `managed_files.id`，`kind`、`text`、`producer`、`edited`、时间戳；Room 升到 v34，官方导出登记并裁掉这张表。附件管理入口待定，先做聊天里的就近入口。

@@ -33,6 +33,8 @@ data class AgentRequest(
      * [me.rerere.ai.core.Tool.timeoutMillis]（再加 5 秒余量）取较大值，见 `effectiveToolTimeout`。
      */
     val toolTimeout: Duration? = 5.minutes,
+    /** 是否允许本轮暂停等待用户审批；重新生成中间节点时只做工具恢复，不进入审批 */
+    val allowToolApproval: Boolean = true,
 ) {
     companion object {
         val DEFAULT_STREAM_IDLE_TIMEOUT = 90.seconds
@@ -85,6 +87,9 @@ sealed interface AgentFinishReason {
 
     /** 有工具在等待用户审批；写入审批结果后，用这条消息再运行一次即可继续 */
     data class AwaitingApproval(val toolCallIds: Set<String>) : AgentFinishReason
+
+    /** 有工具需要审批，但本轮不允许审批；调用方给未执行的调用补恢复结果后结束 */
+    data class ApprovalUnavailable(val toolCallIds: Set<String>) : AgentFinishReason
 
     /** 达到 [AgentRequest.maxSteps]，最后一步调用的工具已经执行，但模型还没有回复 */
     data object StepLimitReached : AgentFinishReason

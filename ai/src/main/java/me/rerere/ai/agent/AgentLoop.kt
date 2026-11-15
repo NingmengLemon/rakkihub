@@ -73,6 +73,21 @@ internal class AgentLoop(
         while (true) {
             val current = message
             if (current != null && current.getTools().any { !it.isExecuted }) {
+                val existingPending = current.getTools().filter { it.isPending }
+                    .mapTo(LinkedHashSet()) { it.toolCallId }
+                if (existingPending.isNotEmpty()) {
+                    return finish(
+                        if (request.allowToolApproval) {
+                            AgentFinishReason.AwaitingApproval(existingPending)
+                        } else {
+                            AgentFinishReason.ApprovalUnavailable(existingPending)
+                        }
+                    )
+                }
+                val candidates = approvalCandidates(current)
+                if (candidates.isNotEmpty() && !request.allowToolApproval) {
+                    return finish(AgentFinishReason.ApprovalUnavailable(candidates))
+                }
                 val pending = requestApprovals(current)
                 if (pending.isNotEmpty()) return finish(AgentFinishReason.AwaitingApproval(pending))
                 executeTools()
@@ -87,21 +102,28 @@ internal class AgentLoop(
     }
 
     // 新的工具调用按定义判断是否需要审批，需要的标为 Pending；返回仍在等待审批的调用
+    private fun approvalCandidates(current: UIMessage): Set<String> =
+        current.getTools()
+            .filter { tool ->
+                !tool.isExecuted && tool.approvalState == ToolApprovalState.Auto &&
+                    findTool(tool.toolName)?.needsApproval?.invoke(tool.inputAsJson()) == true
+            }
+            .mapTo(LinkedHashSet()) { it.toolCallId }
+
     private suspend fun requestApprovals(current: UIMessage): Set<String> {
+        val candidates = approvalCandidates(current)
+        if (candidates.isEmpty()) return emptySet()
         val updated = current.copy(
             parts = current.parts.map { part ->
-                if (part is UIMessagePart.Tool && !part.isExecuted &&
-                    part.approvalState == ToolApprovalState.Auto &&
-                    findTool(part.toolName)?.needsApproval?.invoke(part.inputAsJson()) == true
-                ) {
+                if (part is UIMessagePart.Tool && part.toolCallId in candidates) {
                     part.copy(approvalState = ToolApprovalState.Pending)
                 } else {
                     part
                 }
             }
         )
-        if (updated != current) update(updated)
-        return updated.getTools().filter { it.isPending }.mapTo(LinkedHashSet()) { it.toolCallId }
+        update(updated)
+        return candidates
     }
 
     private suspend fun generateStep() {

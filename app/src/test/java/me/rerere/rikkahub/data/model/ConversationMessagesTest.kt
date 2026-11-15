@@ -118,6 +118,67 @@ class ConversationMessagesTest {
     }
 
     @Test
+    fun `middle node settlement drops half calls and completes the message`() {
+        val reply = UIMessage(
+            role = MessageRole.ASSISTANT,
+            parts = listOf(
+                UIMessagePart.Tool(
+                    toolCallId = "half",
+                    toolName = "workspace_shell",
+                    input = "{}",
+                    output = listOf(UIMessagePart.Text("half output")),
+                    callComplete = false,
+                ),
+                UIMessagePart.Tool(
+                    toolCallId = "pending",
+                    toolName = "workspace_shell",
+                    input = "{}",
+                    approvalState = ToolApprovalState.Auto,
+                ),
+            ),
+            status = MessageStatus.INTERRUPTED,
+            isGenerating = true,
+            steps = listOf(MessageStep(StepStatus.TOOLS, 0, 2, Clock.System.now())),
+        )
+        val conversation = conversationOf(
+            UIMessage.user("run it").toMessageNode(),
+            reply.toMessageNode(),
+            UIMessage.user("after").toMessageNode(),
+        )
+
+        val settled = conversation.settleUnavailableTools(reply.id)!!.messageNodes[1].currentMessage
+
+        assertEquals(MessageStatus.COMPLETE, settled.status)
+        assertFalse(settled.isGenerating)
+        assertTrue(settled.getTools().none { it.toolCallId == "half" })
+        assertEquals(StepStatus.SUCCEEDED, settled.steps.single().status)
+        assertTrue(
+            (settled.getTools().single().output.single() as UIMessagePart.Text)
+                .text.contains("not_started")
+        )
+    }
+
+    @Test
+    fun `middle node unavailable tools settle as succeeded`() {
+        val reply = toolReply(ToolApprovalState.Auto).copy(
+            steps = listOf(MessageStep(StepStatus.TOOLS, 0, 1, Clock.System.now())),
+        )
+        val conversation = conversationOf(
+            UIMessage.user("run it").toMessageNode(),
+            reply.toMessageNode(),
+        )
+
+        val settled = conversation.settleUnavailableTools()!!.currentMessages.last()
+
+        assertEquals(StepStatus.SUCCEEDED, settled.steps.single().status)
+        assertTrue(settled.getTools().single().isExecuted)
+        assertTrue(
+            (settled.getTools().single().output.single() as UIMessagePart.Text)
+                .text.contains("not_started")
+        )
+    }
+
+    @Test
     fun `interrupted tools on the last message get a recovery result`() {
         val conversation = conversationOf(
             UIMessage.user("run it").toMessageNode(),

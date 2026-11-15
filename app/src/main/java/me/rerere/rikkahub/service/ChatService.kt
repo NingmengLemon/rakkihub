@@ -77,7 +77,9 @@ import me.rerere.rikkahub.data.model.planHistoryTruncation
 import me.rerere.rikkahub.data.model.removeCompressionPair
 import me.rerere.rikkahub.data.model.removeCompressionPairs
 import me.rerere.rikkahub.data.model.replaceUserRegexes
+import me.rerere.rikkahub.data.model.settleUnavailableTools
 import me.rerere.rikkahub.data.model.toMessageNode
+import me.rerere.rikkahub.data.model.updateMessageStatus
 import me.rerere.rikkahub.data.model.withAssistantUpdate
 import me.rerere.rikkahub.data.model.withNodeFavorite
 import me.rerere.rikkahub.data.model.withToolApproval
@@ -766,7 +768,12 @@ class ChatService(
             }
             warnIfToolsUnavailable(turn, conversationId)
 
-            val (request, hooks) = requestFactory.createAgent(turn, history, session.processingStatus)
+            val (request, hooks) = requestFactory.createAgent(
+                turn,
+                history,
+                session.processingStatus,
+                allowToolApproval = regenerateNodeId == null || regenerateNodeId == nodes.lastOrNull()?.id,
+            )
             val turnIncarnation = session.incarnation
             var finishReason: AgentFinishReason? = null
             var failure: Throwable? = null
@@ -816,6 +823,10 @@ class ChatService(
 
                             is AgentEvent.Finished -> {
                                 Log.i(TAG, "runTurn: finished (${event.reason})")
+                                if (event.reason is AgentFinishReason.ApprovalUnavailable) {
+                                    val replyId = session.replyMessageId.value
+                                    session.update { it.settleUnavailableTools(replyId) ?: it }
+                                }
                                 finishReason = event.reason
                             }
                         }
@@ -1694,19 +1705,34 @@ class ChatService(
     // 停止当前会话生成任务（不清理会话缓存）。
     // expectedJob 非空时只在它仍是当前 job 时执行，避免确认期间换轮后停到下一轮
     suspend fun stopGeneration(conversationId: Uuid, expectedJob: Job? = null) {
-        val session = sessionManager.get(conversationId) ?: return
+        val session = sessionManager.getOrCreate(conversationId)
         val jobs = synchronized(session) {
             if (expectedJob != null && session.getJob() !== expectedJob) return
             session.messageQueue.pause()
             session.cancelJobs()
         }
-        val shouldSettle = jobs.isNotEmpty() ||
-            session.state.value.isAwaitingToolApproval ||
-            session.pendingApprovalTurn != null
         withContext(NonCancellable) {
             jobs.forEach { it.join() }
             session.pendingApprovalTurn = null
-            if (shouldSettle && session.isInitialized) finishInterruptedPendingTools(session)
+            if (!session.isInitialized) {
+                val loaded = loadConversation(conversationId) ?: return@withContext
+                session.initialize(load = { loaded }, create = { loaded })
+            }
+            if (session.state.value.isAwaitingToolApproval) {
+                val targetId = session.state.value.currentMessages
+                    .lastOrNull { it.role == MessageRole.ASSISTANT }?.id
+                session.update { conversation ->
+                    val settled = conversation.cancelInterruptedTools() ?: conversation
+                    if (targetId != null) {
+                        settled.updateMessageStatus(targetId, MessageStatus.INTERRUPTED) ?: settled
+                    } else {
+                        settled
+                    }
+                }
+                session.flush()
+            } else if (jobs.isNotEmpty()) {
+                finishInterruptedPendingTools(session)
+            }
         }
     }
 }

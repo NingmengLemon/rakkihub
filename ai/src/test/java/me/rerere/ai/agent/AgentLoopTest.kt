@@ -54,6 +54,7 @@ class AgentLoopTest {
         retry: RetryPolicy = RetryPolicy.NONE,
         streamIdleTimeout: Duration? = 90.seconds,
         toolTimeout: Duration? = 5.minutes,
+        allowToolApproval: Boolean = true,
     ) = AgentRequest(
         provider = provider,
         providerSetting = ProviderSetting.OpenAI(),
@@ -64,6 +65,7 @@ class AgentLoopTest {
         retry = retry,
         streamIdleTimeout = streamIdleTimeout,
         toolTimeout = toolTimeout,
+        allowToolApproval = allowToolApproval,
     )
 
     private suspend fun runToEnd(
@@ -78,6 +80,22 @@ class AgentLoopTest {
                 if (index >= newPartsFrom && part is UIMessagePart.Text) part.copy(text = part.text + "!") else part
             }
         )
+    }
+
+    @Test
+    fun `middle node approval is reported as unavailable`() = runTest {
+        provider.stream {
+            toolCall("call-1", "write")
+            finish()
+        }
+
+        val finished = runToEnd(
+            request(tools = listOf(tool("write", needsApproval = true)), allowToolApproval = false)
+        ).finished()
+
+        assertTrue(finished.reason is AgentFinishReason.ApprovalUnavailable)
+        assertEquals(ToolApprovalState.Auto, finished.message.tool("call-1").approvalState)
+        assertFalse(finished.message.tool("call-1").isExecuted)
     }
 
     @Test

@@ -1,6 +1,6 @@
 # B1：step 级提交与失败投影
 
-- 状态：第一阶段已落地（step 记录、Claude step 级请求投影、失败工具事实），完整审批/取消状态机与自动重试恢复待后续阶段
+- 状态：step 记录、Claude step 级请求投影、失败工具事实已落地；审批/取消结算部分落地，最后节点审批、完整状态机与自动重试恢复待后续阶段
 - 日期：2026-11-15
 - 范围：step 记录、失败投影、自动重试恢复，以及重试恢复后自动重现的 C76 内存态卡片。手动重试、错误卡片重试、搜索过滤、Web DTO 扩展与官方导出兜底归 B2
 - 对齐参考：DSH `dsh-v0.2.2-rc.1`（tag 指向 commit `66491b05e3f05ad35bcdd4f6cd7ed26041d9e3db`，2026-11-04；本地 clone `E:\MyWorkspace\deepseek-harness` 的 HEAD 是 `dsh-v0.2.1-rc.5`，0.2.2 事实均用 `git show dsh-v0.2.2-rc.1:<path>` 读取）
