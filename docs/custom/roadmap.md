@@ -305,8 +305,8 @@
 | C72 上下文压缩按 token 预算 | L3 | 无（压缩计划与请求参数） |
 | C73 发送前上下文裁剪（已撤销） | L3 | 无（请求级裁剪） |
 | C74 上下文水位与压缩建议 | L3 | 无（chat page banner） |
-| C75 自动重试次数可调（已下线） | L3 | 无（网络设置） |
-| C76 重试 attempt 可见化（已下线） | L3 | 无（会话内存状态与聊天列表卡片） |
+| C75 自动重试次数可调（已下线，B1 恢复） | L3 | 无（网络设置） |
+| C76 重试 attempt 可见化（已下线，B1 恢复内存态） | L3 | 无（会话内存状态与聊天列表卡片） |
 | C77 错误卡片重试本步（已撤销） | L3 | 无（ChatError 与错误卡片） |
 | C78 工具失败日志分级 | L3 | 无（ai/AgentLoop.kt） |
 | C79 本地导出默认包含工作区文件 | L2 | C29 |
@@ -346,6 +346,8 @@
 
 ### 失败恢复与上下文的返工
 
+冻结已解除（2026-11-15）：B1 第一阶段已落地（C97），step 记录与请求投影、失败消息保留已执行工具都已在设备上验证；自动重试仍保持关闭，C75/C76 的运行时恢复、完整审批/取消状态机、手动重试与消费方收尾按 B1 后续阶段和 B2 另行安排。B1 设计稿在 [`design/b1-step-commits.md`](design/b1-step-commits.md)，B2 草稿在 [`design/b2-step-messages.md`](design/b2-step-messages.md)。
+
 2026-11-14 本轮已落地：
 
 - 自动重试整体下线：`Settings.retryPolicy()` 恒返回 `RetryPolicy.NONE`；网络设置去掉自动重试开关与次数滑块；`NetworkSetting.maxRetries` 与已保存 JSON 保留；C76 的 attempt 卡片失去触发来源（代码保留）；C77 的错误卡片 Retry 撤销，错误卡片只提示错误信息。
@@ -356,8 +358,8 @@
 
 仍挂起：
 
-- 重试恢复与消息模型 B 项：一次 turn 拆成每步一条助手消息，失败只标最后一步，尝试记录单独存；等本轮返工稳定后单独做。
-- C58 半途失败投影（未定）：整条 `FAILED` 会让已执行工具的副作用对模型不可见，需要和 C59、C61 一起定 part 级投影。过渡期由用户判断这一轮有没有重要工作或写操作，有就让模型接着做，没有就重新生成。
+- 重试恢复与消息模型 B1：第一阶段已完成 step 记录、Claude step 级请求投影与失败工具事实（C97）；自动重试恢复、完整审批/取消 step 状态机与 C75/C76 留第二阶段，设计见 [design/b1-step-commits.md](design/b1-step-commits.md)。B2 的手动重试与消费方收尾见 [design/b2-step-messages.md](design/b2-step-messages.md)。
+- C58 半途失败投影已由 B1 第一阶段落地（C97）：聊天请求投影保留失败前已执行的工具事实，失败 step 的正文与推理不进请求；标题、记忆与摘要投影仍整条丢弃失败消息。B2 只收尾搜索、Web 与错误卡片等消费方。
 - C86 思考强度（讨论中）：`OFF` 保留为明确关闭，新增 `NOTSET` 表示不发参数，OCR、翻译、标题、记忆这类内部调用改用 `NOTSET`；官方兼容导出把 `NOTSET` 归一化成 `OFF`，避免未知枚举让官方设置解码失败。deepseek 已支持 `reasoning_effort`，各家现状后续派子代理调研。
 - C87 OCR 文本归属（讨论中）：采用 `file_derivations` 派生表，`file_id` 指向 `managed_files.id`，`kind`、`text`、`producer`、`edited`、时间戳；Room 升到 v34，官方导出登记并裁掉这张表。附件管理入口待定，先做聊天里的就近入口。
 
@@ -374,15 +376,15 @@ RikkaHub 现状：
 
 - 重试单位是 step，`withRetry` 失败后回到 `stepStart`，前面的 step 和工具结果保留；单步回复看起来就是整条重来。DSH 也是这个语义，不是 RikkaHub 独有。
 - C61 把失败归一化为 `HttpException`/`LlmFailure`：流式和非流式的 2xx 之外的响应都带 HTTP status、错误码和 `Retry-After`；默认只重试 `RATE_LIMIT`、`SERVER`、`TIMEOUT`、`TRANSPORT`、`EMPTY_RESPONSE`，鉴权、配额、非法请求和 context overflow 不重试。空回复现在按 `EMPTY_RESPONSE` 归入同一策略。C75 曾把重试次数放到网络设置，现已整体下线：`Settings.retryPolicy()` 恒返回 `RetryPolicy.NONE`，字段与已保存 JSON 保留；基础退避与 `Retry-After` 的实现都还在。`retryOn` 保留为自定义逃生口。
-- C58 已给失败和用户停止的回复加 `FAILED`/`INTERRUPTED` 状态；请求组装、标题生成、记忆整理和 `read_conversations` 都过滤 `FAILED`，失败半截不会再作为普通回复进入下一轮。多步工具调用在中途失败时仍按整条消息隔离。
+- C58 已给失败和用户停止的回复加 `FAILED`/`INTERRUPTED` 状态；请求组装、标题生成、记忆整理和 `conversation_read` 都过滤 `FAILED`，失败半截不会再作为普通回复进入下一轮。B1 第一阶段的请求投影已按 step 保留失败前已执行的工具事实，标题与摘要仍整条隔离失败消息。
 - 停止或下一次发送时，未执行工具补恢复结果，按 `startedAt` 区分 `not_started`/`outcome_unknown`；审批恢复路径中的 Approved/Denied/Answered 工具仍交给 AgentLoop 继续执行。
 - UI 有失败/中断标记；C76 的 attempt 行与 C77 的错误卡片重试都已下线，错误卡片只提示错误信息；C80 给 `usage_record` 加 outcome，失败成本保留、缓存命中率排除失败。
 
 待办：
 
-- P0 失败 attempt 与成功消息分开：C58 已实现 `UIMessage.status` 标记、`FAILED` 消息从请求/标题/记忆/`read_conversations` 过滤、相邻 user 合并和 UI 失败/中断标签。剩余：多步工具调用在中途失败时目前整条隔离，per-step attempt 细化仍归 P2；工具恢复结果已由 C65 处理。
+- P0 失败 attempt 与成功消息分开：C58 已实现 `UIMessage.status` 标记、`FAILED` 消息从请求/标题/记忆/`conversation_read` 过滤、相邻 user 合并和 UI 失败/中断标签。剩余：失败消息的 step 级请求投影已由 C97 落地，标题、记忆与摘要仍整条隔离；完整审批/取消 step 状态机与自动重试留给 B1 后续阶段。工具恢复结果已由 C65 处理。
 - P1 稳定错误码与可配置策略。C61 已把 provider 非 2xx 和空回复统一成带 `code`、`status`、`retryAfterMs` 的失败类型，覆盖 `AUTH`、`QUOTA`、`RATE_LIMIT`、`SERVER`、`TIMEOUT`、`EMPTY_RESPONSE`、`CONTEXT_WINDOW_EXCEEDED`、`INVALID_REQUEST`、`UNKNOWN`；裸传输错误仍按 `IOException` 重试，`TRANSPORT` 留给调用方包装。策略是 normal mode：`maxRetries`、`retryableCodes`、`initialDelay`、`maxDelay`、`jitter`；默认只重试瞬时错误，读取 `Retry-After` 并设上限；C75 曾把 `maxRetries` 放到网络设置，现已下线：`Settings.retryPolicy()` 恒返回 `RetryPolicy.NONE`，字段与已保存 JSON 保留。保留 step 级重试的实现，不做 prefill 续写。验收：429、5xx、空回复可重试；400、401、403、额度、上下文超限不重试；用户停止可取消等待；重试不重复工具副作用；重试请求与前缀缓存兼容。
-- P2 重试状态 UI。C75 与 C76 已下线：网络设置入口与 attempt 卡片不再出现，代码保留；C77 的错误卡片 Retry 已撤销，错误卡片只提示错误信息。恢复时机见「失败恢复与上下文的返工」。
+- P2 重试状态 UI。C75 与 C76 已下线：网络设置入口与 attempt 卡片不再出现，代码保留；C77 的错误卡片 Retry 已撤销，错误卡片只提示错误信息。B1 恢复 C75 与 C76 的内存态卡片，C77 的错误卡片重试归 B2；见「失败恢复与上下文的返工」。
 - P3 用量区分成功与失败 attempt。C80 已给 `usage_record` 加 `outcome`（SUCCESS/FAILED/CANCELLED/UNKNOWN，旧数据 UNKNOWN），失败成本保留、统计页缓存命中率排除 FAILED/CANCELLED；消息卡片继续只显示成功 attempt 的 usage。attempt/retryId 没有单独落列，按 outcome 收口。验收：Room 32 到 33 迁移、旧数据默认 UNKNOWN、真实 app 库迁移、data.sync 53 条和官方导出裁剪都通过。32 到 33 没有降级迁移，回退旧构建前要保留 v32 库副本或继续用新构建。
 
 ### DSH 对照检查记录
@@ -399,7 +401,7 @@ RikkaHub 现状：
 | P1 | 没有 error-driven overflow 恢复（C63 已撤销） | C63 曾用 `AgentHooks.onContextOverflow` 把窗口缩到最后一条 user 后重试，但它静默丢掉整段历史且每轮重演，已撤销：hook、`overflowWindow`、`shrinkActive` 与相关测试都删除，超限只按 `CONTEXT_WINDOW_EXCEEDED` 出错误卡片。`AgentLoop.kt`、`Agent.kt`、`ChatRequestFactory.kt`。 | 已按撤销处理；是否恢复等失败恢复与消息模型重做。 |
 | P2 | 工具恢复语义失真（C65 已修恢复结果与超时设置） | C65 起按 `startedAt` 区分 `not_started` 与 `outcome_unknown`，`cancelInterruptedTools` 和 `withoutUnresumableToolCalls` 共用恢复结果，逐 part 保留文本与推理；工具错误只给模型摘要，堆栈只进日志（C78 起 `Log.e`）。工具声明 `timeoutMillis`，外层 `AgentSetting.toolTimeoutSeconds`（0 表示不限制）与它取较大值；`workspace_shell` 的默认与最大命令超时也进设置。output 的 NonCancellable 写入仍受 FlowCollector 跨协程发射限制，留后续。 | 已按恢复语义、超时设置与声明超时实现；日志分级已完成，取消写入待后续。 |
 | P2 | `withoutUnresumableToolCalls` 删除整条消息（C65 已修） | C65 起逐 part 处理，只把不可恢复的 Tool part 换成恢复结果，保留文本、推理和其它 part，不再删除整条 assistant 消息。`Conversation.kt`。 | 已按此实现。 |
-| P2 | 进程死亡丢失重试与收尾状态（C67 已恢复半截回复，C70 已持久化队列，C71 已持久化错误卡片） | 只周期保存回复节点，5/15/30 秒分档，小节点最迟 60 秒；C67 的 `isGenerating` 随消息落库，加载时把半截回复补成 `INTERRUPTED` 并补工具结果；C70 把未出队消息落到 `noBackupFilesDir`，恢复为暂停态；C71 把错误卡片落到 `noBackupFilesDir`，启动时恢复。实时 `Retrying (n/m)` 状态仍不跨进程：进程死亡后没有在途请求，半截回复按 `INTERRUPTED` 恢复，重试倒计时恢复出来只会误导；首次保存前死亡仍会丢。C50 在节点漂移或含 base64 图片时静默跳过。`MessageSaveLoop.kt`、`ConversationSession.kt`、`ChatService.kt`、`ChatErrorStore.kt`。 | 继续持久化 turn 状态或时间戳心跳；保存失败要上报；live retrying 不跨进程，重试 attempt 的 UI 与用量归 P2 重试状态项。 |
+| P2 | 进程死亡丢失重试与收尾状态（C67 已恢复半截回复，C70 已持久化队列，C71 已持久化错误卡片） | 只周期保存回复节点，5/15/30 秒分档，小节点最迟 60 秒；C67 的 `isGenerating` 随消息落库，加载时把半截回复补成 `INTERRUPTED` 并补工具结果；C70 把未出队消息落到 `noBackupFilesDir`，恢复为暂停态；C71 把错误卡片落到 `noBackupFilesDir`，启动时恢复。实时 `Retrying (n/m)` 状态仍不跨进程：进程死亡后没有在途请求，半截回复按 `INTERRUPTED` 恢复，重试倒计时恢复出来只会误导；首次保存前死亡仍会丢。C50 在节点漂移或含 base64 图片时静默跳过。`MessageSaveLoop.kt`、`ConversationSession.kt`、`ChatService.kt`、`ChatErrorStore.kt`。 | 继续持久化 turn 状态或时间戳心跳；保存失败要上报；live retrying 不跨进程，重试 attempt 的 UI 并入 B1，用量仍按 C80 口径。 |
 | P2 | 消息队列暂停后静默滞留（C66 已修派发与回插，C70 已持久化） | C66 前队列 paused 且非空时，新消息只 enqueue，`takeNext` 因 paused 返回 null，消息不发也不进正文；先 `takeNext` 出队再写历史，中间失败会丢消息。C66 起显式发送总是 resume，发送失败且未落库时回插队首。C70 起未出队消息按会话落到 `noBackupFilesDir`，恢复为暂停态，用队列 id 与已落库消息去重。`ChatService.kt`、`MessageQueue.kt`、`MessageQueueStore.kt`。 | 已按此实现派发恢复、失败回插和跨进程持久化；编辑占位与暂停状态不落盘。 |
 | P2 | 上下文压力与压缩管理（C72/C74 已做，C73 已撤销） | C72 前发送前没有 token 估算或 usage 水位；摘要请求 `maxTokens = null`，截断即整次压缩失败；截断 keep=1 且末条是 assistant 时会丢掉产生它的 user。C72 起保留起点按 user 轮次对齐，摘要输出和输入都有保守 token 预算，超预算先提示截断/多保留，摘要被截断时退回部分摘要；C74 起当前窗口最近 usage 加尾部估算，达到 80% 在主聊天页底部显示压缩建议条，手动打开管理上下文，不自动压缩。C73 的发送前裁剪已撤销（静默改写请求、破坏消息段前缀缓存），超限只出错误卡片。`ChatRequestFactory.kt`、`CompressionPlan.kt`、`ContextPressure.kt`、`ChatPage.kt`、`ChatService.kt`。 | 自动压缩仍不做；C73 已撤销，C72/C74 的预算与水位保留。 |
 | P2 | scratch 生命周期只靠调用点清理（C68 已清理崩溃对并过滤请求/导出/Web 快照/搜索） | 压缩失败或取消留下的 prompt 与半截回复只在发送、截断、再次压缩前清理；C68 起加载会话时删除回复仍为 `COMPLETE` 的崩溃对，失败/取消对标 `FAILED` 后跨 reload 保留，请求派生、导出、Web/SSE 的 `Conversation.toDto` 和 App/Web/agent 搜索结果会过滤；浮动窗口只预览当前回复，压缩轮次结束即清空，不列出孤儿对。`ChatService.kt`、`ConversationSession.kt`、`ConversationMessages.kt`、`ConversationRepository.kt`、`ai/ui/Message.kt`。 | 给 scratch 打逐 part 不可发送标记；C68 已做崩溃对载入清理、请求/导出/Web 快照/搜索过滤。 |
@@ -408,9 +410,9 @@ RikkaHub 现状：
 
 P1 分批：P1a 截断 SSE 与停止结算，P1b 审批分支与配置快照，P1c idle watchdog 与稳定错误码重试（overflow 兜底原先列在 P1c，已随 C63 撤销）。
 
-1. P0 失败 attempt 隔离已由 C58 完成；多步工具调用的 per-step 细化仍留 P2，工具恢复结果已由 C65 处理。
+1. P0 失败 attempt 隔离已由 C58 完成；多步工具调用的 per-step 细化并入 B1，工具恢复结果已由 C65 处理。
 2. P1a 截断 SSE 与停止结算已由 C59 完成；P1b 审批分支与配置快照已由 C60 完成。
 3. P1c 的稳定错误码重试已由 C61、idle watchdog 由 C62（含心跳与开关）完成；overflow 兜底（C63）与发送前裁剪（C73）已撤销，超限只出错误卡片；自动重试（C75）已整体下线，P1 收尾后进入 P2。
-4. P2 工具恢复结果、工具声明超时与超时设置由 C65 完成，队列派发与失败回插由 C66 完成，进程死亡半截回复由 C67 完成，scratch 加载清理与请求/导出/Web 快照/搜索过滤由 C68 完成，队列持久化由 C70 完成，错误卡片持久化由 C71 完成，压缩计划对齐、摘要预算、部分摘要和范围检查由 C72 完成，usage 水位建议条由 C74 完成；C76 的 attempt 卡片与 C77 的错误卡片重试随重试下线；剩余自动压缩（不做）、取消写入、失败 attempt 的 usage 区分、C58 的 part 级投影与新消息模型。
+4. P2 工具恢复结果、工具声明超时与超时设置由 C65 完成，队列派发与失败回插由 C66 完成，进程死亡半截回复由 C67 完成，scratch 加载清理与请求/导出/Web 快照/搜索过滤由 C68 完成，队列持久化由 C70 完成，错误卡片持久化由 C71 完成，压缩计划对齐、摘要预算、部分摘要和范围检查由 C72 完成，usage 水位建议条由 C74 完成；C76 的 attempt 卡片随重试下线、C77 的错误卡片重试撤销；B1 恢复重试与 C76 内存态卡片，B2 做 C76 持久化、手动重试与 C77；剩余自动压缩（不做）、取消写入、失败 attempt 的 usage 区分、C58 的投影与新消息模型（B1/B2）。
 
 范围说明：C59 已逐行核对五个 decoder 的终止判定和五个 provider 接线点的 `onClosed`，并用 `:ai:testDebugUnitTest` 全量验证；工具并发没有展开，当前 RikkaHub 按顺序执行，未发现正确性问题，只是并发效率较低。

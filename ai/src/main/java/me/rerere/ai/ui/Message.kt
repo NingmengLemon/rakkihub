@@ -12,6 +12,7 @@ import me.rerere.ai.provider.Model
 import me.rerere.ai.util.json
 import kotlin.math.roundToInt
 import kotlin.time.Clock
+import kotlin.time.Instant
 import kotlin.uuid.Uuid
 
 /**
@@ -32,6 +33,41 @@ enum class MessageStatus {
     FAILED,
 }
 
+/** 一条 assistant 消息内部的一次模型请求及其工具批次的提交状态。 */
+@Serializable
+enum class StepStatus {
+    @SerialName("running")
+    RUNNING,
+
+    @SerialName("tools")
+    TOOLS,
+
+    @SerialName("succeeded")
+    SUCCEEDED,
+
+    @SerialName("failed")
+    FAILED,
+
+    @SerialName("cancelled")
+    CANCELLED,
+}
+
+/**
+ * 一次模型请求在 [UIMessage.parts] 里的范围，左闭右开。
+ *
+ * 旧消息没有范围，按单 step 处理；生成中的范围由 AgentLoop 在 preview 和结算时重算。
+ */
+@Serializable
+data class MessageStep(
+    val status: StepStatus,
+    val startPartIndex: Int,
+    val endPartIndex: Int,
+    val startedAt: Instant,
+    val finishedAt: Instant? = null,
+    // 接管旧消息时补的前缀 step，合并了多次原生响应，不能按原生 pairing 回放推理
+    val legacy: Boolean = false,
+)
+
 // 公共消息抽象, 具体的Provider实现会转换为API接口需要的DTO
 @Serializable
 data class UIMessage(
@@ -44,6 +80,8 @@ data class UIMessage(
     val finishedAt: LocalDateTime? = null,
     // 生成失败或用户停止的回复不等同于正常完成，见 MessageStatus
     val status: MessageStatus = MessageStatus.COMPLETE,
+    // 每次模型请求的 part 范围与提交状态；旧消息为空，按单 step 处理
+    val steps: List<MessageStep> = emptyList(),
     // 生成中的标记会随消息一起落库，进程重启后据此把半截回复补成 INTERRUPTED
     val isGenerating: Boolean = false,
     val modelId: Uuid? = null,
@@ -150,6 +188,24 @@ data class UIMessage(
 
 /** 过滤掉只用于展示的失败回复；其余消息保持原顺序 */
 fun List<UIMessage>.filterModelVisible(): List<UIMessage> = filter { it.isModelVisible }
+
+/**
+ * 请求投影：失败回复不再整条丢弃，而是只保留已经执行的工具调用与结果，
+ * 让下一轮还能看到失败前已经发生的写入与查询。没有工具事实时整条丢弃。
+ */
+fun List<UIMessage>.projectForRequest(): List<UIMessage> = mapNotNull { message ->
+    if (message.status != MessageStatus.FAILED) {
+        message
+    } else {
+        val tools = message.parts.filterIsInstance<UIMessagePart.Tool>()
+            .filter { it.isExecuted && it.callComplete }
+        if (tools.isEmpty()) {
+            null
+        } else {
+            message.copy(parts = tools, steps = emptyList())
+        }
+    }
+}
 
 /** 去掉压缩临时提示词及其紧随的 assistant 回复；失败/取消的重试卡只给用户看，不进请求。 */
 fun List<UIMessage>.withoutCompressionScratch(): List<UIMessage> {

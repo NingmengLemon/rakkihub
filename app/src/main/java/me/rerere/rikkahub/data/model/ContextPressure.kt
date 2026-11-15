@@ -1,6 +1,6 @@
 package me.rerere.rikkahub.data.model
 
-import me.rerere.ai.ui.filterModelVisible
+import me.rerere.ai.ui.projectForRequest
 import me.rerere.ai.ui.withoutCompressionScratch
 
 internal const val CONTEXT_PRESSURE_SUGGEST_RATIO = 0.8f
@@ -24,7 +24,7 @@ internal data class ContextPressure(
 
 internal fun Conversation.contextPressure(limitTokens: Int): ContextPressure? {
     if (limitTokens <= 0) return null
-    val messages = currentMessages.filterModelVisible().withoutCompressionScratch()
+    val messages = currentMessages.projectForRequest().withoutCompressionScratch()
     val checkpointIndex = messages.indexOfLast { it.isContextCheckpoint }
     val currentWindow = if (checkpointIndex >= 0) {
         messages.subList(checkpointIndex, messages.size)

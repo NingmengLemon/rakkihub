@@ -22,6 +22,7 @@ import me.rerere.ai.provider.Provider
 import me.rerere.ai.provider.ProviderSetting
 import me.rerere.ai.provider.TextGenerationParams
 import me.rerere.ai.provider.TextGenerationResult
+import me.rerere.ai.ui.StepStatus
 import me.rerere.ai.ui.StreamChunk
 import me.rerere.ai.ui.ToolApprovalState
 import me.rerere.ai.ui.UIMessage
@@ -77,6 +78,39 @@ class AgentLoopTest {
                 if (index >= newPartsFrom && part is UIMessagePart.Text) part.copy(text = part.text + "!") else part
             }
         )
+    }
+
+    @Test
+    fun `failed stream persists the partial content with a failed step`() = runTest {
+        provider.stream {
+            text("half")
+            throw java.io.IOException("boom")
+        }
+        val events = mutableListOf<AgentEvent>()
+
+        val error = runCatching {
+            runAgent(request(retry = RetryPolicy.NONE), hooks).collect { events += it }
+        }.exceptionOrNull()
+
+        assertTrue(error is java.io.IOException)
+        val message = events.filterIsInstance<AgentEvent.MessageUpdated>().last().message
+        assertEquals("half", (message.parts.single() as UIMessagePart.Text).text)
+        assertEquals(StepStatus.FAILED, message.steps.single().status)
+        assertEquals(1, message.steps.single().endPartIndex)
+    }
+
+    @Test
+    fun `empty failed stream does not persist an empty assistant message`() = runTest {
+        provider.stream {
+            throw java.io.IOException("boom")
+        }
+        val events = mutableListOf<AgentEvent>()
+
+        runCatching {
+            runAgent(request(retry = RetryPolicy.NONE), hooks).collect { events += it }
+        }
+
+        assertTrue(events.filterIsInstance<AgentEvent.MessageUpdated>().isEmpty())
     }
 
     @Test
@@ -280,6 +314,14 @@ class AgentLoopTest {
         assertEquals(listOf("search"), second.params.tools.map { it.name })
         // 第二步新生成的 part 从工具调用之后开始
         assertEquals(listOf(0, 1), hooks.newPartsFrom)
+        assertEquals(2, finished.message.steps.size)
+        assertEquals(StepStatus.SUCCEEDED, finished.message.steps[0].status)
+        assertEquals(StepStatus.SUCCEEDED, finished.message.steps[1].status)
+        assertEquals(0, finished.message.steps[0].startPartIndex)
+        assertEquals(1, finished.message.steps[0].endPartIndex)
+        assertEquals(1, finished.message.steps[1].startPartIndex)
+        assertEquals(2, finished.message.steps[1].endPartIndex)
+        assertTrue(finished.message.tool("call-1").callComplete)
     }
 
     @Test

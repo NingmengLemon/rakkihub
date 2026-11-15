@@ -188,6 +188,8 @@ sealed class UIMessagePart {
         val output: List<UIMessagePart> = emptyList(),
         val approvalState: ToolApprovalState = ToolApprovalState.Auto,
         override var metadata: JsonObject? = null,
+        // 流式调用是否已经收到 ToolCallEnd；旧消息与完整调用默认为 true
+        val callComplete: Boolean = true,
         // 本地执行的起止时间，只统计真正运行工具的耗时；拒绝、问答和旧消息都为空
         val startedAt: Instant? = null,
         val finishedAt: Instant? = null,
@@ -214,6 +216,7 @@ sealed class UIMessagePart {
                 output = output + other.output,
                 approvalState = approvalState,
                 metadata = if (other.metadata != null) other.metadata else metadata,
+                callComplete = callComplete || other.callComplete,
                 startedAt = startedAt,
                 finishedAt = finishedAt,
             )

@@ -2,6 +2,8 @@ package me.rerere.rikkahub.data.model
 
 import me.rerere.ai.core.MessageRole
 import me.rerere.ai.ui.MessageStatus
+import me.rerere.ai.ui.MessageStep
+import me.rerere.ai.ui.StepStatus
 import me.rerere.ai.ui.ToolApprovalState
 import me.rerere.ai.ui.UIMessage
 import me.rerere.ai.ui.UIMessagePart
@@ -129,11 +131,54 @@ class ConversationMessagesTest {
     }
 
     @Test
+    fun `stopping closes the running step as cancelled`() {
+        val reply = toolReply(ToolApprovalState.Approved).copy(
+            steps = listOf(MessageStep(StepStatus.TOOLS, 0, 1, Clock.System.now())),
+        )
+        val conversation = conversationOf(
+            UIMessage.user("run it").toMessageNode(),
+            reply.toMessageNode(),
+        )
+
+        val settled = conversation.cancelInterruptedTools()!!.currentMessages.last()
+
+        assertEquals(StepStatus.CANCELLED, settled.steps.single().status)
+        assertEquals(settled.parts.size, settled.steps.single().endPartIndex)
+    }
+
+    @Test
+    fun `stopping keeps an already executed tool step succeeded`() {
+        val reply = UIMessage(
+            role = MessageRole.ASSISTANT,
+            parts = listOf(
+                UIMessagePart.Tool(
+                    toolCallId = "done",
+                    toolName = "read",
+                    input = "{}",
+                    output = listOf(UIMessagePart.Text("ok")),
+                )
+            ),
+            steps = listOf(MessageStep(StepStatus.TOOLS, 0, 1, Clock.System.now())),
+        )
+        val conversation = conversationOf(
+            UIMessage.user("run it").toMessageNode(),
+            reply.toMessageNode(),
+        )
+
+        val settled = conversation.cancelInterruptedTools()!!.currentMessages.last()
+
+        assertEquals(StepStatus.SUCCEEDED, settled.steps.single().status)
+    }
+
+    @Test
     fun `abandoned generating reply becomes interrupted on load`() {
         val conversation = conversationOf(
             UIMessage.user("run it").toMessageNode(),
             toolReply(ToolApprovalState.Approved, startedAt = Clock.System.now())
-                .copy(isGenerating = true)
+                .copy(
+                    isGenerating = true,
+                    steps = listOf(MessageStep(StepStatus.TOOLS, 0, 1, Clock.System.now())),
+                )
                 .toMessageNode(),
         )
 
@@ -143,6 +188,7 @@ class ConversationMessagesTest {
         assertEquals(MessageStatus.INTERRUPTED, message.status)
         assertFalse(message.isGenerating)
         assertTrue(message.getTools().single().isExecuted)
+        assertEquals(StepStatus.CANCELLED, message.steps.single().status)
     }
 
     @Test

@@ -54,6 +54,7 @@ import me.rerere.ai.ui.ImageGenerationItem
 import me.rerere.ai.ui.ServerToolMetadata
 import me.rerere.ai.ui.ServerToolProtocol
 import me.rerere.ai.ui.ServerToolStatus
+import me.rerere.ai.ui.StepStatus
 import me.rerere.ai.ui.StreamChunk
 import me.rerere.ai.ui.StreamChunkHandler
 import me.rerere.ai.ui.UIMessage
@@ -74,6 +75,7 @@ import me.rerere.ai.util.withResponse
 import me.rerere.common.http.await
 import me.rerere.common.http.jsonPrimitiveOrNull
 import me.rerere.common.http.sse.newEventSource
+import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
 import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.OkHttpClient
 import okhttp3.Request
@@ -84,6 +86,7 @@ import okhttp3.sse.EventSourceListener
 import kotlin.time.Clock
 
 private const val TAG = "ClaudeProvider"
+private const val OFFICIAL_ANTHROPIC_HOST = "api.anthropic.com"
 private const val MAX_CACHE_CONTROL_BREAKPOINTS = 4
 private const val ANTHROPIC_VERSION = "2023-06-01"
 private const val CLAUDE_PAUSE_TURN = "pause_turn"
@@ -235,6 +238,9 @@ private fun StreamChunk.maxClaudeServerToolIndex(): Int? {
 }
 
 private fun ServerToolMetadata.maxIndex(): Int? = listOfNotNull(callIndex, resultIndex).maxOrNull()
+
+internal fun shouldDropLegacyThinking(baseUrl: String): Boolean =
+    baseUrl.toHttpUrlOrNull()?.host != OFFICIAL_ANTHROPIC_HOST
 
 class ClaudeProvider(private val client: OkHttpClient, context: Context? = null) : Provider<ProviderSetting.Claude> {
     private val keyRoulette = if (context != null) KeyRoulette.lru(context) else KeyRoulette.default()
@@ -441,7 +447,12 @@ class ClaudeProvider(private val client: OkHttpClient, context: Context? = null)
             put("model", params.model.modelId)
             put(
                 "messages",
-                buildMessages(messages).let { built ->
+                buildMessages(
+                    messages,
+                    // 自定义中转的旧消息没有 step 边界，无法保证 thinking 与 tool_use
+                    // 来自同一次原生响应；直接不回放旧思考。官方域名保持原行为。
+                    dropLegacyThinking = shouldDropLegacyThinking(providerSetting.baseUrl),
+                ).let { built ->
                     if (aggressiveCacheBreakpoints) {
                         insertMessagesCacheControl(built, providerSetting.promptCacheTtl)
                     } else {
@@ -596,16 +607,25 @@ class ClaudeProvider(private val client: OkHttpClient, context: Context? = null)
         promptCacheTtl.apiValue?.let { put("ttl", it) }
     }
 
-    private fun buildMessages(messages: List<UIMessage>) = buildJsonArray {
-        messages
-            .filter { it.isValidToUpload() && it.role != MessageRole.SYSTEM }
-            .forEach { message ->
-                if (message.role == MessageRole.ASSISTANT) {
-                    addAssistantMessage(message)
-                } else {
-                    addUserMessage(message)
+    private fun buildMessages(messages: List<UIMessage>): JsonArray =
+        buildMessages(messages, dropLegacyThinking = false)
+
+    private fun buildMessages(
+        messages: List<UIMessage>,
+        dropLegacyThinking: Boolean,
+    ): JsonArray {
+        val built = buildJsonArray {
+            messages
+                .filter { it.isValidToUpload() && it.role != MessageRole.SYSTEM }
+                .forEach { message ->
+                    if (message.role == MessageRole.ASSISTANT) {
+                        addAssistantMessage(message, dropLegacyThinking = dropLegacyThinking)
+                    } else {
+                        addUserMessage(message)
+                    }
                 }
-            }
+        }
+        return built
     }
 
     /**
@@ -655,19 +675,36 @@ class ClaudeProvider(private val client: OkHttpClient, context: Context? = null)
         })
     }
 
-    private fun JsonArrayBuilder.addAssistantMessage(message: UIMessage) {
+    private fun JsonArrayBuilder.addAssistantMessage(
+        message: UIMessage,
+        dropLegacyThinking: Boolean,
+    ) {
+        if (message.steps.isEmpty() || message.steps.any { it.legacy }) {
+            addLegacyAssistantMessage(message, dropLegacyThinking)
+        } else {
+            addSteppedAssistantMessage(message)
+        }
+    }
+
+    private fun JsonArrayBuilder.addLegacyAssistantMessage(
+        message: UIMessage,
+        dropReasoning: Boolean,
+    ) {
         val groups = groupPartsByToolBoundary(message.parts)
         val contentBuffer = mutableListOf<JsonObject>()
 
         for (group in groups) {
             when (group) {
                 is PartGroup.Content -> {
-                    group.parts.toContentBlocks().forEach { contentBuffer.add(it) }
+                    group.parts.toContentBlocks(dropReasoning).forEach { contentBuffer.add(it) }
                 }
 
                 is PartGroup.Tools -> {
+                    // 只回放已经执行的调用，未执行调用没有配对结果，Claude 会拒绝
+                    val tools = group.tools.filter { it.isExecuted && it.callComplete }
+                    if (tools.isEmpty()) continue
                     // 添加 tool_use 到内容缓冲
-                    group.tools.forEach { contentBuffer.add(it.toToolUseBlock()) }
+                    tools.forEach { contentBuffer.add(it.toToolUseBlock()) }
 
                     // 输出 assistant 消息
                     add(buildJsonObject {
@@ -680,7 +717,7 @@ class ClaudeProvider(private val client: OkHttpClient, context: Context? = null)
                     add(buildJsonObject {
                         put("role", "user")
                         putJsonArray("content") {
-                            group.tools.forEach { add(it.toToolResultBlock()) }
+                            tools.forEach { add(it.toToolResultBlock()) }
                         }
                     })
                 }
@@ -696,6 +733,56 @@ class ClaudeProvider(private val client: OkHttpClient, context: Context? = null)
         }
     }
 
+    /**
+     * 有 step 范围时按原生响应边界拆分：thinking 与同一 step 的 tool_use 一起回放，
+     * 不再把前一步的 thinking 拼到后一步的 tool_use 上。FAILED/CANCELLED step 不回放
+     * 推理，只保留已执行的工具事实。
+     */
+    private fun JsonArrayBuilder.addSteppedAssistantMessage(message: UIMessage) {
+        for ((index, step) in message.steps.withIndex()) {
+            val start = step.startPartIndex.coerceIn(0, message.parts.size)
+            val end = step.endPartIndex.coerceIn(start, message.parts.size)
+            val stepParts = message.parts.subList(start, end)
+            val keepReasoning = step.status == StepStatus.SUCCEEDED || step.status == StepStatus.TOOLS
+            val filtered = stepParts.filter { part ->
+                when (part) {
+                    is UIMessagePart.Reasoning -> keepReasoning
+                    is UIMessagePart.Tool -> part.isExecuted && part.callComplete
+                    else -> step.status != StepStatus.FAILED
+                }
+            }
+            val tools = filtered.filterIsInstance<UIMessagePart.Tool>()
+            val contentParts = filtered.filterNot { it is UIMessagePart.Tool }
+            if (contentParts.isEmpty() && tools.isEmpty()) continue
+            // 中间的无工具 step 说明这不是原生连续响应，丢弃以免出现连续 assistant
+            if (tools.isEmpty() && index != message.steps.lastIndex) continue
+
+            val content = mutableListOf<JsonObject>()
+            contentParts.flatMap { it.toContentBlocks() }.forEach { content.add(it) }
+            content.removeAll { block ->
+                block["type"]?.jsonPrimitive?.contentOrNull == "text" &&
+                    block["text"]?.jsonPrimitive?.contentOrNull.isNullOrBlank()
+            }
+            if (content.isEmpty() && tools.isEmpty()) continue
+            if (tools.isEmpty()) {
+                add(buildJsonObject {
+                    put("role", "assistant")
+                    putJsonArray("content") { content.forEach { add(it) } }
+                })
+            } else {
+                tools.forEach { content.add(it.toToolUseBlock()) }
+                add(buildJsonObject {
+                    put("role", "assistant")
+                    putJsonArray("content") { content.forEach { add(it) } }
+                })
+                add(buildJsonObject {
+                    put("role", "user")
+                    putJsonArray("content") { tools.forEach { add(it.toToolResultBlock()) } }
+                })
+            }
+        }
+    }
+
     private fun JsonArrayBuilder.addUserMessage(message: UIMessage) {
         add(buildJsonObject {
             put("role", message.role.name.lowercase())
@@ -705,8 +792,9 @@ class ClaudeProvider(private val client: OkHttpClient, context: Context? = null)
         })
     }
 
-    private fun UIMessagePart.toContentBlocks(): List<JsonObject> = when (this) {
+    private fun UIMessagePart.toContentBlocks(dropReasoning: Boolean = false): List<JsonObject> = when (this) {
         is UIMessagePart.ServerTool -> serverToolContentBlocks()
+        is UIMessagePart.Reasoning -> if (dropReasoning) emptyList() else listOfNotNull(toContentBlock())
         else -> listOfNotNull(toContentBlock())
     }
 
@@ -714,7 +802,7 @@ class ClaudeProvider(private val client: OkHttpClient, context: Context? = null)
      * 解析后 server tool 的 call/result 会合并到同一个 part。回放连续 server tool 时
      * 按原始 content block index 还原顺序；旧消息没有 index 时回退为先 calls、后 results。
      */
-    private fun List<UIMessagePart>.toContentBlocks(): List<JsonObject> = buildList {
+    private fun List<UIMessagePart>.toContentBlocks(dropReasoning: Boolean = false): List<JsonObject> = buildList {
         val serverTools = mutableListOf<UIMessagePart.ServerTool>()
 
         fun flushServerTools() {
@@ -741,7 +829,7 @@ class ClaudeProvider(private val client: OkHttpClient, context: Context? = null)
                 serverTools.add(part)
             } else {
                 flushServerTools()
-                addAll(part.toContentBlocks())
+                addAll(part.toContentBlocks(dropReasoning))
             }
         }
         flushServerTools()
@@ -829,7 +917,15 @@ class ClaudeProvider(private val client: OkHttpClient, context: Context? = null)
         put("type", "tool_result")
         put("tool_use_id", toolCallId)
         putJsonArray("content") {
-            output.mapNotNull { it.toContentBlock() }.forEach { add(it) }
+            val blocks = output.mapNotNull { it.toContentBlock() }
+            if (blocks.isEmpty()) {
+                add(buildJsonObject {
+                    put("type", "text")
+                    put("text", "(no output)")
+                })
+            } else {
+                blocks.forEach { add(it) }
+            }
         }
     }
 

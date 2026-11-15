@@ -2,11 +2,13 @@ package me.rerere.rikkahub.data.model
 
 import me.rerere.ai.core.MessageRole
 import me.rerere.ai.ui.MessageStatus
+import me.rerere.ai.ui.StepStatus
 import me.rerere.ai.ui.ToolApprovalState
 import me.rerere.ai.ui.UIMessage
 import me.rerere.ai.ui.UIMessagePart
 import me.rerere.ai.ui.finishPendingTools
 import me.rerere.ai.ui.finishReasoning
+import kotlin.time.Clock
 import kotlin.uuid.Uuid
 
 /**
@@ -186,7 +188,8 @@ internal fun Conversation.recoverAbandonedGeneration(): Conversation? {
                 message
             } else {
                 changed = true
-                message
+                val closeStatus = message.stepCloseStatus()
+                val settled = message
                     .finishPendingTools(::recoverInterruptedTool)
                     .copy(
                         status = if (message.status ==
@@ -198,6 +201,7 @@ internal fun Conversation.recoverAbandonedGeneration(): Conversation? {
                         isGenerating = false,
                     )
                     .finishReasoning()
+                settled.closeLastStep(closeStatus)
             }
         }
         if (messages == node.messages) node else node.copy(messages = messages)
@@ -211,10 +215,45 @@ internal fun Conversation.recoverAbandonedGeneration(): Conversation? {
  */
 internal fun Conversation.cancelInterruptedTools(): Conversation? {
     val lastNode = messageNodes.lastOrNull() ?: return null
+    val before = lastNode.currentMessage
+    val closeStatus = before.stepCloseStatus()
     // stop 后没有入口再执行这些工具，一律补恢复结果；startedAt 区分未开始和执行中
-    val updatedMessage = lastNode.currentMessage.finishPendingTools(::recoverInterruptedTool)
-    if (updatedMessage === lastNode.currentMessage) return null
-    return upsertMessage(lastNode.id, updatedMessage)
+    val updatedMessage = before.finishPendingTools(::recoverInterruptedTool)
+    val closedMessage = updatedMessage.closeLastStep(closeStatus)
+    if (closedMessage === lastNode.currentMessage) return null
+    return upsertMessage(lastNode.id, closedMessage)
+}
+
+/** 结算前先按真实执行状态决定 step 终态，避免补结果后把 CANCELLED 误判成 SUCCEEDED。 */
+internal fun UIMessage.stepCloseStatus(): StepStatus? {
+    val last = steps.lastOrNull() ?: return null
+    if (last.status != StepStatus.RUNNING && last.status != StepStatus.TOOLS) return null
+    return if (last.status == StepStatus.TOOLS && getTools().all { it.isExecuted }) {
+        StepStatus.SUCCEEDED
+    } else {
+        StepStatus.CANCELLED
+    }
+}
+
+/**
+ * 取消或进程死亡时关闭最后一个未终结 step。传入结算前算出的状态时以它为准；
+ * 已经有终态的 step 不覆盖。
+ */
+internal fun UIMessage.closeLastStep(status: StepStatus? = null): UIMessage {
+    if (steps.isEmpty()) return this
+    val last = steps.last()
+    if (last.status != StepStatus.RUNNING && last.status != StepStatus.TOOLS) return this
+    val target = status ?: if (last.status == StepStatus.TOOLS && getTools().all { it.isExecuted }) {
+        StepStatus.SUCCEEDED
+    } else {
+        StepStatus.CANCELLED
+    }
+    val closed = last.copy(
+        status = target,
+        endPartIndex = maxOf(last.startPartIndex, parts.size),
+        finishedAt = Clock.System.now(),
+    )
+    return copy(steps = steps.dropLast(1) + closed)
 }
 
 /** 给被停止/无法继续的工具补一个模型能读的恢复结果，并保留是否真正开始过的区别。 */

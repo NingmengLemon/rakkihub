@@ -82,8 +82,8 @@
 | C72 | 上下文压缩按 token 预算 | 新增 |
 | C73 | 发送前上下文裁剪 | 撤销 |
 | C74 | 上下文水位与压缩建议 | 新增 |
-| C75 | 自动重试次数可调 | 下线 |
-| C76 | 重试 attempt 可见化 | 下线 |
+| C75 | 自动重试次数可调 | 下线（B1 设计中恢复） |
+| C76 | 重试 attempt 可见化 | 下线（B1 设计中恢复内存态） |
 | C77 | 错误卡片重试本步 | 撤销 |
 | C78 | 工具失败日志分级 | 改造 |
 | C79 | 本地导出默认包含工作区文件 | 改造 |
@@ -104,6 +104,7 @@
 | C94 | 图标收尾：favicon、Web 空状态 logo、清理旧素材 | 改造 |
 | C95 | 清理 RikkaHub 提供商残留 | 移除 |
 | C96 | 移除发给 OpenRouter 的来源标识头 | 移除 |
+| C97 | Claude step 级请求投影与失败工具事实 | 改造 |
 
 ## 明细
 
@@ -467,10 +468,10 @@
 
 ### C58 失败与中断回复状态
 
-- 落点：`UIMessage` 增加 `status`，取值为 `COMPLETE`、`INTERRUPTED`、`FAILED`，默认 `COMPLETE`；`ChatService.runTurn` 通过 `resolveSettlementStatus` 在失败时标 `FAILED`、用户停止时标 `INTERRUPTED`，由 `finishGeneration` 一起落库；`ChatRequestFactory.buildStep` 组装请求前用 `filterModelVisible()` 过滤 `FAILED`，再用 `mergeAdjacentUserMessages()` 合并所有相邻的 user，不只失败过滤造成的那对，保留前一条的 id、createdAt、isSynthetic、isContextCheckpoint，只拼 parts 和 annotations，transforms 在合并之前；`ConversationMetaGenerator` 和 `dialogueMessages()`（记忆整理、`read_conversations`）同样过滤 `FAILED`；`ChatMessageAssistantAvatar` 在模型名旁显示失败/中断标签；新增四份 locale 的 `chat_message_status_failed`、`chat_message_status_interrupted`。
+- 落点：`UIMessage` 增加 `status`，取值为 `COMPLETE`、`INTERRUPTED`、`FAILED`，默认 `COMPLETE`；`ChatService.runTurn` 通过 `resolveSettlementStatus` 在失败时标 `FAILED`、用户停止时标 `INTERRUPTED`，由 `finishGeneration` 一起落库；`ChatRequestFactory.buildStep` 组装请求前用 `filterModelVisible()` 过滤 `FAILED`，再用 `mergeAdjacentUserMessages()` 合并所有相邻的 user，不只失败过滤造成的那对，保留前一条的 id、createdAt、isSynthetic、isContextCheckpoint，只拼 parts 和 annotations，transforms 在合并之前；`ConversationMetaGenerator` 和 `dialogueMessages()`（记忆整理、`conversation_read`）同样过滤 `FAILED`；`ChatMessageAssistantAvatar` 在模型名旁显示失败/中断标签；新增四份 locale 的 `chat_message_status_failed`、`chat_message_status_interrupted`。
 - 理由：失败或停止的半截回复原来作为普通 assistant 消息保存，下一次请求会把它当成完整回复带上。失败 attempt 只应给用户看，不应进入模型历史；用户主动停止的内容用户已经看过，可以继续参与后续对话，但需要和正常完成区分。过滤失败回复后前后两条 user 会相邻，部分 provider 要求 role 交替，所以在请求列表里合并，不改会话本身。
-- 合并注意：`status` 是带默认值的序列化字段，旧消息、旧备份和官方兼容导出里的旧 JSON 解码为 `COMPLETE`；这是 `ai/ui/Message.kt` 的分叉，移植上游 `UIMessage` 改动时保留字段以及 `isModelVisible`、`filterModelVisible`、`mergeAdjacentUserMessages`。`runTurn` 在进入 `runAgent` 收集之前失败（包括 `createContext`/`createAgent` 内部失败）时没有本轮回复可标，审批续写会保留原消息状态并只出错误卡片；此时 `replyMessageId` 可能已指向旧回复，但没有结算路径读它。已收到 `AgentFinishReason` 后发生的取消保持 `COMPLETE`。删除、替换、cleanup 的内部取消也可能短暂标 `INTERRUPTED`，随后被替换或删除；C67 起进程死亡留下的半截回复也会在加载时标 `INTERRUPTED`。`markReplyStatus` 是单向的，不会把 `FAILED` 复位成 `COMPLETE`；当前正常路径不可达，若将来出现“Pending 工具 + FAILED”的续写，需要同时处理过滤与复位。目前按整条消息标记，多步工具调用在中途失败时会整条隔离；per-step attempt 仍归 P2；工具恢复结果（`not_started`/`outcome_unknown`、`withoutUnresumableToolCalls`、`cancelInterruptedTools`）已由 C65 处理。压缩请求在 `buildStep` 之后单独追加 compress prompt，仍是 user+user，不走这次合并，这是压缩指令独立成轮的既有设计。Web、导出图片、Markdown 导出和浮动窗口没有 status，只有 Android 主聊天 UI 显示标签；标签在头像行内，模型已删除且没有快照、又未开助手头像时看不到。`contextWindowSize`、`contextLimitBoundaryIndex`、`planCompression` 仍按未过滤消息计算，失败消息夹在中间时边界和压缩计数尚未同步，归 P2。FTS 索引和 `conversation_search` 仍会把失败回复文本带进模型上下文，这次没有处理，是“失败只给人看”的已知例外。
-- 测试：`UIMessageSerializationTest` 覆盖状态序列化、旧 JSON 默认 `COMPLETE`、过滤只去掉 `FAILED`；`MessageMergeTest` 覆盖相邻 user 合并和过滤失败回复后的合并；`ConversationMessagesTest` 覆盖状态只改目标消息、无变化返回 null；`SettlementStatusTest` 覆盖完成、失败、取消和完成后再取消；`ConversationSessionTest` 覆盖 `markReplyStatus`；`DialogueMessagesTest` 覆盖失败回复不进入记忆和 `read_conversations`；`ConversationRecentModelMessagesTest` 覆盖标题上下文过滤。命令：`:ai:testDebugUnitTest --tests "me.rerere.ai.ui.UIMessageSerializationTest" --tests "me.rerere.ai.ui.MessageMergeTest"`、`:app:testGithubDebugUnitTest --tests "me.rerere.rikkahub.data.model.ConversationMessagesTest" --tests "me.rerere.rikkahub.service.ConversationSessionTest" --tests "me.rerere.rikkahub.service.SettlementStatusTest" --tests "me.rerere.rikkahub.data.ai.tools.DialogueMessagesTest" --tests "me.rerere.rikkahub.data.ai.ConversationRecentModelMessagesTest"`；`assembleGithubDebug` 通过。本轮没有重跑 README 要求的设备验收样本；`UIMessage` 只增加带默认值的字段，旧 JSON 解码测试通过，设备和样本重跑留到下一批。
+- 合并注意：`status` 是带默认值的序列化字段，旧消息、旧备份和官方兼容导出里的旧 JSON 解码为 `COMPLETE`；这是 `ai/ui/Message.kt` 的分叉，移植上游 `UIMessage` 改动时保留字段以及 `isModelVisible`、`filterModelVisible`、`mergeAdjacentUserMessages`。`runTurn` 在进入 `runAgent` 收集之前失败（包括 `createContext`/`createAgent` 内部失败）时没有本轮回复可标，审批续写会保留原消息状态并只出错误卡片；此时 `replyMessageId` 可能已指向旧回复，但没有结算路径读它。已收到 `AgentFinishReason` 后发生的取消保持 `COMPLETE`。删除、替换、cleanup 的内部取消也可能短暂标 `INTERRUPTED`，随后被替换或删除；C67 起进程死亡留下的半截回复也会在加载时标 `INTERRUPTED`。`markReplyStatus` 是单向的，不会把 `FAILED` 复位成 `COMPLETE`；当前正常路径不可达，若将来出现“Pending 工具 + FAILED”的续写，需要同时处理过滤与复位。目前按整条消息标记，多步工具调用在中途失败时会整条隔离；per-step 细化已按 B1 第一阶段的请求投影落地（见 C97），标题、记忆与 `conversation_read` 仍整条过滤失败消息；工具恢复结果（`not_started`/`outcome_unknown`、`withoutUnresumableToolCalls`、`cancelInterruptedTools`）已由 C65 处理。压缩请求在 `buildStep` 之后单独追加 compress prompt，仍是 user+user，不走这次合并，这是压缩指令独立成轮的既有设计。Web、导出图片、Markdown 导出和浮动窗口没有 status，只有 Android 主聊天 UI 显示标签；标签在头像行内，模型已删除且没有快照、又未开助手头像时看不到。`contextWindowSize`、`contextLimitBoundaryIndex`、`planCompression` 仍按未过滤消息计算，失败消息夹在中间时边界和压缩计数尚未同步，归 P2。FTS 索引和 `conversation_search` 仍会把失败回复文本带进模型上下文，这次没有处理，是“失败只给人看”的已知例外。
+- 测试：`UIMessageSerializationTest` 覆盖状态序列化、旧 JSON 默认 `COMPLETE`、过滤只去掉 `FAILED`；`MessageMergeTest` 覆盖相邻 user 合并和过滤失败回复后的合并；`ConversationMessagesTest` 覆盖状态只改目标消息、无变化返回 null；`SettlementStatusTest` 覆盖完成、失败、取消和完成后再取消；`ConversationSessionTest` 覆盖 `markReplyStatus`；`DialogueMessagesTest` 覆盖失败回复不进入记忆和 `conversation_read`；`ConversationRecentModelMessagesTest` 覆盖标题上下文过滤。命令：`:ai:testDebugUnitTest --tests "me.rerere.ai.ui.UIMessageSerializationTest" --tests "me.rerere.ai.ui.MessageMergeTest"`、`:app:testGithubDebugUnitTest --tests "me.rerere.rikkahub.data.model.ConversationMessagesTest" --tests "me.rerere.rikkahub.service.ConversationSessionTest" --tests "me.rerere.rikkahub.service.SettlementStatusTest" --tests "me.rerere.rikkahub.data.ai.tools.DialogueMessagesTest" --tests "me.rerere.rikkahub.data.ai.ConversationRecentModelMessagesTest"`；`assembleGithubDebug` 通过。本轮没有重跑 README 要求的设备验收样本；`UIMessage` 只增加带默认值的字段，旧 JSON 解码测试通过，设备和样本重跑留到下一批。
 
 ### C59 截断流识别与停止结算
 
@@ -662,6 +663,7 @@
 - 理由：上游 #2206/#1629（提交 `e1667163` 标记 Fixes #2308）。思考块必须连同签名原样回传，之前有三处会改动它：非流式把相邻思考块拼成一块、只留下后一块的签名；流式 `signature_delta` 分片到达时只保留最后一片；`redacted_thinking` 非流式直接丢弃、流式存成没有签名的空思考块。签名校验失败会让续轮请求直接报错
 - 合并注意：不再合并相邻推理块是有意的，每块的签名只对自己有效，代价是某些 provider 的非流式多步推理会分成多块显示。`claude_redacted_data` 是新 key，旧会话没有这个字段会反序列化成 null。流式签名累加依赖同一 `ClaudeStreamBlock` 的 metadata 更新，如果以后上游改成按 id 合并推理块，要保留累加逻辑
 - 测试：`:ai:testDebugUnitTest` 340 条全过（新增 5 条：非流式相邻块各自保留签名、pause_turn 续轮不合并不同响应的思考块、非流式与流式 redacted_thinking 回放、流式签名分片累加）；app JVM 798 条，7 条既有 Windows 失败未变；assemble、spotless、markdownlint 通过。没有真实 Claude 响应样本，判据是上游同款用例和构造的 SSE 事件
+- 追加（C97）：中转层按原生思考缓存校验时，历史 assistant 的 thinking 与当前 step 的 tool_use 拼在一条消息里会报 `native_thinking_replay_mismatch`。有 step 范围的消息现在按 step 拆分回放，thinking 只和同一 step 的 tool_use 配对；旧消息没有 step 范围时，自定义中转不再回放 thinking，官方域名保持原行为。测试见 C97
 
 ### C86 关闭思考时省略 reasoning_effort
 
@@ -739,3 +741,10 @@
 - 理由：这两个头是 OpenRouter 的调用来源标识（排行榜归属与应用统计），不参与鉴权，上游 `acdb75e6` 加进来时 `HTTP-Referer` 指 `https://rikka-ai.com`。本分支改名后仍发官方站点，等于把我们的调用在 OpenRouter 那边算成官方 app；本分支没有自己的站点，也没有理由替官方做归属，干脆不发
 - 合并注意：上游再往 `configureReferHeaders` 里加分支时按本项整体保留删除；用户自己在提供商或助手的自定义请求头里写 `X-Title`、`HTTP-Referer` 不受影响，`mergeCustomHeaders` 与 `PropertyEditor` 的常用头列表都没动；`app/src/main/generated/baselineProfiles/` 里还留着 `configureReferHeaders` 的旧条目，同 C13、C95 的说明，ART 会跳过
 - 测试：`ai` 与 `mediagen` 的 JVM 测试全过（mediagen 那条改成断言这两个头都不存在）；`rg` 确认源码里除用户自定义头列表及其测试外没有 `X-Title` 与 `HTTP-Referer`；app JVM 805 条仍全过
+
+### C97 Claude step 级请求投影与失败工具事实
+
+- 落点：`ai/ui/Message.kt` 增加 `MessageStep`、`StepStatus` 与 `UIMessage.steps`；`UIMessagePart.Tool` 增加 `callComplete`，流式 `ToolCallStart` 置 false、`ToolCallEnd` 置 true，`merge` 取逻辑或；`AgentLoop` 在每次请求成功后追加 step，记录 part 范围与 RUNNING/TOOLS/SUCCEEDED/FAILED 终态；`ClaudeProvider` 对带 step 的消息按 step 拆分 assistant/user 消息，thinking 只随同一 step 的 tool_use 回放，旧消息和带 `legacy` 前缀的消息在自定义中转下不回放 thinking；`projectForRequest()` 替代聊天请求里的 `filterModelVisible()`，失败消息只保留已执行的 Tool parts；`ConversationMessages` 的取消/加载恢复关闭未终结 step，工具都已执行时收 SUCCEEDED，否则 CANCELLED
+- 理由：一个 turn 仍是一条 assistant 消息，多个原生响应追加在同一条 parts 里。中转层按原生思考缓存校验时，前一步的 thinking 和后一步的 tool_use 拼在同一条消息里会被判成关联不匹配；失败消息整条过滤又会把已经执行的写入和查询从模型历史里抹掉。step 范围让请求重建能恢复原生配对，失败投影让“继续”还能看到失败前的工具事实
+- 合并注意：`steps`、`callComplete` 都是带默认值的字段，旧消息解码为空 steps、true；`MessageStep.legacy` 只用于接管旧消息时补的前缀范围，带 legacy 的消息不做原生 pairing 回放。自定义中转（非 `api.anthropic.com`）的旧消息不回放 thinking；官方域名保持原行为。投影后消息清空 steps，原始消息不受影响。B1 第一阶段只做请求投影与失败工具事实，自动重试、审批/取消的完整 step 状态机、C75/C76 恢复、手动重试与消费方收尾仍按设计文档后续阶段处理；C58 的摘要过滤、C67 的加载恢复语义不变
+- 测试：`ClaudeThinkingReplayTest` 覆盖 legacy 全剥离、step 内 thinking 与 tool_use 配对、跨 step 的纯文本 step 不把 thinking 带到下一步；`UIMessageSerializationTest` 覆盖旧 JSON 空 steps、steps/callComplete 往返、FAILED 请求投影保留已执行工具并丢掉正文；`ConversationMessagesTest` 覆盖停止时关闭 RUNNING/TOOLS step 与已执行工具收 SUCCEEDED；`:ai:testDebugUnitTest`、`:app:testGithubDebugUnitTest`、`assembleGithubRelease`、spotless 通过。设备上长工具链连续 48 次请求、8510 条消息无 `native_thinking_replay_mismatch`，消息序列无连续 assistant、无 thinking 落在 tool_use 之后；U+FFFD 单独另案

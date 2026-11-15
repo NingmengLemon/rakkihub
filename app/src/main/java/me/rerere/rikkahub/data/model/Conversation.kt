@@ -308,6 +308,7 @@ internal fun Conversation.withoutUnresumableToolCalls(untilNode: Int = messageNo
         val unexecuted = current.getTools().filter { !it.isExecuted }
         // 审批恢复和工具执行靠同一批未执行工具；只要还有可恢复的，整条消息保持原样
         if (unexecuted.any { it.canResumeExecution }) return@mapIndexed node
+        val closeStatus = current.stepCloseStatus()
         val parts = current.parts.map { part ->
             if (part is UIMessagePart.Tool && !part.isExecuted) {
                 recoverInterruptedTool(part)
@@ -316,8 +317,9 @@ internal fun Conversation.withoutUnresumableToolCalls(untilNode: Int = messageNo
             }
         }
         if (parts == current.parts) return@mapIndexed node
+        val settled = current.copy(parts = parts).closeLastStep(closeStatus)
         val messages = node.messages.map { message ->
-            if (message.id == current.id) current.copy(parts = parts) else message
+            if (message.id == current.id) settled else message
         }
         node.copy(messages = messages)
     }

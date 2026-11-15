@@ -1,6 +1,8 @@
 package me.rerere.rikkahub.data.model
 
 import me.rerere.ai.core.MessageRole
+import me.rerere.ai.ui.MessageStep
+import me.rerere.ai.ui.StepStatus
 import me.rerere.ai.ui.ToolApprovalState
 import me.rerere.ai.ui.UIMessage
 import me.rerere.ai.ui.UIMessagePart
@@ -15,12 +17,14 @@ class ConversationToolCallsTest {
     @Test
     fun `unresumable tools get a recovery result instead of deleting the message`() {
         val user = UIMessage.user("run it")
-        val answered = toolReply(ToolApprovalState.Pending)
+        val answered = toolReply(ToolApprovalState.Pending).copy(
+            steps = listOf(MessageStep(StepStatus.TOOLS, 0, 1, Clock.System.now())),
+        )
         val stale = toolReply(ToolApprovalState.Pending)
         val conversation = Conversation.ofId(Uuid.random()).copy(
             messageNodes = listOf(
                 user.toMessageNode(),
-                MessageNode(messages = listOf(answered, stale), selectIndex = 1),
+                MessageNode(messages = listOf(answered, stale), selectIndex = 0),
             )
         )
 
@@ -30,6 +34,10 @@ class ConversationToolCallsTest {
         val recovered = cleaned.currentMessages.last().getTools().single()
         assertTrue(recovered.isExecuted)
         assertTrue((recovered.output.single() as UIMessagePart.Text).text.contains("not_started"))
+        assertEquals(
+            StepStatus.CANCELLED,
+            cleaned.messageNodes.last().messages.first().steps.single().status,
+        )
     }
 
     @Test

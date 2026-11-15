@@ -77,17 +77,75 @@ class UIMessageSerializationTest {
     }
 
     @Test
-    fun `only failed messages are hidden from the model`() {
-        val messages = listOf(
-            UIMessage.user("question"),
-            UIMessage.assistant("failed").copy(status = MessageStatus.FAILED),
-            UIMessage.assistant("stopped").copy(status = MessageStatus.INTERRUPTED),
-            UIMessage.assistant("complete"),
+    fun `messages stored before steps existed decode as a single implicit step`() {
+        val legacy = """{"id":"00000000-0000-0000-0000-000000000001","role":"assistant","parts":[]}"""
+
+        val decoded = Json.decodeFromString<UIMessage>(legacy)
+
+        assertTrue(decoded.steps.isEmpty())
+    }
+
+    @Test
+    fun `steps and tool completeness survive serialization`() {
+        val now = kotlin.time.Instant.fromEpochSeconds(1)
+        val message = UIMessage(
+            role = me.rerere.ai.core.MessageRole.ASSISTANT,
+            parts = listOf(
+                UIMessagePart.Text("answer"),
+                UIMessagePart.Tool(
+                    toolCallId = "call-1",
+                    toolName = "read",
+                    input = "{}",
+                    output = listOf(UIMessagePart.Text("ok")),
+                    callComplete = false,
+                ),
+            ),
+            steps = listOf(MessageStep(StepStatus.SUCCEEDED, 0, 2, now, now)),
         )
 
-        assertEquals(
-            listOf(messages[0].id, messages[2].id, messages[3].id),
-            messages.filterModelVisible().map { it.id },
+        val decoded = Json.decodeFromString<UIMessage>(Json.encodeToString(message))
+
+        assertEquals(StepStatus.SUCCEEDED, decoded.steps.single().status)
+        assertEquals(now, decoded.steps.single().startedAt)
+        assertFalse(decoded.parts.filterIsInstance<UIMessagePart.Tool>().single().callComplete)
+    }
+
+    @Test
+    fun `messages stored before tool completeness existed decode as complete`() {
+        val legacy = """{"id":"00000000-0000-0000-0000-000000000001","role":"assistant","parts":[{"type":"tool","toolCallId":"call-1","toolName":"read","input":"{}"}]}"""
+
+        val tool = Json.decodeFromString<UIMessage>(legacy).parts.filterIsInstance<UIMessagePart.Tool>().single()
+
+        assertTrue(tool.callComplete)
+    }
+
+    @Test
+    fun `failed messages keep executed tool facts in request projection`() {
+        val failed = UIMessage(
+            role = me.rerere.ai.core.MessageRole.ASSISTANT,
+            parts = listOf(
+                UIMessagePart.Text("failed narration"),
+                UIMessagePart.Tool(
+                    toolCallId = "done",
+                    toolName = "write",
+                    input = "{}",
+                    output = listOf(UIMessagePart.Text("written")),
+                ),
+                UIMessagePart.Tool(
+                    toolCallId = "halF",
+                    toolName = "write",
+                    input = "{}",
+                    output = emptyList(),
+                ),
+            ),
+            status = MessageStatus.FAILED,
         )
+
+        val projected = listOf(UIMessage.user("next"), failed).projectForRequest()
+
+        assertEquals(2, projected.size)
+        val tools = projected[1].parts.filterIsInstance<UIMessagePart.Tool>()
+        assertEquals(listOf("done"), tools.map { it.toolCallId })
+        assertTrue(projected[1].parts.none { it is UIMessagePart.Text })
     }
 }

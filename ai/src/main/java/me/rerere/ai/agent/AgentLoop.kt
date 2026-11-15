@@ -16,6 +16,9 @@ import kotlinx.serialization.json.put
 import me.rerere.ai.core.MessageRole
 import me.rerere.ai.core.sum
 import me.rerere.ai.provider.TextGenerationParams
+import me.rerere.ai.ui.MessageStatus
+import me.rerere.ai.ui.MessageStep
+import me.rerere.ai.ui.StepStatus
 import me.rerere.ai.ui.StreamChunk
 import me.rerere.ai.ui.StreamChunkHandler
 import me.rerere.ai.ui.ToolApprovalState
@@ -51,6 +54,9 @@ internal class AgentLoop(
     // 本步失败重试复用第一次尝试的 base，避免 preview 已经写出的消息 id 被换掉
     private var stepBase: UIMessage? = null
 
+    // 最后一次 attempt 的内容；preview 只向收集器发送，失败收尾要靠它保留半截内容
+    private var lastAttempt: UIMessage? = null
+
     init {
         val last = request.messages.lastOrNull()
         if (last?.role == MessageRole.ASSISTANT) {
@@ -70,6 +76,7 @@ internal class AgentLoop(
                 val pending = requestApprovals(current)
                 if (pending.isNotEmpty()) return finish(AgentFinishReason.AwaitingApproval(pending))
                 executeTools()
+                settleExecutedStep()
             } else if (current != null && steps > 0) {
                 return finish(AgentFinishReason.Completed)
             }
@@ -101,19 +108,49 @@ internal class AgentLoop(
         val current = message
         val step = hooks.prepareStep(if (current == null) history else history + current)
         val params = step.params.copy(tools = request.tools)
-        val base = current ?: stepBase ?: UIMessage(
+        val base = (current ?: stepBase ?: UIMessage(
             role = MessageRole.ASSISTANT,
             parts = emptyList(),
             modelId = params.model.id,
-        ).also { stepBase = it }
-        val generated = if (request.stream) {
-            stream(step.messages, params, base)
-        } else {
-            generate(step.messages, params, base)
+        ).also { stepBase = it }).startStep()
+        if (current == null) stepBase = base
+        lastAttempt = null
+        try {
+            val generated = if (request.stream) {
+                stream(step.messages, params, base)
+            } else {
+                generate(step.messages, params, base)
+            }
+            val finished = hooks.finishStep(generated, newPartsFrom = base.parts.size)
+            val withStep = finished.finishCurrentStep(
+                if (finishedTools(finished)) StepStatus.TOOLS else StepStatus.SUCCEEDED,
+            )
+            update(withStep.copy(finishedAt = now()))
+            lastAttempt = null
+            stepBase = null
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: Throwable) {
+            // 失败 attempt 不进模型历史，但要留下 step 终态供请求投影和 UI 使用。
+            // 事件收集器本身失败时不再二次 emit，保留原始异常。
+            val failed = (lastAttempt ?: message?.takeIf {
+                it.steps.lastOrNull()?.status == StepStatus.RUNNING
+            } ?: base)
+                .finishCurrentStep(StepStatus.FAILED)
+            // 新消息在收到任何内容前就失败时不落空回复，只让错误卡片可见
+            if (failed.parts.isNotEmpty()) {
+                try {
+                    update(failed.copy(finishedAt = now()))
+                } catch (_: Throwable) {
+                    // 原始异常优先
+                }
+            }
+            throw e
         }
-        update(hooks.finishStep(generated, newPartsFrom = base.parts.size).copy(finishedAt = now()))
-        stepBase = null
     }
+
+    private fun finishedTools(message: UIMessage): Boolean =
+        message.getTools().any { !it.isExecuted }
 
     @OptIn(FlowPreview::class)
     private suspend fun stream(
@@ -130,6 +167,7 @@ internal class AgentLoop(
                 // 各次尝试共用同一个消息 id，调用方直接覆盖即可。
                 val handler = StreamChunkHandler(params.model)
                 var attempt = stepStart
+                lastAttempt = null
                 var firstChunk: TimeMark? = null
                 val chunks = request.provider.streamText(request.providerSetting, messages, params)
                 val timedChunks = request.streamIdleTimeout?.let { timeout ->
@@ -142,6 +180,7 @@ internal class AgentLoop(
                         try {
                             val mark = firstChunk ?: TimeSource.Monotonic.markNow().also { firstChunk = it }
                             attempt = handler.handle(listOf(attempt), chunk).single()
+                            lastAttempt = attempt
                             preview(attempt.withStepStats(base, mark.elapsedNow()), newPartsFrom = base.parts.size)
                         } catch (e: CancellationException) {
                             throw e
@@ -190,6 +229,7 @@ internal class AgentLoop(
             modelId = params.model.id,
             usage = result.usage,
         ).finishReasoning().withStepStats(base, requestTime)
+        lastAttempt = generated
         preview(generated, newPartsFrom = base.parts.size)
         return generated
     }
@@ -268,6 +308,20 @@ internal class AgentLoop(
 
     private fun findTool(name: String) = request.tools.find { it.name == name }
 
+    private suspend fun settleExecutedStep() {
+        val current = message ?: return
+        if (current.steps.isEmpty()) return
+        val steps = current.steps.toMutableList()
+        val last = steps.last()
+        if (last.status != StepStatus.RUNNING && last.status != StepStatus.TOOLS) return
+        steps[steps.lastIndex] = last.copy(
+            status = StepStatus.SUCCEEDED,
+            endPartIndex = current.parts.size,
+            finishedAt = Clock.System.now(),
+        )
+        update(current.copy(steps = steps))
+    }
+
     private suspend fun update(updated: UIMessage) {
         message = updated
         events.emit(AgentEvent.MessageUpdated(updated))
@@ -289,6 +343,49 @@ private fun UIMessage.hasGeneratedContent(from: Int = 0): Boolean = parts.drop(f
         is UIMessagePart.Reasoning -> part.reasoning.isNotBlank()
         else -> true
     }
+}
+
+private fun UIMessage.startStep(): UIMessage {
+    val prefix = if (steps.isEmpty() && parts.isNotEmpty()) {
+        listOf(
+            MessageStep(
+                status = when (status) {
+                    MessageStatus.COMPLETE -> StepStatus.SUCCEEDED
+                    MessageStatus.INTERRUPTED -> StepStatus.CANCELLED
+                    MessageStatus.FAILED -> StepStatus.FAILED
+                },
+                startPartIndex = 0,
+                endPartIndex = parts.size,
+                startedAt = Clock.System.now(),
+                finishedAt = Clock.System.now(),
+                legacy = true,
+            )
+        )
+    } else {
+        emptyList()
+    }
+    val start = parts.size
+    return copy(
+        steps = prefix + steps + MessageStep(
+            status = StepStatus.RUNNING,
+            startPartIndex = start,
+            endPartIndex = start,
+            startedAt = Clock.System.now(),
+        )
+    )
+}
+
+private fun UIMessage.finishCurrentStep(status: StepStatus): UIMessage {
+    if (steps.isEmpty()) return this
+    val updated = steps.toMutableList()
+    val last = updated.last()
+    if (last.status != StepStatus.RUNNING && last.status != StepStatus.TOOLS) return this
+    updated[updated.lastIndex] = last.copy(
+        status = status,
+        endPartIndex = maxOf(last.startPartIndex, parts.size),
+        finishedAt = Clock.System.now(),
+    )
+    return copy(steps = updated)
 }
 
 private fun errorOutput(error: String): List<UIMessagePart> =

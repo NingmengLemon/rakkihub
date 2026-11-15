@@ -4,8 +4,8 @@ import me.rerere.ai.core.MessageRole
 import me.rerere.ai.provider.Model
 import me.rerere.ai.ui.UIMessage
 import me.rerere.ai.ui.UIMessagePart
-import me.rerere.ai.ui.filterModelVisible
 import me.rerere.ai.ui.limitContext
+import me.rerere.ai.ui.projectForRequest
 import kotlin.uuid.Uuid
 
 /**
@@ -104,7 +104,7 @@ internal fun Conversation.planCompression(
     val messagesToSend = currentMessages.subList(estimateStart, endIndex)
     if (maxInputTokens != Int.MAX_VALUE) {
         val estimated = messagesToSend
-            .filterModelVisible()
+            .projectForRequest()
             .limitContext(contextMessageLimit)
             .estimatedTokens()
         if (estimated > maxInputTokens) return CompressionPlanResult.RangeTooLarge

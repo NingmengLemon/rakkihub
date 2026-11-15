@@ -682,7 +682,7 @@ class GoogleProvider(private val client: OkHttpClient, context: Context? = null)
     }
 
     private fun buildContents(messages: List<UIMessage>): JsonArray {
-        return buildJsonArray {
+        val built = buildJsonArray {
             messages
                 .filter { it.role != MessageRole.SYSTEM && it.isValidToUpload() }
                 .forEach { message ->
@@ -693,6 +693,29 @@ class GoogleProvider(private val client: OkHttpClient, context: Context? = null)
                     }
                 }
         }
+        return built.mergeAdjacentGoogleRoles()
+    }
+
+    /** Gemini 不接受连续同角色 contents；失败投影保留的工具结果会和下一条 user 相邻，这里合并。 */
+    private fun JsonArray.mergeAdjacentGoogleRoles(): JsonArray {
+        val merged = mutableListOf<JsonObject>()
+        for (element in this) {
+            val current = element.jsonObject
+            val role = current["role"]?.jsonPrimitive?.contentOrNull
+            val previous = merged.lastOrNull()
+            if (previous != null && role != null &&
+                previous["role"]?.jsonPrimitive?.contentOrNull == role
+            ) {
+                val parts = buildJsonArray {
+                    previous["parts"]?.jsonArray?.forEach { add(it) }
+                    current["parts"]?.jsonArray?.forEach { add(it) }
+                }
+                merged[merged.lastIndex] = JsonObject(previous + ("parts" to parts))
+            } else {
+                merged.add(current)
+            }
+        }
+        return JsonArray(merged)
     }
 
     private fun JsonArrayBuilder.addModelMessage(message: UIMessage) {

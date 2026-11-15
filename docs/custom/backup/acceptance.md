@@ -183,3 +183,10 @@ C62 给 `NetworkSetting` 增加 `streamIdleTimeoutEnabled`（默认 true），C6
 - `:app:connectedGithubDebugAndroidTest` 限制在 `me.rerere.rikkahub.data.sync`，在设备上跑，53 条通过、0 失败。按类拆分：`BackupManagerTest` 26、`DatabaseBackupTest` 3、`OfficialBackupRestoreAcceptanceTest` 2、`RestoreAppliedOutcomeTest` 1、`OfficialDatabaseConverterTest` 2、`OfficialDatabaseReaderTest` 7、`OfficialDatabaseWriterTest` 4、`OfficialForeignAttachmentPathsTest` 4、`OfficialSampleAcceptanceTest` 2、`OfficialSchemaTrimmerTest` 2，合计 53。
 - JVM 侧：`SettingsFieldsTest` 覆盖 `agent_setting` 的 DataStore 往返与 key 表；`AgentSettingTest` 覆盖默认值、序列化往返、范围收口与 `NetworkSetting.streamIdleTimeoutEnabled` 的旧 JSON 默认值；`SettingsTimeoutsTest` 覆盖两个设置到 `AgentRequest` 的映射。
 - 官方 RikkaHub 3.1.1 手动恢复、5GB 与 `.crosscheck` 换包名恢复没有重跑：官方 App 3.1.1 的设置入口在当前设备仍然无法通过自动化进入（与 C75、C80 相同），本次没有新增数据库、附件或导出结构变化，53 条设备用例已覆盖自家导出/恢复与官方样本。
+
+## 待验证（B1）
+
+B1 第一阶段已给 `UIMessage` 增加 `steps`，给 `UIMessagePart.Tool` 增加 `callComplete`。这两项只作为官方不认识的 JSON 字段随消息导出，官方 3.1.1 对消息 JSON 未知字段的容忍还没有样本验证。需要用包含这两个字段的会话补两条：
+
+- 普通消息（`steps` 为空数组、`callComplete` 为 true）的官方兼容导出与 3.1.1 恢复。
+- 带多 step 消息（至少包含一次工具调用）的官方兼容导出与 3.1.1 恢复，确认会话可读、工具调用不崩。
