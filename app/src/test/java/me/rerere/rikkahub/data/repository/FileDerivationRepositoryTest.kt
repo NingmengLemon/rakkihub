@@ -177,6 +177,12 @@ private class FakeFileDerivationDAO : FileDerivationDAO {
         if (index >= 0) rows[index] = derivation
     }
 
+    override suspend fun clearGenerated(): Int {
+        val before = rows.size
+        rows.removeAll { !it.edited }
+        return before - rows.size
+    }
+
     override suspend fun clear(): Int {
         val before = rows.size
         rows.clear()

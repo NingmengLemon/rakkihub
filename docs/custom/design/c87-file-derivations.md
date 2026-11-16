@@ -2,7 +2,7 @@
 
 ## 状态
 
-已落地 Phase 1，范围限定为 `file_derivations` 的持久化、读取优先级、备份恢复清空和官方导出裁剪；Phase 2 已补 producer 指纹失效和 OCR 文本编辑入口。备份恢复合并留后续。
+已落地 Phase 1，范围限定为 `file_derivations` 的持久化、读取优先级、备份恢复合并和官方导出裁剪；Phase 2 已补 producer 指纹失效和 OCR 文本编辑入口。
 
 ## 问题
 
@@ -58,7 +58,7 @@ CREATE UNIQUE INDEX index_file_derivations_file_id_kind_producer
 ## 删除、清理与备份
 
 - `managed_files` 删除、按路径删除、按目录删除时，由 `file_derivations.file_id` 的 `ON DELETE CASCADE` 清理（Room 打开外键）；`FilesRepository` 不再手工级联。
-- 自家备份恢复会合并同内容的上传文件并删掉落选行，`file_id` 无法可靠对应；`BackupManager.stageDatabase` 恢复时统一清空 `file_derivations`，包括 `edited=1` 的手改行，最多重新识别一次，避免错配或孤儿；手改文本恢复后需要重新编辑。官方备份本来没有这张表，迁移后为空。
+- 自家备份恢复会合并同内容的上传文件并删掉落选行；`UploadNames` 在删除前把落选行的 `edited=1` 手改文本挂到保留行（`INSERT OR IGNORE`，已有同名手改时保留保留行），`BackupManager.stageDatabase` 只清 `edited=0` 的自动行。自动行恢复后按当前 producer 重新识别，手改行继续覆盖；避免错配或孤儿。官方备份本来没有这张表，迁移后为空。
 
 ## 官方兼容
 
@@ -74,6 +74,7 @@ CREATE UNIQUE INDEX index_file_derivations_file_id_kind_producer
 - `OcrTextChoiceTest`：derivation 优先、metadata 回填、无文件不回填、空值、指纹 producer 下忽略 metadata，以及缓存 key 带 producer。
 - `OfficialDatabaseSchemaTest`：schema 34、identity、官方表集合加 `file_derivations`、已知额外列。
 - `Migration_33_34_Test`（开发机）：表创建、字段读取、外键级联删除。
+- `BackupManagerTest`（开发机）：恢复清空自动行、保留 `edited=1` 手改行；两份同内容上传合并后只保留保留行的手改行。
 - `OfficialSchemaTrimmerTest`（开发机）：裁剪后 `file_derivations` 消失、usage 行保留、官方读取层可打开；未登记额外表会抛 `OfficialExportUnsupportedException`。
 - `LiveDatabaseMigrationTest`（开发机）：真实 app 库迁到 34。
 - 设备链路（2026-11-16）：上传一张图片，OCR 调用后数据库生成一条 `file_derivations`；同一会话第二轮和 force-stop 重启后的第三轮都只发聊天请求，没有重复 OCR；derivation 行数始终为 1。
@@ -84,5 +85,5 @@ CREATE UNIQUE INDEX index_file_derivations_file_id_kind_producer
 
 - 没有自动派生结果的清空入口；手改文本置空只删除 `ocr:manual` 行，让自动结果恢复。
 - producer 现在随 OCR 提示词和模型 id 变化，旧 producer 行保留但不再读取；有文件行的图片换设置后首次发送会重新识别一次。没有文件行的旧附件仍只能使用 metadata。
-- 备份恢复不合并 derivation，统一清空后重新识别；手改行也会被清空，恢复后需重新编辑。官方导出同样 drop 整张表。
+- 备份恢复保留手改行、清掉自动行；同内容文件合并时落选手改行会挂到保留行，保留行已有手改时以保留行为准。
 - 只处理能映射到 `managed_files` 的本地图片；本安装 `filesDir` 下的绝对和相对地址都会解析，别的安装路径、目录外文件和未登记文件走旧回退。

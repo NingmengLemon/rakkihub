@@ -47,6 +47,9 @@ interface FileDerivationDAO {
     )
     suspend fun delete(fileId: Long, kind: String, producer: String): Int
 
+    @Query("DELETE FROM file_derivations WHERE edited = 0")
+    suspend fun clearGenerated(): Int
+
     @Query("DELETE FROM file_derivations")
     suspend fun clear(): Int
 }

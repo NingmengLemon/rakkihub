@@ -123,7 +123,19 @@ internal object UploadNames {
             .filter { it.size > 1 }
             .flatMap { group -> group.sortedBy { it.first }.drop(1) }
         val droppedIds = dropped.map { it.first }.toSet()
-        dropped.forEach { database.execSQL("DELETE FROM `managed_files` WHERE id = ?", arrayOf(it.first)) }
+        // 同内容文件合并前，把被删行的手改 OCR 先挂到保留行上；自动行随后由恢复侧清空。
+        rows.groupBy { it.third }.values
+            .filter { it.size > 1 }
+            .forEach { group ->
+                val kept = group.minBy { it.first }
+                group.filter { it.first != kept.first }.forEach { loser ->
+                    copyEditedDerivations(database, fromFileId = loser.first, toFileId = kept.first)
+                }
+            }
+        dropped.forEach {
+            database.execSQL("DELETE FROM `file_derivations` WHERE file_id = ?", arrayOf(it.first))
+            database.execSQL("DELETE FROM `managed_files` WHERE id = ?", arrayOf(it.first))
+        }
         val moved = rows.filter { it.first !in droppedIds && it.third != it.second }
         // 先挪到不可能与真实路径相撞的临时路径，再落到目标路径：改名可能成链
         // （a.png 改成 H1.png，而 H1.png 自己还要改成 H2.png），直接改会撞唯一索引。
@@ -140,5 +152,23 @@ internal object UploadNames {
                 arrayOf<Any?>(it.third, it.first),
             )
         }
+    }
+
+    /**
+     * 合并同内容文件时保留手改 OCR；自动行不复制，恢复阶段会按新 producer 重新生成。
+     * 目标行已有同 producer 的手改时保留目标行，避免覆盖用户最近一次编辑。
+     */
+    private fun copyEditedDerivations(database: SupportSQLiteDatabase, fromFileId: Long, toFileId: Long) {
+        val exists = database.query(
+            "SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = 'file_derivations'"
+        ).use { it.moveToFirst() }
+        if (!exists) return
+        database.execSQL(
+            "INSERT OR IGNORE INTO `file_derivations` " +
+                "(file_id, kind, text, producer, edited, created_at, updated_at) " +
+                "SELECT ?, kind, text, producer, edited, created_at, updated_at " +
+                "FROM `file_derivations` WHERE file_id = ? AND edited = 1",
+            arrayOf<Any?>(toFileId, fromFileId),
+        )
     }
 }

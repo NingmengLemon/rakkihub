@@ -393,9 +393,9 @@ class BackupManager(
             DatabaseBackup.checkpoint(database)
             // 附件改名是在解压时按内容算出来的，必须在这份库被发布之前改掉引用
             UploadNames.rewriteDatabase(database, renamed)
-            // file_derivations 里自动 OCR 行可按文件重新生成，手改行则是用户内容；导入会合并同内容文件，
-            // 恢复后的 file_id 无法可靠对应，统一清空（含手改行），重新识别后需要重新编辑，避免错配或孤儿。
-            room.fileDerivationDao().clear()
+            // 自动 OCR 行可按文件重新生成，恢复后清掉；手改行是用户内容，按现有 managed_files 行保留。
+            // 同内容文件合并时 UploadNames 已先把落选手改行挂到保留行，避免丢文本或错配。
+            room.fileDerivationDao().clearGenerated()
             DatabaseBackup.checkpoint(database)
         } finally {
             room.close()

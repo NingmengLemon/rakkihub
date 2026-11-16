@@ -117,6 +117,7 @@
 | C107 | B2 step 稳定标识与失败码 | 改造 |
 | C108 | C87 OCR producer 指纹失效 | 改造 |
 | C109 | C87 OCR 文本编辑入口 | 新增 |
+| C110 | C87 备份恢复保留手改 OCR | 改造 |
 
 ## 明细
 
@@ -687,9 +688,9 @@
 
 ### C87 OCR 结果按 managed file 持久化，历史图片不再重复识别
 
-- 落点：Room 34 新增 `file_derivations`，`file_id` 指向 `managed_files.id`，`kind=ocr`、`producer=ocr:v1`（C108 起为 `ocr:v1:<prompt+model 指纹>`），每个文件每个 producer 一条。`OcrTransformer` 优先读 derivation，其次读旧消息 `OcrMetadata.ocr_text` 并懒回填，再读缓存；只有没有 `managed_files` 行的旧附件才继续调用 `Conversation.withOcrTexts` 和 `ChatService.attachOcrTexts` 写回消息 metadata。删除 managed file 依赖 `ON DELETE CASCADE`；自家备份恢复统一清空 derivation，官方导出由 `OfficialSchemaTrimmer` drop 这张表。设计见 [design/c87-file-derivations.md](design/c87-file-derivations.md)。
+- 落点：Room 34 新增 `file_derivations`，`file_id` 指向 `managed_files.id`，`kind=ocr`、`producer=ocr:v1`（C108 起为 `ocr:v1:<prompt+model 指纹>`），每个文件每个 producer 一条。`OcrTransformer` 优先读 derivation，其次读旧消息 `OcrMetadata.ocr_text` 并懒回填，再读缓存；只有没有 `managed_files` 行的旧附件才继续调用 `Conversation.withOcrTexts` 和 `ChatService.attachOcrTexts` 写回消息 metadata。删除 managed file 依赖 `ON DELETE CASCADE`；自家备份恢复清掉自动行、保留手改行（C110），官方导出仍由 `OfficialSchemaTrimmer` drop 这张表。设计见 [design/c87-file-derivations.md](design/c87-file-derivations.md)。
 - 理由：metadata 只对当前消息和历史分支有效；同一上传内容在别的会话复用时只能靠 3 天、64 条的缓存，过期后重复识别。文件级派生数据把 OCR 从消息附属物提升为文件属性，跨会话、跨进程和缓存过期都能命中。
-- 合并注意：旧消息的 `OcrMetadata` 保留为兼容回退，不批量迁移；解析不到 `managed_files` 的图片仍走旧 metadata/缓存。C108 起 producer 为 `ocr:v1:<prompt+model 指纹>`，有文件行的图片在指纹 producer 下不再回退/回填旧 metadata，换设置后首次发送会重新识别；C109 起 `edited` 行的写入方在附件管理，恢复会连手改行一起清空。备份恢复不合并 derivation，统一清空后最多重新识别一次。官方 v32 读/写层不认识这张表，官方导出前会 drop；`OfficialDatabaseSchemaTest` 允许已登记额外表，未登记表由 `OfficialSchemaTrimmerTest` 在开发机验证会让导出失败。
+- 合并注意：旧消息的 `OcrMetadata` 保留为兼容回退，不批量迁移；解析不到 `managed_files` 的图片仍走旧 metadata/缓存。C108 起 producer 为 `ocr:v1:<prompt+model 指纹>`，有文件行的图片在指纹 producer 下不再回退/回填旧 metadata，换设置后首次发送会重新识别；C109 起 `edited` 行的写入方在附件管理，C110 起备份恢复保留手改行、合并同内容文件时把落选手改行挂到保留行。备份恢复不再整表清空，自动行重新识别一次。官方 v32 读/写层不认识这张表，官方导出前会 drop；`OfficialDatabaseSchemaTest` 允许已登记额外表，未登记表由 `OfficialSchemaTrimmerTest` 在开发机验证会让导出失败。
 - 追加（C108）：producer 指纹失效、OCR 缓存 key 带 producer，以及有文件行时禁止旧 metadata 重标为新 producer；producer 参数和测试见 C108。
 - 测试：`FileDerivationRepositoryTest` 覆盖 put/get、相同文本、更新、edited 保护、空文本、批量读取、URL 解析和目录外拒绝；`OcrTextChoiceTest` 覆盖 derivation 优先、metadata 回填、无文件不回填和空值；`OfficialDatabaseSchemaTest` 覆盖 schema 34、identity、官方表加 `file_derivations`；`Migration_33_34_Test` 在开发机覆盖建表和外键级联；`BackupManagerTest` 在开发机覆盖恢复清空；`OfficialSchemaTrimmerTest` 在开发机覆盖 drop 表、未登记额外表和官方读取；全量 JVM、spotless 和 assemble 通过。设备链路：上传图片后 OCR 生成一条 derivation，同一会话第二轮和 force-stop 重启后的第三轮都只发聊天请求，derivation 始终只有一条。
 
@@ -838,12 +839,19 @@
 
 - 落点：`FileDerivationRepository` 的 `get` / `listForFiles` / `putOcr` 接受 producer，新增 `ocrProducer(prompt, modelId)`，对提示词和模型 id 做 SHA-256 取前 8 字节生成 `ocr:v1:<hash>`；`OcrTransformer` 按当前设置计算 producer，读取、回填和写入都用它，文件缓存 key 也带上 producer。
 - 理由：旧实现 producer 固定 `ocr:v1`，换 OCR 提示词或模型后仍会读到旧文本；缓存 key 只按 URL，也会绕过派生失效。
-- 合并注意：升级后首次发送时，有文件行的图片会因 producer 变化重新识别一次；没有文件行的旧附件仍只能使用 metadata。旧 `ocr:v1` 行保留但不再被读取；`edited` 行仍不会被覆盖。producer 变化不删除旧行，避免误删历史；如果以后要清理，按 producer 前缀和编辑标记单独做。备份恢复仍统一清空 `file_derivations`。
+- 合并注意：升级后首次发送时，有文件行的图片会因 producer 变化重新识别一次；没有文件行的旧附件仍只能使用 metadata。旧 `ocr:v1` 行保留但不再被读取；`edited` 行仍不会被覆盖。producer 变化不删除旧行，避免误删历史；如果以后要清理，按 producer 前缀和编辑标记单独做。备份恢复的自动/手改处理见 C110。
 - 测试：`FileDerivationRepositoryTest` 覆盖同配置指纹稳定、16 位小写十六进制、提示词或模型变化产生不同 producer、不同 producer 行互不覆盖；`OcrTextChoiceTest` 覆盖指纹 producer 下忽略 metadata 和缓存 key 带 producer；app JVM 测试通过。设备上的 OCR 重识别未在本次单独重跑。
 
 ### C109 C87 OCR 文本编辑入口
 
 - 落点：`FileDerivationDAO` 增加 `getAny` / `listAny` / `delete`；`FileDerivationRepository` 增加 `getAnyOcr`、`editOcr` 和固定 `OCR_MANUAL_PRODUCER=ocr:manual`。手改行 `edited=true`，在 `listForFiles` 中覆盖任何 producer 的自动结果；空文本删除手改行。`SettingFilesPage` 的图片卡片增加编辑按钮和底部输入面板，新增四份 locale 文案。
 - 理由：自动 OCR 对表格、手写或特殊排版可能出错，需要用户直接修正；手改文本必须跨 OCR 提示词/模型变化继续生效，不能下次自动识别又被覆盖。
-- 合并注意：手改行与自动行分开存，不删除自动行；`putOcr` 看到任意手改行就不覆盖。空文本只删手改行，让自动结果重新可见；不提供清空自动结果的入口。备份恢复会清空整张 `file_derivations`，包括手改行；官方导出也会 drop 这张表，手改文本不随备份或官方导出保留。UI 只对 `image/*` 显示编辑按钮，保存相同文本视为成功。编辑入口只改文本，不改文件本身或消息 parts。
+- 合并注意：手改行与自动行分开存，不删除自动行；`putOcr` 看到任意手改行就不覆盖。空文本只删手改行，让自动结果重新可见；不提供清空自动结果的入口。备份恢复会保留手改行，同内容文件合并时由 UploadNames 把落选手改行挂到保留行；官方导出仍会 drop 整张表，手改文本不随官方导出保留。UI 只对 `image/*` 显示编辑按钮，保存相同文本视为成功。编辑入口只改文本，不改文件本身或消息 parts。
 - 测试：`FileDerivationRepositoryTest` 覆盖手改覆盖自动结果、手改后 `putOcr` 不写入、空文本删除手改后自动结果恢复；app JVM 测试通过。设备上打开附件管理，编辑并保存一张图片的 OCR 文本，出现保存成功提示，重新打开显示手改文本。
+
+### C110 C87 备份恢复保留手改 OCR
+
+- 落点：`FileDerivationDAO` 增加 `clearGenerated()`，`BackupManager.stageDatabase` 恢复时只清 `edited=0`；`UploadNames.rewriteManagedFiles` 在合并同内容文件、删除落选 `managed_files` 行之前，把落选行的 `edited=1` 派生文本 `INSERT OR IGNORE` 挂到保留行。
+- 理由：手改 OCR 是用户内容，不是可重新生成的缓存；整表清空会让恢复后的附件丢掉手工修正。自动行仍可重新识别，不需要保留。
+- 合并注意：保留行已有同 producer 的手改时保留保留行，不覆盖；落选手改行随后显式删除，避免外键未开启时留下孤儿。官方导出仍 drop 整张表，手改文本不随官方备份保留。恢复后首次发送会重新识别自动行，但手改行继续覆盖。
+- 测试：`BackupManagerTest`（开发机）覆盖自动行清空、手改行保留，以及两份同内容上传合并后只保留一条手改行、保留行文本生效；`connectedGithubDebugAndroidTest` 通过。

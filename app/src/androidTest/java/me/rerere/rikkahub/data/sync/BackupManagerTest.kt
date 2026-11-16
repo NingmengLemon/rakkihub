@@ -128,6 +128,17 @@ class BackupManagerTest {
                 updatedAt = 1,
             )
         )
+        liveDatabase.fileDerivationDao().insert(
+            FileDerivationEntity(
+                fileId = managed,
+                kind = "ocr",
+                text = "manual text",
+                producer = "ocr:manual",
+                edited = true,
+                createdAt = 2,
+                updatedAt = 2,
+            )
+        )
         val archive = manager.createBackup(includeFiles = false)
         manager.stageRestore(archive, includeFiles = false)
 
@@ -135,7 +146,81 @@ class BackupManagerTest {
         val room = AppDatabaseFactory.create(context, staged.absolutePath)
         try {
             assertEquals(0, room.fileDerivationDao().get(managed, "ocr", "ocr:v1")?.id ?: 0)
+            assertEquals("manual text", room.fileDerivationDao().get(managed, "ocr", "ocr:manual")?.text)
             assertEquals("H1.png", room.managedFileDao().getById(managed)?.displayName)
+        } finally {
+            room.close()
+        }
+    }
+
+    @Test fun mergeKeepsOneEditedOcrRowWhenDuplicateUploadsCollapse() = runBlocking {
+        val upload = File(context.filesDir, "upload").apply { mkdirs() }
+        val bytes = "same image".toByteArray()
+        File(upload, "a.png").writeBytes(bytes)
+        File(upload, "b.png").writeBytes(bytes)
+        val first = liveDatabase.managedFileDao().insert(
+            ManagedFileEntity(
+                folder = "upload",
+                relativePath = "upload/a.png",
+                displayName = "a.png",
+                mimeType = "image/png",
+                sizeBytes = bytes.size.toLong(),
+                createdAt = 1,
+                updatedAt = 1,
+            )
+        )
+        val second = liveDatabase.managedFileDao().insert(
+            ManagedFileEntity(
+                folder = "upload",
+                relativePath = "upload/b.png",
+                displayName = "b.png",
+                mimeType = "image/png",
+                sizeBytes = bytes.size.toLong(),
+                createdAt = 1,
+                updatedAt = 1,
+            )
+        )
+        liveDatabase.fileDerivationDao().insert(
+            FileDerivationEntity(
+                fileId = first,
+                kind = "ocr",
+                text = "first manual",
+                producer = "ocr:manual",
+                edited = true,
+                createdAt = 1,
+                updatedAt = 1,
+            )
+        )
+        liveDatabase.fileDerivationDao().insert(
+            FileDerivationEntity(
+                fileId = second,
+                kind = "ocr",
+                text = "second manual",
+                producer = "ocr:manual",
+                edited = true,
+                createdAt = 1,
+                updatedAt = 1,
+            )
+        )
+
+        val archive = manager.createBackup(includeFiles = true)
+        manager.stageRestore(archive, includeFiles = true)
+        val staged = File(context.noBackupFilesDir, "backup-restore/pending/payload/database/rikka_hub")
+        val room = AppDatabaseFactory.create(context, staged.absolutePath)
+        try {
+            val keptIds = room.openHelper.writableDatabase.query("SELECT id FROM managed_files").use { cursor ->
+                buildList { while (cursor.moveToNext()) add(cursor.getLong(0)) }
+            }
+            assertEquals(1, keptIds.size)
+            val kept = keptIds.single()
+            assertEquals("first manual", room.fileDerivationDao().get(kept, "ocr", "ocr:manual")?.text)
+            val manualCount = room.openHelper.writableDatabase.query(
+                "SELECT COUNT(*) FROM file_derivations WHERE edited = 1"
+            ).use { cursor ->
+                cursor.moveToFirst()
+                cursor.getInt(0)
+            }
+            assertEquals(1, manualCount)
         } finally {
             room.close()
         }
