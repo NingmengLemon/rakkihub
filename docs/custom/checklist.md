@@ -797,7 +797,7 @@
 
 ### C103 工作区写/编辑文件显示运行状态
 
-- 落点：`WorkspaceToolUIs` 的 `WorkspaceWriteFileToolUI` / `EditFileToolUI` 标题按 `loading && callComplete && !isPending` 选择 Writing/Editing 文案；四个 locale 增加运行中和无路径默认文案。
+- 落点：`WorkspaceToolUIs` 的 `WriteFileToolUI` / `EditFileToolUI` 标题按 `loading && callComplete && !isPending` 选择 Writing/Editing 文案；四个 locale 增加运行中和无路径默认文案。
 - 理由：工具执行期间仍显示完成态的 “Write/Edit”，用户会以为卡在思考末尾；有明确运行态后至少能看出正在写文件。
 - 合并注意：`callComplete=false` 表示参数还在流式生成，此时不冒充执行中；等待审批也不显示 Writing/Editing。Gemini 的 `functionCall` 是整块到达，参数生成阶段没有可展示的 part，进入执行后才显示运行态。
 - 测试：编译与全量 JVM 通过；按工具执行路径检查标题分支，未单独构造 Gemini 真机工具样本。
@@ -807,7 +807,7 @@
 - 落点：新增 `TerminalImeEditText`，用正常 `TYPE_CLASS_TEXT` 作为隐藏 IME 宿主；`commitText`、`finishComposingText` 把提交文本按 UTF-8 写给 `TerminalSession`，退格、Enter、Tab、控制键单独转发；`WorkspaceTerminalViewClient` 优先聚焦该宿主并 `restartInput`；`TerminalView` 保持可聚焦以支持长按选择/复制。
 - 理由：`terminal-view` 0.118.0 的 `TerminalView` 把 inputType 设成无文本类，Gboard/Fcitx 的拼音组合没有正常 `InputConnection` 承接，候选提交会丢失。
 - 合并注意：终端核心仍是上游 AAR，不要改 `terminal-view` 二进制；输入法宿主是 1dp 透明视图，设置 `importantForAccessibility=NO`。硬件键盘事件和 IME 的 `sendKeyEvent` 都要转发给终端，长按选择不能因为聚焦宿主而失效。升级 terminal-view 后要重测中文、日文、退格和 Enter。
-- 测试：开发机装 Rootfs 后用 Fcitx5 提交“你好”、退格和执行；用户用 Gboard 中文/日文复核；开发机长按终端文本已显示 Copy/More 选择工具栏。
+- 测试：开发机装 Rootfs 后用 Fcitx5 提交“你好”、退格和执行；焦点恢复后重新点终端，拼音候选仍进入隐藏宿主，空格提交“你好”，组合中的退格没有误删终端字符；长按终端文本显示 Copy/More 选择工具栏。用户用 Gboard 中文/日文复核正常。
 
 ### C105 工作区 Markdown 预览与源码切换
 

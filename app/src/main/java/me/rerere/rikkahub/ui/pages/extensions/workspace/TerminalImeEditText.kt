@@ -14,7 +14,7 @@ import android.widget.EditText
  *
  * `terminal-view` 的 TerminalView 把自己的 inputType 压成 TYPE_NULL/无文本类，Gboard、Fcitx
  * 等输入法只会把拼音候选提交到一个不存在的编辑框里。这里用一个真正的 EditText 接收组合文本，
- * 只在 commitText 时把最终字符写给终端；控制键仍交给 TerminalView 处理。
+ * 只在 commitText/finishComposingText 时把最终字符写给终端；控制键仍交给 TerminalView 处理。
  */
 internal class TerminalImeEditText(context: Context) : EditText(context) {
     var onCommitText: ((String) -> Unit)? = null
