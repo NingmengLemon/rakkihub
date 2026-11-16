@@ -196,7 +196,7 @@ JVM 侧：PreferenceStoreV6MigrationTest 覆盖 V6 的版本门禁、写回版�
 - 新备份：在 C75 开启自动重试（3 次）后导出自备份，`settings.json` 含 `settingsVersion=6` 与 `enableAutoRetry=true`；在同一构建恢复后 DataStore 仍为 true，网络设置开关保持开启、滑块可见。
 - 旧备份：干净安装 C98，导出 `settingsVersion` 缺失、`enableAutoRetry=true` 的备份；覆盖安装 C75 并恢复后 DataStore 为 false，网络设置开关为关、滑块隐藏。
 - 官方 3.1.1：C75 的官方兼容导出含 `settingsVersion=6` 与 false；开发机上的官方客户端原本处于禁用状态，重装其自带 APK 后恢复可启动。官方客户端导入该归档并重启后正常打开，没有因未知 `settingsVersion` 解码崩溃。样本里没有会话，因此这条只验 settings 未知键容忍，不重跑官方会话与附件恢复。
-- 待验：C61 的 429、`Retry-After`、5xx 与空回复退避样本；需要在假 provider 或代理上跑，开启自动重试后确认等待间隔和 C76 卡片。
+- C61 退避：2026-11-16 开发机假 provider 验证 429 `Retry-After: 2` 重试一次并成功、500 HTML 重试一次、空 SSE 按 `EMPTY_RESPONSE` 重试、401/402/400 context 不重试；C76 卡片显示等待时间。
 
 ## 待验证（B1）
 
