@@ -107,6 +107,7 @@
 | C97 | Claude step 级请求投影与失败工具事实 | 改造 |
 | C98 | 消息操作手动重试失败 step | 改造 |
 | C99 | 失败请求记录完整 provider 响应体 | 改造 |
+| C100 | U+FFFD 替换字符与官方 Claude 行为对齐 | 待调研（低优先） |
 
 ## 明细
 
@@ -750,7 +751,7 @@
 - 落点：`ai/ui/Message.kt` 增加 `MessageStep`、`StepStatus` 与 `UIMessage.steps`；`AgentRequest.allowToolApproval` 与 `AgentFinishReason.ApprovalUnavailable` 让中间节点生成不进入审批，`ChatService` 用 `settleUnavailableTools()` 给未执行工具补恢复结果、丢掉 `callComplete=false` 的半截调用、把消息置 COMPLETE 并把 step 记 SUCCEEDED；无 job 的审批停止会先加载会话，按最后一条 assistant 的 id 标 INTERRUPTED 后一次 flush；`isAwaitingToolApproval`/`pendingToolCalls` 对有 steps 的消息只看最后一条 assistant，旧消息仍扫描全部；`withToolApproval`、聊天列表的审批回调与悬浮窗同步收口；`UIMessagePart.Tool` 增加 `callComplete`，流式 `ToolCallStart` 置 false、`ToolCallEnd` 置 true，`merge` 取逻辑或；`AgentLoop` 在每次请求成功后追加 step，记录 part 范围与 RUNNING/TOOLS/SUCCEEDED/FAILED 终态；`ClaudeProvider` 对带 step 的消息按 step 拆分 assistant/user 消息，thinking 只随同一 step 的 tool_use 回放，旧消息和带 `legacy` 前缀的消息在自定义中转下不回放 thinking；`projectForRequest()` 替代聊天请求里的 `filterModelVisible()`，失败消息只保留已执行的 Tool parts；`ConversationMessages` 的取消/加载恢复关闭未终结 step，工具都已执行时收 SUCCEEDED，否则 CANCELLED
 - 理由：一个 turn 仍是一条 assistant 消息，多个原生响应追加在同一条 parts 里。中转层按原生思考缓存校验时，前一步的 thinking 和后一步的 tool_use 拼在同一条消息里会被判成关联不匹配；失败消息整条过滤又会把已经执行的写入和查询从模型历史里抹掉。step 范围让请求重建能恢复原生配对，失败投影让“继续”还能看到失败前的工具事实
 - 合并注意：`steps`、`callComplete` 都是带默认值的字段，旧消息解码为空 steps、true；`MessageStep.legacy` 只用于接管旧消息时补的前缀范围，带 legacy 的消息不做原生 pairing 回放。自定义中转（非 `api.anthropic.com`）的旧消息不回放 thinking；官方域名保持原行为。投影后消息清空 steps，原始消息不受影响。本阶段做 step 记录、请求投影、失败工具事实、审批/取消结算与最后节点审批；自动重试 C75 已默认关闭恢复，C76 attempt 摘要已持久化，剩余消费方收尾仍按 B2 设计处理；手动 step 重试见 C98；C58 的摘要过滤、C67 的加载恢复语义不变
-- 测试：`AgentLoopTest` 覆盖中间节点 `ApprovalUnavailable`；`ConversationMessagesTest` 覆盖中间节点按 messageId 补结果、丢弃半截调用、置 COMPLETE 并收 SUCCEEDED；`ClaudeThinkingReplayTest` 覆盖 legacy 全剥离、step 内 thinking 与 tool_use 配对、跨 step 的纯文本 step 不把 thinking 带到下一步；`UIMessageSerializationTest` 覆盖旧 JSON 空 steps、steps/callComplete 往返、FAILED 请求投影保留已执行工具并丢掉正文；`ConversationMessagesTest`、`ConversationToolCallsTest` 覆盖停止/加载恢复关闭 RUNNING/TOOLS step、已执行工具收 SUCCEEDED 和最后一条 assistant 的审批收口；`:ai:testDebugUnitTest`、`:app:testGithubDebugUnitTest`、`assembleGithubRelease`、spotless 通过。设备上长工具链连续 48 次请求、8510 条消息无 `native_thinking_replay_mismatch`，消息序列无连续 assistant、无 thinking 落在 tool_use 之后；U+FFFD 单独另案
+- 测试：`AgentLoopTest` 覆盖中间节点 `ApprovalUnavailable`；`ConversationMessagesTest` 覆盖中间节点按 messageId 补结果、丢弃半截调用、置 COMPLETE 并收 SUCCEEDED；`ClaudeThinkingReplayTest` 覆盖 legacy 全剥离、step 内 thinking 与 tool_use 配对、跨 step 的纯文本 step 不把 thinking 带到下一步；`UIMessageSerializationTest` 覆盖旧 JSON 空 steps、steps/callComplete 往返、FAILED 请求投影保留已执行工具并丢掉正文；`ConversationMessagesTest`、`ConversationToolCallsTest` 覆盖停止/加载恢复关闭 RUNNING/TOOLS step、已执行工具收 SUCCEEDED 和最后一条 assistant 的审批收口；`:ai:testDebugUnitTest`、`:app:testGithubDebugUnitTest`、`assembleGithubRelease`、spotless 通过。设备上长工具链连续 48 次请求、8510 条消息无 `native_thinking_replay_mismatch`，消息序列无连续 assistant、无 thinking 落在 tool_use 之后；U+FFFD 见 C100
 
 ### C98 消息操作手动重试失败 step
 
@@ -766,3 +767,10 @@
 - 理由：provider 的 400/401/429 等错误经常只在响应体里给出具体原因，例如 OpenCode Go 的 `Requests ending with a model turn are not supported`；只把解析后的 message 放进错误卡片会丢掉其余字段。logcat 长行有上限，分块才能保留完整正文。
 - 注意：响应体可能包含用户内容或回显的请求片段，日志只留在本机 logcat；不要把日志片段贴到外部。请求 URL 只取 path，防止 query 里的 key 落盘。
 - 测试：编译通过；用 `adb logcat -s ProviderError` 或 logcat Extreme 抓取，验证一次非 2xx 请求出现完整分块。暂无 JVM 单测，日志辅助路径留设备验证。
+
+### C100 U+FFFD 替换字符与官方 Claude 行为对齐
+
+- 现状：待调研，低优先级，尚未排期（2026-11-16 重新登记）。经中转使用 Claude 时，回复偶尔出现 U+FFFD 替换字符；用户侧对照显示同一中转下官方 Claude Code 正常，中转方称不是服务端问题。目前没有确认问题落在 SSE 分块、UTF-8 边界、流式文本合并、客户端解码还是中转改写，不能先按“中转坏了”或“客户端坏了”下结论。
+- 计划：等 B2 的剩余消费方和 C87 之后再排。用同一 prompt 对照官方 Claude Code、官方 API 与中转，保留原始 SSE 字节和客户端解码结果，确认第一个 U+FFFD 出现在哪一层，再决定改 `ai` 的 Claude decoder/UTF-8 处理，还是只记录兼容性说明。官方 Claude Code 只作为行为参照，不直接移植其实现。
+- 合并注意：这是独立的行为对齐项，不阻塞 C75/C76；不要为它引入全局的替换字符清洗，避免掩盖真正的编码错误。C97 的长工具链设备验证已把 U+FFFD 单独分开，本次只是重新登记。
+- 测试：暂无；需要可复现样本、原始 SSE 字节和官方 Claude Code 的对照结果。
