@@ -190,11 +190,13 @@ C75 恢复自动重试时把 NetworkSetting.enableAutoRetry 的默认值改成 f
 
 JVM 侧：PreferenceStoreV6MigrationTest 覆盖 V6 的版本门禁、写回版本 6、旧 JSON 关闭和带 6 的新备份保留显式 true；SettingsRetryPolicyTest 覆盖默认关闭与次数上限。
 
-设备待验：
+设备验证（2026-11-16，开发机 K60，数据可清）：
 
-- 用一份 C75 之前的自家备份恢复，确认网络设置里的自动重试为关闭。
-- 用一份 C75 之后、显式开启自动重试的自家备份恢复，确认开关保持开启且次数正确。
-- 官方 3.1.1 备份恢复没有新增数据库或附件结构变化；其 settings 没有 settingsVersion，按旧备份处理并关闭自动重试。
+- V6 升级：旧 C98 安装的设置里 `enableAutoRetry=true`，覆盖安装 C75 后 DataStore 变为 false，网络设置开关为关、次数滑块隐藏；`data_version` 只升一次。
+- 新备份：在 C75 开启自动重试（3 次）后导出自备份，`settings.json` 含 `settingsVersion=6` 与 `enableAutoRetry=true`；在同一构建恢复后 DataStore 仍为 true，网络设置开关保持开启、滑块可见。
+- 旧备份：干净安装 C98，导出 `settingsVersion` 缺失、`enableAutoRetry=true` 的备份；覆盖安装 C75 并恢复后 DataStore 为 false，网络设置开关为关、滑块隐藏。
+- 官方 3.1.1：C75 的官方兼容导出含 `settingsVersion=6` 与 false；开发机上的官方客户端原本处于禁用状态，重装其自带 APK 后恢复可启动。官方客户端导入该归档并重启后正常打开，没有因未知 `settingsVersion` 解码崩溃。样本里没有会话，因此这条只验 settings 未知键容忍，不重跑官方会话与附件恢复。
+- 待验：C61 的 429、`Retry-After`、5xx 与空回复退避样本；需要在假 provider 或代理上跑，开启自动重试后确认等待间隔和 C76 卡片。
 
 ## 待验证（B1）
 

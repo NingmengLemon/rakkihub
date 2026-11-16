@@ -594,7 +594,7 @@
 - 现状：已恢复为默认关闭的可选项（2026-11-16）。`NetworkSetting.enableAutoRetry` 默认 false，网络设置提供开关和 1..10 次滑块；`Settings.retryPolicy()` 只在开关开启且次数大于 0 时返回 `RetryPolicy.NETWORK.copy(maxRetries = 次数)`，压缩摘要与记忆整理仍显式传 `RetryPolicy.NONE`。V6 迁移把旧设置里的 `enableAutoRetry` 一次性改成 false，之后用户显式开启不会被覆盖。
 - 理由：失败恢复与消息模型已经落地，自动重试可以重新作为 opt-in 提供；默认关闭避免新用户在没有预期时重复请求和重放当前 step。
 - 合并注意：`maxRetries` 保留在 0..`NetworkSetting.MAX_RETRIES`；开关开启但次数为 0 时仍返回 NONE；旧 JSON 缺少字段默认 false，`enableAutoRetry` 为 true 的旧设置由 V6 迁移关掉。`Settings.retryPolicy()` 只接聊天轮次，标题、OCR、翻译、压缩与记忆不继承自动重试。备份恢复会看 `settings.json` 的 `settingsVersion`：缺失或小于 6 的旧备份与官方备份强制关掉，写入 6 的新备份保留用户显式开启值；`SettingsJsonMigrator` 与 DataStore 迁移保持同一套语义。
-- 测试：`SettingsRetryPolicyTest` 覆盖默认关闭、开启后次数与上限、旧 JSON 默认值；`PreferenceStoreV6MigrationTest` 覆盖旧 true 被关闭且其它字段保留。
+- 测试：`SettingsRetryPolicyTest` 覆盖默认关闭、开启后次数与上限、旧 JSON 默认值；`PreferenceStoreV6MigrationTest` 覆盖旧 true 被关闭、版本门禁与备份 marker；开发机验收记录见 `backup/acceptance.md` 的 2026-11-16 C75 一节。
 
 ### C76 重试 attempt 可见化
 
