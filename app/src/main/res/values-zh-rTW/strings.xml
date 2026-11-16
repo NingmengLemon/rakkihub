@@ -1099,10 +1099,14 @@
   <string name="common_export">匯出</string>
   <string name="common_share">分享</string>
   <string name="tool_ui_edit_file">編輯：%s</string>
+  <string name="tool_ui_edit_file_running">正在編輯：%s</string>
+  <string name="tool_ui_edit_file_running_default">正在編輯檔案</string>
   <string name="tool_ui_edit_file_default">編輯檔案</string>
   <string name="tool_ui_read_file">讀取: %s</string>
   <string name="tool_ui_read_file_default">讀取檔案</string>
   <string name="tool_ui_write_file">寫入: %s</string>
+  <string name="tool_ui_write_file_running">正在寫入：%s</string>
+  <string name="tool_ui_write_file_running_default">正在寫入檔案</string>
   <string name="tool_ui_write_file_default">寫入檔案</string>
   <string name="tool_ui_list_files">列表：%s</string>
   <string name="tool_ui_list_files_default">列出檔案</string>

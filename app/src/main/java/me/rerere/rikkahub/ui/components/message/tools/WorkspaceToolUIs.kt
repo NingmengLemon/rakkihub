@@ -59,7 +59,13 @@ object EditFileToolUI : ToolUIRenderer {
     @Composable
     override fun title(context: ToolUIContext): String {
         val path = context.arguments.getStringContent("path")
-        return if (path != null) stringResource(R.string.tool_ui_edit_file, path) else stringResource(R.string.tool_ui_edit_file_default)
+        return when {
+            path == null -> stringResource(
+                if (context.loading) R.string.tool_ui_edit_file_running_default else R.string.tool_ui_edit_file_default
+            )
+            context.loading -> stringResource(R.string.tool_ui_edit_file_running, path)
+            else -> stringResource(R.string.tool_ui_edit_file, path)
+        }
     }
 
     /**
@@ -203,7 +209,13 @@ object WriteFileToolUI : ToolUIRenderer {
     @Composable
     override fun title(context: ToolUIContext): String {
         val path = context.arguments.getStringContent("path")
-        return if (path != null) stringResource(R.string.tool_ui_write_file, path) else stringResource(R.string.tool_ui_write_file_default)
+        return when {
+            path == null -> stringResource(
+                if (context.loading) R.string.tool_ui_write_file_running_default else R.string.tool_ui_write_file_default
+            )
+            context.loading -> stringResource(R.string.tool_ui_write_file_running, path)
+            else -> stringResource(R.string.tool_ui_write_file, path)
+        }
     }
 
     private fun textOf(context: ToolUIContext): String? =

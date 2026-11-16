@@ -1160,10 +1160,14 @@
   <string name="common_export">Export</string>
   <string name="common_share">Share</string>
   <string name="tool_ui_edit_file">Edit: %s</string>
+  <string name="tool_ui_edit_file_running">Editing: %s</string>
+  <string name="tool_ui_edit_file_running_default">Editing file</string>
   <string name="tool_ui_edit_file_default">Edit file</string>
   <string name="tool_ui_read_file">Read: %s</string>
   <string name="tool_ui_read_file_default">Read file</string>
   <string name="tool_ui_write_file">Write: %s</string>
+  <string name="tool_ui_write_file_running">Writing: %s</string>
+  <string name="tool_ui_write_file_running_default">Writing file</string>
   <string name="tool_ui_write_file_default">Write file</string>
   <string name="tool_ui_list_files">List: %s</string>
   <string name="tool_ui_list_files_default">List files</string>

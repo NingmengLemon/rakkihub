@@ -1101,10 +1101,14 @@ mDNSアドレス: .localホスト名を使用し、IPを知らなくても同じ
   <string name="common_export">エクスポート</string>
   <string name="common_share">共有</string>
   <string name="tool_ui_edit_file">編集: %s</string>
+  <string name="tool_ui_edit_file_running">編集中: %s</string>
+  <string name="tool_ui_edit_file_running_default">ファイル編集中</string>
   <string name="tool_ui_edit_file_default">ファイル編集</string>
   <string name="tool_ui_read_file">読み取り: %s</string>
   <string name="tool_ui_read_file_default">ファイルを読む</string>
   <string name="tool_ui_write_file">書き込み: %s</string>
+  <string name="tool_ui_write_file_running">書き込み中: %s</string>
+  <string name="tool_ui_write_file_running_default">ファイル書き込み中</string>
   <string name="tool_ui_write_file_default">ファイル書き込み</string>
   <string name="tool_ui_list_files">リスト: %s</string>
   <string name="tool_ui_list_files_default">ファイル一覧</string>
