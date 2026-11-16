@@ -113,6 +113,7 @@ fun ChatMessage(
     lastMessage: Boolean = false,
     onFork: () -> Unit,
     onRegenerate: () -> Unit,
+    onRetryStep: (() -> Unit)? = null,
     onEdit: () -> Unit,
     onShare: () -> Unit,
     onDelete: () -> Unit,
@@ -219,6 +220,7 @@ fun ChatMessage(
                 ChatMessageActionButtons(
                     message = message,
                     onRegenerate = onRegenerate,
+                    onRetryStep = onRetryStep,
                     node = node,
                     onUpdate = onUpdate,
                     onOpenActionSheet = {
@@ -247,6 +249,7 @@ fun ChatMessage(
             onDelete = onDelete,
             onShare = onShare,
             onFork = onFork,
+            onRetryStep = onRetryStep,
             model = model,
             onSelectAndCopy = {
                 showSelectCopySheet = true

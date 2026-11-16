@@ -40,6 +40,7 @@ import me.rerere.ai.provider.Model
 import me.rerere.ai.ui.UIMessage
 import me.rerere.ai.ui.UIMessagePart
 import me.rerere.hugeicons.HugeIcons
+import me.rerere.hugeicons.stroke.ArrowReloadHorizontal
 import me.rerere.hugeicons.stroke.Copy01
 import me.rerere.hugeicons.stroke.Delete01
 import me.rerere.hugeicons.stroke.Edit01
@@ -67,6 +68,7 @@ fun ColumnScope.ChatMessageActionButtons(
     onUpdate: (MessageNode) -> Unit,
     onRegenerate: () -> Unit,
     onOpenActionSheet: () -> Unit,
+    onRetryStep: (() -> Unit)? = null,
     onTranslate: ((UIMessage, Locale) -> Unit)? = null,
     onClearTranslation: (UIMessage) -> Unit = {},
 ) {
@@ -92,6 +94,14 @@ fun ColumnScope.ChatMessageActionButtons(
             contentDescription = stringResource(R.string.copy),
             onClick = { context.copyMessageToClipboard(message) },
         )
+
+        if (onRetryStep != null) {
+            ChatMessageActionButton(
+                icon = HugeIcons.ArrowReloadHorizontal,
+                contentDescription = stringResource(R.string.chat_message_retry_step),
+                onClick = onRetryStep,
+            )
+        }
 
         ChatMessageActionButton(
             icon = HugeIcons.Refresh03,
@@ -217,6 +227,7 @@ fun ChatMessageActionsSheet(
     onShare: () -> Unit,
     onFork: () -> Unit,
     onSelectAndCopy: () -> Unit,
+    onRetryStep: (() -> Unit)? = null,
     isFavorite: Boolean = false,
     onToggleFavorite: (() -> Unit)? = null,
     onWebViewPreview: () -> Unit,
@@ -235,6 +246,15 @@ fun ChatMessageActionsSheet(
                 add(MessageSheetAction(HugeIcons.WebDesign01, stringResource(R.string.render_with_webview), onClick = onWebViewPreview))
             }
             add(MessageSheetAction(HugeIcons.Edit01, stringResource(R.string.edit), onClick = onEdit))
+            if (onRetryStep != null) {
+                add(
+                    MessageSheetAction(
+                        HugeIcons.ArrowReloadHorizontal,
+                        stringResource(R.string.chat_message_retry_step),
+                        onClick = onRetryStep,
+                    )
+                )
+            }
             add(MessageSheetAction(HugeIcons.Share04, stringResource(R.string.share), onClick = onShare))
             add(MessageSheetAction(HugeIcons.GitFork, stringResource(R.string.create_fork), onClick = onFork))
             if (onToggleFavorite != null) {

@@ -1,5 +1,7 @@
 package me.rerere.rikkahub.data.model
 
+import kotlinx.datetime.TimeZone
+import kotlinx.datetime.toLocalDateTime
 import me.rerere.ai.core.MessageRole
 import me.rerere.ai.ui.MessageStatus
 import me.rerere.ai.ui.MessageStep
@@ -115,6 +117,76 @@ class ConversationMessagesTest {
         )
 
         assertNull(conversation.withToolApproval(toolCallId, ToolApprovalState.Approved))
+    }
+
+    @Test
+    fun `manual retry truncates to the failed step and resets the message`() {
+        val reply = UIMessage(
+            role = MessageRole.ASSISTANT,
+            parts = listOf(UIMessagePart.Text("prefix"), UIMessagePart.Text("failed")),
+            status = MessageStatus.FAILED,
+            isGenerating = true,
+            finishedAt = Clock.System.now().toLocalDateTime(TimeZone.UTC),
+            steps = listOf(
+                MessageStep(StepStatus.SUCCEEDED, 0, 1, Clock.System.now()),
+                MessageStep(StepStatus.FAILED, 1, 2, Clock.System.now()),
+            ),
+        )
+        val conversation = conversationOf(
+            UIMessage.user("run it").toMessageNode(),
+            reply.toMessageNode(),
+        )
+
+        val retried = conversation.prepareStepRetry(reply.id)!!.currentMessages.last()
+
+        assertEquals(listOf("prefix"), retried.parts.map { (it as UIMessagePart.Text).text })
+        assertEquals(listOf(StepStatus.SUCCEEDED), retried.steps.map { it.status })
+        assertEquals(MessageStatus.COMPLETE, retried.status)
+        assertFalse(retried.isGenerating)
+        assertNull(retried.finishedAt)
+    }
+
+    @Test
+    fun `manual retry ignores non-last nodes and completed messages`() {
+        val reply = toolReply(ToolApprovalState.Approved).copy(
+            status = MessageStatus.FAILED,
+            steps = listOf(MessageStep(StepStatus.FAILED, 0, 1, Clock.System.now())),
+        )
+        val conversation = conversationOf(
+            UIMessage.user("first").toMessageNode(),
+            reply.toMessageNode(),
+            UIMessage.user("after").toMessageNode(),
+        )
+
+        assertNull(conversation.prepareStepRetry(reply.id))
+        assertNull(
+            conversationOf(UIMessage.assistant("done").toMessageNode())
+                .prepareStepRetry(conversation.currentMessages.first().id)
+        )
+    }
+
+    @Test
+    fun `manual retry is hidden when the failed step already executed a tool`() {
+        val tool = UIMessagePart.Tool(
+            toolCallId = "executed",
+            toolName = "workspace_shell",
+            input = "{}",
+            output = listOf(UIMessagePart.Text("done")),
+            approvalState = ToolApprovalState.Approved,
+        )
+        val reply = UIMessage(
+            role = MessageRole.ASSISTANT,
+            parts = listOf(tool),
+            status = MessageStatus.FAILED,
+            steps = listOf(MessageStep(StepStatus.FAILED, 0, 1, Clock.System.now())),
+        )
+        val conversation = conversationOf(
+            UIMessage.user("run it").toMessageNode(),
+            reply.toMessageNode(),
+        )
+
+        assertNull(reply.retryableStepIndex())
+        assertNull(conversation.prepareStepRetry(reply.id))
     }
 
     @Test

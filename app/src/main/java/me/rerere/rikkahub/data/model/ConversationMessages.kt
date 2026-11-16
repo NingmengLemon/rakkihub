@@ -3,7 +3,9 @@ package me.rerere.rikkahub.data.model
 import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.put
 import me.rerere.ai.core.MessageRole
+import me.rerere.ai.provider.Model
 import me.rerere.ai.ui.MessageStatus
+import me.rerere.ai.ui.ModelSnapshot
 import me.rerere.ai.ui.StepStatus
 import me.rerere.ai.ui.ToolApprovalState
 import me.rerere.ai.ui.UIMessage
@@ -276,6 +278,56 @@ internal fun Conversation.settleUnavailableTools(messageId: Uuid? = null): Conve
     return copy(
         messageNodes = messageNodes.map { node ->
             if (node.id == targetNode.id) node.copy(messages = messages) else node
+        }
+    )
+}
+
+/** 这条消息最后一个可重试的 step 下标：失败或中断留下、且还没执行过工具的 step。 */
+internal fun UIMessage.retryableStepIndex(): Int? {
+    if (role != MessageRole.ASSISTANT) return null
+    if (status != MessageStatus.FAILED && status != MessageStatus.INTERRUPTED) return null
+    val index = steps.indexOfLast {
+        it.status == StepStatus.FAILED ||
+            it.status == StepStatus.CANCELLED ||
+            it.status == StepStatus.RUNNING ||
+            it.status == StepStatus.TOOLS
+    }.takeIf { it >= 0 } ?: return null
+    val step = steps[index]
+    val start = step.startPartIndex.coerceIn(0, parts.size)
+    val end = step.endPartIndex.coerceIn(start, parts.size)
+    // 已经执行过的工具结果不能被截掉重放，否则模型看不到已发生的事实，可能有副作用
+    if (parts.subList(start, end).any { it is UIMessagePart.Tool && it.isExecuted }) return null
+    return index
+}
+
+/**
+ * 手动重试最后一条 assistant 的失败 step：截断到该 step 的起点，删掉它和之后的 step，
+ * 把消息复位成 COMPLETE，随后由 runTurn 从这条消息继续。目标不是最后一节点时不做。
+ * 传入 [model] 时同步消息的模型标记，避免续写内容与气泡显示的模型不一致。
+ */
+internal fun Conversation.prepareStepRetry(
+    messageId: Uuid,
+    model: Model? = null,
+): Conversation? {
+    val node = messageNodes.lastOrNull() ?: return null
+    val message = node.currentMessage
+    if (message.id != messageId) return null
+    val stepIndex = message.retryableStepIndex() ?: return null
+    val step = message.steps[stepIndex]
+    val start = step.startPartIndex.coerceIn(0, message.parts.size)
+    val retried = message.copy(
+        parts = message.parts.take(start),
+        steps = message.steps.take(stepIndex),
+        status = MessageStatus.COMPLETE,
+        isGenerating = false,
+        finishedAt = null,
+        modelId = model?.id ?: message.modelId,
+        modelSnapshot = model?.let { ModelSnapshot(it.modelId, it.displayName) } ?: message.modelSnapshot,
+    )
+    val messages = node.messages.map { if (it.id == message.id) retried else it }
+    return copy(
+        messageNodes = messageNodes.map { current ->
+            if (current.id == node.id) current.copy(messages = messages) else current
         }
     )
 }

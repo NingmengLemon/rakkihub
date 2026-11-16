@@ -107,6 +107,7 @@ import me.rerere.rikkahub.data.model.hasVisiblePendingTool
 import me.rerere.rikkahub.data.model.withConversation
 import me.rerere.rikkahub.data.model.isAwaitingToolApproval
 import me.rerere.rikkahub.data.model.pendingToolCalls
+import me.rerere.rikkahub.data.model.retryableStepIndex
 import me.rerere.rikkahub.service.ChatError
 import me.rerere.rikkahub.service.RecordedRetryAttempt
 import me.rerere.rikkahub.ui.components.ai.RetryAttemptsCard
@@ -141,6 +142,7 @@ fun ChatList(
     onDismissError: (Uuid) -> Unit = {},
     onClearAllErrors: () -> Unit = {},
     onRegenerate: (UIMessage) -> Unit = {},
+    onRetryStep: (UIMessage) -> Unit = {},
     onEdit: (UIMessage) -> Unit = {},
     onForkMessage: (UIMessage) -> Unit = {},
     onDelete: (UIMessage) -> Unit = {},
@@ -187,6 +189,7 @@ fun ChatList(
                 onDismissError = onDismissError,
                 onClearAllErrors = onClearAllErrors,
                 onRegenerate = onRegenerate,
+                onRetryStep = onRetryStep,
                 onEdit = onEdit,
                 onForkMessage = onForkMessage,
                 onDelete = onDelete,
@@ -240,6 +243,7 @@ private fun ChatListNormal(
     onDismissError: (Uuid) -> Unit,
     onClearAllErrors: () -> Unit,
     onRegenerate: (UIMessage) -> Unit,
+    onRetryStep: (UIMessage) -> Unit,
     onEdit: (UIMessage) -> Unit,
     onForkMessage: (UIMessage) -> Unit,
     onDelete: (UIMessage) -> Unit,
@@ -424,6 +428,13 @@ private fun ChatListNormal(
                             loading = loading && index == lastMessageIndex,
                             onRegenerate = {
                                 onRegenerate(node.currentMessage)
+                            },
+                            onRetryStep = if (index == lastMessageIndex &&
+                                node.currentMessage.retryableStepIndex() != null
+                            ) {
+                                { onRetryStep(node.currentMessage) }
+                            } else {
+                                null
                             },
                             onEdit = {
                                 onEdit(node.currentMessage)

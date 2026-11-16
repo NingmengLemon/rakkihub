@@ -484,6 +484,9 @@ private fun ChatPageContent(
                 onRegenerate = {
                     vm.regenerateAtMessage(it)
                 },
+                onRetryStep = {
+                    vm.retryMessageStep(it)
+                },
                 onEdit = {
                     if (isBusy) {
                         vm.showStopGeneratingFirstError()

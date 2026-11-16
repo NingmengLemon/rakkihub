@@ -75,6 +75,7 @@ import me.rerere.rikkahub.data.model.localFileUrls
 import me.rerere.rikkahub.data.model.pendingToolCalls
 import me.rerere.rikkahub.data.model.planCompressionFor
 import me.rerere.rikkahub.data.model.planHistoryTruncation
+import me.rerere.rikkahub.data.model.prepareStepRetry
 import me.rerere.rikkahub.data.model.removeCompressionPair
 import me.rerere.rikkahub.data.model.removeCompressionPairs
 import me.rerere.rikkahub.data.model.replaceUserRegexes
@@ -645,6 +646,40 @@ class ChatService(
                 }
             }
 
+            session.setJob(job)
+        }
+    }
+
+    /**
+     * 手动重试最后一条 assistant 的失败 step：先截断到该 step 起点并复位消息，
+     * 再复用 runTurn 从这条消息继续；不新建候选分支。
+     */
+    fun retryMessageStep(conversationId: Uuid, messageId: Uuid) {
+        val session = sessionManager.getOrCreate(conversationId)
+        synchronized(session) {
+            if (session.isCompressing) return
+            if (!session.canRegenerate()) {
+                reportRegenerateBlocked(session)
+                return
+            }
+            val job = launchGenerationJob(conversationId = conversationId) {
+                try {
+                    session.replyMessageId.value = null
+                    ensureInitialized(session)
+                    if (session.state.value.isAwaitingToolApproval || session.pendingApprovalTurn != null) {
+                        reportRegenerateBlocked(session)
+                        return@launchGenerationJob
+                    }
+                    val settings = settingsStore.awaitLoaded()
+                    session.tryUpdate {
+                        it.prepareStepRetry(messageId, settings.getChatModelOf(it))
+                    } ?: return@launchGenerationJob
+                    session.flush()
+                    runTurn(session)
+                } catch (e: Exception) {
+                    reportFailure(session, e, R.string.error_title_regenerate_message)
+                }
+            }
             session.setJob(job)
         }
     }

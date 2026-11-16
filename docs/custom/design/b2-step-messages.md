@@ -1,6 +1,6 @@
 # B2：step 级提交与失败投影（完整版草稿）
 
-- 状态：部分落地。Web DTO 的 status/steps、conversation_search 的失败消息过滤（scratch 与状态共用一次会话加载）、contextLimitBoundaryIndex 的投影对齐已完成；手动 step 重试、官方导出兜底、C76 持久化与剩余消费方待后续。
+- 状态：部分落地。Web DTO 的 status/steps、conversation_search 的失败消息过滤（scratch 与状态共用一次会话加载）、contextLimitBoundaryIndex 的投影对齐已完成；手动 step 重试已落地；官方导出兜底按样本待验，C76 持久化与剩余消费方待后续。
 - 日期：2026-11-15
 - 前置：先完成 [`b1-step-commits.md`](b1-step-commits.md)；本文档保留手动重试、错误卡片、C76、搜索过滤、Web/导出兜底等 B2 内容
 - 对齐参考：DSH `dsh-v0.2.2-rc.1`（tag 指向 commit `66491b05e3f05ad35bcdd4f6cd7ed26041d9e3db`，2026-11-04；本地 clone `E:\MyWorkspace\deepseek-harness` 的 HEAD 是 `dsh-v0.2.1-rc.5`，本文档的 0.2.2 事实均用 `git show dsh-v0.2.2-rc.1:<path>` 读取）
@@ -253,10 +253,10 @@ RUNNING 会出现在当前请求里：AgentLoop 把正在生成的 assistant 消
 - 每次重试开始时，preview 只重建当前 step 的 part 范围，之前的 step parts 不参与重置；消息 id 与 step id 在整个重试期间保持不变。
 - 重试成功：本 step 提交成功，之前的 step 不动；失败 attempt 只留摘要。
 - 重试耗尽：本 step FAILED，消息 FAILED；下一轮请求保留之前 SUCCEEDED step 的内容与工具事实，失败 step 只保留 Tool parts，正文与推理丢弃；摘要与 `conversation_search` 按整条消息丢弃。
-- 手动 step 重试不通过错误卡片：C77 已永久取消，错误卡片只做信息提示。手动重试如果需要，入口放在消息操作或独立面板；`ChatError` 不增加 retry 字段。具体入口未定，落地前重新设计。
-- 手动重试入口未定；若落地，目标节点必须仍是最后一个节点，目标消息仍是该节点当前候选，目标 step 仍存在；任一不满足就按陈旧处理。会话 `updateAt` 只用于辅助判断，不作为唯一判据。
+- 手动 step 重试不通过错误卡片：C77 已永久取消，错误卡片只做信息提示。入口落在最后一条可重试 assistant 的消息快捷按钮与更多菜单；`ChatError` 不增加 retry 字段。
+- 手动重试要求目标节点仍是最后一个节点、目标消息仍是该节点当前候选；服务端重新推导当前可重试 step，入口只带 messageId，不信任 UI 传来的 step 下标。目标 step 已执行过工具时不露出入口，避免截断后丢掉已发生的工具事实。
 - 重新生成整轮仍然新建候选消息；手动 step 重试不新建候选，这是 step 生命周期内的原位更新，并对消息状态做一次显式复位。
-- 错误卡片没有重试语义，不再需要目标校验；手动 step 重试如果后续落地，再单独定义入口、目标与陈旧处理。
+- 错误卡片没有重试语义，不再需要目标校验；手动 step 重试的入口与陈旧处理由消息操作入口负责。
 
 ## 9. 会话操作与消费方
 
@@ -306,7 +306,7 @@ RUNNING 会出现在当前请求里：AgentLoop 把正在生成的 assistant 消
 
 1. 模型与投影：`steps`、`callComplete`、两个投影函数、空消息与检查点规则、序列化与旧数据测试。
 2. 生命周期与结算：step 记录、范围重算、失败/取消/审批/进程死亡的收尾、工具事实保留；仍不恢复自动重试。
-3. 重试恢复：聊天轮次接回 `RetryPolicy`、C75 设置入口、C76 attempt 卡片；手动 step 重试入口待定；C77 不再恢复。
+3. 重试恢复：聊天轮次接回 `RetryPolicy`、C75 设置入口、C76 attempt 卡片；手动 step 重试已落地为消息操作入口；C77 不再恢复。
 4. 消费方与验收：Web DTO、搜索过滤、导出与官方兼容验收、设备验收、`docs/custom/README.md`（文档表补 design/ 一行与降级说明）、`docs/custom/backup/importer.md`（导入 raw copy 不变量保持）、`docs/custom/backup/acceptance.md`（官方恢复样本）、`docs/custom/checklist.md`（含上节列出的 C 项与 C97 明细）、`docs/custom/roadmap.md` 同步。
 
 阶段 1 到 4 作为一个批次推送，不发布中间态。
@@ -316,7 +316,7 @@ RUNNING 会出现在当前请求里：AgentLoop 把正在生成的 assistant 消
 - 序列化：旧 JSON 默认空 steps 与 `callComplete=true`；新 JSON 往返；attempts 截断到 20 条；`maxRetries` 与时间字段往返；StepStatus 的小写序列名。
 - 投影：成功 step 全保留；失败 step 只留 Tool；纯文本失败投影为空后整条丢弃；取消 step 保留前缀；旧 FAILED 消息整条丢弃且不套用单 step 规则；空 steps 加 FAILED 的新 turn 整条丢弃；压缩失败留下的空 steps 回复先由 `withoutCompressionScratch` 移除；相邻 user 在空消息丢弃后仍能合并；空文本截断标记不被丢弃；TOOLS step 的请求与摘要投影；RUNNING 出现在当前请求时的投影；多 step FAILED 消息的 `conversation_search` 过滤且 UI 搜索仍可见；跨多个会话的 `conversation_search` 结果都按各自会话状态过滤；`ServerTool` 的 COMPLETED 与 IN_PROGRESS 在每张投影表下的处理。
 - 生命周期：模型成功无工具直接完成；空回复重试耗尽；工具失败继续；审批暂停与恢复；审批恢复不被 runTurn 开头结算破坏；审批暂停后进程重启仍可恢复；重新生成中间 assistant 节点时出现需要审批的调用，turn 结束直接结算为 not_started、不进入 AwaitingApproval；Web（`/api/conversations/{id}/stop`）在审批等待时停止，step 关闭为 CANCELLED、消息 INTERRUPTED、pendingApprovalTurn 清理；前台服务超时在审批等待时不可达；重新生成中间 assistant 节点后停止，结算命中该节点而不是会话末尾；用户取消；工具执行一半；首 token 前取消仍有 step 可结算；生成中进程死亡恢复；跨 step 死亡时最后一个 SUCCEEDED 保持成功；终态失败时 Auto/Approved/Answered 工具收口；半截 ToolCall 被删除；`ToolCallEnd` 按 id 置位、`Tool.merge` 单调合并、`executeTools` 与主循环都过滤未完成调用；`handleToolApproval` 的 Accepted/Conflict/Stale 三种返回；输出变换插入 Reasoning 后 step 范围重算正确；取消时 preview 的视觉变换与 Reasoning 插入同时发生仍正确；最终失败消息保留最后一次 attempt 的 partial parts。
-- 重试：只在聊天轮次生效；压缩与记忆传 NONE；attempt 摘要与 maxRetries；手动重试从失败 step 继续到本轮结束且拿到新 maxSteps；手动重试入口待定，不做错误卡片重试；`stepCount` 继续累计。
+- 重试：只在聊天轮次生效；压缩与记忆传 NONE；attempt 摘要与 maxRetries；手动重试从失败 step 继续到本轮结束且拿到新 maxSteps；入口为消息快捷按钮与更多菜单，不做错误卡片重试；`stepCount` 继续累计。
 - 上下文：失败消息占用与不占用 `contextMessageLimit` 两种路径；边界下标分三组断言：没有截断时返回 null，有压缩 scratch 时返回 null，窗口前有被丢弃消息但确实发生截断时返回映射后的节点下标；截断时与请求投影一致；最后一条 assistant 去掉与丢空消息的先后顺序；`keepRecent` 不变的压缩计划。
 - 压缩：估算与请求使用同一投影、同一窗口的用例。
 - 消费方：Web DTO、FTS、搜索跳转、`conversation_search` 不返回失败正文、浮动窗口、Markdown 导出、官方兼容导出（普通消息空 steps 与带 steps 两种样本）。

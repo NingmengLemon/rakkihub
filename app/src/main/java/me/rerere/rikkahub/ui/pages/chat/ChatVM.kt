@@ -392,6 +392,10 @@ class ChatVM(
         chatService.regenerateAtMessage(_conversationId, message.id)
     }
 
+    fun retryMessageStep(message: UIMessage) {
+        chatService.retryMessageStep(_conversationId, message.id)
+    }
+
     fun handleToolApproval(
         toolCallId: String,
         approved: Boolean,
