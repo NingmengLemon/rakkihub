@@ -699,6 +699,7 @@
   <string name="setting_files_page_ocr_edit_content_description">编辑 OCR 文本</string>
   <string name="setting_files_page_ocr_title">OCR 文本</string>
   <string name="setting_files_page_ocr_description">图片发给不支持图片的模型时使用。保存后会覆盖所有 OCR 配置下的自动识别结果。清空文本可删除手改内容。</string>
+  <string name="setting_files_page_ocr_load_failed">加载 OCR 文本失败</string>
   <string name="setting_files_page_ocr_saved">OCR 文本已保存</string>
   <string name="setting_files_page_ocr_save_failed">保存 OCR 文本失败</string>
   <string name="setting_files_page_delete_content_description">删除</string>

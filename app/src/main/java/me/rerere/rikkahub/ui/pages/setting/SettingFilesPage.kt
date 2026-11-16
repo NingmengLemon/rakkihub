@@ -15,6 +15,7 @@ import androidx.compose.foundation.layout.calculateStartPadding
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
@@ -124,16 +125,31 @@ fun SettingFilesPage(
     val cleanUnusedFailedToast = stringResource(R.string.setting_files_page_clean_unused_failed)
     val ocrSavedToast = stringResource(R.string.setting_files_page_ocr_saved)
     val ocrSaveFailedToast = stringResource(R.string.setting_files_page_ocr_save_failed)
+    val ocrLoadFailedToast = stringResource(R.string.setting_files_page_ocr_load_failed)
 
     var selectedFolder by remember { mutableStateOf(FileFolders.UPLOAD) }
     var pendingDelete by remember { mutableStateOf<ManagedFileEntity?>(null) }
     var editingOcr by remember { mutableStateOf<ManagedFileEntity?>(null) }
     var ocrDraft by remember { mutableStateOf("") }
+    var ocrLoading by remember { mutableStateOf(false) }
+    var ocrLoadFailed by remember { mutableStateOf(false) }
 
     // 切换目标时 LaunchedEffect 会取消上一次加载，避免旧文件的异步结果覆盖当前草稿
     LaunchedEffect(editingOcr?.id) {
         val target = editingOcr ?: return@LaunchedEffect
-        ocrDraft = derivations.getAnyOcr(target.id)?.text.orEmpty()
+        ocrLoading = true
+        ocrLoadFailed = false
+        try {
+            ocrDraft = derivations.getAnyOcr(target.id)?.text.orEmpty()
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            Log.w("SettingFilesPage", "Failed to load OCR text for ${target.id}", e)
+            ocrLoadFailed = true
+            toaster.show(ocrLoadFailedToast)
+        } finally {
+            ocrLoading = false
+        }
     }
     var showCleanSheet by remember { mutableStateOf(false) }
     var showCleanUnused by remember { mutableStateOf(false) }
@@ -261,12 +277,18 @@ fun SettingFilesPage(
 
     if (editingOcr != null) {
         val target = editingOcr!!
+        val sheetState = rememberBottomSheetState(
+            initialValue = SheetValue.Hidden,
+            enabledValues = setOf(SheetValue.Hidden, SheetValue.Expanded),
+        )
         ModalBottomSheet(
             onDismissRequest = { editingOcr = null },
+            sheetState = sheetState,
         ) {
             Column(
                 modifier = Modifier
                     .fillMaxWidth()
+                    .imePadding()
                     .navigationBarsPadding()
                     .padding(horizontal = 16.dp)
                     .padding(bottom = 16.dp),
@@ -292,7 +314,7 @@ fun SettingFilesPage(
                     modifier = Modifier.fillMaxWidth(),
                     minLines = 6,
                     maxLines = 12,
-                    placeholder = { Text(stringResource(R.string.setting_files_page_ocr_title)) },
+                    label = { Text(stringResource(R.string.setting_files_page_ocr_title)) },
                 )
                 Row(
                     modifier = Modifier.fillMaxWidth(),
@@ -319,6 +341,7 @@ fun SettingFilesPage(
                                 }
                             }
                         },
+                        enabled = !ocrLoading && !ocrLoadFailed,
                     ) {
                         Text(stringResource(R.string.common_save))
                     }

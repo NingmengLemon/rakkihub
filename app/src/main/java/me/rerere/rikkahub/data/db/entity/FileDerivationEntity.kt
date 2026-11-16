@@ -40,7 +40,7 @@ data class FileDerivationEntity(
     // 生成方式标识；OCR 为 ocr:v1:<prompt+model 指纹>，随 OCR 设置变化；旧 ocr:v1 行保留但不读
     @ColumnInfo("producer")
     val producer: String,
-    // Phase 1 没有编辑入口，保留字段给后续附件管理；为 true 时 upsert 不覆盖
+    // 手改入口写入；为 true 时自动 OCR 写入不覆盖
     @ColumnInfo("edited")
     val edited: Boolean = false,
     @ColumnInfo("created_at")

@@ -706,6 +706,7 @@
   <string name="setting_files_page_ocr_edit_content_description">Edit OCR text</string>
   <string name="setting_files_page_ocr_title">OCR text</string>
   <string name="setting_files_page_ocr_description">Used when the image is sent to a model without image support. Saving replaces the automatic OCR result for every OCR configuration. Clear the field to remove the manual text.</string>
+  <string name="setting_files_page_ocr_load_failed">Could not load OCR text</string>
   <string name="setting_files_page_ocr_saved">OCR text saved</string>
   <string name="setting_files_page_ocr_save_failed">Could not save OCR text</string>
   <string name="setting_files_page_delete_content_description">Delete</string>

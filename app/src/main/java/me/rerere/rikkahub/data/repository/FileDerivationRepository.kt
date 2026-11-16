@@ -40,7 +40,7 @@ class FileDerivationRepository(
             dao.update(existing.copy(text = text, edited = true, updatedAt = now))
             return true
         }
-        return dao.insert(
+        val inserted = dao.insert(
             FileDerivationEntity(
                 fileId = fileId,
                 kind = OCR_KIND,
@@ -50,7 +50,12 @@ class FileDerivationRepository(
                 createdAt = now,
                 updatedAt = now,
             )
-        ) != -1L
+        )
+        if (inserted != -1L) return true
+        val raced = dao.get(fileId, OCR_KIND, OCR_MANUAL_PRODUCER) ?: return false
+        if (raced.text == text && raced.edited) return true
+        dao.update(raced.copy(text = text, edited = true, updatedAt = now))
+        return true
     }
 
     /** 已有 edited 的行不覆盖；相同文本也不重复写。返回是否写入了新内容。 */

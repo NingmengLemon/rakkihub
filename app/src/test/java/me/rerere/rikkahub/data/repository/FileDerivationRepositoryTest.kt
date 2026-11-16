@@ -57,18 +57,24 @@ class FileDerivationRepositoryTest {
     fun `manual OCR text overrides generated derivations across producers`() = runBlocking {
         val (repository, _) = repository()
         val producer = FileDerivationRepository.ocrProducer("prompt-a", "model-a")
+        val other = FileDerivationRepository.ocrProducer("prompt-b", "model-b")
         assertTrue(repository.putOcr(7, "generated", producer, now = 100))
         assertTrue(repository.editOcr(7, "manual", now = 200))
 
         assertEquals("manual", repository.getAnyOcr(7)?.text)
         assertEquals("manual", repository.listForFiles(listOf(7), producer).getValue(7).text)
-        // 手改行存在时，自动识别不能再覆盖它
+        assertEquals("manual", repository.listForFiles(listOf(7), other).getValue(7).text)
+        // 手改行存在时，任何 producer 的自动识别都不能覆盖它
         assertFalse(repository.putOcr(7, "new generated", producer, now = 300))
-        assertEquals("manual", repository.listForFiles(listOf(7), producer).getValue(7).text)
+        assertFalse(repository.putOcr(7, "auto-b", other, now = 350))
+        assertEquals("manual", repository.listForFiles(listOf(7), other).getValue(7).text)
+        // 相同文本保存视为成功，不产生第二条手改行
+        assertTrue(repository.editOcr(7, "manual", now = 360))
 
         // 空文本删掉手改，自动派生重新可见
         assertTrue(repository.editOcr(7, " ", now = 400))
         assertEquals("generated", repository.listForFiles(listOf(7), producer).getValue(7).text)
+        assertEquals("generated", repository.getAnyOcr(7)?.text)
     }
 
     @Test

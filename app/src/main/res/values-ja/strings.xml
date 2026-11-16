@@ -679,6 +679,7 @@
   <string name="setting_files_page_ocr_edit_content_description">OCR テキストを編集</string>
   <string name="setting_files_page_ocr_title">OCR テキスト</string>
   <string name="setting_files_page_ocr_description">画像に対応していないモデルへ送るときに使います。保存すると、すべての OCR 設定の自動認識結果を上書きします。空欄にすると手動テキストを削除します。</string>
+  <string name="setting_files_page_ocr_load_failed">OCR テキストを読み込めませんでした</string>
   <string name="setting_files_page_ocr_saved">OCR テキストを保存しました</string>
   <string name="setting_files_page_ocr_save_failed">OCR テキストを保存できませんでした</string>
   <string name="setting_files_page_delete_content_description">削除</string>

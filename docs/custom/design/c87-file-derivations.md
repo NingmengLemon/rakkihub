@@ -58,7 +58,7 @@ CREATE UNIQUE INDEX index_file_derivations_file_id_kind_producer
 ## 删除、清理与备份
 
 - `managed_files` 删除、按路径删除、按目录删除时，由 `file_derivations.file_id` 的 `ON DELETE CASCADE` 清理（Room 打开外键）；`FilesRepository` 不再手工级联。
-- 自家备份恢复会合并同内容的上传文件并删掉落选行，`file_id` 无法可靠对应；Phase 1 在 `BackupManager.stageDatabase` 恢复时统一清空 `file_derivations`，最多重新识别一次，避免错配或孤儿。官方备份本来没有这张表，迁移后为空。
+- 自家备份恢复会合并同内容的上传文件并删掉落选行，`file_id` 无法可靠对应；`BackupManager.stageDatabase` 恢复时统一清空 `file_derivations`，包括 `edited=1` 的手改行，最多重新识别一次，避免错配或孤儿；手改文本恢复后需要重新编辑。官方备份本来没有这张表，迁移后为空。
 
 ## 官方兼容
 
@@ -84,5 +84,5 @@ CREATE UNIQUE INDEX index_file_derivations_file_id_kind_producer
 
 - 没有自动派生结果的清空入口；手改文本置空只删除 `ocr:manual` 行，让自动结果恢复。
 - producer 现在随 OCR 提示词和模型 id 变化，旧 producer 行保留但不再读取；有文件行的图片换设置后首次发送会重新识别一次。没有文件行的旧附件仍只能使用 metadata。
-- 备份恢复不合并 derivation，统一清空后重新识别。
+- 备份恢复不合并 derivation，统一清空后重新识别；手改行也会被清空，恢复后需重新编辑。官方导出同样 drop 整张表。
 - 只处理能映射到 `managed_files` 的本地图片；本安装 `filesDir` 下的绝对和相对地址都会解析，别的安装路径、目录外文件和未登记文件走旧回退。
