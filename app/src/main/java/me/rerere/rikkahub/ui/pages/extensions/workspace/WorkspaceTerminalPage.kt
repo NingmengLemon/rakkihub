@@ -1,6 +1,7 @@
 package me.rerere.rikkahub.ui.pages.extensions.workspace
 
 import android.graphics.Typeface
+import android.view.KeyEvent
 import androidx.compose.foundation.background
 import androidx.compose.foundation.basicMarquee
 import androidx.compose.foundation.clickable
@@ -304,6 +305,7 @@ private fun WorkspaceTerminalTabContent(
                 tab.client.terminalView = null
             }
             viewClient.terminalView = null
+            viewClient.imeInputView = null
         }
     }
 
@@ -317,8 +319,8 @@ private fun WorkspaceTerminalTabContent(
                 modifier = Modifier.fillMaxSize(),
                 factory = { viewContext ->
                     TerminalView(viewContext, null).apply {
-                        isFocusable = true
-                        isFocusableInTouchMode = true
+                        isFocusable = false
+                        isFocusableInTouchMode = false
                         setTextSize(terminalTextSizePx)
                         setTypeface(terminalTypeface)
                         setTerminalViewClient(viewClient)
@@ -331,8 +333,8 @@ private fun WorkspaceTerminalTabContent(
                     }
                 },
                 update = { terminalView ->
-                    terminalView.isFocusable = true
-                    terminalView.isFocusableInTouchMode = true
+                    terminalView.isFocusable = false
+                    terminalView.isFocusableInTouchMode = false
                     terminalView.setTextSize(terminalTextSizePx)
                     terminalView.setTypeface(terminalTypeface)
                     terminalView.setTerminalViewClient(viewClient)
@@ -340,6 +342,43 @@ private fun WorkspaceTerminalTabContent(
                     viewClient.terminalView = terminalView
                     terminalView.attachSession(tab.session)
                     terminalView.onScreenUpdated()
+                },
+            )
+            AndroidView(
+                modifier = Modifier
+                    .align(Alignment.BottomStart)
+                    .size(1.dp),
+                factory = { viewContext ->
+                    TerminalImeEditText(viewContext).apply {
+                        alpha = 0f
+                        onCommitText = { text ->
+                            tab.session.writeText(
+                                terminalInputText(
+                                    text = text,
+                                    control = viewClient.controlDown,
+                                    alt = viewClient.altDown,
+                                )
+                            )
+                        }
+                        onDelete = {
+                            tab.session.write(byteArrayOf(0x7f), 0, 1)
+                        }
+                        onKeyEvent = { keyCode, event ->
+                            val terminal = viewClient.terminalView
+                            when {
+                                terminal == null -> false
+                                event.action == KeyEvent.ACTION_UP -> terminal.onKeyUp(keyCode, event)
+                                else -> terminal.onKeyDown(keyCode, event)
+                            }
+                        }
+                        viewClient.imeInputView = this
+                        post {
+                            viewClient.focusAndShowKeyboard()
+                        }
+                    }
+                },
+                update = { inputView ->
+                    viewClient.imeInputView = inputView
                 },
             )
             if (tab.finished) {
@@ -427,4 +466,18 @@ private fun TerminalExtraKey(
 private fun TerminalSession.writeText(text: String) {
     val bytes = text.toByteArray()
     write(bytes, 0, bytes.size)
+}
+
+private fun terminalInputText(text: String, control: Boolean, alt: Boolean): String {
+    if (!control && !alt) return text
+    return buildString {
+        if (alt) append('\u001B')
+        text.forEach { char ->
+            if (control && char.code in 0x40..0x7f && char.isLetter()) {
+                append((char.uppercaseChar().code and 0x1f).toChar())
+            } else {
+                append(char)
+            }
+        }
+    }
 }

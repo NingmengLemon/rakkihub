@@ -355,7 +355,7 @@
 - 消息操作里的“重试”和“重新生成”图标没有区分度：已处理（2026-11-16），失败 step 的重试改用 `ArrowTurnBackward`，整轮重新生成保持 `Refresh03`，聊天快捷栏与更多菜单同步；两者语义仍分别对应重跑当前 step 和新建整轮候选。
 - Gemini 协议下写文件/编辑文件时没有“正在写入/正在编辑”状态：已处理（2026-11-16），`workspace_write_file` / `workspace_edit_file` 的标题在 `ToolUIContext.loading` 为真时改用“Writing/Editing”文案，执行完成后回到普通标题；Gemini 的 `functionCall` 仍是整块到达，因此参数生成阶段没有可展示的 part，进入工具执行后卡片和状态会立即出现。
 - 工作区文件编辑器从多任务视图切回时自动弹出输入法并滚回光标位置，丢失切出前的浏览进度：已处理（2026-11-16），编辑页在 `ON_PAUSE` 保存 `ScrollState`、清焦点并收起输入法，`ON_RESUME` 和加载完成后恢复滚动位置；`TextField` 现在持有同一个 `scrollState`，回来不再自动聚焦。设备上用 200 行文件验证了无键盘和键盘打开两种切出场景。
-- 工作区终端不能输入其他语言：Gboard 中文等 IME 的组合文本、候选词提交和删除需要走终端输入连接，当前只适合直接键事件；需要支持 composing text 与 `commitText`，并用 Gboard 中文实际验证候选、提交、退格和粘贴。
+- 工作区终端不能输入其他语言：已处理（2026-11-16），终端页增加一个隐藏的 `TerminalImeEditText` 作为正常文本输入宿主，IME 的 `commitText` 按 UTF-8 写给 `TerminalSession`，删除/Enter/Tab 和控制键单独转发，`TerminalView` 不再抢焦点。开发机装 Rootfs 后用 Fcitx5 拼音验证了“你好”提交、bash 执行和错误回显；Gboard 等其他标准 IME 走同一条 InputConnection。终端核心仍是上游 0.118.0，没有改 AAR。
 
 ### 失败恢复与上下文的返工
 

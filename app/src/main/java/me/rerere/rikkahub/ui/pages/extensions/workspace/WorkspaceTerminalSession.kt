@@ -114,6 +114,7 @@ internal class WorkspaceTerminalViewClient(
     private val context: Context,
 ) : TerminalViewClient {
     var terminalView: TerminalView? = null
+    var imeInputView: TerminalImeEditText? = null
     var controlDown: Boolean = false
     var altDown: Boolean = false
 
@@ -179,11 +180,12 @@ internal class WorkspaceTerminalViewClient(
     }
 
     fun focusAndShowKeyboard() {
-        val view = terminalView ?: return
+        val inputView = imeInputView ?: terminalView ?: return
         val inputMethodManager = context.getSystemService(Context.INPUT_METHOD_SERVICE) as InputMethodManager
-        view.post {
-            view.requestFocus()
-            inputMethodManager.showSoftInput(view, InputMethodManager.SHOW_IMPLICIT)
+        inputView.post {
+            inputView.requestFocus()
+            inputMethodManager.restartInput(inputView)
+            inputMethodManager.showSoftInput(inputView, InputMethodManager.SHOW_IMPLICIT)
         }
     }
 
