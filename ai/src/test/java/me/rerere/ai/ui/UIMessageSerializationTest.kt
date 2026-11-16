@@ -3,6 +3,7 @@ package me.rerere.ai.ui
 import kotlinx.serialization.json.Json
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
+import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
@@ -102,7 +103,7 @@ class UIMessageSerializationTest {
             ),
             steps = listOf(
                 MessageStep(
-                    StepStatus.SUCCEEDED, 0, 2, now, now,
+                    StepStatus.FAILED, 0, 2, now, now,
                     attempts = listOf(
                         MessageAttempt(
                             attempt = 1,
@@ -121,7 +122,7 @@ class UIMessageSerializationTest {
         val stepId = message.steps.single().id
         val decoded = Json.decodeFromString<UIMessage>(Json.encodeToString(message))
 
-        assertEquals(StepStatus.SUCCEEDED, decoded.steps.single().status)
+        assertEquals(StepStatus.FAILED, decoded.steps.single().status)
         assertEquals(now, decoded.steps.single().startedAt)
         assertEquals(1, decoded.steps.single().attempts.single().attempt)
         assertEquals("SERVER", decoded.steps.single().attempts.single().code)
@@ -137,6 +138,31 @@ class UIMessageSerializationTest {
         val step = Json.decodeFromString<UIMessage>(legacy).steps.single()
 
         assertTrue(step.attempts.isEmpty())
+        assertNull(step.failureCode)
+        assertNotNull(step.id)
+    }
+
+    @Test
+    fun `succeeded step keeps a null failure code and stable id`() {
+        val stepId = Uuid.random()
+        val message = UIMessage.assistant("ok").copy(
+            steps = listOf(
+                MessageStep(
+                    status = StepStatus.SUCCEEDED,
+                    startPartIndex = 0,
+                    endPartIndex = 1,
+                    startedAt = kotlin.time.Instant.fromEpochSeconds(1),
+                    id = stepId,
+                )
+            )
+        )
+
+        val decoded = Json.decodeFromString<UIMessage>(Json.encodeToString(message))
+        val step = decoded.steps.single()
+
+        assertEquals(StepStatus.SUCCEEDED, step.status)
+        assertNull(step.failureCode)
+        assertEquals(stepId, step.id)
     }
 
     @Test

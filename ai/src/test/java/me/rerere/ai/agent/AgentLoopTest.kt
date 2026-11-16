@@ -119,6 +119,40 @@ class AgentLoopTest {
     }
 
     @Test
+    fun `failed stream records a typed llm failure code`() = runTest {
+        provider.stream {
+            text("half")
+            throw LlmFailure("auth failed", LlmFailureCode.AUTH)
+        }
+        val events = mutableListOf<AgentEvent>()
+
+        runCatching {
+            runAgent(request(retry = RetryPolicy.NONE), hooks).collect { events += it }
+        }
+
+        val step = events.filterIsInstance<AgentEvent.MessageUpdated>().last().message.steps.single()
+        assertEquals(StepStatus.FAILED, step.status)
+        assertEquals("AUTH", step.failureCode)
+    }
+
+    @Test
+    fun `failed stream walks nested failure causes`() = runTest {
+        provider.stream {
+            text("half")
+            throw RuntimeException("wrapped", LlmFailure("server failed", LlmFailureCode.SERVER))
+        }
+        val events = mutableListOf<AgentEvent>()
+
+        runCatching {
+            runAgent(request(retry = RetryPolicy.NONE), hooks).collect { events += it }
+        }
+
+        val step = events.filterIsInstance<AgentEvent.MessageUpdated>().last().message.steps.single()
+        assertEquals(StepStatus.FAILED, step.status)
+        assertEquals("SERVER", step.failureCode)
+    }
+
+    @Test
     fun `empty failed stream does not persist an empty assistant message`() = runTest {
         provider.stream {
             throw java.io.IOException("boom")
@@ -706,6 +740,13 @@ class AgentLoopTest {
         val finished = events.finished()
         assertEquals(listOf("full"), finished.message.texts())
         assertEquals(setOf(finished.message.id), events.messageIds())
+        assertEquals(1, finished.message.steps.size)
+        val stepIds = events.filterIsInstance<AgentEvent.MessageUpdated>()
+            .flatMap { it.message.steps }
+            .map { it.id }
+            .toSet()
+        assertEquals(1, stepIds.size)
+        assertEquals(finished.message.steps.single().id, stepIds.single())
         assertEquals(2, provider.requests.size)
         val recorded = finished.message.steps.single().attempts.single()
         assertEquals(1, recorded.attempt)

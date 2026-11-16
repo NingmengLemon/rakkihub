@@ -75,15 +75,19 @@ val steps: List<MessageStep> = emptyList()
 ```kotlin
 @Serializable
 data class MessageStep(
-    val id: Uuid = Uuid.random(),
     val status: StepStatus,
     // 本步在 message.parts 里的范围，左闭右开
     val startPartIndex: Int,
     val endPartIndex: Int,
-    val attempts: List<MessageAttempt> = emptyList(),
-    val failureCode: String? = null,
     val startedAt: Instant,
     val finishedAt: Instant? = null,
+    val attempts: List<MessageAttempt> = emptyList(),
+    // 仅 AgentLoop 终态失败路径填码；成功、取消、旧 JSON/legacy step 为 null
+    val failureCode: String? = null,
+    // 接管旧消息时补的前缀 step，合并了多次原生响应，不能按原生 pairing 回放推理
+    val legacy: Boolean = false,
+    // 首次创建时生成；旧 JSON 解码会新生成
+    val id: Uuid = Uuid.random(),
 )
 
 @Serializable

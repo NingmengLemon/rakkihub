@@ -828,5 +828,5 @@
 
 - 落点：`ai/ui/Message.kt` 的 `MessageStep` 增加带默认值的 `id` 与 `failureCode`；`AgentLoop` 在失败结算时按 `LlmFailure` 错误码填 `failureCode`，未知异常填 `UNKNOWN`，成功/取消保持 null。
 - 理由：step 后续要作为错误卡片、Web DTO 和日志的稳定单位，不能再靠 part 下标或消息 id 猜；失败码也让消费方不必重新解析异常类型。
-- 合并注意：字段都有默认值，旧 JSON 解码时 `id` 会新生成，`failureCode` 为 null，不会破坏旧消息；重试决策仍只看 `LlmFailureCode`，不要把 `failureCode` 当作重试开关。旧构建保存新会话时会丢掉这两个字段，属于 B2 降级限制。
+- 合并注意：字段都有默认值，旧 JSON 解码时 `id` 会新生成，`failureCode` 为 null，不会破坏旧消息；新字段只能追加在构造参数末尾，不能插到现有的前四个必填字段之前，否则位置参数调用点会错位。重试决策仍只看 `LlmFailureCode`，不要把 `failureCode` 当作重试开关。旧构建保存新会话时会丢掉这两个字段，属于 B2 降级限制。
 - 测试：`UIMessageSerializationTest` 覆盖 id/failureCode 往返；`AgentLoopTest` 覆盖失败 step 的 `UNKNOWN` 错误码；`ai` 与 app 的 JVM 测试通过。

@@ -78,11 +78,11 @@ data class MessageStep(
     val startedAt: Instant,
     val finishedAt: Instant? = null,
     val attempts: List<MessageAttempt> = emptyList(),
-    // 失败 step 的 provider 中性错误码，成功/取消时为 null
+    // 仅 AgentLoop 终态失败路径填码；成功、取消、旧 JSON/legacy step 为 null
     val failureCode: String? = null,
     // 接管旧消息时补的前缀 step，合并了多次原生响应，不能按原生 pairing 回放推理
     val legacy: Boolean = false,
-    // 稳定标识，后续消费方（错误卡片、Web、日志）不再依赖 part 下标
+    // 首次创建时生成；旧 JSON 解码会新生成，不保证旧 step 跨版本稳定
     val id: Uuid = Uuid.random(),
 )
 
