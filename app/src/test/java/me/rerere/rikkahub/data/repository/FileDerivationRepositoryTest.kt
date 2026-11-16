@@ -54,6 +54,24 @@ class FileDerivationRepositoryTest {
     }
 
     @Test
+    fun `manual OCR text overrides generated derivations across producers`() = runBlocking {
+        val (repository, _) = repository()
+        val producer = FileDerivationRepository.ocrProducer("prompt-a", "model-a")
+        assertTrue(repository.putOcr(7, "generated", producer, now = 100))
+        assertTrue(repository.editOcr(7, "manual", now = 200))
+
+        assertEquals("manual", repository.getAnyOcr(7)?.text)
+        assertEquals("manual", repository.listForFiles(listOf(7), producer).getValue(7).text)
+        // 手改行存在时，自动识别不能再覆盖它
+        assertFalse(repository.putOcr(7, "new generated", producer, now = 300))
+        assertEquals("manual", repository.listForFiles(listOf(7), producer).getValue(7).text)
+
+        // 空文本删掉手改，自动派生重新可见
+        assertTrue(repository.editOcr(7, " ", now = 400))
+        assertEquals("generated", repository.listForFiles(listOf(7), producer).getValue(7).text)
+    }
+
+    @Test
     fun `edited derivation is never overwritten`() = runBlocking {
         val (repository, dao) = repository()
         dao.rows += FileDerivationEntity(
@@ -129,6 +147,17 @@ private class FakeFileDerivationDAO : FileDerivationDAO {
         kind: String,
         producer: String,
     ): List<FileDerivationEntity> = rows.filter { it.fileId in fileIds && it.kind == kind && it.producer == producer }
+
+    override suspend fun getAny(fileId: Long, kind: String): FileDerivationEntity? =
+        rows.filter { it.fileId == fileId && it.kind == kind }
+            .maxWithOrNull(compareBy<FileDerivationEntity> { it.edited }.thenBy { it.updatedAt })
+
+    override suspend fun listAny(fileIds: List<Long>, kind: String): List<FileDerivationEntity> =
+        rows.filter { it.fileId in fileIds && it.kind == kind }
+            .sortedWith(compareByDescending<FileDerivationEntity> { it.edited }.thenByDescending { it.updatedAt })
+
+    override suspend fun delete(fileId: Long, kind: String, producer: String): Int =
+        rows.removeAll { it.fileId == fileId && it.kind == kind && it.producer == producer }.let { if (it) 1 else 0 }
 
     override suspend fun insert(derivation: FileDerivationEntity): Long {
         if (get(derivation.fileId, derivation.kind, derivation.producer) != null) return -1

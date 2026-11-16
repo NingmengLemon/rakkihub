@@ -2,7 +2,7 @@
 
 ## 状态
 
-已落地 Phase 1，范围限定为 `file_derivations` 的持久化、读取优先级、备份恢复清空和官方导出裁剪；Phase 2 已补 producer 指纹失效。附件管理入口、手改 OCR 文本和备份恢复合并留后续。
+已落地 Phase 1，范围限定为 `file_derivations` 的持久化、读取优先级、备份恢复清空和官方导出裁剪；Phase 2 已补 producer 指纹失效和 OCR 文本编辑入口。备份恢复合并留后续。
 
 ## 问题
 
@@ -30,7 +30,7 @@ CREATE UNIQUE INDEX index_file_derivations_file_id_kind_producer
   ON file_derivations(file_id, kind, producer);
 ```
 
-`kind` 当前固定 `ocr`，`producer` 为 `ocr:v1:<prompt+model 指纹>`。`text` 存原始 OCR 文本，`<image_file_ocr>` 包装只在请求组装时做。`edited` 留给后续编辑入口，当前没有写入方。
+`kind` 当前固定 `ocr`，`producer` 为 `ocr:v1:<prompt+model 指纹>` 或手改的 `ocr:manual`。`text` 存原始 OCR 文本，`<image_file_ocr>` 包装只在请求组装时做。`edited` 标记手改行，手改文本覆盖任何自动结果。
 
 ## 文件解析
 
@@ -51,6 +51,8 @@ CREATE UNIQUE INDEX index_file_derivations_file_id_kind_producer
 3. 缓存命中时使用，有 `file_id` 就写 derivation；缓存 key 带 producer；
 4. 调 OCR 模型，成功后写 derivation；只有没有 `managed_files` 行的旧附件才继续写回消息 metadata。
 
+手改行（`ocr:manual`, `edited=1`）在 `listForFiles` 里覆盖当前 producer 的自动结果；手改存在时 `putOcr` 不写入，置空只删除手改行。
+
 新结果不再触发 `ChatService.attachOcrTexts` 的整会话 flush；该路径只保留给无法解析文件行的附件。
 
 ## 删除、清理与备份
@@ -68,18 +70,19 @@ CREATE UNIQUE INDEX index_file_derivations_file_id_kind_producer
 
 ## 测试
 
-- `FileDerivationRepositoryTest`：put/get、相同文本跳过、更新、edited 不覆盖、空文本忽略、按文件列表、producer 指纹稳定/隔离、`resolveAll` 的相对/绝对/目录外/未登记 URL 过滤与批量映射。
+- `FileDerivationRepositoryTest`：put/get、相同文本跳过、更新、edited 不覆盖、空文本忽略、按文件列表、手改覆盖自动结果、手改后自动写入被拒、清空手改后自动结果恢复、producer 指纹稳定/隔离、`resolveAll` 的相对/绝对/目录外/未登记 URL 过滤与批量映射。
 - `OcrTextChoiceTest`：derivation 优先、metadata 回填、无文件不回填、空值、指纹 producer 下忽略 metadata，以及缓存 key 带 producer。
 - `OfficialDatabaseSchemaTest`：schema 34、identity、官方表集合加 `file_derivations`、已知额外列。
 - `Migration_33_34_Test`（开发机）：表创建、字段读取、外键级联删除。
 - `OfficialSchemaTrimmerTest`（开发机）：裁剪后 `file_derivations` 消失、usage 行保留、官方读取层可打开；未登记额外表会抛 `OfficialExportUnsupportedException`。
 - `LiveDatabaseMigrationTest`（开发机）：真实 app 库迁到 34。
 - 设备链路（2026-11-16）：上传一张图片，OCR 调用后数据库生成一条 `file_derivations`；同一会话第二轮和 force-stop 重启后的第三轮都只发聊天请求，没有重复 OCR；derivation 行数始终为 1。
+- 设备编辑（2026-11-17）：附件管理打开图片的 OCR 面板，保存后出现成功提示，重新打开仍显示手改文本。
 - 全量 JVM 测试和 `:app:compileGithubDebugAndroidTestKotlin` 通过。
 
 ## 已知限制
 
-- 没有 OCR 编辑 UI，`edited` 目前没有写入方。
+- 没有自动派生结果的清空入口；手改文本置空只删除 `ocr:manual` 行，让自动结果恢复。
 - producer 现在随 OCR 提示词和模型 id 变化，旧 producer 行保留但不再读取；有文件行的图片换设置后首次发送会重新识别一次。没有文件行的旧附件仍只能使用 metadata。
 - 备份恢复不合并 derivation，统一清空后重新识别。
 - 只处理能映射到 `managed_files` 的本地图片；本安装 `filesDir` 下的绝对和相对地址都会解析，别的安装路径、目录外文件和未登记文件走旧回退。

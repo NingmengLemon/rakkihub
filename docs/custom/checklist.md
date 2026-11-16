@@ -116,6 +116,7 @@
 | C106 | 工作区编辑器未保存退出保护 | 新增 |
 | C107 | B2 step 稳定标识与失败码 | 改造 |
 | C108 | C87 OCR producer 指纹失效 | 改造 |
+| C109 | C87 OCR 文本编辑入口 | 新增 |
 
 ## 明细
 
@@ -839,3 +840,10 @@
 - 理由：旧实现 producer 固定 `ocr:v1`，换 OCR 提示词或模型后仍会读到旧文本；缓存 key 只按 URL，也会绕过派生失效。
 - 合并注意：升级后首次发送时，有文件行的图片会因 producer 变化重新识别一次；没有文件行的旧附件仍只能使用 metadata。旧 `ocr:v1` 行保留但不再被读取；`edited` 行仍不会被覆盖。producer 变化不删除旧行，避免误删历史；如果以后要清理，按 producer 前缀和编辑标记单独做。备份恢复仍统一清空 `file_derivations`。
 - 测试：`FileDerivationRepositoryTest` 覆盖同配置指纹稳定、16 位小写十六进制、提示词或模型变化产生不同 producer、不同 producer 行互不覆盖；`OcrTextChoiceTest` 覆盖指纹 producer 下忽略 metadata 和缓存 key 带 producer；app JVM 测试通过。设备上的 OCR 重识别未在本次单独重跑。
+
+### C109 C87 OCR 文本编辑入口
+
+- 落点：`FileDerivationDAO` 增加 `getAny` / `listAny` / `delete`；`FileDerivationRepository` 增加 `getAnyOcr`、`editOcr` 和固定 `OCR_MANUAL_PRODUCER=ocr:manual`。手改行 `edited=true`，在 `listForFiles` 中覆盖任何 producer 的自动结果；空文本删除手改行。`SettingFilesPage` 的图片卡片增加编辑按钮和底部输入面板，新增四份 locale 文案。
+- 理由：自动 OCR 对表格、手写或特殊排版可能出错，需要用户直接修正；手改文本必须跨 OCR 提示词/模型变化继续生效，不能下次自动识别又被覆盖。
+- 合并注意：手改行与自动行分开存，不删除自动行；`putOcr` 看到任意手改行就不覆盖。空文本只删手改行，让自动结果重新可见；不提供清空自动结果的入口。UI 只对 `image/*` 显示编辑按钮，保存相同文本视为成功。编辑入口只改文本，不改文件本身或消息 parts。
+- 测试：`FileDerivationRepositoryTest` 覆盖手改覆盖自动结果、手改后 `putOcr` 不写入、空文本删除手改后自动结果恢复；app JVM 测试通过。设备上打开附件管理，编辑并保存一张图片的 OCR 文本，出现保存成功提示，重新打开显示手改文本。

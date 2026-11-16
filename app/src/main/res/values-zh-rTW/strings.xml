@@ -676,6 +676,11 @@
   <string name="setting_files_page_clean_unused_title">清理沒有引用的檔案</string>
   <string name="setting_files_page_cleaned_toast">檔案已清理</string>
   <string name="setting_files_page_delete_action">刪除</string>
+  <string name="setting_files_page_ocr_edit_content_description">編輯 OCR 文字</string>
+  <string name="setting_files_page_ocr_title">OCR 文字</string>
+  <string name="setting_files_page_ocr_description">圖片傳給不支援圖片的模型時使用。儲存後會覆蓋所有 OCR 設定下的自動辨識結果。清空文字可刪除手改內容。</string>
+  <string name="setting_files_page_ocr_saved">OCR 文字已儲存</string>
+  <string name="setting_files_page_ocr_save_failed">儲存 OCR 文字失敗</string>
   <string name="setting_files_page_delete_content_description">刪除</string>
   <string name="setting_files_page_delete_failed_toast">刪除失敗</string>
   <string name="setting_files_page_delete_file_title">刪除檔案</string>

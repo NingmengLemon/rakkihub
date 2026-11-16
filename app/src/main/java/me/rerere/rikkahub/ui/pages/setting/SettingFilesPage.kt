@@ -37,6 +37,7 @@ import androidx.compose.material3.LargeFlexibleTopAppBar
 import androidx.compose.material3.MaterialShapes
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
+import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.RadioButton
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.SheetValue
@@ -79,11 +80,13 @@ import me.rerere.hugeicons.stroke.File01
 import me.rerere.hugeicons.stroke.FileAudio
 import me.rerere.hugeicons.stroke.FileVideo
 import me.rerere.hugeicons.stroke.FolderOpen
+import me.rerere.hugeicons.stroke.PencilEdit01
 import me.rerere.rikkahub.R
 import me.rerere.rikkahub.data.db.entity.ManagedFileEntity
 import me.rerere.rikkahub.data.files.AttachmentCleaner
 import me.rerere.rikkahub.data.files.FileFolders
 import me.rerere.rikkahub.data.files.FilesManager
+import me.rerere.rikkahub.data.repository.FileDerivationRepository
 import me.rerere.rikkahub.ui.components.ai.ExtensionEmptyState
 import me.rerere.rikkahub.ui.components.nav.BackButton
 import me.rerere.rikkahub.ui.components.ui.CardGroup
@@ -99,6 +102,7 @@ import java.util.concurrent.TimeUnit
 fun SettingFilesPage(
     filesManager: FilesManager = koinInject(),
     attachmentCleaner: AttachmentCleaner = koinInject(),
+    derivations: FileDerivationRepository = koinInject(),
 ) {
     val scrollBehavior = TopAppBarDefaults.exitUntilCollapsedScrollBehavior()
     val gridState = rememberLazyStaggeredGridState()
@@ -117,9 +121,13 @@ fun SettingFilesPage(
     val cleanUnusedBusyToast = stringResource(R.string.setting_files_page_clean_unused_busy)
     val cleanUnusedEmptyToast = stringResource(R.string.setting_files_page_clean_unused_empty)
     val cleanUnusedFailedToast = stringResource(R.string.setting_files_page_clean_unused_failed)
+    val ocrSavedToast = stringResource(R.string.setting_files_page_ocr_saved)
+    val ocrSaveFailedToast = stringResource(R.string.setting_files_page_ocr_save_failed)
 
     var selectedFolder by remember { mutableStateOf(FileFolders.UPLOAD) }
     var pendingDelete by remember { mutableStateOf<ManagedFileEntity?>(null) }
+    var editingOcr by remember { mutableStateOf<ManagedFileEntity?>(null) }
+    var ocrDraft by remember { mutableStateOf("") }
     var showCleanSheet by remember { mutableStateOf(false) }
     var showCleanUnused by remember { mutableStateOf(false) }
     var selectedCleanRange by remember { mutableStateOf(CleanRange.DAYS_7) }
@@ -244,6 +252,74 @@ fun SettingFilesPage(
         }
     }
 
+    if (editingOcr != null) {
+        val target = editingOcr!!
+        ModalBottomSheet(
+            onDismissRequest = { editingOcr = null },
+        ) {
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .navigationBarsPadding()
+                    .padding(horizontal = 16.dp)
+                    .padding(bottom = 16.dp),
+                verticalArrangement = Arrangement.spacedBy(12.dp),
+            ) {
+                Text(
+                    text = stringResource(R.string.setting_files_page_ocr_title),
+                    style = MaterialTheme.typography.headlineSmall,
+                )
+                Text(
+                    text = stringResource(R.string.setting_files_page_ocr_description),
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+                Text(
+                    text = target.displayName,
+                    style = MaterialTheme.typography.labelLarge,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+                OutlinedTextField(
+                    value = ocrDraft,
+                    onValueChange = { ocrDraft = it },
+                    modifier = Modifier.fillMaxWidth(),
+                    minLines = 6,
+                    maxLines = 12,
+                    placeholder = { Text(stringResource(R.string.setting_files_page_ocr_title)) },
+                )
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.End,
+                ) {
+                    TextButton(onClick = { editingOcr = null }) {
+                        Text(stringResource(R.string.common_cancel))
+                    }
+                    Spacer(Modifier.width(8.dp))
+                    Button(
+                        onClick = {
+                            scope.launch {
+                                val saved = runCatching {
+                                    derivations.editOcr(target.id, ocrDraft)
+                                }.getOrElse {
+                                    if (it is CancellationException) throw it
+                                    false
+                                }
+                                if (saved) {
+                                    toaster.show(ocrSavedToast)
+                                    editingOcr = null
+                                } else {
+                                    toaster.show(ocrSaveFailedToast)
+                                }
+                            }
+                        },
+                    ) {
+                        Text(stringResource(R.string.common_save))
+                    }
+                }
+            }
+        }
+    }
+
     Scaffold(
         topBar = {
             LargeFlexibleTopAppBar(
@@ -314,7 +390,13 @@ fun SettingFilesPage(
                         FileItem(
                             file = file,
                             fileOnDisk = filesManager.getFile(file),
-                            onDelete = { pendingDelete = file }
+                            onDelete = { pendingDelete = file },
+                            onEditOcr = {
+                                scope.launch {
+                                    ocrDraft = derivations.getAnyOcr(file.id)?.text.orEmpty()
+                                    editingOcr = file
+                                }
+                            },
                         )
                     }
                 }
@@ -454,6 +536,7 @@ private fun FileItem(
     file: ManagedFileEntity,
     fileOnDisk: File,
     onDelete: () -> Unit,
+    onEditOcr: () -> Unit,
 ) {
     Surface(
         modifier = Modifier.fillMaxWidth(),
@@ -502,6 +585,20 @@ private fun FileItem(
                 }
 
                 // 带底色的按钮，叠在图片上也看得清
+                if (file.mimeType.startsWith("image/")) {
+                    FilledTonalIconButton(
+                        onClick = onEditOcr,
+                        modifier = Modifier
+                            .align(Alignment.TopStart)
+                            .padding(4.dp)
+                    ) {
+                        Icon(
+                            imageVector = HugeIcons.PencilEdit01,
+                            contentDescription = stringResource(R.string.setting_files_page_ocr_edit_content_description),
+                            modifier = Modifier.size(20.dp),
+                        )
+                    }
+                }
                 FilledTonalIconButton(
                     onClick = onDelete,
                     modifier = Modifier
