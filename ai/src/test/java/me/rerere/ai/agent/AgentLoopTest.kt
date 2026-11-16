@@ -114,6 +114,7 @@ class AgentLoopTest {
         val message = events.filterIsInstance<AgentEvent.MessageUpdated>().last().message
         assertEquals("half", (message.parts.single() as UIMessagePart.Text).text)
         assertEquals(StepStatus.FAILED, message.steps.single().status)
+        assertEquals("UNKNOWN", message.steps.single().failureCode)
         assertEquals(1, message.steps.single().endPartIndex)
     }
 

@@ -113,16 +113,20 @@ class UIMessageSerializationTest {
                             recordedAt = now,
                         )
                     ),
+                    failureCode = "SERVER",
                 )
             ),
         )
 
+        val stepId = message.steps.single().id
         val decoded = Json.decodeFromString<UIMessage>(Json.encodeToString(message))
 
         assertEquals(StepStatus.SUCCEEDED, decoded.steps.single().status)
         assertEquals(now, decoded.steps.single().startedAt)
         assertEquals(1, decoded.steps.single().attempts.single().attempt)
         assertEquals("SERVER", decoded.steps.single().attempts.single().code)
+        assertEquals("SERVER", decoded.steps.single().failureCode)
+        assertEquals(stepId, decoded.steps.single().id)
         assertFalse(decoded.parts.filterIsInstance<UIMessagePart.Tool>().single().callComplete)
     }
 

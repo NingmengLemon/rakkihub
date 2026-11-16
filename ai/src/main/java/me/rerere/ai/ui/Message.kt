@@ -78,8 +78,12 @@ data class MessageStep(
     val startedAt: Instant,
     val finishedAt: Instant? = null,
     val attempts: List<MessageAttempt> = emptyList(),
+    // 失败 step 的 provider 中性错误码，成功/取消时为 null
+    val failureCode: String? = null,
     // 接管旧消息时补的前缀 step，合并了多次原生响应，不能按原生 pairing 回放推理
     val legacy: Boolean = false,
+    // 稳定标识，后续消费方（错误卡片、Web、日志）不再依赖 part 下标
+    val id: Uuid = Uuid.random(),
 )
 
 // 公共消息抽象, 具体的Provider实现会转换为API接口需要的DTO

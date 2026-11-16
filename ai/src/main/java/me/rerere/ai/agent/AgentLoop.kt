@@ -161,7 +161,7 @@ internal class AgentLoop(
             val failed = (lastAttempt ?: message?.takeIf {
                 it.steps.lastOrNull()?.status == StepStatus.RUNNING
             } ?: base)
-                .finishCurrentStep(StepStatus.FAILED)
+                .finishCurrentStep(StepStatus.FAILED, failureCode = e.failureCode())
                 .withCurrentStepAttempts(attempts)
             // 新消息在收到任何内容前就失败时不落空回复，只让错误卡片可见
             if (failed.parts.isNotEmpty()) {
@@ -409,7 +409,7 @@ private fun UIMessage.startStep(): UIMessage {
     )
 }
 
-private fun UIMessage.finishCurrentStep(status: StepStatus): UIMessage {
+private fun UIMessage.finishCurrentStep(status: StepStatus, failureCode: String? = null): UIMessage {
     if (steps.isEmpty()) return this
     val updated = steps.toMutableList()
     val last = updated.last()
@@ -418,8 +418,18 @@ private fun UIMessage.finishCurrentStep(status: StepStatus): UIMessage {
         status = status,
         endPartIndex = maxOf(last.startPartIndex, parts.size),
         finishedAt = Clock.System.now(),
+        failureCode = failureCode,
     )
     return copy(steps = updated)
+}
+
+private fun Throwable.failureCode(): String {
+    var current: Throwable? = this
+    while (current != null) {
+        if (current is LlmFailure) return current.code.name
+        current = current.cause
+    }
+    return LlmFailureCode.UNKNOWN.name
 }
 
 private fun RetryAttempt.toMessageAttempt(): MessageAttempt = MessageAttempt(

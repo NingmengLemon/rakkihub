@@ -114,6 +114,7 @@
 | C104 | 工作区终端支持 IME 文本输入 | 新增 |
 | C105 | 工作区 Markdown 预览与源码切换 | 新增 |
 | C106 | 工作区编辑器未保存退出保护 | 新增 |
+| C107 | B2 step 稳定标识与失败码 | 改造 |
 
 ## 明细
 
@@ -822,3 +823,10 @@
 - 理由：编辑后直接返回会静默丢改动；至少要在离开前给一次保存机会。
 - 合并注意：`textState` 故意不 `rememberSaveable`，旋转或进程死亡仍会丢未提交文本；这里只保护主动返回。保存失败时保持弹窗并显示错误 toast，不能 pop。新增文案在四份 locale。
 - 测试：开发机验证未保存弹窗、Discard 返回；保存路径复用原有保存函数，未单独构造可写文件验证。全量 JVM、spotless、assemble 通过。
+
+### C107 B2 step 稳定标识与失败码
+
+- 落点：`ai/ui/Message.kt` 的 `MessageStep` 增加带默认值的 `id` 与 `failureCode`；`AgentLoop` 在失败结算时按 `LlmFailure` 错误码填 `failureCode`，未知异常填 `UNKNOWN`，成功/取消保持 null。
+- 理由：step 后续要作为错误卡片、Web DTO 和日志的稳定单位，不能再靠 part 下标或消息 id 猜；失败码也让消费方不必重新解析异常类型。
+- 合并注意：字段都有默认值，旧 JSON 解码时 `id` 会新生成，`failureCode` 为 null，不会破坏旧消息；重试决策仍只看 `LlmFailureCode`，不要把 `failureCode` 当作重试开关。旧构建保存新会话时会丢掉这两个字段，属于 B2 降级限制。
+- 测试：`UIMessageSerializationTest` 覆盖 id/failureCode 往返；`AgentLoopTest` 覆盖失败 step 的 `UNKNOWN` 错误码；`ai` 与 app 的 JVM 测试通过。
