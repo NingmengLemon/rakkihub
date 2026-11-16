@@ -81,4 +81,4 @@ CREATE UNIQUE INDEX index_file_derivations_file_id_kind_producer
 - `producer` 不随 OCR 提示词或模型变化；换设置后旧文件的派生文本不会自动重算。
 - 备份恢复不合并 derivation，统一清空后重新识别。
 - 只处理能映射到 `managed_files` 的本地图片；本安装 `filesDir` 下的绝对和相对地址都会解析，别的安装路径、目录外文件和未登记文件走旧回退。
-- 没有在设备上跑完整 OCR 链路（上传图片、OCR、杀进程、复用图片），当前测试覆盖数据层、迁移和解析层。
+- 设备链路已验（2026-11-16）：上传一张图片，OCR 调用后数据库生成一条 file_derivations；同一会话第二轮和 force-stop 重启后的第三轮都只发聊天请求，没有重复 OCR；derivation 行数始终为 1。
