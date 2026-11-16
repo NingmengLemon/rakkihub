@@ -1173,6 +1173,10 @@
   <string name="setting_page_preferences_network_proxy_invalid">請輸入包含主機和連接埠的有效代理 URL。</string>
   <string name="setting_page_preferences_network_stream_idle_timeout">串流閒置逾時</string>
   <string name="setting_page_preferences_network_stream_idle_timeout_desc">串流回應連續 90 秒沒有收到任何資料時中斷等待，保活 ping 也算資料</string>
+  <string name="setting_page_preferences_network_auto_retry">自動重試</string>
+  <string name="setting_page_preferences_network_auto_retry_desc">聊天請求遇到瞬時網路錯誤時自動重試，預設關閉。</string>
+  <string name="setting_page_preferences_network_auto_retry_count">重試次數</string>
+  <string name="setting_page_preferences_network_auto_retry_count_value">%1$d 次</string>
   <string name="setting_page_preferences_agent">工具</string>
   <string name="setting_page_preferences_agent_desc">工具執行逾時與工作區命令上限</string>
   <string name="setting_page_agent_tool_group">工具執行</string>

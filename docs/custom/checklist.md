@@ -82,8 +82,8 @@
 | C72 | 上下文压缩按 token 预算 | 新增 |
 | C73 | 发送前上下文裁剪 | 撤销 |
 | C74 | 上下文水位与压缩建议 | 新增 |
-| C75 | 自动重试次数可调 | 下线（B1 设计中恢复） |
-| C76 | 重试 attempt 可见化 | 下线（B1 设计中恢复内存态） |
+| C75 | 自动重试次数可调 | 改造（默认关闭） |
+| C76 | 重试 attempt 可见化 | 改造（内存态） |
 | C77 | 错误卡片重试本步 | 永久取消 |
 | C78 | 工具失败日志分级 | 改造 |
 | C79 | 本地导出默认包含工作区文件 | 改造 |
@@ -493,14 +493,14 @@
 
 - 落点：`ErrorParser.kt` 新增 `LlmFailureCode`、`LlmFailure`，`HttpException` 带上 code、HTTP status 和 `Retry-After`；`toHttpException`、`withResponse` 负责从响应归一化。五个聊天 provider 接线点（Claude、ChatCompletions、Responses、Google generateContent、Interactions）的非流式非 2xx 改抛 `HttpException`，流式 `onFailure` 的解析错误附加响应状态，空响应体也保留状态。`RetryPolicy` 改为按错误码允许列表重试，支持 `maxDelay`、10% jitter 和 `Retry-After`；`AgentLoop` 在流式和非流式路径把空回复包成 `EMPTY_RESPONSE`，进入同一重试循环。
 - 理由：原来只按 `IOException` 判断，HTTP 429/5xx 的 JSON 错误大多不重试；空回复直接以完成状态落库；重试固定 1s/2s/4s，没有 jitter，也不看服务端 `Retry-After`。
-- 合并注意：默认只重试 `RATE_LIMIT`、`SERVER`、`TIMEOUT`、`TRANSPORT`、`EMPTY_RESPONSE`；`AUTH`、`QUOTA`、`INVALID_REQUEST`、`CONTEXT_WINDOW_EXCEEDED` 不重试。C75 的 `NetworkSetting.maxRetries` 与开关已随重试整体下线，`Settings.retryPolicy()` 恒为 `RetryPolicy.NONE`，字段保留。`RetryPolicy` 的 `retryOn` 仍是可选的逃生口，自定义策略优先于码表。`Retry-After` 会被 `maxDelay` 截断，不做“服务端要求超过上限就放弃”的区分；jitter 固定 10%，测试用 `jitterRatio = 0`。空回复判定只把空白 Text/Reasoning 当空，Tool、图片、文档等 part 都算有内容；这会让某些本来静默成功的空回复变成重试后错误，是预期行为。结构化错误优先于 HTTP status，`insufficient_quota` 和嵌套 `QuotaFailure` 即使是 429 也归 `QUOTA` 且不重试；没有 `QuotaFailure` 的 Google `RESOURCE_EXHAUSTED` 429 仍是 `RATE_LIMIT`，可重试。非 JSON body 只按 HTTP status 分类，不拿 HTML 里的关键词做信号。流式 onFailure 解析失败时用响应状态兜底，不再把 HTML 502 当序列化异常。`ai/build.gradle.kts` 打开 `unitTests.isReturnDefaultValues` 只是为了 provider 接线测试能调用 `Log`，范围仅限 `ai` 单测。C3 的 `ai/` 小改动原则下，这是第八处分叉。
-- 手动验收：用假 provider 或代理返回 429 带 `Retry-After`、5xx 带 JSON/HTML、401、402、400 context、空回复，确认错误码分类正确。自动重试已整体下线，退避次数与等待间隔的样本等恢复接线后再跑；空回复现在直接出错误卡片，不再重试。
+- 合并注意：默认只重试 `RATE_LIMIT`、`SERVER`、`TIMEOUT`、`TRANSPORT`、`EMPTY_RESPONSE`；`AUTH`、`QUOTA`、`INVALID_REQUEST`、`CONTEXT_WINDOW_EXCEEDED` 不重试。C75 已恢复为默认关闭的可选项，`Settings.retryPolicy()` 只在用户开启后返回策略，压缩与记忆仍显式 NONE。`RetryPolicy` 的 `retryOn` 仍是可选的逃生口，自定义策略优先于码表。`Retry-After` 会被 `maxDelay` 截断，不做“服务端要求超过上限就放弃”的区分；jitter 固定 10%，测试用 `jitterRatio = 0`。空回复判定只把空白 Text/Reasoning 当空，Tool、图片、文档等 part 都算有内容；这会让某些本来静默成功的空回复变成重试后错误，是预期行为。结构化错误优先于 HTTP status，`insufficient_quota` 和嵌套 `QuotaFailure` 即使是 429 也归 `QUOTA` 且不重试；没有 `QuotaFailure` 的 Google `RESOURCE_EXHAUSTED` 429 仍是 `RATE_LIMIT`，可重试。非 JSON body 只按 HTTP status 分类，不拿 HTML 里的关键词做信号。流式 onFailure 解析失败时用响应状态兜底，不再把 HTML 502 当序列化异常。`ai/build.gradle.kts` 打开 `unitTests.isReturnDefaultValues` 只是为了 provider 接线测试能调用 `Log`，范围仅限 `ai` 单测。C3 的 `ai/` 小改动原则下，这是第八处分叉。
+- 手动验收：用假 provider 或代理返回 429 带 `Retry-After`、5xx 带 JSON/HTML、401、402、400 context、空回复，确认错误码分类正确；自动重试默认关闭，开启后补跑退避次数、等待间隔与 C76 卡片。空回复在关闭时直接出错误卡片，开启时按 `EMPTY_RESPONSE` 重试。
 - 测试：`RetryTest` 覆盖码表、`Retry-After` 原值和超过 `maxDelay` 的截断、jitter 归零后的固定间隔、`QUOTA` 不重试和取消；`ErrorParserTest` 覆盖 401/402/429/5xx/400 context 分类、结构化 `insufficient_quota`、嵌套 `QuotaFailure`、Gemini `RESOURCE_EXHAUSTED` 429 仍可重试、`withResponse` 保留结构化 code、HTTP date、非 JSON body 只按 status 分类和 `Retry-After` 解析；`AgentLoopTest` 覆盖流式和非流式空回复重试后成功；`ChatCompletionsErrorTest` 用假 interceptor 验证 429 `insufficient_quota` 到 `HttpException(status/code/Retry-After)` 的接线；`:ai:testDebugUnitTest` 全量通过；`:app:assembleGithubDebug` 通过。`:app:testGithubDebugUnitTest` 仍为已知 Windows 7 失败，本轮没有改 app。
 
 ### C62 流式 idle watchdog
 
 - 落点：`AgentRequest.streamIdleTimeout` 默认 90 秒；`AgentLoop.stream` 用 `Flow.timeout` 限制相邻 chunk 的等待，超时抛 `LlmFailure(TIMEOUT)`。Claude 的 `ping` 事件解码成 `StreamChunk.Heartbeat`，`AgentLoop` 收到后跳过、不触发 preview，但会重置看门狗；`NetworkSetting.streamIdleTimeoutEnabled`（默认 true）控制整条看门狗，关掉后在 `ChatRequestFactory.createAgent` 传 null。
-- 理由：Anthropic 长思考时可能长时间没有内容 chunk，只有 ping；只按内容 chunk 计时会把正常请求切断。自动重试下线期间超时直接出错误卡片，不重试。
+- 理由：Anthropic 长思考时可能长时间没有内容 chunk，只有 ping；只按内容 chunk 计时会把正常请求切断。自动重试关闭时超时直接出错误卡片，开启后按策略重试。
 - 合并注意：`streamIdleTimeout <= 0` 仍会立即超时，调用方只传正数或 null；非流式请求不经过看门狗。新增 provider 若有自己的保活事件，按同样方式产出 `StreamChunk.Heartbeat`，不要在 `AgentLoop` 里按 provider 特判。设置入口在网络偏好页（`setting_page_preferences_network_stream_idle_timeout`），四种语言同步；关掉后 `ChatRequestFactory` 传 null。代码里 90 秒的唯一来源是 `AgentRequest.DEFAULT_STREAM_IDLE_TIMEOUT`，四份 locale 文案与 NetworkSetting 的注释仍写死 90 秒，改常量时要一起改。
 - 测试：`AgentLoopTest` 覆盖空闲超时、chunk 重置、心跳重置与心跳不触发 preview；`ClaudeStreamDecoderTest` 覆盖 ping 解码成 `StreamChunk.Heartbeat`；`SettingsTimeoutsTest` 覆盖看门狗开关与工具超时的映射；`AgentSettingTest` 覆盖 `NetworkSetting.streamIdleTimeoutEnabled` 的旧 JSON 默认值；`:ai:testDebugUnitTest` 通过。
 
@@ -591,22 +591,22 @@
 
 ### C75 自动重试次数可调
 
-- 现状：已下线（2026-11-14）。`NetworkSetting.maxRetries` 字段与已保存 JSON 保留，网络设置里的自动重试开关和次数滑块已移除，`Settings.retryPolicy()` 恒返回 `RetryPolicy.NONE`；`SettingsRetryPolicyTest` 改为断言恒为 0 与旧 JSON 默认值。
-- 理由：重试以 agent step 为单位，失败后整条重放会把已生成内容吞回去；等失败恢复与消息模型重做后再恢复入口，见 `roadmap.md` 的「失败恢复与上下文的返工」。
-- 合并注意：恢复时只需改回 `Settings.retryPolicy()` 的实现并恢复设置项，字段和序列化都不用动；`NetworkSetting.MAX_RETRIES` 保留。
-- 测试：`SettingsRetryPolicyTest` 通过。
+- 现状：已恢复为默认关闭的可选项（2026-11-16）。`NetworkSetting.enableAutoRetry` 默认 false，网络设置提供开关和 1..10 次滑块；`Settings.retryPolicy()` 只在开关开启且次数大于 0 时返回 `RetryPolicy.NETWORK.copy(maxRetries = 次数)`，压缩摘要与记忆整理仍显式传 `RetryPolicy.NONE`。V6 迁移把旧设置里的 `enableAutoRetry` 一次性改成 false，之后用户显式开启不会被覆盖。
+- 理由：失败恢复与消息模型已经落地，自动重试可以重新作为 opt-in 提供；默认关闭避免新用户在没有预期时重复请求和重放当前 step。
+- 合并注意：`maxRetries` 保留在 0..`NetworkSetting.MAX_RETRIES`；开关开启但次数为 0 时仍返回 NONE；旧 JSON 缺少字段默认 false，`enableAutoRetry` 为 true 的旧设置由 V6 迁移关掉。`Settings.retryPolicy()` 只接聊天轮次，标题、OCR、翻译、压缩与记忆不继承自动重试。备份恢复会看 `settings.json` 的 `settingsVersion`：缺失或小于 6 的旧备份与官方备份强制关掉，写入 6 的新备份保留用户显式开启值；`SettingsJsonMigrator` 与 DataStore 迁移保持同一套语义。
+- 测试：`SettingsRetryPolicyTest` 覆盖默认关闭、开启后次数与上限、旧 JSON 默认值；`PreferenceStoreV6MigrationTest` 覆盖旧 true 被关闭且其它字段保留。
 
 ### C76 重试 attempt 可见化
 
-- 现状：已下线（2026-11-14）。自动重试关闭后没有 `AgentEvent.Retrying` 来源，`RetryAttemptsCard` 与 `retryRemainingSeconds` 不会再出现；代码与测试保留，恢复重试时直接接线。
-- 理由：同 C75。
-- 合并注意：`ConversationSession.retryAttempts` 仍会随 `replace`/新一轮清空，不落盘；恢复重试前不要删 UI 与文案。
+- 现状：内存态卡片已随 C75 恢复（2026-11-16）。自动重试产生 `AgentEvent.Retrying` 时 `ChatService` 写入 `session.retryAttempts`，聊天底部重新出现 `RetryAttemptsCard` 与 `retryRemainingSeconds`；attempt 仍不落盘，持久化留 B2。
+- 理由：用户需要看到自动重试正在进行、失败原因和剩余等待时间；默认关闭时没有事件，卡片自然不出现。
+- 合并注意：`ConversationSession.retryAttempts` 仍会随 `replace`/新一轮清空，不落盘；C76 的历史持久化仍按 B2 设计使用 `MessageStep.attempts`，当前只恢复内存态卡片。
 - 测试：`RetryAttemptsTest` 保留并通过。
 
 ### C77 错误卡片重试本步
 
 - 现状：已撤销（2026-11-14）；2026-11-15 用户确认不恢复，错误卡片只保留信息提示。`ChatError.retryable`、`retryMessageId`、`retryTargetMessageId`、`hasLaterUserTurn`、`ChatVM.retryError`、错误卡片上的 Retry 按钮、`ChatErrorStore` 的对应字段与 `ChatErrorStoreTest`/`RetryTargetMessageIdTest` 的相关用例都已删除；错误卡片只显示错误信息、复制与关闭。
-- 理由：重试语义依赖整条消息重放，和 C75 下线重试的决定一致；用户已习惯按轮判断后自己重新生成或让模型继续。
+- 理由：重试语义依赖整条消息重放，用户已习惯按轮判断后自己重新生成或让模型继续；C75 恢复的是默认关闭的自动重试，错误卡片仍不承载重试。
 - 合并注意：旧错误文件里的 `retryable`/`retryMessageId` 字段由 `JsonInstant` 的 `ignoreUnknownKeys` 忽略，`ChatErrorStoreTest` 有一条旧文件用例钉住；C77 永久取消，B2 不再恢复错误卡片重试，也不要把旧字段搬回来。
 - 测试：`ChatErrorStoreTest` 的旧文件用例通过；`:app:testGithubDebugUnitTest` 全量通过。
 
@@ -748,14 +748,14 @@
 
 - 落点：`ai/ui/Message.kt` 增加 `MessageStep`、`StepStatus` 与 `UIMessage.steps`；`AgentRequest.allowToolApproval` 与 `AgentFinishReason.ApprovalUnavailable` 让中间节点生成不进入审批，`ChatService` 用 `settleUnavailableTools()` 给未执行工具补恢复结果、丢掉 `callComplete=false` 的半截调用、把消息置 COMPLETE 并把 step 记 SUCCEEDED；无 job 的审批停止会先加载会话，按最后一条 assistant 的 id 标 INTERRUPTED 后一次 flush；`isAwaitingToolApproval`/`pendingToolCalls` 对有 steps 的消息只看最后一条 assistant，旧消息仍扫描全部；`withToolApproval`、聊天列表的审批回调与悬浮窗同步收口；`UIMessagePart.Tool` 增加 `callComplete`，流式 `ToolCallStart` 置 false、`ToolCallEnd` 置 true，`merge` 取逻辑或；`AgentLoop` 在每次请求成功后追加 step，记录 part 范围与 RUNNING/TOOLS/SUCCEEDED/FAILED 终态；`ClaudeProvider` 对带 step 的消息按 step 拆分 assistant/user 消息，thinking 只随同一 step 的 tool_use 回放，旧消息和带 `legacy` 前缀的消息在自定义中转下不回放 thinking；`projectForRequest()` 替代聊天请求里的 `filterModelVisible()`，失败消息只保留已执行的 Tool parts；`ConversationMessages` 的取消/加载恢复关闭未终结 step，工具都已执行时收 SUCCEEDED，否则 CANCELLED
 - 理由：一个 turn 仍是一条 assistant 消息，多个原生响应追加在同一条 parts 里。中转层按原生思考缓存校验时，前一步的 thinking 和后一步的 tool_use 拼在同一条消息里会被判成关联不匹配；失败消息整条过滤又会把已经执行的写入和查询从模型历史里抹掉。step 范围让请求重建能恢复原生配对，失败投影让“继续”还能看到失败前的工具事实
-- 合并注意：`steps`、`callComplete` 都是带默认值的字段，旧消息解码为空 steps、true；`MessageStep.legacy` 只用于接管旧消息时补的前缀范围，带 legacy 的消息不做原生 pairing 回放。自定义中转（非 `api.anthropic.com`）的旧消息不回放 thinking；官方域名保持原行为。投影后消息清空 steps，原始消息不受影响。本阶段做 step 记录、请求投影、失败工具事实、审批/取消结算与最后节点审批；自动重试、C75/C76 恢复与消费方收尾仍按设计文档后续阶段处理；手动 step 重试见 C98；C58 的摘要过滤、C67 的加载恢复语义不变
+- 合并注意：`steps`、`callComplete` 都是带默认值的字段，旧消息解码为空 steps、true；`MessageStep.legacy` 只用于接管旧消息时补的前缀范围，带 legacy 的消息不做原生 pairing 回放。自定义中转（非 `api.anthropic.com`）的旧消息不回放 thinking；官方域名保持原行为。投影后消息清空 steps，原始消息不受影响。本阶段做 step 记录、请求投影、失败工具事实、审批/取消结算与最后节点审批；自动重试 C75 已默认关闭恢复，C76 内存态卡片随之恢复，持久化与消费方收尾仍按 B2 设计处理；手动 step 重试见 C98；C58 的摘要过滤、C67 的加载恢复语义不变
 - 测试：`AgentLoopTest` 覆盖中间节点 `ApprovalUnavailable`；`ConversationMessagesTest` 覆盖中间节点按 messageId 补结果、丢弃半截调用、置 COMPLETE 并收 SUCCEEDED；`ClaudeThinkingReplayTest` 覆盖 legacy 全剥离、step 内 thinking 与 tool_use 配对、跨 step 的纯文本 step 不把 thinking 带到下一步；`UIMessageSerializationTest` 覆盖旧 JSON 空 steps、steps/callComplete 往返、FAILED 请求投影保留已执行工具并丢掉正文；`ConversationMessagesTest`、`ConversationToolCallsTest` 覆盖停止/加载恢复关闭 RUNNING/TOOLS step、已执行工具收 SUCCEEDED 和最后一条 assistant 的审批收口；`:ai:testDebugUnitTest`、`:app:testGithubDebugUnitTest`、`assembleGithubRelease`、spotless 通过。设备上长工具链连续 48 次请求、8510 条消息无 `native_thinking_replay_mismatch`，消息序列无连续 assistant、无 thinking 落在 tool_use 之后；U+FFFD 单独另案
 
 ### C98 消息操作手动重试失败 step
 
 - 落点：`UIMessage.retryTarget()` 在消息为 FAILED/INTERRUPTED 时返回两种目标。最后还有 FAILED、CANCELLED、RUNNING 或 TOOLS step 且该 step 没执行过工具时返回 `Step`，截断到该 step 的 `startPartIndex`，删掉该 step 及之后的记录；没有失败 step、所有 step 都 SUCCEEDED 且所有工具都已执行时返回 `Continue`，保留现有 parts 与 steps，只复位消息状态并从末尾继续。两种情况都要求目标仍是最后节点与当前候选，并用当前会话模型同步 `modelId`/`modelSnapshot`；`ChatService.retryMessageStep` 在 `canRegenerate()` 通过后加载会话、二次检查审批/frozen，落库后复用 `runTurn(session)` 从同一条 assistant 消息继续，不新建候选。聊天消息快捷按钮与更多菜单只在最后一条 `retryTarget()` 非空的 assistant 上出现，文案 `chat_message_retry_step`（四份 locale）。
 - 理由：C77 的错误卡片重试永久取消，失败或中断的 step 需要一个人工入口；原位续跑保留此前 SUCCEEDED step 的正文与工具事实，不把整轮回复重放，也不产生分支。
-- 合并注意：只处理最后节点，中间节点或已切走分支返回 null；可截断的 step 已执行过工具时入口隐藏，防止丢掉有副作用的工具事实；`Continue` 只保留全部已执行工具和已完成 step，未执行工具存在时返回 null；`runTurn` 开头的 `withoutUnresumableToolCalls` 仍会清理前缀里无法恢复的工具，`Step` 目标已经被截掉，`Continue` 目标保持原样；usage/stepCount 不重置，新 step 继续累计。`ChatError` 不增加 retry 字段，入口只依赖消息本身；自动重试仍关闭。UI 只在 `lastMessage` 且 `retryTarget()` 非空时传回调，避免在旧消息上露出无效入口。`Continue` 覆盖“下一步请求在第一个流事件之前失败”的情况：此时失败没有落成新 step，旧实现会因为没有可截断的 step 而完全隐藏入口。
+- 合并注意：只处理最后节点，中间节点或已切走分支返回 null；可截断的 step 已执行过工具时入口隐藏，防止丢掉有副作用的工具事实；`Continue` 只保留全部已执行工具和已完成 step，未执行工具存在时返回 null；`runTurn` 开头的 `withoutUnresumableToolCalls` 仍会清理前缀里无法恢复的工具，`Step` 目标已经被截掉，`Continue` 目标保持原样；usage/stepCount 不重置，新 step 继续累计。`ChatError` 不增加 retry 字段，入口只依赖消息本身；自动重试默认关闭，但用户可在网络设置开启。UI 只在 `lastMessage` 且 `retryTarget()` 非空时传回调，避免在旧消息上露出无效入口。`Continue` 覆盖“下一步请求在第一个流事件之前失败”的情况：此时失败没有落成新 step，旧实现会因为没有可截断的 step 而完全隐藏入口。
 - 测试：`ConversationMessagesTest` 覆盖截断到失败 step、保留前缀 step、复位状态、非最后节点、已完成消息、已执行工具 step 返回 null，所有 step 已成功时保留内容从末尾继续、INTERRUPTED 的继续与模型快照同步、存在未执行工具时不继续；`:ai:testDebugUnitTest`、`:app:testGithubDebugUnitTest`、assemble、spotless 通过；手动重试的 `ChatService` 任务接线没有 JVM 单测，留设备验证。
 
 ### C99 失败请求记录完整 provider 响应体

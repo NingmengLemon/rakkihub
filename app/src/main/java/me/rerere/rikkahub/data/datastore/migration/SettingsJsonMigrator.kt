@@ -3,10 +3,15 @@ package me.rerere.rikkahub.data.datastore.migration
 import android.util.Log
 import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.json.JsonPrimitive
+import kotlinx.serialization.json.intOrNull
 import kotlinx.serialization.json.jsonObject
 import me.rerere.rikkahub.utils.JsonInstant
 
 private const val TAG = "SettingsJsonMigrator"
+
+const val SETTINGS_VERSION_KEY = "settingsVersion"
+const val CURRENT_SETTINGS_VERSION = 6
 
 /**
  * 对备份文件中的 settings.json 应用与 DataStore migration 相同的迁移逻辑。
@@ -75,6 +80,16 @@ object SettingsJsonMigrator {
             (root["providers"] as? JsonArray)?.let { providers ->
                 root["providers"] = JsonArray(providers.map(::migrateProviderQuotaQuery))
             }
+
+            // V6: 旧备份没有 schema 标记，按 legacy 处理，关闭默认开启的自动重试。
+            // 新备份由 encodeSettings 写入 settingsVersion，保留用户显式开启的值。
+            val version = (root[SETTINGS_VERSION_KEY] as? JsonPrimitive)?.intOrNull
+            if (version == null || version < CURRENT_SETTINGS_VERSION) {
+                (root["networkSetting"] as? JsonObject)?.let { network ->
+                    root["networkSetting"] = JsonObject(network + ("enableAutoRetry" to JsonPrimitive(false)))
+                }
+            }
+            root[SETTINGS_VERSION_KEY] = JsonPrimitive(CURRENT_SETTINGS_VERSION)
 
             JsonInstant.encodeToString(JsonObject(root))
         }.onFailure {

@@ -1175,6 +1175,10 @@ mDNSアドレス: .localホスト名を使用し、IPを知らなくても同じ
   <string name="setting_page_preferences_network_proxy_invalid">ホストとポートを含む有効なプロキシURLを入力してください。</string>
   <string name="setting_page_preferences_network_stream_idle_timeout">ストリームのアイドルタイムアウト</string>
   <string name="setting_page_preferences_network_stream_idle_timeout_desc">ストリーミング応答が 90 秒間データを受信しない場合に待機を中止します（キープアライブ ping もデータに含みます）</string>
+  <string name="setting_page_preferences_network_auto_retry">自動再試行</string>
+  <string name="setting_page_preferences_network_auto_retry_desc">チャットで一時的なネットワークエラーを自動再試行します。既定ではオフです。</string>
+  <string name="setting_page_preferences_network_auto_retry_count">再試行回数</string>
+  <string name="setting_page_preferences_network_auto_retry_count_value">%1$d 回</string>
   <string name="setting_page_preferences_agent">ツール</string>
   <string name="setting_page_preferences_agent_desc">ツール実行のタイムアウトとワークスペースコマンドの上限</string>
   <string name="setting_page_agent_tool_group">ツール実行</string>

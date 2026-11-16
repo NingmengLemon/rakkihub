@@ -211,7 +211,7 @@ class ChatRequestFactory(
         var current = initial
         var finishReason: String? = null
         withRetry(
-            policy = turn.settings.retryPolicy(),
+            policy = RetryPolicy.NONE,
             onRetry = { Log.w(TAG, "Compression stream failed, retrying in ${it.delay}", it.cause) },
         ) {
             current = initial
@@ -357,12 +357,15 @@ internal fun backgroundTextGenerationParams(
 )
 
 /**
- * 自动重试暂时整体下线：重试以 agent step 为单位，失败后会把已生成的内容整条重放，
- * 半截内容被吞回去的情况比可恢复的错误更常见。这里先恒返回 [RetryPolicy.NONE]，
- * `NetworkSetting.enableAutoRetry` 与 `maxRetries` 字段和已保存的设置都保留，等失败恢复
- * 与消息模型打磨好之后再接线。调用方不需要改。
+ * 聊天轮次的自动重试：默认关闭，用户在网络设置里开启后才生效。
+ * 重试以 agent step 为单位，失败后只重放当前 step；压缩摘要与记忆整理显式传 [RetryPolicy.NONE]。
  */
-internal fun Settings.retryPolicy(): RetryPolicy = RetryPolicy.NONE
+internal fun Settings.retryPolicy(): RetryPolicy {
+    if (!networkSetting.enableAutoRetry) return RetryPolicy.NONE
+    val retries = networkSetting.maxRetries.coerceIn(0, NetworkSetting.MAX_RETRIES)
+    if (retries == 0) return RetryPolicy.NONE
+    return RetryPolicy.NETWORK.copy(maxRetries = retries)
+}
 
 /** 流式空闲看门狗；关掉开关时整条看门狗不生效。 */
 internal fun Settings.streamIdleWatchdog(): Duration? =

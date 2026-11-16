@@ -13,7 +13,7 @@
 备份是一个自包含 zip，不需要云端：
 
 ```text
-settings.json                              整个 Settings 的序列化，额外带 launchCount
+settings.json                              整个 Settings 的序列化，额外带 launchCount 与 settingsVersion
 rikka_hub.db                               VACUUM INTO 出来的标准 SQLite 快照
 upload/ skills/ fonts/ media_creation/     附件，可选择不备份
 workspaces/<root>/files/                   工作区文件区，本地导出默认勾选（C79）；WebDAV 默认不打包
@@ -21,7 +21,7 @@ workspaces/<root>/files/                   工作区文件区，本地导出默�
 
 前两条是必须的，第三条与第四条是可选的附带内容。库里的会话引用设置里的助手，附件名也由库里的文本列引用，缺了设置或缺了库，恢复出来都是错配，所以导入侧在解压之前就会拒绝（C40）；附件与工作区文件从不单独导出或恢复。
 
-前三条是官方也认识的条目；`workspaces/` 是本仓库自己加的，官方格式里没有，所以官方兼容出口既不打包这一类条目、也会从 settings.json 里去掉工作区这个选项（未知枚举值不像未知字段那样能被忽略，带着它官方会整份设置解码失败）。勾选工作区之后，每个工作区的文件区按 `workspaces/<root>/files/<relative>` 打包，与 `filesDir` 下的实际布局一致，恢复侧因此复用同一条 `files/` 映射。工作区里的 PRoot 根文件系统（`<root>/linux`）与临时目录（`<root>/tmp`）不进归档。
+settingsVersion 记录设置 schema 版本（当前 6），恢复时用它区分 legacy 与新备份；官方把它当作未知顶层字段，和 launchCount 一样依赖 `ignoreUnknownKeys`。前三条是官方也认识的条目；`workspaces/` 是本仓库自己加的，官方格式里没有，所以官方兼容出口既不打包这一类条目、也会从 settings.json 里去掉工作区这个选项（未知枚举值不像未知字段那样能被忽略，带着它官方会整份设置解码失败）。勾选工作区之后，每个工作区的文件区按 `workspaces/<root>/files/<relative>` 打包，与 `filesDir` 下的实际布局一致，恢复侧因此复用同一条 `files/` 映射。工作区里的 PRoot 根文件系统（`<root>/linux`）与临时目录（`<root>/tmp`）不进归档。
 
 设置里的 `webDavConfig.items` 是持久化的选择。每一项的含义没变（仍然是「要不要带上这一类」），但聊天记录不再允许关掉：旧值里只有 `FILES` 或 `WORKSPACES` 的，在导出写进归档、以及备份页展示与保存时由 `normalize` 补上 `DATABASE`；设置本身的解码与 DataStore key 都不变，`normalize` 幂等。
 

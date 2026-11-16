@@ -19,6 +19,7 @@ import androidx.compose.material3.LargeFlexibleTopAppBar
 import androidx.compose.material3.LoadingIndicator
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.Slider
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBarDefaults
@@ -50,13 +51,16 @@ import me.rerere.hugeicons.stroke.View
 import me.rerere.hugeicons.stroke.ViewOff
 import me.rerere.rikkahub.BuildConfig
 import me.rerere.rikkahub.R
+import me.rerere.rikkahub.data.datastore.NetworkSetting
 import me.rerere.rikkahub.data.remote.toProxyOrNull
 import me.rerere.rikkahub.ui.components.nav.BackButton
 import me.rerere.rikkahub.ui.components.ui.CardGroup
+import me.rerere.rikkahub.ui.components.ui.CardGroupValue
 import me.rerere.rikkahub.ui.components.ui.switchItem
 import me.rerere.rikkahub.ui.context.LocalToaster
 import me.rerere.rikkahub.ui.theme.CustomColors
 import me.rerere.rikkahub.utils.plus
+import kotlin.math.roundToInt
 import okhttp3.OkHttpClient
 import okhttp3.Request
 import org.koin.androidx.compose.koinViewModel
@@ -92,6 +96,7 @@ fun SettingPreferencesNetworkPage(vm: SettingVM = koinViewModel()) {
     val resources = LocalResources.current
     val toaster = LocalToaster.current
     var proxyTesting by remember { mutableStateOf(false) }
+    val retryCount = settings.networkSetting.maxRetries.coerceIn(1, NetworkSetting.MAX_RETRIES)
 
     fun updateUserAgent(value: String) {
         userAgent = value
@@ -276,6 +281,67 @@ fun SettingPreferencesNetworkPage(vm: SettingVM = koinViewModel()) {
             contentPadding = contentPadding + PaddingValues(horizontal = 16.dp, vertical = 8.dp),
             verticalArrangement = Arrangement.spacedBy(16.dp),
         ) {
+            item {
+                CardGroup {
+                    switchItem(
+                        checked = settings.networkSetting.enableAutoRetry,
+                        onCheckedChange = { enabled ->
+                            vm.updateSettings { current ->
+                                val retries = current.networkSetting.maxRetries
+                                current.copy(
+                                    networkSetting = current.networkSetting.copy(
+                                        enableAutoRetry = enabled,
+                                        maxRetries = if (enabled) {
+                                            retries.coerceIn(1, NetworkSetting.MAX_RETRIES)
+                                        } else {
+                                            retries
+                                        },
+                                    ),
+                                )
+                            }
+                        },
+                        supportingContent = {
+                            Text(stringResource(R.string.setting_page_preferences_network_auto_retry_desc))
+                        },
+                        headlineContent = {
+                            Text(stringResource(R.string.setting_page_preferences_network_auto_retry))
+                        },
+                    )
+                    if (settings.networkSetting.enableAutoRetry) {
+                        formItem(
+                            headlineContent = {
+                                Text(stringResource(R.string.setting_page_preferences_network_auto_retry_count))
+                            },
+                            trailingContent = {
+                                CardGroupValue(
+                                    stringResource(
+                                        R.string.setting_page_preferences_network_auto_retry_count_value,
+                                        retryCount,
+                                    )
+                                )
+                            },
+                        ) {
+                            Slider(
+                                value = retryCount.toFloat(),
+                                onValueChange = { value ->
+                                    val count = value.roundToInt()
+                                        .coerceIn(1, NetworkSetting.MAX_RETRIES)
+                                    if (count != settings.networkSetting.maxRetries) {
+                                        vm.updateSettings {
+                                            it.copy(
+                                                networkSetting = it.networkSetting.copy(maxRetries = count),
+                                            )
+                                        }
+                                    }
+                                },
+                                valueRange = 1f..NetworkSetting.MAX_RETRIES.toFloat(),
+                                steps = NetworkSetting.MAX_RETRIES - 2,
+                                modifier = Modifier.fillMaxWidth(),
+                            )
+                        }
+                    }
+                }
+            }
             item {
                 CardGroup {
                     switchItem(

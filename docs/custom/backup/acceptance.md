@@ -184,6 +184,18 @@ C62 给 `NetworkSetting` 增加 `streamIdleTimeoutEnabled`（默认 true），C6
 - JVM 侧：`SettingsFieldsTest` 覆盖 `agent_setting` 的 DataStore 往返与 key 表；`AgentSettingTest` 覆盖默认值、序列化往返、范围收口与 `NetworkSetting.streamIdleTimeoutEnabled` 的旧 JSON 默认值；`SettingsTimeoutsTest` 覆盖两个设置到 `AgentRequest` 的映射。
 - 官方 RikkaHub 3.1.1 手动恢复、5GB 与 `.crosscheck` 换包名恢复没有重跑：官方 App 3.1.1 的设置入口在当前设备仍然无法通过自动化进入（与 C75、C80 相同），本次没有新增数据库、附件或导出结构变化，53 条设备用例已覆盖自家导出/恢复与官方样本。
 
+## 2026-11-16 C75 自动重试默认关闭
+
+C75 恢复自动重试时把 NetworkSetting.enableAutoRetry 的默认值改成 false，并新增 DataStore V6 迁移，把旧设置里的 true 一次性改成 false。备份恢复不能绕过这个语义：settings.json 现在写入 settingsVersion=6，SettingsJsonMigrator 对缺失或小于 6 的旧备份与官方备份强制关闭自动重试，只有带 6 的新备份才保留用户显式开启的值。settingsVersion 是官方不认识的顶层键，和 launchCount 一样依赖官方 ignoreUnknownKeys；没有 Room/schema 或附件变化。
+
+JVM 侧：PreferenceStoreV6MigrationTest 覆盖 V6 的版本门禁、写回版本 6、旧 JSON 关闭和带 6 的新备份保留显式 true；SettingsRetryPolicyTest 覆盖默认关闭与次数上限。
+
+设备待验：
+
+- 用一份 C75 之前的自家备份恢复，确认网络设置里的自动重试为关闭。
+- 用一份 C75 之后、显式开启自动重试的自家备份恢复，确认开关保持开启且次数正确。
+- 官方 3.1.1 备份恢复没有新增数据库或附件结构变化；其 settings 没有 settingsVersion，按旧备份处理并关闭自动重试。
+
 ## 待验证（B1）
 
 B1 第一阶段已给 `UIMessage` 增加 `steps`，给 `UIMessagePart.Tool` 增加 `callComplete`。这两项只作为官方不认识的 JSON 字段随消息导出。上游 `ref` 的 `app/src/main/java/me/rerere/rikkahub/utils/Json.kt` 里 `JsonInstant` 已开启 `ignoreUnknownKeys`，消息节点也用 `JsonInstant.decodeFromString<List<UIMessage>>` 解码，因此不需要先做 JSON 投影兜底；官方 3.1.1 是否与该解码器一致仍需样本确认。若样本拒绝未知字段，再按 B2 设计在 `OfficialDatabaseAdapter` 投影 `messages` JSON。需要用包含这两个字段的会话补两条：

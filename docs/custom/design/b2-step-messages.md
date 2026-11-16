@@ -13,7 +13,7 @@
 - 失败或取消时整条消息标 `FAILED` / `INTERRUPTED`。`filterModelVisible()` 对 `FAILED` 整条过滤，已经执行过的工具调用与结果对模型不可见，下一轮可能重复执行。
 - 自动重试本来就在 step 级：`withRetry` 从本 step 的 `stepStart` 重放，之前的 step parts 不会被清掉。真正的问题是重试期间 preview 会覆盖当前 step 的展示，以及重试耗尽后整条消息被过滤；所以要先修投影与结算，再恢复重试。
 - 存储：会话树在 `message_node` 表，一行一个 `MessageNode`，`messages` 列是 `List<UIMessage>` 的 JSON，`select_index` 是整轮候选下标；`ConversationEntity.nodes` 是遗留空列，固定写 `"[]"`；整会话保存会删除并重插全部节点；收藏记录节点 id；FTS 按消息索引；官方兼容出口保留行结构与 JSON 字段，但 `OfficialDatabaseAdapter` 会对 TEXT 列做附件路径改写（C30/C36）。
-- 自动重试当前整体下线，C63 自动缩窗与 C73 发送前裁剪已撤销。在本文档通过评审并实现前，这块保持冻结。
+- 自动重试已恢复为默认关闭的可选项，C63 自动缩窗与 C73 发送前裁剪仍撤销。
 
 ## 2. 目标与非目标
 
@@ -247,7 +247,7 @@ RUNNING 会出现在当前请求里：AgentLoop 把正在生成的 assistant 消
 ## 8. 重试
 
 - 自动重试恢复，但只接在聊天轮次上：`ChatRequestFactory.createAgent` 使用 `settings.retryPolicy()`；压缩摘要与记忆整理显式传 `RetryPolicy.NONE`；标题生成本来没有 `retry` 参数，不涉及。
-- 默认策略沿用 RikkaHub 现有实现：默认 3 次，基础间隔 1s/2s/4s，10% 抖动，`Retry-After` 用 `maxDelay` 截断，码表与 C61 一致。DSH 的 5 次与 500ms 作为以后可调的候选，不在本次改变。
+- 默认关闭；开启后沿用 RikkaHub 现有实现：默认 3 次，基础间隔 1s/2s/4s，10% 抖动，`Retry-After` 用 `maxDelay` 截断，码表与 C61 一致。DSH 的 5 次与 500ms 作为以后可调的候选，不在本次改变。
 - attempt 由 AgentLoop 在每次重试时构造：`RetryAttempt` 增加 `code` 与 `durationMs`，`code` 从 `LlmFailureCode` 或异常映射得出，耗时按一次请求的起止计算；AgentLoop 在 step 结束时把 attempts 写进消息并发出最后一次 `MessageUpdated`，ChatService 负责落库；重试耗尽时同样先把带 FAILED step 与 attempts 的消息落库再抛错，最终消息使用最后一次 attempt 的 parts。
 - attempt 记录最多 20 条；C76 历史卡片从 `MessageStep.attempts` 读 `attempt`、`maxRetries`、`code`、`delayMs`、`durationMs`，实时倒计时继续用会话内存 `retryAttempts` 的 `recordedAtMillis`。
 - 每次重试开始时，preview 只重建当前 step 的 part 范围，之前的 step parts 不参与重置；消息 id 与 step id 在整个重试期间保持不变。

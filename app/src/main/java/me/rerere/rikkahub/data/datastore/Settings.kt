@@ -117,8 +117,8 @@ data class NetworkSetting(
     val proxyUrl: String = "",
     val proxyUsername: String = "",
     val proxyPassword: String = "",
-    // 自动重试暂时整体下线，这两个字段与已保存的 JSON 保留，恢复接线时直接读回
-    val enableAutoRetry: Boolean = true,
+    // 自动重试默认关闭，用户可在网络设置里显式开启；旧版本字段保留，首次升级由 V6 迁移关掉
+    val enableAutoRetry: Boolean = false,
     // 自动重试的最大次数（不包含首次请求）；0 表示只发一次，不重试
     val maxRetries: Int = 3,
     // 流式响应连续 90 秒没有任何数据（含 Anthropic 的保活 ping）时中断；关掉后只依赖网络层读超时

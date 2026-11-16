@@ -1182,6 +1182,10 @@ mDNS 地址：使用 .local 主机名，同一网络中的其他设备可通过�
   <string name="setting_page_preferences_network_proxy_invalid">请输入包含主机和端口的有效代理 URL。</string>
   <string name="setting_page_preferences_network_stream_idle_timeout">流式空闲超时</string>
   <string name="setting_page_preferences_network_stream_idle_timeout_desc">流式响应连续 90 秒没有收到任何数据时中断等待，保活 ping 也算数据</string>
+  <string name="setting_page_preferences_network_auto_retry">自动重试</string>
+  <string name="setting_page_preferences_network_auto_retry_desc">聊天请求遇到瞬时网络错误时自动重试，默认关闭。</string>
+  <string name="setting_page_preferences_network_auto_retry_count">重试次数</string>
+  <string name="setting_page_preferences_network_auto_retry_count_value">%1$d 次</string>
   <string name="setting_page_preferences_agent">工具</string>
   <string name="setting_page_preferences_agent_desc">工具执行超时与工作区命令上限</string>
   <string name="setting_page_agent_tool_group">工具执行</string>

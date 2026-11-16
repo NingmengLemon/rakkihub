@@ -33,7 +33,7 @@
 3. 在 staging 的 `payload/database/` 下新建空的 Room 库，把行数据写进去。
    - 文件名必须是 `rikka_hub`：`PendingRestore.buildEntries` 按 `database/<name>` 识别，`targetFile` 也只接受这个名字，其他名字会在 apply 时直接报错。
    - 写完后按现有顺序收尾：`try { checkpoint } finally { close }`，再 `removeSidecars`。留着非空的 `-wal` 会让 `buildEntries` 对同一路径生成两条 entry。
-4. settings 按原流程迁移、解码、重新编码，`launchCount` 一并带进 pending 的 `settings.json`。
+4. settings 按原流程迁移、解码、重新编码，`launchCount` 与 `settingsVersion` 一并带进 pending 的 `settings.json`。
 5. `PendingRestore.publish(staging)`，重启时原子替换。
 
 payload 的布局沿用现有约定：`payload/database/rikka_hub`、`payload/files/<附件路径>`，`settings.json` 放在 staging 根。归档必须同时带数据库与 settings，缺条目在解压之前就被拒绝（C40），所以不会出现空 payload 的「静默成功」。
@@ -83,7 +83,7 @@ payload 的布局沿用现有约定：`payload/database/rikka_hub`、`payload/fi
 
 钩子放在共用的恢复入口（`stageRestore`）上，所以官方 v32 走那条路时也会跑。
 
-`launchCount` 不属于 `Settings`，由 `PendingRestore.apply` 在启动前与 settings 一起写入，不在运行时单独设。
+`launchCount` 与 `settingsVersion` 不属于 `Settings`，由 `PendingRestore.apply` 在启动前与 settings 一起写入，不在运行时单独设。`settingsVersion` 用于恢复时判断是否 legacy；当前恢复统一重写成当前版本 6，未来版本的设置 schema 不保证可被旧构建保留。
 
 ## 维护时机
 

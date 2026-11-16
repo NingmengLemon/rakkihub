@@ -95,4 +95,7 @@ private fun Settings.withValuesInRange(): Settings = copy(
     searchServiceSelected = searchServiceSelected.coerceIn(0, (searchServices.size - 1).coerceAtLeast(0)),
     defaultTTSPlaybackSpeed = defaultTTSPlaybackSpeed.coerceIn(0.5f, 2.0f),
     agentSetting = agentSetting.normalized(),
+    networkSetting = networkSetting.copy(
+        maxRetries = networkSetting.maxRetries.coerceIn(0, NetworkSetting.MAX_RETRIES),
+    ),
 )

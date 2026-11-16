@@ -1,6 +1,6 @@
 # B1：step 级提交与失败投影
 
-- 状态：step 记录、Claude step 级请求投影、失败工具事实、审批/取消结算与最后节点审批已落地；完整状态机与自动重试恢复待后续阶段
+- 状态：step 记录、Claude step 级请求投影、失败工具事实、审批/取消结算、最后节点审批与默认关闭的自动重试已落地；C76 内存态卡片已恢复，持久化留 B2
 - 日期：2026-11-15
 - 范围：step 记录、失败投影、自动重试恢复，以及重试恢复后自动重现的 C76 内存态卡片。手动 step 重试、搜索过滤、Web DTO 扩展与官方导出兜底归 B2；错误卡片重试永久取消
 - 对齐参考：DSH `dsh-v0.2.2-rc.1`（tag 指向 commit `66491b05e3f05ad35bcdd4f6cd7ed26041d9e3db`，2026-11-04；本地 clone `E:\MyWorkspace\deepseek-harness` 的 HEAD 是 `dsh-v0.2.1-rc.5`，0.2.2 事实均用 `git show dsh-v0.2.2-rc.1:<path>` 读取）
@@ -12,7 +12,7 @@
 - 失败或取消时整条消息标 `FAILED` / `INTERRUPTED`。`filterModelVisible()` 对 `FAILED` 整条过滤，前面成功 step 里的工具调用与结果对模型不可见，下一轮可能重复执行。
 - 自动重试本来就在 step 级：`withRetry` 从本 step 的 `stepStart` 重放，之前的 step parts 不会被清掉。真正的问题是重试期间 preview 会覆盖当前 step 的展示，以及重试耗尽后整条消息被过滤。
 - 存储：会话树在 `message_node` 表，一行一个 `MessageNode`，`messages` 列是 `List<UIMessage>` 的 JSON，`select_index` 是整轮候选下标；整会话保存会删除并重插全部节点；收藏记录节点 id；FTS 按消息索引。官方兼容出口保留行结构，`OfficialDatabaseAdapter` 对一致形状只改写 TEXT 列的附件路径，已登记分叉先经 `OfficialSchemaTrimmer` 裁剪，未登记分叉直接抛 `OfficialExportUnsupportedException`。
-- 自动重试当前整体下线，C63 自动缩窗与 C73 发送前裁剪已撤销。在本文档通过评审并实现前，这块保持冻结。
+- 自动重试已恢复接线，默认关闭、用户显式开启后生效；C63 自动缩窗与 C73 发送前裁剪仍撤销。
 
 ## 2. 目标与非目标
 
@@ -189,7 +189,7 @@ val callComplete: Boolean = true
 ## 7. 重试
 
 - 聊天轮次恢复 `settings.retryPolicy()`；压缩摘要（`ChatRequestFactory.streamCompressionSummary`）与记忆整理（`MemoryConsolidator`）显式传 `RetryPolicy.NONE`；标题没有 retry 参数。
-- 默认 3 次、1s/2s/4s、10% 抖动、`Retry-After` 用 `maxDelay` 截断，码表与 C61 一致。
+- 默认关闭；开启后默认 3 次、1s/2s/4s、10% 抖动、`Retry-After` 用 `maxDelay` 截断，码表与 C61 一致。
 - 重试仍在 step 内由 `withRetry` 完成：`attempt = stepStart`，之前的 step parts 不动；step 记录与 id 保持不变。
 - 重试会重新触发 `AgentEvent.Retrying`，现有 `ConversationSession.retryAttempts` 与 C76 内存态卡片会自动重现。B1 接受这一点：卡片只显示当前进程的尝试记录，不落盘、不改卡片代码；attempt 的持久化归 B2。
 - 重试耗尽：step FAILED、消息 FAILED；之后请求保留前面 SUCCEEDED step 的正文与工具事实。
@@ -224,7 +224,7 @@ val callComplete: Boolean = true
 1. 模型与投影：`steps`、`callComplete`、两个投影函数、空消息与检查点规则、媒体/annotations、序列化与旧数据测试。
 2. 生命周期与结算：step 记录、step-start、失败/取消/审批/中间节点回退/进程死亡/预请求失败的收尾、工具事实保留、Finished upsert。
 3. 重试恢复：聊天轮次接回 `RetryPolicy`、C75 设置入口、压缩与记忆显式 NONE、`SettingsRetryPolicyTest` 更新、C76 内存态卡片回归。
-4. 验收与登记：Web/FTS/导出回归、官方恢复样本、`docs/custom/backup/acceptance.md` 补 steps/callComplete 的待验证条目、README（design/ 行、降级说明）、checklist（C97 明细与计数、C51、C58、C60、C61、C62、C65、C67、C72、C74、C75、C76、C77 措辞；C61 的“自动重试已整体下线”、C62 的“超时直接出错误卡片”、C72/C74 的 filterModelVisible 描述同步改写）与 roadmap 的 :378、:386、:400、:415 行同步改写、roadmap 同步，全部放在同一个提交里。
+4. 验收与登记：Web/FTS/导出回归、官方恢复样本、`docs/custom/backup/acceptance.md` 补 steps/callComplete 的待验证条目、README（design/ 行、降级说明）、checklist（C97 明细与计数、C51、C58、C60、C61、C62、C65、C67、C72、C74、C75、C76、C77 措辞；C61 的自动重试措辞、C62 的“超时直接出错误卡片”、C72/C74 的 filterModelVisible 描述同步改写）与 roadmap 的 :378、:386、:400、:415 行同步改写、roadmap 同步，全部放在同一个提交里。
 
 阶段 1 到 4 作为一个批次推送。
 

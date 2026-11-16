@@ -809,6 +809,10 @@
   <string name="setting_page_preferences_network_proxy_invalid">Enter a valid proxy URL with a host and port.</string>
   <string name="setting_page_preferences_network_stream_idle_timeout">Stream idle timeout</string>
   <string name="setting_page_preferences_network_stream_idle_timeout_desc">Stop waiting for a streaming response after 90 seconds without any data, including keep-alive pings</string>
+  <string name="setting_page_preferences_network_auto_retry">Automatic retry</string>
+  <string name="setting_page_preferences_network_auto_retry_desc">Retry transient network errors in chat. Off by default.</string>
+  <string name="setting_page_preferences_network_auto_retry_count">Retry count</string>
+  <string name="setting_page_preferences_network_auto_retry_count_value">%1$d</string>
   <string name="setting_page_preferences_agent">Tools</string>
   <string name="setting_page_preferences_agent_desc">Tool execution timeouts and workspace command limits</string>
   <string name="setting_page_agent_tool_group">Tool execution</string>

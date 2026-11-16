@@ -13,6 +13,8 @@ import kotlinx.serialization.json.jsonArray
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
 import me.rerere.rikkahub.data.datastore.SettingsStore
+import me.rerere.rikkahub.data.datastore.migration.CURRENT_SETTINGS_VERSION
+import me.rerere.rikkahub.data.datastore.migration.SETTINGS_VERSION_KEY
 import me.rerere.rikkahub.data.datastore.WebDavConfig
 import me.rerere.rikkahub.data.db.AppDatabase
 import me.rerere.rikkahub.data.db.AppDatabaseFactory
@@ -110,6 +112,10 @@ class BackupManagerTest {
             assertTrue(zip.getEntry(DatabaseBackup.ARCHIVE_DATABASE) != null)
             assertEquals(null, zip.getEntry(DatabaseBackup.WAL))
             assertEquals(null, zip.getEntry(DatabaseBackup.SHM))
+            assertEquals(
+                CURRENT_SETTINGS_VERSION,
+                settingsVersionOf(zip.getInputStream(zip.getEntry("settings.json")).readBytes().decodeToString()),
+            )
         }
         manager.stageRestore(archive, includeFiles = false)
         assertEquals("live", probe(liveDatabase))
@@ -129,6 +135,10 @@ class BackupManagerTest {
         ZipFile(archive).use { zip ->
             assertTrue(zip.getEntry("settings.json") != null)
             assertTrue(zip.getEntry(DatabaseBackup.ARCHIVE_DATABASE) != null)
+            assertEquals(
+                CURRENT_SETTINGS_VERSION,
+                settingsVersionOf(zip.getInputStream(zip.getEntry("settings.json")).readBytes().decodeToString()),
+            )
         }
         manager.stageRestore(archive, includeFiles = false)
         assertEquals("live", probe(liveDatabase))
@@ -169,6 +179,9 @@ class BackupManagerTest {
 
     private fun launchCountOf(settingsJson: String): Int? =
         JsonInstant.parseToJsonElement(settingsJson).jsonObject["launchCount"]?.jsonPrimitive?.int
+
+    private fun settingsVersionOf(settingsJson: String): Int? =
+        JsonInstant.parseToJsonElement(settingsJson).jsonObject[SETTINGS_VERSION_KEY]?.jsonPrimitive?.int
 
     /**
      * 设置存储是进程级单例，apply 会把 pending 里的 settings 写进这台设备的真实设置。

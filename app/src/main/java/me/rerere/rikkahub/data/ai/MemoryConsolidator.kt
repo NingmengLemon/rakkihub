@@ -11,6 +11,7 @@ import me.rerere.ai.agent.AgentEvent
 import me.rerere.ai.agent.AgentFinishReason
 import me.rerere.ai.agent.AgentHooks
 import me.rerere.ai.agent.AgentRequest
+import me.rerere.ai.agent.RetryPolicy
 import me.rerere.ai.agent.StepRequest
 import me.rerere.ai.agent.runAgent
 import me.rerere.ai.core.MessageRole
@@ -210,7 +211,7 @@ class MemoryConsolidator(
                 tools = tools,
                 stream = false,
                 maxSteps = MAX_STEPS,
-                retry = settings.retryPolicy(),
+                retry = RetryPolicy.NONE,
                 toolTimeout = settings.toolExecutionTimeout(),
                 allowToolApproval = false,
             ),

@@ -20,6 +20,8 @@ import kotlinx.serialization.json.jsonPrimitive
 import me.rerere.rikkahub.data.datastore.Settings
 import me.rerere.rikkahub.data.datastore.SettingsStore
 import me.rerere.rikkahub.data.datastore.WebDavConfig
+import me.rerere.rikkahub.data.datastore.migration.CURRENT_SETTINGS_VERSION
+import me.rerere.rikkahub.data.datastore.migration.SETTINGS_VERSION_KEY
 import me.rerere.rikkahub.data.datastore.migration.SettingsJsonMigrator
 import me.rerere.rikkahub.data.db.AppDatabase
 import me.rerere.rikkahub.data.db.AppDatabaseFactory
@@ -528,7 +530,10 @@ class BackupManager(
         internal const val WORKSPACE_FILES_DIR = WorkspaceManager.FILES_DIR
 
         private fun Json.encodeSettings(settings: Settings, launchCount: Int): String {
-            val fields = encodeToJsonElement(settings).jsonObject + (LAUNCH_COUNT_KEY to JsonPrimitive(launchCount))
+            val fields = encodeToJsonElement(settings).jsonObject + mapOf(
+                LAUNCH_COUNT_KEY to JsonPrimitive(launchCount),
+                SETTINGS_VERSION_KEY to JsonPrimitive(CURRENT_SETTINGS_VERSION),
+            )
             return encodeToString(JsonObject(fields))
         }
 
