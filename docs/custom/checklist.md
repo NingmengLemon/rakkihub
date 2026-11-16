@@ -807,7 +807,7 @@
 - 落点：新增 `TerminalImeEditText`，用正常 `TYPE_CLASS_TEXT` 作为隐藏 IME 宿主；`commitText`、`finishComposingText` 把提交文本按 UTF-8 写给 `TerminalSession`，退格、Enter、Tab、控制键单独转发；`WorkspaceTerminalViewClient` 优先聚焦该宿主并 `restartInput`；`TerminalView` 保持可聚焦以支持长按选择/复制。
 - 理由：`terminal-view` 0.118.0 的 `TerminalView` 把 inputType 设成无文本类，Gboard/Fcitx 的拼音组合没有正常 `InputConnection` 承接，候选提交会丢失。
 - 合并注意：终端核心仍是上游 AAR，不要改 `terminal-view` 二进制；输入法宿主是 1dp 透明视图，设置 `importantForAccessibility=NO`。硬件键盘事件和 IME 的 `sendKeyEvent` 都要转发给终端，长按选择不能因为聚焦宿主而失效。升级 terminal-view 后要重测中文、日文、退格和 Enter。
-- 测试：开发机装 Rootfs 后用 Fcitx5 提交“你好”、退格和执行；用户用 Gboard 中文/日文复核；长按选择/复制需要单独设备回归。
+- 测试：开发机装 Rootfs 后用 Fcitx5 提交“你好”、退格和执行；用户用 Gboard 中文/日文复核；开发机长按终端文本已显示 Copy/More 选择工具栏。
 
 ### C105 工作区 Markdown 预览与源码切换
 
