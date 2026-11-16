@@ -54,6 +54,7 @@ import me.rerere.ai.util.KeyRoulette
 import me.rerere.ai.util.configureSessionHeaders
 import me.rerere.ai.util.encodeBase64
 import me.rerere.ai.util.json
+import me.rerere.ai.util.logFailureBody
 import me.rerere.ai.util.mergeCustomBody
 import me.rerere.ai.util.mergeCustomHeaders
 import me.rerere.ai.util.parseErrorDetail
@@ -138,6 +139,7 @@ class ResponseAPI(
         client.newCall(request).await().use { response ->
             val bodyStr = response.body.string()
             if (!response.isSuccessful) {
+                response.logFailureBody(bodyStr)
                 throw response.toHttpException(bodyStr)
             }
 
@@ -200,6 +202,7 @@ class ResponseAPI(
                 println("[onFailure] 发生错误: ${t?.javaClass?.name} ${t?.message} / $response")
 
                 val bodyRaw = response?.body?.stringSafe()
+                response?.logFailureBody(bodyRaw)
                 try {
                     if (!bodyRaw.isNullOrBlank()) {
                         val bodyElement = Json.parseToJsonElement(bodyRaw)

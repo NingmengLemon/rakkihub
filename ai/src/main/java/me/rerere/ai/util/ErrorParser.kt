@@ -1,5 +1,6 @@
 package me.rerere.ai.util
 
+import android.util.Log
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonElement
@@ -11,6 +12,38 @@ import kotlinx.serialization.json.jsonPrimitive
 import okhttp3.Response
 import java.time.ZonedDateTime
 import java.time.format.DateTimeFormatter
+
+private const val FAILURE_LOG_TAG = "ProviderError"
+private const val FAILURE_LOG_CHUNK = 1000
+
+/**
+ * 把 provider 的失败响应体完整写进 logcat，按块拆分避免单条日志被截断。
+ * 只记录方法、路径和状态码，不记录 query（里面可能有 key）。
+ */
+fun Response.logFailureBody(body: String?) {
+    val location = "${request.method} ${request.url.encodedPath} -> HTTP $code"
+    if (body.isNullOrEmpty()) {
+        Log.e(FAILURE_LOG_TAG, "$location body=<empty>")
+        return
+    }
+    val chunks = body.chunkWithoutSplittingSurrogates(FAILURE_LOG_CHUNK)
+    chunks.forEachIndexed { index, chunk ->
+        Log.e(FAILURE_LOG_TAG, "$location body=${index + 1}/${chunks.size}\n$chunk")
+    }
+}
+
+private fun String.chunkWithoutSplittingSurrogates(limit: Int): List<String> {
+    require(limit >= 2)
+    val chunks = mutableListOf<String>()
+    var start = 0
+    while (start < length) {
+        var end = (start + limit).coerceAtMost(length)
+        if (end < length && Character.isHighSurrogate(this[end - 1])) end--
+        chunks += substring(start, end)
+        start = end
+    }
+    return chunks
+}
 
 /** Provider-neutral failure classes used by retry and recovery decisions. */
 enum class LlmFailureCode {

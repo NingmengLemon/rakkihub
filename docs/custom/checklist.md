@@ -106,6 +106,7 @@
 | C96 | 移除发给 OpenRouter 的来源标识头 | 移除 |
 | C97 | Claude step 级请求投影与失败工具事实 | 改造 |
 | C98 | 消息操作手动重试失败 step | 改造 |
+| C99 | 失败请求记录完整 provider 响应体 | 改造 |
 
 ## 明细
 
@@ -752,7 +753,15 @@
 
 ### C98 消息操作手动重试失败 step
 
-- 落点：`UIMessage.retryableStepIndex()` 只在消息为 FAILED/INTERRUPTED 时返回最后一个 FAILED、CANCELLED、RUNNING 或 TOOLS step，并在该 step 已执行过工具时返回 null；`prepareStepRetry` 再要求目标仍是最后节点与当前候选；`Conversation.prepareStepRetry(messageId)` 截断到该 step 的 `startPartIndex`，删掉该 step 及之后的记录，把消息复位为 COMPLETE、清 `isGenerating` 与 `finishedAt`，并用当前会话模型同步 `modelId`/`modelSnapshot`；`ChatService.retryMessageStep` 在 `canRegenerate()` 通过后加载会话、二次检查审批/frozen，落库后复用 `runTurn(session)` 从同一条 assistant 消息继续，不新建候选。聊天消息快捷按钮与更多菜单只在最后一条可重试 assistant 上出现，文案 `chat_message_retry_step`（四份 locale）。
+- 落点：`UIMessage.retryTarget()` 在消息为 FAILED/INTERRUPTED 时返回两种目标。最后还有 FAILED、CANCELLED、RUNNING 或 TOOLS step 且该 step 没执行过工具时返回 `Step`，截断到该 step 的 `startPartIndex`，删掉该 step 及之后的记录；没有失败 step、所有 step 都 SUCCEEDED 且所有工具都已执行时返回 `Continue`，保留现有 parts 与 steps，只复位消息状态并从末尾继续。两种情况都要求目标仍是最后节点与当前候选，并用当前会话模型同步 `modelId`/`modelSnapshot`；`ChatService.retryMessageStep` 在 `canRegenerate()` 通过后加载会话、二次检查审批/frozen，落库后复用 `runTurn(session)` 从同一条 assistant 消息继续，不新建候选。聊天消息快捷按钮与更多菜单只在最后一条 `retryTarget()` 非空的 assistant 上出现，文案 `chat_message_retry_step`（四份 locale）。
 - 理由：C77 的错误卡片重试永久取消，失败或中断的 step 需要一个人工入口；原位续跑保留此前 SUCCEEDED step 的正文与工具事实，不把整轮回复重放，也不产生分支。
-- 合并注意：只处理最后节点，中间节点或已切走分支返回 null；目标 step 已执行过工具时入口隐藏，防止丢掉有副作用的工具事实；`runTurn` 开头的 `withoutUnresumableToolCalls` 仍会清理前缀里无法恢复的工具，目标 step 已经被截掉；usage/stepCount 不重置，新 step 继续累计。`ChatError` 不增加 retry 字段，入口只依赖消息本身；自动重试仍关闭。UI 只在 `lastMessage` 且 `retryableStepIndex()` 非空时传回调，避免在旧消息上露出无效入口。
-- 测试：`ConversationMessagesTest` 覆盖截断到失败 step、保留前缀 step、复位状态、非最后节点、已完成消息与已执行工具 step 返回 null；`:ai:testDebugUnitTest`、`:app:testGithubDebugUnitTest`、assemble、spotless 通过；手动重试的 `ChatService` 任务接线没有 JVM 单测，留设备验证。
+- 合并注意：只处理最后节点，中间节点或已切走分支返回 null；可截断的 step 已执行过工具时入口隐藏，防止丢掉有副作用的工具事实；`Continue` 只保留全部已执行工具和已完成 step，未执行工具存在时返回 null；`runTurn` 开头的 `withoutUnresumableToolCalls` 仍会清理前缀里无法恢复的工具，`Step` 目标已经被截掉，`Continue` 目标保持原样；usage/stepCount 不重置，新 step 继续累计。`ChatError` 不增加 retry 字段，入口只依赖消息本身；自动重试仍关闭。UI 只在 `lastMessage` 且 `retryTarget()` 非空时传回调，避免在旧消息上露出无效入口。`Continue` 覆盖“下一步请求在第一个流事件之前失败”的情况：此时失败没有落成新 step，旧实现会因为没有可截断的 step 而完全隐藏入口。
+- 测试：`ConversationMessagesTest` 覆盖截断到失败 step、保留前缀 step、复位状态、非最后节点、已完成消息、已执行工具 step 返回 null，所有 step 已成功时保留内容从末尾继续、INTERRUPTED 的继续与模型快照同步、存在未执行工具时不继续；`:ai:testDebugUnitTest`、`:app:testGithubDebugUnitTest`、assemble、spotless 通过；手动重试的 `ChatService` 任务接线没有 JVM 单测，留设备验证。
+
+### C99 失败请求记录完整 provider 响应体
+
+- 落点：`ai/util/ErrorParser.kt` 新增 `Response.logFailureBody(body)`，只记录请求方法、`encodedPath` 和 HTTP 状态码，不记录 query、header 或 URL 中的 key；响应体按 1000 个 code point 分块写 logcat，标记 `ProviderError`，避免单条日志被截断和拆坏代理对。
+- 接线：`fetchBody()` 的非 2xx 路径记录后抛错；Claude、Google generateContent、OpenAI Chat Completions、OpenAI Responses、Google Interactions 的非流式非 2xx 在抛错前记录，流式 `onFailure` 在解析错误体前各记录一次；`toHttpException()` 不再隐式记录，避免同一条响应出现重复或空 body。成功响应不记录。
+- 理由：provider 的 400/401/429 等错误经常只在响应体里给出具体原因，例如 OpenCode Go 的 `Requests ending with a model turn are not supported`；只把解析后的 message 放进错误卡片会丢掉其余字段。logcat 长行有上限，分块才能保留完整正文。
+- 注意：响应体可能包含用户内容或回显的请求片段，日志只留在本机 logcat；不要把日志片段贴到外部。请求 URL 只取 path，防止 query 里的 key 落盘。
+- 测试：编译通过；用 `adb logcat -s ProviderError` 或 logcat Extreme 抓取，验证一次非 2xx 请求出现完整分块。暂无 JVM 单测，日志辅助路径留设备验证。

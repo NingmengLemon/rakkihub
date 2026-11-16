@@ -48,6 +48,7 @@ internal suspend fun OkHttpClient.fetchBody(request: Request): String = withCont
     newCall(request).await().use { response ->
         val body = response.body.string()
         if (!response.isSuccessful) {
+            response.logFailureBody(body)
             error("Request to ${request.url.encodedPath} failed: ${response.code} $body")
         }
         body

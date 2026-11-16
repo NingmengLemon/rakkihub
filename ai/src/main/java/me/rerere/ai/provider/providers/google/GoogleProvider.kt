@@ -60,6 +60,7 @@ import me.rerere.ai.util.KeyRoulette
 import me.rerere.ai.util.configureSessionHeaders
 import me.rerere.ai.util.encodeBase64
 import me.rerere.ai.util.json
+import me.rerere.ai.util.logFailureBody
 import me.rerere.ai.util.mergeCustomBody
 import me.rerere.ai.util.mergeCustomHeaders
 import me.rerere.ai.util.parseErrorDetail
@@ -211,6 +212,7 @@ class GoogleProvider(private val client: OkHttpClient, context: Context? = null)
         val response = client.newCall(request).await()
         val bodyStr = response.body?.string() ?: ""
         if (!response.isSuccessful) {
+            response.logFailureBody(bodyStr)
             throw response.toHttpException(bodyStr)
         }
         val bodyJson = json.parseToJsonElement(bodyStr).jsonObject
@@ -309,6 +311,7 @@ class GoogleProvider(private val client: OkHttpClient, context: Context? = null)
                 try {
                     if (t == null && response != null) {
                         val bodyStr = response.body.stringSafe()
+                        response.logFailureBody(bodyStr)
                         exception = if (!bodyStr.isNullOrEmpty()) {
                             json.parseToJsonElement(bodyStr).parseErrorDetail().withResponse(response)
                         } else {

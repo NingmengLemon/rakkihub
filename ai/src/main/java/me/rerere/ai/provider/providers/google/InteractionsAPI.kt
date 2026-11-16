@@ -49,6 +49,7 @@ import me.rerere.ai.util.KeyRoulette
 import me.rerere.ai.util.configureSessionHeaders
 import me.rerere.ai.util.encodeBase64
 import me.rerere.ai.util.json
+import me.rerere.ai.util.logFailureBody
 import me.rerere.ai.util.mergeCustomBody
 import me.rerere.ai.util.mergeCustomHeaders
 import me.rerere.ai.util.parseErrorDetail
@@ -94,6 +95,7 @@ internal class InteractionsAPI(
         client.newCall(request).await().use { response ->
             val bodyStr = response.body.string()
             if (!response.isSuccessful) {
+                response.logFailureBody(bodyStr)
                 throw response.toHttpException(bodyStr)
             }
             val bodyJson = json.parseToJsonElement(bodyStr).jsonObject
@@ -143,6 +145,7 @@ internal class InteractionsAPI(
                 var exception = t
 
                 val bodyRaw = response?.body?.stringSafe()
+                response?.logFailureBody(bodyRaw)
                 try {
                     if (!bodyRaw.isNullOrBlank()) {
                         exception = json.parseToJsonElement(bodyRaw).parseErrorDetail().withResponse(response)
