@@ -10,6 +10,7 @@ import me.rerere.rikkahub.data.db.entity.ManagedFileEntity
 import me.rerere.rikkahub.data.files.FileDerivationResolver
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
+import org.junit.Assert.assertNotEquals
 import org.junit.Assert.assertTrue
 import org.junit.Test
 import java.io.File
@@ -31,6 +32,24 @@ class FileDerivationRepositoryTest {
         assertFalse(repository.putOcr(7, "hello", now = 200))
         assertTrue(repository.putOcr(7, "changed", now = 300))
         assertEquals("changed", repository.get(7)?.text)
+    }
+
+    @Test
+    fun `ocr producer changes with prompt or model and isolates rows`() = runBlocking {
+        val (repository, _) = repository()
+        val first = FileDerivationRepository.ocrProducer("prompt-a", "model-a")
+        val second = FileDerivationRepository.ocrProducer("prompt-b", "model-a")
+        val third = FileDerivationRepository.ocrProducer("prompt-a", "model-b")
+
+        assertEquals(first, FileDerivationRepository.ocrProducer("prompt-a", "model-a"))
+        assertNotEquals(first, second)
+        assertNotEquals(first, third)
+        assertTrue(repository.putOcr(7, "old", first, now = 100))
+        assertTrue(repository.putOcr(7, "new", second, now = 200))
+
+        assertEquals("old", repository.get(7, first)?.text)
+        assertEquals("new", repository.get(7, second)?.text)
+        assertEquals(setOf(7L), repository.listForFiles(listOf(7, 8), second).keys)
     }
 
     @Test

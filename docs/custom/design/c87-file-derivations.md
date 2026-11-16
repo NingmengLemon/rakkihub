@@ -2,7 +2,7 @@
 
 ## 状态
 
-已落地 Phase 1，范围限定为 `file_derivations` 的持久化、读取优先级、备份恢复清空和官方导出裁剪。附件管理入口、手改 OCR 文本、producer 指纹失效和备份恢复合并留后续。
+已落地 Phase 1，范围限定为 `file_derivations` 的持久化、读取优先级、备份恢复清空和官方导出裁剪；Phase 2 已补 producer 指纹失效。附件管理入口、手改 OCR 文本和备份恢复合并留后续。
 
 ## 问题
 
@@ -30,7 +30,7 @@ CREATE UNIQUE INDEX index_file_derivations_file_id_kind_producer
   ON file_derivations(file_id, kind, producer);
 ```
 
-`kind` 当前固定 `ocr`，`producer` 固定 `ocr:v1`。`text` 存原始 OCR 文本，`<image_file_ocr>` 包装只在请求组装时做。`edited` 留给后续编辑入口，当前没有写入方。
+`kind` 当前固定 `ocr`，`producer` 为 `ocr:v1:<prompt+model 指纹>`。`text` 存原始 OCR 文本，`<image_file_ocr>` 包装只在请求组装时做。`edited` 留给后续编辑入口，当前没有写入方。
 
 ## 文件解析
 
@@ -68,7 +68,7 @@ CREATE UNIQUE INDEX index_file_derivations_file_id_kind_producer
 
 ## 测试
 
-- `FileDerivationRepositoryTest`：put/get、相同文本跳过、更新、edited 不覆盖、空文本忽略、按文件列表、`resolveAll` 的相对/绝对/目录外/未登记 URL 过滤与批量映射。
+- `FileDerivationRepositoryTest`：put/get、相同文本跳过、更新、edited 不覆盖、空文本忽略、按文件列表、producer 指纹稳定/隔离、`resolveAll` 的相对/绝对/目录外/未登记 URL 过滤与批量映射。
 - `OfficialDatabaseSchemaTest`：schema 34、identity、官方表集合加 `file_derivations`、已知额外列。
 - `Migration_33_34_Test`（开发机）：表创建、字段读取、外键级联删除。
 - `OfficialSchemaTrimmerTest`（开发机）：裁剪后 `file_derivations` 消失、usage 行保留、官方读取层可打开；未登记额外表会抛 `OfficialExportUnsupportedException`。
@@ -79,6 +79,6 @@ CREATE UNIQUE INDEX index_file_derivations_file_id_kind_producer
 ## 已知限制
 
 - 没有 OCR 编辑 UI，`edited` 目前没有写入方。
-- `producer` 不随 OCR 提示词或模型变化；换设置后旧文件的派生文本不会自动重算。
+- producer 随 OCR 提示词和模型 id 变化，旧 producer 行保留但不再读取；换设置后首次发送会重新识别一次。
 - 备份恢复不合并 derivation，统一清空后重新识别。
 - 只处理能映射到 `managed_files` 的本地图片；本安装 `filesDir` 下的绝对和相对地址都会解析，别的安装路径、目录外文件和未登记文件走旧回退。

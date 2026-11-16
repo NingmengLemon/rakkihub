@@ -115,6 +115,7 @@
 | C105 | 工作区 Markdown 预览与源码切换 | 新增 |
 | C106 | 工作区编辑器未保存退出保护 | 新增 |
 | C107 | B2 step 稳定标识与失败码 | 改造 |
+| C108 | C87 OCR producer 指纹失效 | 改造 |
 
 ## 明细
 
@@ -830,3 +831,10 @@
 - 理由：step 后续要作为错误卡片、Web DTO 和日志的稳定单位，不能再靠 part 下标或消息 id 猜；失败码也让消费方不必重新解析异常类型。
 - 合并注意：字段都有默认值，旧 JSON 解码时 `id` 会新生成，`failureCode` 为 null，不会破坏旧消息；新字段只能追加在构造参数末尾，不能插到现有的前四个必填字段之前，否则位置参数调用点会错位。重试决策仍只看 `LlmFailureCode`，不要把 `failureCode` 当作重试开关。旧构建保存新会话时会丢掉这两个字段，属于 B2 降级限制。
 - 测试：`UIMessageSerializationTest` 覆盖 id/failureCode 往返；`AgentLoopTest` 覆盖失败 step 的 `UNKNOWN` 错误码；`ai` 与 app 的 JVM 测试通过。
+
+### C108 C87 OCR producer 指纹失效
+
+- 落点：`FileDerivationRepository` 的 `get` / `listForFiles` / `putOcr` 接受 producer，新增 `ocrProducer(prompt, modelId)`，对提示词和模型 id 做 SHA-256 取前 8 字节生成 `ocr:v1:<hash>`；`OcrTransformer` 按当前设置计算 producer，读取、回填和写入都用它，文件缓存 key 也带上 producer。
+- 理由：旧实现 producer 固定 `ocr:v1`，换 OCR 提示词或模型后仍会读到旧文本；缓存 key 只按 URL，也会绕过派生失效。
+- 合并注意：升级后首次发送会因 producer 变化重新识别一次，旧 `ocr:v1` 行保留但不再被读取；`edited` 行仍不会被覆盖。producer 变化不删除旧行，避免误删历史；如果以后要清理，按 producer 前缀和编辑标记单独做。备份恢复仍统一清空 `file_derivations`。
+- 测试：`FileDerivationRepositoryTest` 覆盖同配置指纹稳定、提示词或模型变化产生不同 producer、不同 producer 行互不覆盖；app JVM 测试通过。设备上的 OCR 重识别未在本次单独重跑。

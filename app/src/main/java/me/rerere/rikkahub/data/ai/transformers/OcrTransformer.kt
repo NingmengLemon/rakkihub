@@ -78,6 +78,13 @@ object OcrTransformer : InputMessageTransformer, KoinComponent {
             val context = get<Context>()
             val filesRepository = get<FilesRepository>()
             val derivations = get<FileDerivationRepository>()
+            val settings = runCatching { get<SettingsStore>().settingsFlow.value }.getOrNull()
+            val producer = settings?.let {
+                FileDerivationRepository.ocrProducer(
+                    prompt = it.ocrPrompt,
+                    modelId = it.ocrModelId.toString(),
+                )
+            } ?: FileDerivationRepository.OCR_PRODUCER
             // 派生数据只是缓存：数据库读失败时退回 metadata/缓存，不能让 OCR 把整轮发送拖垮
             val resolvedFiles = runCatching {
                 FileDerivationResolver.resolveAll(
@@ -90,7 +97,7 @@ object OcrTransformer : InputMessageTransformer, KoinComponent {
                 Log.w(TAG, "resolve file derivations failed", it)
             }.getOrDefault(emptyMap())
             val storedByFileId = runCatching {
-                derivations.listForFiles(resolvedFiles.values.map { it.id })
+                derivations.listForFiles(resolvedFiles.values.map { it.id }, producer)
             }.onFailure {
                 if (it is CancellationException) throw it
                 Log.w(TAG, "read file derivations failed", it)
@@ -112,7 +119,7 @@ object OcrTransformer : InputMessageTransformer, KoinComponent {
                 }
             }
             backfill.forEach { (fileId, text) ->
-                runCatching { derivations.putOcr(fileId, text) }
+                runCatching { derivations.putOcr(fileId, text, producer) }
                     .onFailure {
                         if (it is CancellationException) throw it
                         Log.w(TAG, "backfill file derivation failed for $fileId", it)
@@ -125,10 +132,9 @@ object OcrTransformer : InputMessageTransformer, KoinComponent {
 
             try {
                 if (missing.isNotEmpty()) {
-                    val settings = get<SettingsStore>().settingsFlow.value
-                    val model = settings.findModelById(settings.ocrModelId)
+                    val model = settings?.findModelById(settings.ocrModelId)
                     val providerSetting = model?.findProvider(settings.providers)
-                    if (model == null || providerSetting == null) {
+                    if (settings == null || model == null || providerSetting == null) {
                         // 没配置 OCR 模型：保持原来的中性占位，不发请求也不报错
                         missing.forEach { part -> replacements[part.url] = NO_OCR_MODEL_PLACEHOLDER }
                     } else {
@@ -138,7 +144,7 @@ object OcrTransformer : InputMessageTransformer, KoinComponent {
                         )
                         var statusShown = false
                         missing.forEach { part ->
-                            val cacheKey = CACHE_KEY_PREFIX + part.url
+                            val cacheKey = CACHE_KEY_PREFIX + producer + ":" + part.url
                             val cached = cache.get(cacheKey)
                             val text = if (cached != null) {
                                 cached
@@ -155,7 +161,7 @@ object OcrTransformer : InputMessageTransformer, KoinComponent {
                                 replacements[part.url] = formatOcr(text)
                                 val file = resolvedFiles[part.url]
                                 if (file != null) {
-                                    runCatching { derivations.putOcr(file.id, text) }
+                                    runCatching { derivations.putOcr(file.id, text, producer) }
                                         .onFailure {
                                             if (it is CancellationException) throw it
                                             Log.w(TAG, "write file derivation failed for ${file.id}", it)
