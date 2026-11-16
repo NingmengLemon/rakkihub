@@ -339,9 +339,9 @@
 - 上游 issue 区已做一轮只读调研（2026-11-13，293 个 open）。优先候选：GoogleProvider 遇到独立 `thoughtSignature` 直接抛错（#2316）、Claude thinking 签名与 `redacted_thinking` 处理缺失（#2206/#1629，上游 3.2.0 的 `e1667163` 已移植，见 C85；上游标记 Fixes #2308）、OCR 默认 `reasoning_effort=none`（#1644，已修，见 C86）、Exa 正文没有长度上限（#1569，已修，见 C88）、历史图片每次请求重复 OCR（#1736/#1678，已修，见 C87）、workspace shell 超时后残留进程（#2225，已修前台命令，见 C89；后台命令未移植）。Phone Use 和自动压缩相关的一律不做；这批修复往后排。
 - `tools/i18n` 已重写成 Python（C93）：用 `uv run --project tools/i18n i18n <command>` 运行，config、术语表、缺条目与未使用检查都保留；本机没有 `.env`，自动翻译仍需配 key。
 - U+FFFD 替换字符按 C100 重新登记为独立行为对齐项，低优先级、不排期：经中转使用 Claude 时偶发，用户侧对照显示同一中转下官方 Claude Code 正常，中转方称不是服务端问题；根因尚未定位，可能在 SSE 分块、UTF-8 边界、流式合并或中转改写。等 B2 剩余消费方和 C87 之后，用同一 prompt 对照官方 Claude Code、官方 API 与中转，抓原始字节确认第一处替换字符出现在哪一层，再决定改 decoder 还是只记兼容性说明。不要先做全局替换字符清洗。
-- 提示词注入与世界书按上游 #1542 重做（删除提示词注入，换成缓存友好的上下文方案）：本机配置里没有启用提示词注入，先记在待办，不排期。
+- 提示词注入、世界书与酒馆先搁置，必要时可整体删除；若重做，按“提示词注入与世界书的搁置决定”一节的方向，把系统触发的提示作为新轮次追加到消息列表末尾，而不是修改已有消息。
 - 仓库改名为 `rakkihub` 已完成：GitHub 仓库名和本地 remote 已改，`docs/custom/README.md` 的 remote 表同步；上游链接不动。
-- 更换应用图标已完成（C90、C92、C94）：launcher 各密度用关于页同一张插画生成，monochrome 层去掉（插画剪影会变成黑块），README 的 `docs/icon.png` 同步；`web-ui/public/favicon.ico` 统一用插画（48/64/128/256 四帧，16px 标签页由浏览器缩），Web UI 新会话空状态改用 `web-ui/public/icon.png`，没有引用的 `docs/img/` 整个目录已删除。通知栏小图标 `ic_stat_rikkahub` 是有意保留的兔子头剪影：插画在 24dp 下是一团色块，这枚单色剪影反而清楚
+- 更换应用图标已完成（C90、C92、C94、C101）：launcher 各密度用关于页同一张插画生成，monochrome 层去掉（插画剪影会变成黑块），README 使用安全区裁切的 `docs/readme-icon.png`（`docs/icon.png` 保留为通用图标）；`web-ui/public/favicon.ico` 统一用插画（48/64/128/256 四帧，16px 标签页由浏览器缩），Web UI 新会话空状态改用 `web-ui/public/icon.png`，没有引用的 `docs/img/` 整个目录已删除。通知栏小图标 `ic_stat_rikkahub` 是有意保留的兔子头剪影：插画在 24dp 下是一团色块，这枚单色剪影反而清楚
 - RikkaHub 提供商残留已清理（C95）：上游 `0533acde` 删掉默认提供商后，本分支删掉 `assets/icons/rikkahub.svg`、`AIIconMatcher` 的 `rikka|auto` 分支、四份 `rikkahub_provider_description`，以及只给它用的空 `RikkaHubAPI` 与指向 `api.rikka-ai.com` 的 Retrofit 单例；`DEFAULT_AUTO_MODEL_ID` 改名 `DEFAULT_MODEL_ID` 并注明当前预置里没有对应模型（老设置里那个提供商的 auto 模型仍是这个 id）。搜索服务 `RikkaHubSearchService` 仍保留，但它的选项里 `displayName` 是 `RikkaHub`，同样走这个 matcher，图标回退成首字母
 - 发给 OpenRouter 的来源标识头已移除（C96）：`configureReferHeaders` 只在 host 是 `openrouter.ai` 时加 `X-Title` 与 `HTTP-Referer`，Referer 指官方站点，等于把本分支的调用算成官方 app；函数、十一处调用与 `mediagen` 生图那两行一并删掉，用户自定义请求头不受影响
 
@@ -351,7 +351,7 @@
 - MCP 工具失败无感重试：在 MCP 面板由用户逐工具标注是否可重试、是否可重入；运行时只对标记过的工具自动重试，未标记的工具保持现状。非幂等工具默认不重试。
 - stdio 形式的 MCP：需要借助专用的工作区与 rootfs 实现，由工作区终端负责子进程的启动、输入输出和环境隔离；不要直接在 app 进程内裸起子进程。具体工作区绑定、生命周期和权限模型待设计。
 
-### 用户反馈问题与功能请求（待排期）
+### 用户反馈问题与功能请求（已处理）
 
 - 消息操作里的“重试”和“重新生成”图标没有区分度：已处理（2026-11-16），失败 step 的重试改用 `ArrowTurnBackward`，整轮重新生成保持 `Refresh03`，聊天快捷栏与更多菜单同步；两者语义仍分别对应重跑当前 step 和新建整轮候选。
 - Gemini 协议下写文件/编辑文件时没有“正在写入/正在编辑”状态：已处理（2026-11-16），`workspace_write_file` / `workspace_edit_file` 的标题在 `ToolUIContext.loading` 为真时改用“Writing/Editing”文案，执行完成后回到普通标题；Gemini 的 `functionCall` 仍是整块到达，因此参数生成阶段没有可展示的 part，进入工具执行后卡片和状态会立即出现。

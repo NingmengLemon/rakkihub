@@ -3,6 +3,7 @@ package me.rerere.rikkahub.ui.pages.extensions.workspace
 import android.content.Context
 import android.text.InputType
 import android.view.KeyEvent
+import android.view.View
 import android.view.inputmethod.BaseInputConnection
 import android.view.inputmethod.EditorInfo
 import android.view.inputmethod.InputConnection
@@ -27,6 +28,7 @@ internal class TerminalImeEditText(context: Context) : EditText(context) {
         isFocusable = true
         isFocusableInTouchMode = true
         isSingleLine = false
+        importantForAccessibility = View.IMPORTANT_FOR_ACCESSIBILITY_NO
         inputType = InputType.TYPE_CLASS_TEXT or
             InputType.TYPE_TEXT_FLAG_MULTI_LINE or
             InputType.TYPE_TEXT_FLAG_NO_SUGGESTIONS
@@ -40,15 +42,20 @@ internal class TerminalImeEditText(context: Context) : EditText(context) {
             EditorInfo.IME_FLAG_NO_EXTRACT_UI
         return object : BaseInputConnection(this@TerminalImeEditText, true) {
             override fun commitText(text: CharSequence?, newCursorPosition: Int): Boolean {
-                val value = text?.toString().orEmpty()
-                if (value.isNotEmpty()) onCommitText?.invoke(value)
-                editable?.clear()
+                super.commitText(text, newCursorPosition)
+                sendEditableToTerminal()
+                return true
+            }
+
+            override fun finishComposingText(): Boolean {
+                super.finishComposingText()
+                sendEditableToTerminal()
                 return true
             }
 
             override fun deleteSurroundingText(beforeLength: Int, afterLength: Int): Boolean {
                 repeat(beforeLength.coerceAtLeast(0)) { onDelete?.invoke() }
-                return true
+                return super.deleteSurroundingText(beforeLength, afterLength)
             }
 
             override fun sendKeyEvent(event: KeyEvent): Boolean {
@@ -61,6 +68,22 @@ internal class TerminalImeEditText(context: Context) : EditText(context) {
                 }
                 return true
             }
+
+            private fun sendEditableToTerminal() {
+                val value = editable?.toString().orEmpty()
+                if (value.isNotEmpty()) onCommitText?.invoke(value)
+                editable?.clear()
+            }
         }
+    }
+
+    override fun onKeyDown(keyCode: Int, event: KeyEvent): Boolean {
+        if (onKeyEvent?.invoke(keyCode, event) == true) return true
+        return super.onKeyDown(keyCode, event)
+    }
+
+    override fun onKeyUp(keyCode: Int, event: KeyEvent): Boolean {
+        if (onKeyEvent?.invoke(keyCode, event) == true) return true
+        return super.onKeyUp(keyCode, event)
     }
 }

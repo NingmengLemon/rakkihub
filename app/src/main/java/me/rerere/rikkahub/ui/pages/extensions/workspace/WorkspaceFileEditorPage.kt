@@ -87,8 +87,8 @@ fun WorkspaceFileEditorPage(
     var loadedText by remember { mutableStateOf("") }
     var showUnsavedDialog by remember { mutableStateOf(false) }
     val navController = LocalNavController.current
-    val dirty = editable && !loading && loadError == null &&
-        textState.text.toString() != loadedText
+    val currentText = textState.text.toString()
+    val dirty = editable && !loading && loadError == null && currentText != loadedText
     val scrollState = rememberScrollState()
     var savedScroll by rememberSaveable(id, area, path) { mutableIntStateOf(0) }
     val focusManager = LocalFocusManager.current
@@ -224,22 +224,34 @@ fun WorkspaceFileEditorPage(
                 )
             }
 
-            showPreview -> if (supportsMarkdownPreview) {
-                LazyColumn(
+            showPreview -> when {
+                supportsMarkdownPreview && currentText.length > MAX_MARKDOWN_PREVIEW_CHARS -> Box(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .padding(innerPadding)
+                        .padding(16.dp),
+                ) {
+                    Text(
+                        text = stringResource(R.string.workspace_markdown_too_large),
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
+
+                supportsMarkdownPreview -> LazyColumn(
                     modifier = Modifier
                         .fillMaxSize()
                         .padding(innerPadding),
                 ) {
                     item {
                         MaterialMarkdown(
-                            content = textState.text.toString(),
+                            content = currentText,
                             modifier = Modifier.padding(16.dp),
                         )
                     }
                 }
-            } else {
-                WorkspaceWebPreview(
-                    content = textState.text.toString(),
+
+                else -> WorkspaceWebPreview(
+                    content = currentText,
                     isSvg = extension == "svg",
                     modifier = Modifier.fillMaxSize().padding(innerPadding),
                 )
@@ -342,3 +354,6 @@ private fun WorkspaceWebPreview(
 
 /** SVG 预览上限，超过后只给提示，不把整份文件交给 WebView。 */
 private const val MAX_SVG_PREVIEW_CHARS = 1_000_000
+
+/** Markdown 预览上限，和 workspace 文件大小上限对齐；超过后保留源码入口。 */
+private const val MAX_MARKDOWN_PREVIEW_CHARS = 512_000

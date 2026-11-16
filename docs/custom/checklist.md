@@ -108,6 +108,12 @@
 | C98 | 消息操作手动重试失败 step | 改造 |
 | C99 | 失败请求记录完整 provider 响应体 | 改造 |
 | C100 | U+FFFD 替换字符与官方 Claude 行为对齐 | 待调研（低优先） |
+| C101 | README 图标按 launcher 安全区裁切 | 改造 |
+| C102 | 工作区编辑器返回时恢复滚动并收起 IME | 改造 |
+| C103 | 工作区写/编辑文件显示运行状态 | 改造 |
+| C104 | 工作区终端支持 IME 文本输入 | 新增 |
+| C105 | 工作区 Markdown 预览与源码切换 | 新增 |
+| C106 | 工作区编辑器未保存退出保护 | 新增 |
 
 ## 明细
 
@@ -756,7 +762,7 @@
 ### C98 消息操作手动重试失败 step
 
 - 落点：`UIMessage.retryTarget()` 在消息为 FAILED/INTERRUPTED 时返回两种目标。最后还有 FAILED、CANCELLED、RUNNING 或 TOOLS step 且该 step 没执行过工具时返回 `Step`，截断到该 step 的 `startPartIndex`，删掉该 step 及之后的记录；没有失败 step、所有 step 都 SUCCEEDED 且所有工具都已执行时返回 `Continue`，保留现有 parts 与 steps，只复位消息状态并从末尾继续。两种情况都要求目标仍是最后节点与当前候选，并用当前会话模型同步 `modelId`/`modelSnapshot`；`ChatService.retryMessageStep` 在 `canRegenerate()` 通过后加载会话、二次检查审批/frozen，落库后复用 `runTurn(session)` 从同一条 assistant 消息继续，不新建候选。聊天消息快捷按钮与更多菜单只在最后一条 `retryTarget()` 非空的 assistant 上出现，文案 `chat_message_retry_step`（四份 locale）。
-- 理由：C77 的错误卡片重试永久取消，失败或中断的 step 需要一个人工入口；原位续跑保留此前 SUCCEEDED step 的正文与工具事实，不把整轮回复重放，也不产生分支。
+- 理由：C77 的错误卡片重试永久取消，失败或中断的 step 需要一个人工入口；原位续跑保留此前 SUCCEEDED step 的正文与工具事实，不把整轮回复重放，也不产生分支。重试 step 与整轮重新生成在快捷栏和更多菜单都使用不同图标（`ArrowTurnBackward` / `Refresh03`），避免两个圆形箭头混淆。
 - 合并注意：只处理最后节点，中间节点或已切走分支返回 null；可截断的 step 已执行过工具时入口隐藏，防止丢掉有副作用的工具事实；`Continue` 只保留全部已执行工具和已完成 step，未执行工具存在时返回 null；`runTurn` 开头的 `withoutUnresumableToolCalls` 仍会清理前缀里无法恢复的工具，`Step` 目标已经被截掉，`Continue` 目标保持原样；usage/stepCount 不重置，新 step 继续累计。`ChatError` 不增加 retry 字段，入口只依赖消息本身；自动重试默认关闭，但用户可在网络设置开启。UI 只在 `lastMessage` 且 `retryTarget()` 非空时传回调，避免在旧消息上露出无效入口。`Continue` 覆盖“下一步请求在第一个流事件之前失败”的情况：此时失败没有落成新 step，旧实现会因为没有可截断的 step 而完全隐藏入口。
 - 测试：`ConversationMessagesTest` 覆盖截断到失败 step、保留前缀 step、复位状态、非最后节点、已完成消息、已执行工具 step 返回 null，所有 step 已成功时保留内容从末尾继续、INTERRUPTED 的继续与模型快照同步、存在未执行工具时不继续；`:ai:testDebugUnitTest`、`:app:testGithubDebugUnitTest`、assemble、spotless 通过；手动重试的 `ChatService` 任务接线没有 JVM 单测，留设备验证。
 
@@ -774,3 +780,45 @@
 - 计划：等 B2 的剩余消费方和 C87 之后再排。用同一 prompt 对照官方 Claude Code、官方 API 与中转，保留原始 SSE 字节和客户端解码结果，确认第一个 U+FFFD 出现在哪一层，再决定改 `ai` 的 Claude decoder/UTF-8 处理，还是只记录兼容性说明。官方 Claude Code 只作为行为参照，不直接移植其实现。
 - 合并注意：这是独立的行为对齐项，不阻塞 C75/C76；不要为它引入全局的替换字符清洗，避免掩盖真正的编码错误。C97 的长工具链设备验证已把 U+FFFD 单独分开，本次只是重新登记。
 - 测试：暂无；需要可复现样本、原始 SSE 字节和官方 Claude Code 的对照结果。
+
+### C101 README 图标按 launcher 安全区裁切
+
+- 落点：`tools/gen-icons.py` 增加 `readme_icon()`，按 adaptive `72/108` 安全区裁切并保留同一圆角；`docs/readme-icon.png`（512）由脚本生成，`README.md` 改引用它；`docs/icon.png`、`web-ui/public/icon.png`、favicon 和 launcher 各密度保持不变。
+- 理由：README 原来直接用完整 108dp 画布的 `docs/icon.png`，插画只占 78%，在实际 launcher 的安全区裁切后视觉上偏小；单独生成安全区版本，不改变桌面和 Web 资源。
+- 合并注意：改插画参数后要重跑 `uv run --with pillow python -P tools/gen-icons.py`，三个图标和 README 图标一起更新；`docs/readme-icon.png` 是生成物，不要手工改。
+- 测试：`docs/readme-icon.png` 为 512x512 RGBA，和脚本重跑结果一致；README 引用路径存在；launcher、Web、favicon 无 diff。
+
+### C102 工作区编辑器返回时恢复滚动并收起 IME
+
+- 落点：`WorkspaceFileEditorPage` 使用 `rememberScrollState()` 并把它传给 `TextField`；`ON_PAUSE` 保存 `ScrollState.value`、`clearFocus(force = true)` 并隐藏输入法；`ON_RESUME` 和加载完成后的 effect 恢复位置；`savedScroll` 用 `rememberSaveable`。
+- 理由：从 Recents 切回时，焦点恢复会把页面滚回光标并自动弹出输入法，用户切出前的浏览位置丢失。
+- 合并注意：恢复只在页面存活或重建时生效，不做草稿持久化；编辑器仍不能跨进程保存未提交文本，见 C106。不要再把 `ON_PAUSE` 的清焦点去掉，否则输入法会在返回时重新聚焦。
+- 测试：开发机 200 行文件，无键盘和键盘打开两种切出场景，返回后滚动位置一致且不自动弹键盘。
+
+### C103 工作区写/编辑文件显示运行状态
+
+- 落点：`WorkspaceToolUIs` 的 `WorkspaceWriteFileToolUI` / `EditFileToolUI` 标题按 `loading && callComplete && !isPending` 选择 Writing/Editing 文案；四个 locale 增加运行中和无路径默认文案。
+- 理由：工具执行期间仍显示完成态的 “Write/Edit”，用户会以为卡在思考末尾；有明确运行态后至少能看出正在写文件。
+- 合并注意：`callComplete=false` 表示参数还在流式生成，此时不冒充执行中；等待审批也不显示 Writing/Editing。Gemini 的 `functionCall` 是整块到达，参数生成阶段没有可展示的 part，进入执行后才显示运行态。
+- 测试：编译与全量 JVM 通过；按工具执行路径检查标题分支，未单独构造 Gemini 真机工具样本。
+
+### C104 工作区终端支持 IME 文本输入
+
+- 落点：新增 `TerminalImeEditText`，用正常 `TYPE_CLASS_TEXT` 作为隐藏 IME 宿主；`commitText`、`finishComposingText` 把提交文本按 UTF-8 写给 `TerminalSession`，退格、Enter、Tab、控制键单独转发；`WorkspaceTerminalViewClient` 优先聚焦该宿主并 `restartInput`；`TerminalView` 保持可聚焦以支持长按选择/复制。
+- 理由：`terminal-view` 0.118.0 的 `TerminalView` 把 inputType 设成无文本类，Gboard/Fcitx 的拼音组合没有正常 `InputConnection` 承接，候选提交会丢失。
+- 合并注意：终端核心仍是上游 AAR，不要改 `terminal-view` 二进制；输入法宿主是 1dp 透明视图，设置 `importantForAccessibility=NO`。硬件键盘事件和 IME 的 `sendKeyEvent` 都要转发给终端，长按选择不能因为聚焦宿主而失效。升级 terminal-view 后要重测中文、日文、退格和 Enter。
+- 测试：开发机装 Rootfs 后用 Fcitx5 提交“你好”、退格和执行；用户用 Gboard 中文/日文复核；长按选择/复制需要单独设备回归。
+
+### C105 工作区 Markdown 预览与源码切换
+
+- 落点：`WorkspaceFileEditorPage` 对 `.md`/`.markdown` 默认显示 `MaterialMarkdown` 预览，顶栏在“预览/源码”间切换；超过 512,000 字符只显示过大提示并保留源码入口；HTML/SVG 继续走原 WebView 预览。
+- 理由：Markdown 文件原来只有 raw 文本，工作区里查看说明文档不方便；静态 HTML/SVG 已有 WebView，不需要重复造。
+- 合并注意：`MaterialMarkdown` 不加载工作区相对图片，公式和代码高亮也不完整；需要完整渲染时再换 `MarkdownBlock` 并接工作区资源解析。大文件必须有上限，否则一次组合整份文档会卡 UI。
+- 测试：开发机用含标题、加粗、列表的 `.md` 验证默认渲染和源码切换；超限分支只做代码审查。
+
+### C106 工作区编辑器未保存退出保护
+
+- 落点：`WorkspaceFileEditorPage` 记录加载基线 `loadedText` 和当前文本，`dirty` 只在可编辑且无加载错误时成立；`BackHandler` 和顶栏返回都调用 `requestExit()`；弹窗提供 Save/Discard/Cancel，Save 成功才 pop，Discard 直接 pop，Cancel 留在编辑页；`BackButton` 增加可选 `onClick`。
+- 理由：编辑后直接返回会静默丢改动；至少要在离开前给一次保存机会。
+- 合并注意：`textState` 故意不 `rememberSaveable`，旋转或进程死亡仍会丢未提交文本；这里只保护主动返回。保存失败时保持弹窗并显示错误 toast，不能 pop。新增文案在四份 locale。
+- 测试：开发机验证未保存弹窗、Discard 返回；保存路径复用原有保存函数，未单独构造可写文件验证。全量 JVM、spotless、assemble 通过。

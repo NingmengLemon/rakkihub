@@ -319,8 +319,8 @@ private fun WorkspaceTerminalTabContent(
                 modifier = Modifier.fillMaxSize(),
                 factory = { viewContext ->
                     TerminalView(viewContext, null).apply {
-                        isFocusable = false
-                        isFocusableInTouchMode = false
+                        isFocusable = true
+                        isFocusableInTouchMode = true
                         setTextSize(terminalTextSizePx)
                         setTypeface(terminalTypeface)
                         setTerminalViewClient(viewClient)
@@ -333,8 +333,8 @@ private fun WorkspaceTerminalTabContent(
                     }
                 },
                 update = { terminalView ->
-                    terminalView.isFocusable = false
-                    terminalView.isFocusableInTouchMode = false
+                    terminalView.isFocusable = true
+                    terminalView.isFocusableInTouchMode = true
                     terminalView.setTextSize(terminalTextSizePx)
                     terminalView.setTypeface(terminalTypeface)
                     terminalView.setTerminalViewClient(viewClient)
@@ -468,7 +468,7 @@ private fun TerminalSession.writeText(text: String) {
     write(bytes, 0, bytes.size)
 }
 
-private fun terminalInputText(text: String, control: Boolean, alt: Boolean): String {
+internal fun terminalInputText(text: String, control: Boolean, alt: Boolean): String {
     if (!control && !alt) return text
     return buildString {
         if (alt) append('\u001B')

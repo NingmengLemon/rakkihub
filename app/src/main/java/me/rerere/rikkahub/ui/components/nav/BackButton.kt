@@ -12,6 +12,9 @@ import me.rerere.rikkahub.R
 import me.rerere.rikkahub.ui.context.LocalNavController
 import me.rerere.rikkahub.ui.theme.CustomColors
 
+/**
+ * 通用返回按钮。默认 pop 当前导航栈；需要拦截返回（例如未保存确认）时传 [onClick]。
+ */
 @Composable
 fun BackButton(
     modifier: Modifier = Modifier,

@@ -73,6 +73,7 @@ CREATE UNIQUE INDEX index_file_derivations_file_id_kind_producer
 - `Migration_33_34_Test`（开发机）：表创建、字段读取、外键级联删除。
 - `OfficialSchemaTrimmerTest`（开发机）：裁剪后 `file_derivations` 消失、usage 行保留、官方读取层可打开；未登记额外表会抛 `OfficialExportUnsupportedException`。
 - `LiveDatabaseMigrationTest`（开发机）：真实 app 库迁到 34。
+- 设备链路（2026-11-16）：上传一张图片，OCR 调用后数据库生成一条 `file_derivations`；同一会话第二轮和 force-stop 重启后的第三轮都只发聊天请求，没有重复 OCR；derivation 行数始终为 1。
 - 全量 JVM 测试和 `:app:compileGithubDebugAndroidTestKotlin` 通过。
 
 ## 已知限制
@@ -81,4 +82,3 @@ CREATE UNIQUE INDEX index_file_derivations_file_id_kind_producer
 - `producer` 不随 OCR 提示词或模型变化；换设置后旧文件的派生文本不会自动重算。
 - 备份恢复不合并 derivation，统一清空后重新识别。
 - 只处理能映射到 `managed_files` 的本地图片；本安装 `filesDir` 下的绝对和相对地址都会解析，别的安装路径、目录外文件和未登记文件走旧回退。
-- 设备链路已验（2026-11-16）：上传一张图片，OCR 调用后数据库生成一条 file_derivations；同一会话第二轮和 force-stop 重启后的第三轮都只发聊天请求，没有重复 OCR；derivation 行数始终为 1。
