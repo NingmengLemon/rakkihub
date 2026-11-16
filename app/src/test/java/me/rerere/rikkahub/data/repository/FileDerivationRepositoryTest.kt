@@ -182,12 +182,6 @@ private class FakeFileDerivationDAO : FileDerivationDAO {
         rows.removeAll { !it.edited }
         return before - rows.size
     }
-
-    override suspend fun clear(): Int {
-        val before = rows.size
-        rows.clear()
-        return before
-    }
 }
 
 private class FakeManagedFileDAO(

@@ -22,6 +22,7 @@ import me.rerere.rikkahub.data.db.entity.WorkspaceEntity
 import me.rerere.rikkahub.data.db.entity.FileDerivationEntity
 import me.rerere.rikkahub.data.db.entity.ManagedFileEntity
 import me.rerere.rikkahub.data.model.Avatar
+import me.rerere.rikkahub.data.repository.FileDerivationRepository
 import me.rerere.rikkahub.data.sync.official.OFFICIAL_APPLICATION_ID
 import me.rerere.rikkahub.data.sync.official.OfficialDatabaseHeaders
 import me.rerere.rikkahub.data.sync.official.OfficialDatabaseSchema
@@ -106,7 +107,7 @@ class BackupManagerTest {
         ZipFile(archive).use { assertTrue(it.getEntry(DatabaseBackup.SHM) != null) }
     }
 
-    @Test fun stageRestoreClearsFileDerivationsForTheImportedDatabase() = runBlocking {
+    @Test fun stageRestoreClearsGeneratedFileDerivationsAndKeepsManual() = runBlocking {
         val managed = liveDatabase.managedFileDao().insert(
             ManagedFileEntity(
                 folder = "upload",
@@ -121,9 +122,9 @@ class BackupManagerTest {
         liveDatabase.fileDerivationDao().insert(
             FileDerivationEntity(
                 fileId = managed,
-                kind = "ocr",
+                kind = FileDerivationRepository.OCR_KIND,
                 text = "old text",
-                producer = "ocr:v1",
+                producer = FileDerivationRepository.OCR_PRODUCER,
                 createdAt = 1,
                 updatedAt = 1,
             )
@@ -131,9 +132,9 @@ class BackupManagerTest {
         liveDatabase.fileDerivationDao().insert(
             FileDerivationEntity(
                 fileId = managed,
-                kind = "ocr",
+                kind = FileDerivationRepository.OCR_KIND,
                 text = "manual text",
-                producer = "ocr:manual",
+                producer = FileDerivationRepository.OCR_MANUAL_PRODUCER,
                 edited = true,
                 createdAt = 2,
                 updatedAt = 2,
@@ -145,8 +146,8 @@ class BackupManagerTest {
         val staged = File(context.noBackupFilesDir, "backup-restore/pending/payload/database/rikka_hub")
         val room = AppDatabaseFactory.create(context, staged.absolutePath)
         try {
-            assertEquals(0, room.fileDerivationDao().get(managed, "ocr", "ocr:v1")?.id ?: 0)
-            assertEquals("manual text", room.fileDerivationDao().get(managed, "ocr", "ocr:manual")?.text)
+            assertEquals(0, room.fileDerivationDao().get(managed, FileDerivationRepository.OCR_KIND, FileDerivationRepository.OCR_PRODUCER)?.id ?: 0)
+            assertEquals("manual text", room.fileDerivationDao().get(managed, FileDerivationRepository.OCR_KIND, FileDerivationRepository.OCR_MANUAL_PRODUCER)?.text)
             assertEquals("H1.png", room.managedFileDao().getById(managed)?.displayName)
         } finally {
             room.close()
@@ -182,21 +183,10 @@ class BackupManagerTest {
         )
         liveDatabase.fileDerivationDao().insert(
             FileDerivationEntity(
-                fileId = first,
-                kind = "ocr",
-                text = "first manual",
-                producer = "ocr:manual",
-                edited = true,
-                createdAt = 1,
-                updatedAt = 1,
-            )
-        )
-        liveDatabase.fileDerivationDao().insert(
-            FileDerivationEntity(
                 fileId = second,
-                kind = "ocr",
+                kind = FileDerivationRepository.OCR_KIND,
                 text = "second manual",
-                producer = "ocr:manual",
+                producer = FileDerivationRepository.OCR_MANUAL_PRODUCER,
                 edited = true,
                 createdAt = 1,
                 updatedAt = 1,
@@ -213,7 +203,7 @@ class BackupManagerTest {
             }
             assertEquals(1, keptIds.size)
             val kept = keptIds.single()
-            assertEquals("first manual", room.fileDerivationDao().get(kept, "ocr", "ocr:manual")?.text)
+            assertEquals("second manual", room.fileDerivationDao().get(kept, FileDerivationRepository.OCR_KIND, FileDerivationRepository.OCR_MANUAL_PRODUCER)?.text)
             val manualCount = room.openHelper.writableDatabase.query(
                 "SELECT COUNT(*) FROM file_derivations WHERE edited = 1"
             ).use { cursor ->
@@ -449,6 +439,17 @@ class BackupManagerTest {
                 "INSERT INTO usage_record (created_at, source, prompt_tokens, completion_tokens, cached_tokens, outcome) " +
                     "VALUES (1, 'CHAT', 10, 1, 2, 'SUCCESS')"
             )
+            db.execSQL(
+                "INSERT INTO managed_files " +
+                    "(folder, relative_path, display_name, mime_type, size_bytes, created_at, updated_at) " +
+                    "VALUES ('upload', 'upload/abc.png', 'abc.png', 'image/png', 1, 1, 1)"
+            )
+            db.execSQL(
+                "INSERT INTO file_derivations " +
+                    "(file_id, kind, text, producer, edited, created_at, updated_at) " +
+                    "SELECT id, 'ocr', 'manual foreign', 'ocr:manual', 1, 1, 1 " +
+                    "FROM managed_files WHERE relative_path = 'upload/abc.png'"
+            )
             DatabaseBackup.checkpoint(db)
         }
         ZipOutputStream(archive.outputStream()).use { zip ->
@@ -473,6 +474,14 @@ class BackupManagerTest {
                 it.getString(0)
             }
             assertEquals("转换不能把 usage outcome 重置成 UNKNOWN", "SUCCESS", outcome)
+            val manual = db.rawQuery(
+                "SELECT text FROM file_derivations WHERE edited = 1",
+                null,
+            ).use {
+                check(it.moveToFirst())
+                it.getString(0)
+            }
+            assertEquals("转换不能丢掉手改 OCR", "manual foreign", manual)
             assertEquals(
                 OfficialDatabaseSchema.ROOM_IDENTITY_HASH,
                 OfficialDatabaseHeaders.readIdentityHash(db),

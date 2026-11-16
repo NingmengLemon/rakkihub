@@ -692,7 +692,7 @@
 - 理由：metadata 只对当前消息和历史分支有效；同一上传内容在别的会话复用时只能靠 3 天、64 条的缓存，过期后重复识别。文件级派生数据把 OCR 从消息附属物提升为文件属性，跨会话、跨进程和缓存过期都能命中。
 - 合并注意：旧消息的 `OcrMetadata` 保留为兼容回退，不批量迁移；解析不到 `managed_files` 的图片仍走旧 metadata/缓存。C108 起 producer 为 `ocr:v1:<prompt+model 指纹>`，有文件行的图片在指纹 producer 下不再回退/回填旧 metadata，换设置后首次发送会重新识别；C109 起 `edited` 行的写入方在附件管理，C110 起备份恢复保留手改行、合并同内容文件时把落选手改行挂到保留行。备份恢复不再整表清空，自动行重新识别一次。官方 v32 读/写层不认识这张表，官方导出前会 drop；`OfficialDatabaseSchemaTest` 允许已登记额外表，未登记表由 `OfficialSchemaTrimmerTest` 在开发机验证会让导出失败。
 - 追加（C108）：producer 指纹失效、OCR 缓存 key 带 producer，以及有文件行时禁止旧 metadata 重标为新 producer；producer 参数和测试见 C108。
-- 测试：`FileDerivationRepositoryTest` 覆盖 put/get、相同文本、更新、edited 保护、空文本、批量读取、URL 解析和目录外拒绝；`OcrTextChoiceTest` 覆盖 derivation 优先、metadata 回填、无文件不回填和空值；`OfficialDatabaseSchemaTest` 覆盖 schema 34、identity、官方表加 `file_derivations`；`Migration_33_34_Test` 在开发机覆盖建表和外键级联；`BackupManagerTest` 在开发机覆盖恢复清空；`OfficialSchemaTrimmerTest` 在开发机覆盖 drop 表、未登记额外表和官方读取；全量 JVM、spotless 和 assemble 通过。设备链路：上传图片后 OCR 生成一条 derivation，同一会话第二轮和 force-stop 重启后的第三轮都只发聊天请求，derivation 始终只有一条。
+- 测试：`FileDerivationRepositoryTest` 覆盖 put/get、相同文本、更新、edited 保护、空文本、批量读取、URL 解析和目录外拒绝；`OcrTextChoiceTest` 覆盖 derivation 优先、metadata 回填、无文件不回填和空值；`OfficialDatabaseSchemaTest` 覆盖 schema 34、identity、官方表加 `file_derivations`；`Migration_33_34_Test` 在开发机覆盖建表和外键级联；`BackupManagerTest` 在开发机覆盖自动行清空、手改行保留；`OfficialSchemaTrimmerTest` 在开发机覆盖 drop 表、未登记额外表和官方读取；全量 JVM、spotless 和 assemble 通过。设备链路：上传图片后 OCR 生成一条 derivation，同一会话第二轮和 force-stop 重启后的第三轮都只发聊天请求，derivation 始终只有一条。
 
 ### C88 Exa 搜索正文长度上限
 
@@ -851,7 +851,7 @@
 
 ### C110 C87 备份恢复保留手改 OCR
 
-- 落点：`FileDerivationDAO` 增加 `clearGenerated()`，`BackupManager.stageDatabase` 恢复时只清 `edited=0`；`UploadNames.rewriteManagedFiles` 在合并同内容文件、删除落选 `managed_files` 行之前，把落选行的 `edited=1` 派生文本 `INSERT OR IGNORE` 挂到保留行。
+- 落点：`FileDerivationDAO` 增加 `clearGenerated()`，`BackupManager.stageDatabase` 恢复时只清 `edited=0`；`UploadNames.rewriteManagedFiles` 在合并同内容文件、删除落选 `managed_files` 行之前，把落选行的 `edited=1` 派生文本 `INSERT OR IGNORE` 挂到保留行；`OfficialDatabaseConverter` 对同版本外来路径转换也按原 `file_id` 补回手改行。
 - 理由：手改 OCR 是用户内容，不是可重新生成的缓存；整表清空会让恢复后的附件丢掉手工修正。自动行仍可重新识别，不需要保留。
-- 合并注意：保留行已有同 producer 的手改时保留保留行，不覆盖；落选手改行随后显式删除，避免外键未开启时留下孤儿。官方导出仍 drop 整张表，手改文本不随官方备份保留。恢复后首次发送会重新识别自动行，但手改行继续覆盖。
-- 测试：`BackupManagerTest`（开发机）覆盖自动行清空、手改行保留，以及两份同内容上传合并后只保留一条手改行、保留行文本生效；`connectedGithubDebugAndroidTest` 通过。
+- 合并注意：保留行已有同 producer 的手改时保留保留行，不覆盖；落选手改行随后显式删除，避免外键未开启时留下孤儿。同版本外来路径转换会由 `OfficialDatabaseConverter` 按原 `file_id` 补回手改行，再做 UploadNames 合并。官方导出仍 drop 整张表，手改文本不随官方备份保留。恢复后首次发送会重新识别自动行，但手改行继续覆盖。
+- 测试：`BackupManagerTest`（开发机）覆盖自动行清空、手改行保留，两份同内容上传合并后只保留落选行的手改文本，以及同版本外来路径转换后手改行仍在；`connectedGithubDebugAndroidTest` 通过。

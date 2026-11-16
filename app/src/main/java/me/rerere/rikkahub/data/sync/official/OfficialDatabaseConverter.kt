@@ -37,6 +37,7 @@ internal class OfficialDatabaseConverter(
                 requireTargetCoversSnapshot(database, reader.tables)
                 OfficialDatabaseWriter(database, filesUriPrefix).write(reader)
                 preserveUsageOutcome(source, database)
+                preserveEditedDerivations(source, database)
                 // WAL 里可能还压着内容，先合进主文件再关，否则留下非空的 -wal 会让
                 // PendingRestore 对同一路径生成两条 entry
                 DatabaseBackup.checkpoint(database)
@@ -75,6 +76,65 @@ internal class OfficialDatabaseConverter(
             target.execSQL(
                 "UPDATE usage_record SET outcome = ? WHERE id = ?",
                 arrayOf(outcome, id),
+            )
+        }
+    }
+
+    /**
+     * 当前版本自家库带外来附件路径时也会走转换器；手改 OCR 是用户内容，
+     * 官方快照里没有这张表，按保留的 managed_files id 补回。自动行仍丢弃并重新识别。
+     */
+    private fun preserveEditedDerivations(source: java.io.File, target: SupportSQLiteDatabase) {
+        val targetHasTable = target.query(
+            "SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = 'file_derivations'"
+        ).use { it.moveToFirst() }
+        if (!targetHasTable) return
+        val rows = SQLiteDatabase.openDatabase(
+            source.absolutePath,
+            null,
+            SQLiteDatabase.OPEN_READONLY,
+        ).use { db ->
+            val sourceHasTable = db.rawQuery(
+                "SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = 'file_derivations'",
+                null,
+            ).use { it.moveToFirst() }
+            if (!sourceHasTable) {
+                emptyList()
+            } else {
+                db.rawQuery(
+                    "SELECT file_id, kind, text, producer, created_at, updated_at " +
+                        "FROM file_derivations WHERE edited = 1",
+                    null,
+                ).use { cursor ->
+                    buildList {
+                        while (cursor.moveToNext()) {
+                            add(
+                                arrayOf<Any?>(
+                                    cursor.getLong(0),
+                                    cursor.getString(1),
+                                    cursor.getString(2),
+                                    cursor.getString(3),
+                                    cursor.getLong(4),
+                                    cursor.getLong(5),
+                                )
+                            )
+                        }
+                    }
+                }
+            }
+        }
+        for (row in rows) {
+            val fileId = row[0] as Long
+            val exists = target.query(
+                "SELECT 1 FROM managed_files WHERE id = ?",
+                arrayOf(fileId),
+            ).use { it.moveToFirst() }
+            if (!exists) continue
+            target.execSQL(
+                "INSERT OR IGNORE INTO file_derivations " +
+                    "(file_id, kind, text, producer, edited, created_at, updated_at) " +
+                    "VALUES (?, ?, ?, ?, 1, ?, ?)",
+                row,
             )
         }
     }

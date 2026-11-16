@@ -69,7 +69,7 @@ payload 的布局沿用现有约定：`payload/database/rikka_hub`、`payload/fi
 
 ## 按内容改名
 
-转换与迁移只管结构与安装前缀，文件名在归档里是什么就是什么。`stageRestore` 在库换成当前版本之后还有一次改写：`upload/` 下的附件在解压时已经按内容改名并去重（`ImportedUploadFiles`），这一步由 `UploadNames.rewriteDatabase` 把暂存库里的引用换成新名字，`managed_files.relative_path` 单独处理并先删掉合并后重复的行。表与文本列从 `sqlite_master` 与 `PRAGMA table_info` 现查，`message_fts*` 跳过；settings.json 走同一份名字映射。
+转换与迁移只管结构与安装前缀，文件名在归档里是什么就是什么。`stageRestore` 在库换成当前版本之后还有一次改写：`upload/` 下的附件在解压时已经按内容改名并去重（`ImportedUploadFiles`），这一步由 `UploadNames.rewriteDatabase` 把暂存库里的引用换成新名字，`managed_files.relative_path` 单独处理并先删掉合并后重复的行；删除重复行前会把落选行的 `edited=1` OCR 文本挂到保留行。表与文本列从 `sqlite_master` 与 `PRAGMA table_info` 现查，`message_fts*` 跳过；settings.json 走同一份名字映射。
 
 转换器不参与改名：它读的是归档里的原始文本，名字映射要等解压完成才知道。顺序因此是转换、迁移、改名、最后 settings。
 

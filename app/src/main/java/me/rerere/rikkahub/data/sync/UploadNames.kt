@@ -25,6 +25,8 @@ internal object UploadNames {
         try {
             rewriteManagedFiles(database, renames)
             for (table in userTables(database)) {
+                // 手改 OCR 文本是用户输入，不参与附件路径改名
+                if (table == "file_derivations") continue
                 val columns = columns(database, table)
                 // 没有声明主键的表用 rowid 定位；Room 建的表都有主键，这条只是兜底
                 val keys = columns
@@ -119,19 +121,16 @@ internal object UploadNames {
                 }
             }
         }
-        val dropped = rows.groupBy { it.third }.values
-            .filter { it.size > 1 }
-            .flatMap { group -> group.sortedBy { it.first }.drop(1) }
+        val duplicateGroups = rows.groupBy { it.third }.values.filter { it.size > 1 }
+        val dropped = duplicateGroups.flatMap { group -> group.sortedBy { it.first }.drop(1) }
         val droppedIds = dropped.map { it.first }.toSet()
         // 同内容文件合并前，把被删行的手改 OCR 先挂到保留行上；自动行随后由恢复侧清空。
-        rows.groupBy { it.third }.values
-            .filter { it.size > 1 }
-            .forEach { group ->
-                val kept = group.minBy { it.first }
-                group.filter { it.first != kept.first }.forEach { loser ->
-                    copyEditedDerivations(database, fromFileId = loser.first, toFileId = kept.first)
-                }
+        duplicateGroups.forEach { group ->
+            val kept = group.minBy { it.first }
+            group.filter { it.first != kept.first }.forEach { loser ->
+                copyEditedDerivations(database, fromFileId = loser.first, toFileId = kept.first)
             }
+        }
         dropped.forEach {
             database.execSQL("DELETE FROM `file_derivations` WHERE file_id = ?", arrayOf(it.first))
             database.execSQL("DELETE FROM `managed_files` WHERE id = ?", arrayOf(it.first))
@@ -156,13 +155,9 @@ internal object UploadNames {
 
     /**
      * 合并同内容文件时保留手改 OCR；自动行不复制，恢复阶段会按新 producer 重新生成。
-     * 目标行已有同 producer 的手改时保留目标行，避免覆盖用户最近一次编辑。
+     * 目标行已有同 producer 的手改时保留目标行；其余落选行按原行序尝试插入。
      */
     private fun copyEditedDerivations(database: SupportSQLiteDatabase, fromFileId: Long, toFileId: Long) {
-        val exists = database.query(
-            "SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = 'file_derivations'"
-        ).use { it.moveToFirst() }
-        if (!exists) return
         database.execSQL(
             "INSERT OR IGNORE INTO `file_derivations` " +
                 "(file_id, kind, text, producer, edited, created_at, updated_at) " +
