@@ -200,7 +200,9 @@ JVM 侧：PreferenceStoreV6MigrationTest 覆盖 V6 的版本门禁、写回版�
 
 ## 待验证（B1）
 
-B1 第一阶段已给 `UIMessage` 增加 `steps`，给 `UIMessagePart.Tool` 增加 `callComplete`。这两项只作为官方不认识的 JSON 字段随消息导出。上游 `ref` 的 `app/src/main/java/me/rerere/rikkahub/utils/Json.kt` 里 `JsonInstant` 已开启 `ignoreUnknownKeys`，消息节点也用 `JsonInstant.decodeFromString<List<UIMessage>>` 解码，因此不需要先做 JSON 投影兜底；官方 3.1.1 是否与该解码器一致仍需样本确认。若样本拒绝未知字段，再按 B2 设计在 `OfficialDatabaseAdapter` 投影 `messages` JSON。需要用包含这两个字段的会话补两条：
+B1 第一阶段已给 `UIMessage` 增加 `steps`，给 `UIMessagePart.Tool` 增加 `callComplete`。这两项只作为官方不认识的 JSON 字段随消息导出。上游 `ref` 的 `app/src/main/java/me/rerere/rikkahub/utils/Json.kt` 里 `JsonInstant` 已开启 `ignoreUnknownKeys`，消息节点也用 `JsonInstant.decodeFromString<List<UIMessage>>` 解码，因此不需要先做 JSON 投影兜底；官方 3.1.1 是否与该解码器一致仍需样本确认。若样本拒绝未知字段，再按 B2 设计在 `OfficialDatabaseAdapter` 投影 `messages` JSON。
+
+2026-11-16 开发机验证（部分）：构造一条先 500 重试、再调用 `get_time_info`、最后返回 `TOOL DONE` 的 2 step 消息，官方兼容导出包含 `steps`、`callComplete`、`attempts`；官方 3.1.1 导入并重启后会话可读，显示工具调用与 `2 steps`，没有崩溃。官方客户端不显示 `attempts`，按未知字段忽略。普通消息（`steps` 为空数组）的样本仍未单独跑，完整样本清单仍按下述两条保留：
 
 - 普通消息（`steps` 为空数组、`callComplete` 为 true）的官方兼容导出与 3.1.1 恢复。
 - 带多 step 消息（至少包含一次工具调用）的官方兼容导出与 3.1.1 恢复，确认会话可读、工具调用不崩。
