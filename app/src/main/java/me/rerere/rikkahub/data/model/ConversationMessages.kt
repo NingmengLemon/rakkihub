@@ -282,8 +282,19 @@ internal fun Conversation.settleUnavailableTools(messageId: Uuid? = null): Conve
     )
 }
 
-/** 这条消息最后一个可重试的 step 下标：失败或中断留下、且还没执行过工具的 step。 */
-internal fun UIMessage.retryableStepIndex(): Int? {
+/** 手动重试的目标：截断到失败的 step，或保留所有已完成 step 从末尾继续。 */
+internal sealed interface MessageRetryTarget {
+    data class Step(val index: Int) : MessageRetryTarget
+
+    data object Continue : MessageRetryTarget
+}
+
+/**
+ * 这条消息的重试目标：最后还有一个失败或中断留下的 step 时截断它；
+ * 如果没有失败 step（例如下一步请求在第一个流事件之前就失败），
+ * 且所有 step 已完成、所有工具都已执行，则从消息末尾继续。
+ */
+internal fun UIMessage.retryTarget(): MessageRetryTarget? {
     if (role != MessageRole.ASSISTANT) return null
     if (status != MessageStatus.FAILED && status != MessageStatus.INTERRUPTED) return null
     val index = steps.indexOfLast {
@@ -291,19 +302,25 @@ internal fun UIMessage.retryableStepIndex(): Int? {
             it.status == StepStatus.CANCELLED ||
             it.status == StepStatus.RUNNING ||
             it.status == StepStatus.TOOLS
-    }.takeIf { it >= 0 } ?: return null
-    val step = steps[index]
-    val start = step.startPartIndex.coerceIn(0, parts.size)
-    val end = step.endPartIndex.coerceIn(start, parts.size)
-    // 已经执行过的工具结果不能被截掉重放，否则模型看不到已发生的事实，可能有副作用
-    if (parts.subList(start, end).any { it is UIMessagePart.Tool && it.isExecuted }) return null
-    return index
+    }
+    if (index >= 0) {
+        val step = steps[index]
+        val start = step.startPartIndex.coerceIn(0, parts.size)
+        val end = step.endPartIndex.coerceIn(start, parts.size)
+        // 已经执行过的工具结果不能被截掉重放，否则模型看不到已发生的事实，可能有副作用
+        if (parts.subList(start, end).any { it is UIMessagePart.Tool && it.isExecuted }) return null
+        return MessageRetryTarget.Step(index)
+    }
+    if (steps.isEmpty() || parts.isEmpty()) return null
+    if (steps.any { it.status != StepStatus.SUCCEEDED }) return null
+    if (getTools().any { !it.isExecuted }) return null
+    return MessageRetryTarget.Continue
 }
 
 /**
- * 手动重试最后一条 assistant 的失败 step：截断到该 step 的起点，删掉它和之后的 step，
- * 把消息复位成 COMPLETE，随后由 runTurn 从这条消息继续。目标不是最后一节点时不做。
- * 传入 [model] 时同步消息的模型标记，避免续写内容与气泡显示的模型不一致。
+ * 手动重试最后一条 assistant 的失败消息。有失败 step 时截断到该 step 的起点；
+ * 所有 step 都已完成时保留现有内容，只复位消息状态，随后由 runTurn 从消息末尾继续。
+ * 目标不是最后一节点时不做。传入 [model] 时同步消息的模型标记，避免续写内容与气泡显示的模型不一致。
  */
 internal fun Conversation.prepareStepRetry(
     messageId: Uuid,
@@ -312,18 +329,22 @@ internal fun Conversation.prepareStepRetry(
     val node = messageNodes.lastOrNull() ?: return null
     val message = node.currentMessage
     if (message.id != messageId) return null
-    val stepIndex = message.retryableStepIndex() ?: return null
-    val step = message.steps[stepIndex]
-    val start = step.startPartIndex.coerceIn(0, message.parts.size)
-    val retried = message.copy(
-        parts = message.parts.take(start),
-        steps = message.steps.take(stepIndex),
+    val target = message.retryTarget() ?: return null
+    var retried = message.copy(
         status = MessageStatus.COMPLETE,
         isGenerating = false,
         finishedAt = null,
         modelId = model?.id ?: message.modelId,
         modelSnapshot = model?.let { ModelSnapshot(it.modelId, it.displayName) } ?: message.modelSnapshot,
     )
+    if (target is MessageRetryTarget.Step) {
+        val step = message.steps[target.index]
+        val start = step.startPartIndex.coerceIn(0, message.parts.size)
+        retried = retried.copy(
+            parts = message.parts.take(start),
+            steps = message.steps.take(target.index),
+        )
+    }
     val messages = node.messages.map { if (it.id == message.id) retried else it }
     return copy(
         messageNodes = messageNodes.map { current ->

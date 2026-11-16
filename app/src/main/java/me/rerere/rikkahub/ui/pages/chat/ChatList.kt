@@ -107,7 +107,7 @@ import me.rerere.rikkahub.data.model.hasVisiblePendingTool
 import me.rerere.rikkahub.data.model.withConversation
 import me.rerere.rikkahub.data.model.isAwaitingToolApproval
 import me.rerere.rikkahub.data.model.pendingToolCalls
-import me.rerere.rikkahub.data.model.retryableStepIndex
+import me.rerere.rikkahub.data.model.retryTarget
 import me.rerere.rikkahub.service.ChatError
 import me.rerere.rikkahub.service.RecordedRetryAttempt
 import me.rerere.rikkahub.ui.components.ai.RetryAttemptsCard
@@ -430,7 +430,7 @@ private fun ChatListNormal(
                                 onRegenerate(node.currentMessage)
                             },
                             onRetryStep = if (index == lastMessageIndex &&
-                                node.currentMessage.retryableStepIndex() != null
+                                node.currentMessage.retryTarget() != null
                             ) {
                                 { onRetryStep(node.currentMessage) }
                             } else {

@@ -3,8 +3,10 @@ package me.rerere.rikkahub.data.model
 import kotlinx.datetime.TimeZone
 import kotlinx.datetime.toLocalDateTime
 import me.rerere.ai.core.MessageRole
+import me.rerere.ai.provider.Model
 import me.rerere.ai.ui.MessageStatus
 import me.rerere.ai.ui.MessageStep
+import me.rerere.ai.ui.ModelSnapshot
 import me.rerere.ai.ui.StepStatus
 import me.rerere.ai.ui.ToolApprovalState
 import me.rerere.ai.ui.UIMessage
@@ -147,6 +149,80 @@ class ConversationMessagesTest {
     }
 
     @Test
+    fun `manual retry continues after all steps succeeded`() {
+        val reply = UIMessage(
+            role = MessageRole.ASSISTANT,
+            parts = listOf(UIMessagePart.Text("done")),
+            status = MessageStatus.FAILED,
+            finishedAt = Clock.System.now().toLocalDateTime(TimeZone.UTC),
+            steps = listOf(MessageStep(StepStatus.SUCCEEDED, 0, 1, Clock.System.now())),
+        )
+        val conversation = conversationOf(
+            UIMessage.user("run it").toMessageNode(),
+            reply.toMessageNode(),
+        )
+
+        assertEquals(MessageRetryTarget.Continue, reply.retryTarget())
+
+        val retried = conversation.prepareStepRetry(reply.id)!!.currentMessages.last()
+
+        assertEquals(listOf("done"), retried.parts.map { (it as UIMessagePart.Text).text })
+        assertEquals(listOf(StepStatus.SUCCEEDED), retried.steps.map { it.status })
+        assertEquals(MessageStatus.COMPLETE, retried.status)
+        assertFalse(retried.isGenerating)
+        assertNull(retried.finishedAt)
+    }
+
+    @Test
+    fun `manual retry continues an interrupted all-succeeded message and syncs the model`() {
+        val oldModel = Model(modelId = "old-model", displayName = "Old Model")
+        val newModel = Model(modelId = "new-model", displayName = "New Model")
+        val step = MessageStep(StepStatus.SUCCEEDED, 0, 1, Clock.System.now())
+        val reply = UIMessage(
+            role = MessageRole.ASSISTANT,
+            parts = listOf(UIMessagePart.Text("done")),
+            status = MessageStatus.INTERRUPTED,
+            modelId = oldModel.id,
+            modelSnapshot = ModelSnapshot(oldModel.modelId, oldModel.displayName),
+            steps = listOf(step),
+        )
+        val conversation = conversationOf(
+            UIMessage.user("run it").toMessageNode(),
+            reply.toMessageNode(),
+        )
+
+        assertEquals(MessageRetryTarget.Continue, reply.retryTarget())
+
+        val retried = conversation.prepareStepRetry(reply.id, newModel)!!.currentMessages.last()
+
+        assertEquals(listOf("done"), retried.parts.map { (it as UIMessagePart.Text).text })
+        assertEquals(listOf(step), retried.steps)
+        assertEquals(newModel.id, retried.modelId)
+        assertEquals(ModelSnapshot(newModel.modelId, newModel.displayName), retried.modelSnapshot)
+        assertEquals(MessageStatus.COMPLETE, retried.status)
+    }
+
+    @Test
+    fun `manual retry does not continue with an unexecuted tool`() {
+        val reply = UIMessage(
+            role = MessageRole.ASSISTANT,
+            parts = listOf(
+                UIMessagePart.Tool(
+                    toolCallId = "pending",
+                    toolName = "workspace_shell",
+                    input = "{}",
+                    approvalState = ToolApprovalState.Auto,
+                )
+            ),
+            status = MessageStatus.FAILED,
+            steps = listOf(MessageStep(StepStatus.SUCCEEDED, 0, 1, Clock.System.now())),
+        )
+
+        assertNull(reply.retryTarget())
+        assertNull(conversationOf(reply.toMessageNode()).prepareStepRetry(reply.id))
+    }
+
+    @Test
     fun `manual retry ignores non-last nodes and completed messages`() {
         val reply = toolReply(ToolApprovalState.Approved).copy(
             status = MessageStatus.FAILED,
@@ -185,7 +261,7 @@ class ConversationMessagesTest {
             reply.toMessageNode(),
         )
 
-        assertNull(reply.retryableStepIndex())
+        assertNull(reply.retryTarget())
         assertNull(conversation.prepareStepRetry(reply.id))
     }
 
