@@ -1,5 +1,5 @@
 <div align="center">
-  <img src="docs/icon.png" alt="App 图标" width="100" />
+  <img src="docs/readme-icon.png" alt="App 图标" width="100" />
   <h1>RakkiHub</h1>
 
   [RikkaHub](https://github.com/rikkahub/rikkahub) 的个人 fork，自用。
@@ -8,7 +8,7 @@
 > [!WARNING]
 > 这是个人 fork，不是官方版本，与官方没有任何关系。代码按个人需要改过、删过功能，也不保证跟上上游。
 >
-> 请不要把它当官方客户端使用。需要稳定版本请去[官方仓库](https://github.com/rikkahub/rikkahub)或[官网](https://rikka-ai.com/)下载。从非官方渠道安装的 APK 可能有隐私泄露与过度申请权限的风险，使用前请自行判断。
+> 请不要把它当官方客户端使用。需要稳定版本请去[官方仓库](https://github.com/rikkahub/rikkahub)或[官网](https://rikka-ai.com/)下载。
 
 ## 这个仓库是什么
 

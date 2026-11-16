@@ -9,7 +9,7 @@
 写入：
 
 - app/src/main/res/mipmap-*/ 的 ic_launcher、ic_launcher_foreground、ic_launcher_background
-- docs/icon.png（README 用，512）
+- docs/icon.png（通用 512）与 docs/readme-icon.png（README 用，adaptive 安全区裁切）
 - web-ui/public/icon.png（Web UI 空状态用，256）
 - web-ui/public/favicon.ico（48/64/128/256，全部用插画）
 
@@ -68,6 +68,20 @@ def icon(size):
     return round_out(canvas, size, int(s * RADIUS))
 
 
+def readme_icon(size):
+    """README 预览：按 adaptive 72/108 安全区裁切，和 launcher 的实际显示一致。"""
+    s = size * SS
+    canvas = Image.new("RGBA", (s, s), BG)
+    art = img.resize((round(s * SCALE),) * 2, Image.LANCZOS)
+    x = round(s * (0.5 + DX) - art.width / 2)
+    y = round(s * (0.5 + DY) - art.height / 2)
+    canvas.alpha_composite(art, (x, y))
+    visible = round(s * 72 / 108)
+    left = (s - visible) // 2
+    cropped = canvas.crop((left, left, left + visible, left + visible))
+    return round_out(cropped, size, int(visible * RADIUS))
+
+
 def legacy(size):
     s = size * SS
     canvas = Image.new("RGBA", (s, s), BG)
@@ -97,6 +111,7 @@ for name, scale in {
     background(round(108 * scale)).save(f"{d}/ic_launcher_background.png")
 
 icon(512).save(r"docs/icon.png")
+readme_icon(512).save(r"docs/readme-icon.png")
 icon(256).save(r"web-ui/public/icon.png")
 
 # favicon：统一用插画，标签页那枚 16px 由浏览器从 48 帧缩下去

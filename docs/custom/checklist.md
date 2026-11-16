@@ -699,7 +699,7 @@
 
 ### C90 应用图标与可见文案改名 RakkiHub
 
-- 落点：`app/src/main/res/mipmap-*/` 的 `ic_launcher.png`、`ic_launcher_foreground.png`、`ic_launcher_background.png` 全部换成关于页那张插画（`drawable-nodpi/about_logo.webp`）生成的图；`mipmap-anydpi-v26/ic_launcher.xml` 去掉 `<monochrome>`，删除五个 `ic_launcher_monochrome.png`；`docs/icon.png`（README 图标）同步；可见文案：`SettingAboutPage.kt` 标题改用 `stringResource(R.string.app_name)`，`NsdServiceRegistrar.kt` 的 `DEFAULT_SERVICE_NAME` 改成 `rakkihub`（mDNS 地址变成 `rakkihub.local`）与 NSD 描述，`SettingPreferencesNetworkPage.kt` 的默认 User-Agent，`ContextUtil.kt` 的导出文件名，`McpOAuthCoordinator.kt` 的 OAuth clientName，`oauth` 模块 `OAuthLoopbackCallbackServer.kt` 的回调页标题、品牌与四条提示，`DataSourceModule.kt`、`ai/util/Request.kt`、`mediagen` 的 `X-Title`（`X-Title` 与 `HTTP-Referer` 已由 C96 删除），`RootfsPatcher.kt` 的生成标记
+- 落点：`app/src/main/res/mipmap-*/` 的 `ic_launcher.png`、`ic_launcher_foreground.png`、`ic_launcher_background.png` 全部换成关于页那张插画（`drawable-nodpi/about_logo.webp`）生成的图；`mipmap-anydpi-v26/ic_launcher.xml` 去掉 `<monochrome>`，删除五个 `ic_launcher_monochrome.png`；`docs/icon.png` 与 README 用的 `docs/readme-icon.png` 同步；可见文案：`SettingAboutPage.kt` 标题改用 `stringResource(R.string.app_name)`，`NsdServiceRegistrar.kt` 的 `DEFAULT_SERVICE_NAME` 改成 `rakkihub`（mDNS 地址变成 `rakkihub.local`）与 NSD 描述，`SettingPreferencesNetworkPage.kt` 的默认 User-Agent，`ContextUtil.kt` 的导出文件名，`McpOAuthCoordinator.kt` 的 OAuth clientName，`oauth` 模块 `OAuthLoopbackCallbackServer.kt` 的回调页标题、品牌与四条提示，`DataSourceModule.kt`、`ai/util/Request.kt`、`mediagen` 的 `X-Title`（`X-Title` 与 `HTTP-Referer` 已由 C96 删除），`RootfsPatcher.kt` 的生成标记
 - 理由：应用改名为 RakkiHub，图标换成和关于页一致的插画。插画是满幅人物，monochrome 层用它的 alpha 会变成一块黑色剪影，主题图标反而更差，所以去掉 monochrome 层，本应用不参与系统主题着色
 - 合并注意：图标由 `about_logo.webp` 生成，前景缩放到 108dp 画布的 70% 居中，主体落在圆形遮罩内，但四角和边缘的头发、耳朵尖会被圆形遮罩裁掉一点，满幅人像没有更小的构图可退；legacy 圆角 20.8%，背景取插画主色 `#F4EEEF`；插画底部是裁切的人像，方形图标底部会留一条浅色带。浮动窗口气泡、导出分享图、workspace 文档图标复用 `R.mipmap.ic_launcher` 或 `ic_launcher_foreground`，会跟着变，不需要单独改。通知栏小图标 `ic_stat_rikkahub` 仍是旧的兔子。mDNS 主机名改成 `rakkihub.local`，旧书签需要重填。`search-picker.tsx` 的 `rikkahub: "RikkaHub"`、备份导入导出的官方 RikkaHub 文案都指官方服务，保留；官方 provider 描述已由 C95 删除。`web-ui/public/favicon.ico` 与整个 `docs/img/` 已由 C94 处理，通知栏小图标 `ic_stat_rikkahub` 有意保留
 - 测试：`:app:assembleGithubDebug` 通过，设备上安装启动正常；图标用圆形、圆角方形和 96px 预览核对；app JVM 803 条（7 条既有 Windows 失败）、ai 345 条、search 18 条、mediagen 43 条、oauth 9 条全过，改动过的 workspace `ExampleUnitTest` 1 条通过；spotless、markdownlint 通过。没有在真实桌面上截图验证图标，也没有验证主题图标；`web-ui/public/favicon.ico` 与整个 `docs/img/` 已由 C94 处理
@@ -713,7 +713,7 @@
 
 ### C92 launcher 插画重新对位
 
-- 落点：重新生成 `app/src/main/res/mipmap-*/` 的 `ic_launcher.png`、`ic_launcher_foreground.png` 与 `docs/icon.png`（`ic_launcher_background.png` 不变），插画占 108dp 画布 78%，并相对画布中心左移 1.5%、上移 6%
+- 落点：重新生成 `app/src/main/res/mipmap-*/` 的 `ic_launcher.png`、`ic_launcher_foreground.png`、`docs/icon.png` 与 `docs/readme-icon.png`（`ic_launcher_background.png` 不变），插画占 108dp 画布 78%，并相对画布中心左移 1.5%、上移 6%；README 图标再按 adaptive 72/108 安全区裁切
 - 理由：70% 居中时眼睛落在圆形遮罩的右下，看起来没对正；按眼睛位置（画布 47.4%、69.6%）换算，78% 再左移 1.5%、上移 6% 后眼睛大致落在圆形遮罩中心
 - 合并注意：C90 里“前景缩放到 70%”的说法已由本项取代。圆形遮罩下耳朵尖和两侧头发仍会被裁掉；插画底部是裁切的人像，上移后底部裁切线接近遮罩下缘，再往上移就会露出来。legacy 圆角 20.8%、背景 `#F4EEEF` 不变
 - 测试：`:app:assembleGithubDebug` 通过并安装到设备；生成后的圆角方形、圆形和 96px 预览核对；没有在真实桌面上截图验证
@@ -727,9 +727,9 @@
 
 ### C94 图标收尾：favicon、Web 空状态 logo、清理旧素材
 
-- 落点：`web-ui/public/favicon.ico` 重做成四帧（48/64/128/256，全部用插画，标签页那枚 16px 由浏览器从 48 帧缩下去）；新增 `web-ui/public/icon.png`（256，与 `docs/icon.png` 同一构图）；`web-ui/app/components/logo.tsx` 从内联的旧兔子线稿 SVG 改成渲染 `/icon.png`（`alt` 用品牌名，宽高属性是 256，显示尺寸由调用方的 `className` 决定），`web-ui/app/routes/conversations.tsx` 的新会话空状态去掉 `[&>svg]:size-16` 包裹与 `text-primary`；删除整个 `docs/img/`（海报 `poster.png` 与五张没有引用的界面截图，共约 4.2 MB）；生成脚本移到 `tools/gen-icons.py`，一次覆盖 launcher 图标、`docs/icon.png`、`web-ui/public/icon.png` 与 favicon（在仓库根目录运行 `uv run --with pillow python -P tools/gen-icons.py`，Pillow 由 uv 临时安装；`build/` 被 gitignore，脚本放那里不可复现）
+- 落点：`web-ui/public/favicon.ico` 重做成四帧（48/64/128/256，全部用插画，标签页那枚 16px 由浏览器从 48 帧缩下去）；新增 `web-ui/public/icon.png`（256，与 `docs/icon.png` 同一构图）；`web-ui/app/components/logo.tsx` 从内联的旧兔子线稿 SVG 改成渲染 `/icon.png`（`alt` 用品牌名，宽高属性是 256，显示尺寸由调用方的 `className` 决定），`web-ui/app/routes/conversations.tsx` 的新会话空状态去掉 `[&>svg]:size-16` 包裹与 `text-primary`；删除整个 `docs/img/`（海报 `poster.png` 与五张没有引用的界面截图，共约 4.2 MB）；生成脚本移到 `tools/gen-icons.py`，一次覆盖 launcher 图标、`docs/icon.png`、`docs/readme-icon.png`、`web-ui/public/icon.png` 与 favicon（在仓库根目录运行 `uv run --with pillow python -P tools/gen-icons.py`，Pillow 由 uv 临时安装；`build/` 被 gitignore，脚本放那里不可复现）
 - 理由：C90 只换了 launcher 与 README 图标，浏览器标签页、Web UI 新会话空状态、海报三处还是旧兔子；本分支对 `docs/img/` 没有任何引用（根 README 是 fork 说明，见 C39），五张截图连上游 README 都没用，留着只是几 MB 的旧素材
-- 合并注意：favicon 统一用插画，不再为 16px 单独准备兔子头剪影：16px 标签页是 48 帧缩下去的，糊一点但只有一套形象；`web-ui/public/` 由 `web` 模块 preBuild 的 `pnpm run build` 拷进 `web/src/main/resources/static`（该目录 gitignored），只改 `web-ui/public` 而不重新构建 APK 不会生效；`docs/icon.png` 保持 512（README 用），`web-ui/public/icon.png` 取 256，够 64px 显示的四倍屏；通知栏小图标 `ic_stat_rikkahub` 是有意保留的兔子头剪影（见 C90）
+- 合并注意：favicon 统一用插画，不再为 16px 单独准备兔子头剪影：16px 标签页是 48 帧缩下去的，糊一点但只有一套形象；`web-ui/public/` 由 `web` 模块 preBuild 的 `pnpm run build` 拷进 `web/src/main/resources/static`（该目录 gitignored），只改 `web-ui/public` 而不重新构建 APK 不会生效；`docs/icon.png` 保持 512（通用），`docs/readme-icon.png` 也取 512 但按 adaptive 72/108 安全区裁切，README 用它显示 launcher 的真实裁切效果；`web-ui/public/icon.png` 取 256，够 64px 显示的四倍屏；通知栏小图标 `ic_stat_rikkahub` 是有意保留的兔子头剪影（见 C90）
 - 测试：四个尺寸逐帧导出核对；`pnpm run typecheck` 通过，oxfmt 对改动的两个文件通过（整棵 `web-ui/app` 在 oxfmt 默认配置下另有 64 个既有格式差异，与本次无关，CI 也不跑这项）；`:app:assembleGithubDebug` 通过，解包 APK 后 `static/favicon.ico`（72560 字节）与 `static/icon.png`（43496 字节）和 `web-ui/public` 下的文件哈希一致，打包产物里能看到 `<img src="/icon.png" alt="RakkiHub">`；用本地静态服务器把构建产物打开，新会话空状态显示插画图标，`/favicon.ico` 与 `/icon.png` 都返回 200。设备上的 Web 服务器开关要在设置里手动打开，本次没开，所以没在真机浏览器里核对标签页图标
 
 ### C95 清理 RikkaHub 提供商残留
