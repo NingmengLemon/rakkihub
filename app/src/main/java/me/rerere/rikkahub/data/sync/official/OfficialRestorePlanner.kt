@@ -41,8 +41,8 @@ internal object OfficialDatabaseHeaders {
  * 恢复一个库时该走哪条路。
  *
  * 判定只看两处元数据：`user_version` 与 schema 指纹。版本高于当前 Room 版本时拒绝，低于时
- * 交给迁移链；同版本只有 identity 不同且有该版本官方快照时才交给转换器，当前 Room 33 没有
- * v33 官方快照，所以同版本未知 identity 直接拒绝。
+ * 交给迁移链；同版本只有 identity 不同且有该版本官方快照时才交给转换器，当前 Room 34 没有
+ * v34 官方快照，所以同版本未知 identity 直接拒绝。
  */
 internal sealed interface OfficialRestorePlan {
     /** 交给 Room 迁移链：自家旧备份、以及与我们结构一致的库 */

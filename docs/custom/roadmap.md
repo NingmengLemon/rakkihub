@@ -74,7 +74,7 @@
 
    这是要求 1 的对称面，也是「改了结构就回不去」的解药。它在备份页上是第二个出口，不是把现有导出改掉：自家的导出始终带全量数据，包括我们新增的表与字段；官方兼容的导出只带官方认识的部分。
 
-   当前 Room schema 是 v33、官方是 v32；C80 只对 `usage_record.outcome` 做已知裁剪，官方兼容出口仍要把附件引用换成官方安装的位置（C30）。官方恢复只把附件搬进自己的 files 目录、不改库里的路径，所以路径必须在导出时换掉。其它表或列一旦分叉，这个出口仍会直接失败。
+   当前 Room schema 是 v34、官方是 v32；C80 对 `usage_record.outcome` 做已知裁剪，C87 另把 `file_derivations` 整张表裁掉，官方兼容出口仍要把附件引用换成官方安装的位置（C30）。官方恢复只把附件搬进自己的 files 目录、不改库里的路径，所以路径必须在导出时换掉。其它表或列一旦分叉，这个出口仍会直接失败。
 
    `settings.json` 不需要裁字段：官方恢复用的 `JsonInstant` 开着 `ignoreUnknownKeys`，多余字段会被忽略，归档里的 `launchCount` 就是先例。这个容忍度只覆盖不认识的 key，改已有字段的含义它救不了，往枚举里加值它也救不了（未知枚举值会让整份设置解码失败，所以官方出口会把官方不认识的选项去掉）。
 
@@ -367,7 +367,7 @@
 - 重试恢复与消息模型 B1：已完成 step 记录、Claude step 级请求投影、失败工具事实、审批/取消 step 结算、最后节点审批收口（C97）与默认关闭的自动重试（C75）；C76 的 attempt 摘要已持久化，设计见 [design/b1-step-commits.md](design/b1-step-commits.md)。B2 已开始：Web DTO 的 status/steps、conversation_search 的失败消息过滤（单次会话加载）、上下文边界投影对齐已落地；官方导出按上游 `ignoreUnknownKeys` 容忍未知字段，3.1.1 样本待补；手动 step 重试已落地（C98），搜索加载优化见 [design/b2-step-messages.md](design/b2-step-messages.md)。
 - C58 半途失败投影已由 B1 第一阶段落地（C97）：聊天请求投影保留失败前已执行的工具事实，失败 step 的正文与推理不进请求；标题、记忆与摘要投影仍整条丢弃失败消息。B2 只收尾搜索、Web 与错误卡片等消费方。
 - C86 思考强度（已落地）：`OFF` 保留为明确关闭，新增 `NOTSET` 表示不发参数，`TextGenerationParams` 默认改为 `NOTSET`，OCR 和 Qwen MT 翻译不再带 `none`，翻译的 int budget 用 `-2` 哨兵保留默认档；官方兼容导出把 `NOTSET` 归一化成 `OFF`，会话 config 同步替换。deepseek 等 provider 的具体映射仍按现有能力表维护，后续只有新 provider 接入时再补调研。
-- C87 OCR 文本归属（讨论中）：采用 `file_derivations` 派生表，`file_id` 指向 `managed_files.id`，`kind`、`text`、`producer`、`edited`、时间戳；Room 升到 v34，官方导出登记并裁掉这张表。附件管理入口待定，先做聊天里的就近入口。
+- C87 OCR 文本归属（Phase 1 已落地）：Room 34 新增 `file_derivations`，`file_id` 指向 `managed_files.id`，`kind`、`text`、`producer`、`edited`、时间戳；OCR 优先读文件级派生，旧消息 metadata 作为回退并懒回填；删除文件级联清理，自家备份恢复清空，官方导出登记并裁掉整张表。附件管理入口、手改文本和 producer 指纹失效留后续，设计见 [design/c87-file-derivations.md](design/c87-file-derivations.md)。
 
 ### Markdown 渲染能力
 

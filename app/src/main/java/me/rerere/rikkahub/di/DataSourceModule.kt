@@ -100,6 +100,10 @@ val dataSourceModule = module {
     }
 
     single {
+        get<AppDatabase>().fileDerivationDao()
+    }
+
+    single {
         get<AppDatabase>().favoriteDao()
     }
 

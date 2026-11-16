@@ -5,15 +5,18 @@ import me.rerere.rikkahub.data.sync.DatabaseBackup
 import java.io.File
 
 /**
- * 官方兼容导出前把已知的自定义列裁掉。
+ * 官方兼容导出前把已知的自定义列和整张自定义表裁掉。
  *
- * 目前只有 C80 给 `usage_record` 加的 `outcome`；其它表或列一旦分叉仍然直接失败，不猜。
- * 裁剪用重建表而不是 `ALTER TABLE DROP COLUMN`，兼容低版本 SQLite。
+ * C80 的 `usage_record.outcome` 按列裁，C87 的 `file_derivations` 按表 drop；其它表或列一旦分叉
+ * 仍然直接失败，不猜。裁剪用重建表而不是 `ALTER TABLE DROP COLUMN`，兼容低版本 SQLite。
  */
 internal object OfficialSchemaTrimmer {
 
     fun canReadAsV32(database: SQLiteDatabase): Boolean {
         if (database.version != OfficialDatabaseSchema.ROOM_VERSION) return false
+        val extraTables = userTables(database) - OfficialSnapshotV32.TABLES.keys -
+            OfficialDatabaseSchema.KNOWN_EXTRA_TABLES
+        if (extraTables.isNotEmpty()) return false
         for ((name, table) in OfficialSnapshotV32.TABLES) {
             val live = columns(database, name)
             if (live.isEmpty()) return false
@@ -33,6 +36,11 @@ internal object OfficialSchemaTrimmer {
             check(canReadAsV32(database)) { "数据库不在已知的可裁剪形状上" }
             database.beginTransaction()
             try {
+                // 先删整张自定义表，避免重建 managed_files 时还挂着 file_derivations 的外键；
+                // 再裁官方表上的已知额外列。
+                for (table in OfficialDatabaseSchema.KNOWN_EXTRA_TABLES) {
+                    database.execSQL("DROP TABLE IF EXISTS `$table`")
+                }
                 for ((name, table) in OfficialSnapshotV32.TABLES) {
                     val official = table.columns.map { it.name }.toSet()
                     val extras = columns(database, name) - official
@@ -52,6 +60,16 @@ internal object OfficialSchemaTrimmer {
     private fun columns(database: SQLiteDatabase, table: String): List<String> =
         database.rawQuery("PRAGMA table_info(`$table`)", null).use { cursor ->
             buildList { while (cursor.moveToNext()) add(cursor.getString(1)) }
+        }
+
+    private fun userTables(database: SQLiteDatabase): Set<String> =
+        database.rawQuery(
+            "SELECT name FROM sqlite_master WHERE type = 'table' " +
+                "AND name NOT LIKE 'sqlite_%' AND name NOT LIKE 'message_fts%' " +
+                "AND name NOT IN ('android_metadata', 'room_master_table')",
+            null,
+        ).use { cursor ->
+            buildSet { while (cursor.moveToNext()) add(cursor.getString(0)) }
         }
 
     private fun rebuildWithout(database: SQLiteDatabase, table: OfficialSchemaTypes.Table) {

@@ -20,6 +20,10 @@ class FilesRepository(
 
     suspend fun getByPath(relativePath: String): ManagedFileEntity? = dao.getByPath(relativePath)
 
+    /** 一次取多行，OCR 解析图片时避免每张图点查一次。 */
+    suspend fun getByPaths(relativePaths: Collection<String>): List<ManagedFileEntity> =
+        dao.getByPaths(relativePaths.toList())
+
     fun listByFolder(folder: String): Flow<List<ManagedFileEntity>> = dao.listByFolder(folder)
 
     suspend fun deleteById(id: Long): Int = dao.deleteById(id)

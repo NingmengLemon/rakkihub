@@ -38,7 +38,7 @@ class OfficialRestorePlannerTest {
     @Test fun `an older backup goes through the migration chain`() {
         assertEquals(OfficialRestorePlan.Migrate, plan(31, "a428043e3256791d9bc0855715c6355a"))
         assertEquals(OfficialRestorePlan.Migrate, plan(32, OfficialDatabaseSchema.IDENTITY_HASH))
-        // 低于当前 Room 33 的库一律交给迁移链；identity 不能用来跳过迁移
+        // 低于当前 Room 34 的库一律交给迁移链；identity 不能用来跳过迁移
         assertEquals(OfficialRestorePlan.Migrate, plan(32, "00000000000000000000000000000000"))
         assertEquals(OfficialRestorePlan.Migrate, plan(16, null))
     }
@@ -50,7 +50,7 @@ class OfficialRestorePlannerTest {
     }
 
     @Test fun `same version different identity still converts when a snapshot exists`() {
-        // 生产当前 Room 33 没有 v33 官方快照，这条覆盖转换器仍然支持的同期官方库分支
+        // 生产当前 Room 34 没有 v34 官方快照，这条覆盖转换器仍然支持的同期官方库分支
         val result = planAt(
             appVersion = OfficialDatabaseSchema.VERSION,
             appIdentity = OfficialDatabaseSchema.IDENTITY_HASH,

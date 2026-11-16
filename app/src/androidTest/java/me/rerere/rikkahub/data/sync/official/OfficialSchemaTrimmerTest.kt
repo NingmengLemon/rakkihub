@@ -50,6 +50,10 @@ class OfficialSchemaTrimmerTest {
                 buildList { while (cursor.moveToNext()) add(cursor.getString(1)) }
             }
             assertFalse("裁剪后不应保留 outcome", "outcome" in columns)
+            val tables = db.rawQuery("SELECT name FROM sqlite_master WHERE type = 'table'", null).use { cursor ->
+                buildSet { while (cursor.moveToNext()) add(cursor.getString(0)) }
+            }
+            assertFalse("官方导出不应包含 file_derivations", "file_derivations" in tables)
             db.rawQuery("SELECT COUNT(*), SUM(prompt_tokens), SUM(cached_tokens) FROM usage_record", null).use {
                 it.moveToFirst()
                 assertEquals(2, it.getInt(0))
@@ -81,6 +85,28 @@ class OfficialSchemaTrimmerTest {
         cachedTokens = cached,
         outcome = outcome.name,
     )
+
+    @Test
+    fun rejectsUnregisteredExtraTables() = runBlocking {
+        directory.mkdirs()
+        val source = File(directory, "unregistered-table.db")
+        val room = AppDatabaseFactory.create(context, source.absolutePath)
+        try {
+            room.openHelper.writableDatabase.execSQL("CREATE TABLE unregistered (id TEXT)")
+            DatabaseBackup.checkpoint(room.openHelper.writableDatabase)
+        } finally {
+            room.close()
+        }
+
+        val error = runCatching {
+            OfficialDatabaseAdapter.adaptForOfficial(source, emptyList())
+        }.exceptionOrNull()
+
+        assertTrue(
+            "未登记的额外表必须让官方导出失败，实际是 $error",
+            error is OfficialExportUnsupportedException,
+        )
+    }
 
     @Test
     fun rejectsExtraColumnsThatAreNotRegistered() = runBlocking {

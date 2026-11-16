@@ -94,7 +94,7 @@
 | C84 | Gemini 独立 thoughtSignature 兼容 | 改造 |
 | C85 | Claude 思考块签名与 redacted_thinking 回放 | 改造 |
 | C86 | 思考强度 NOTSET 与 OFF 分离 | 改造 |
-| C87 | OCR 结果写回会话，历史图片不再重复识别 | 改造 |
+| C87 | OCR 结果按 managed file 持久化，历史图片不再重复识别 | 改造 |
 | C88 | Exa 搜索正文长度上限 | 改造 |
 | C89 | workspace 前台命令超时后的孤儿进程清理 | 改造 |
 | C90 | 应用图标与可见文案改名 RakkiHub | 改造 |
@@ -174,7 +174,7 @@
 
 - 落点：`ImportExportTab`（官方 RikkaHub 分组里的「从官方 RikkaHub 导入」入口，操作类型用 `BackupOperation.IMPORT_OFFICIAL`，与本地导入共用同一个确认对话框与 `openDocumentLauncher`；分组本身见 C42）；7 个 locale 新增 `backup_page_import_from_official` 与 `backup_page_import_official_desc`
 - 理由：改包名后本应用与官方应用并存，需要一个明确的迁移入口
-- 合并注意：官方备份与本应用的归档格式相同（`settings.json` + `rikka_hub.db` + 附件目录），所以复用同一条 `stageRestore` 流程，入口只负责引导用户先在官方应用里导出备份。`JsonInstant` 开了 `ignoreUnknownKeys`，官方备份里的额外字段不会导致解码失败。本节只管导入方向；反过来的「导出官方兼容备份」是并列的第二个出口，由 C18 落地；C80 之后 v33 的 `usage_record.outcome` 通过已知裁剪去掉，其它 schema 分叉仍直接失败
+- 合并注意：官方备份与本应用的归档格式相同（`settings.json` + `rikka_hub.db` + 附件目录），所以复用同一条 `stageRestore` 流程，入口只负责引导用户先在官方应用里导出备份。`JsonInstant` 开了 `ignoreUnknownKeys`，官方备份里的额外字段不会导致解码失败。本节只管导入方向；反过来的「导出官方兼容备份」是并列的第二个出口，由 C18 落地；C80 之后 v33 的 `usage_record.outcome`、C87 之后 v34 的 `file_derivations` 通过已知裁剪去掉，其它 schema 分叉仍直接失败
 
 ### C11 导出备份显示进度
 
@@ -216,13 +216,13 @@
 
 - 落点：新增 `data/sync/official/`：`OfficialDatabaseSchema`（14 张表、106 个列、14 个索引、5 个外键、3 处自增）、`OfficialBackupLayout`（归档条目名、为兼容保留的 WAL 侧条目、`launchCount`、四个附件目录与其中两个嵌套目录），以及三个校验测试。配套改动：`BackupManager` 新增 `SETTINGS_ENTRY` 常量并让写入、恢复与 `PendingRestore` 三条路径共用它，另把 `ATTACHMENT_FOLDERS`、`NESTED_ATTACHMENT_FOLDERS`、`LAUNCH_COUNT_KEY` 从 private 放宽到 internal 以便对账
 - 理由：导入器和官方兼容导出都需要一份「官方那侧认识什么」的描述，且不能随我们自己的 Room 定义漂，否则一旦我们改结构，导入器就读不懂官方库
-- 合并注意：快照只描述官方那侧，数据从 `app/schemas/.../32.json` 生成。`message_fts*` 这类由手写 SQL 建的全文索引表不在其中：`AppDatabaseFactory` 打开数据库时只保证表存在，索引内容要靠 `ConversationRepository.rebuildAllIndexes` 重建，所以导入完成后要跑一次重建，否则搜索是空的。快照测试与 `32.json` 逐表、逐列、逐索引、逐外键对账；C80 的 Room 33 只允许已登记的 `usage_record.outcome`，由 `OfficialDatabaseSchemaTest` 校验；布局测试与 `BackupManager`、`DatabaseBackup` 的常量对账；settings 测试钉住官方解码器的 `ignoreUnknownKeys` 行为。官方升级会触发版本断言，我们自己改了归档布局会触发布局断言；自家 schema 与官方分叉后版本那条要重做
+- 合并注意：快照只描述官方那侧，数据从 `app/schemas/.../32.json` 生成。`message_fts*` 这类由手写 SQL 建的全文索引表不在其中：`AppDatabaseFactory` 打开数据库时只保证表存在，索引内容要靠 `ConversationRepository.rebuildAllIndexes` 重建，所以导入完成后要跑一次重建，否则搜索是空的。快照测试与 `32.json` 逐表、逐列、逐索引、逐外键对账；C80 的 Room 33 只允许已登记的 `usage_record.outcome`，C87 的 Room 34 另允许整张 `file_derivations`，由 `OfficialDatabaseSchemaTest` 校验；布局测试与 `BackupManager`、`DatabaseBackup` 的常量对账；settings 测试钉住官方解码器的 `ignoreUnknownKeys` 行为。官方升级会触发版本断言，我们自己改了归档布局会触发布局断言；自家 schema 与官方分叉后版本那条要重做
 
 ### C18 新增官方兼容的导出出口
 
 - 落点：新增 `BackupTarget`（`SELF` / `OFFICIAL`）、`OfficialDatabaseCompatibility`（判定我们的库还在不在官方形状上，比较版本与 identity hash，配 `OfficialDatabaseCompatibilityTest`）、`OfficialDatabaseAdapter`（一致时把附件路径改写成官方安装的位置再交出，已知分叉裁剪，其它分叉抛 `OfficialExportUnsupportedException`）；`BackupManager.createBackup` 与 `WebDavSync.prepareBackupFile` 加目标参数，`BackupVM.exportToFile` 透传，只有 `SELF` 会更新备份提醒的时间戳；`ImportExportTab` 加第二个导出入口，落在官方 RikkaHub 分组里（C42），与自家导出的区别在数据库与其中的路径，目标用 `rememberSaveable` 存，避免选择文件期间被回收后退回自家格式；8 个 locale 新增 `backup_page_export_official`、`backup_page_export_official_desc`、`backup_page_export_failed`、`backup_page_export_schema_diverged`；`BackupManagerTest` 补一条官方目标的 androidTest
 - 理由：改结构之后自家备份官方读不了，需要一个能把数据交回官方的出口；它和自家导出并列，不是把现有导出改掉
-- 合并注意：C80 后本仓库 Room 33、官方 v32；适配层对一致形状改写路径，对已登记的 `usage_record.outcome` 做已知裁剪，其它分叉仍失败。失败是刻意的，静默产出官方打不开的备份要等到恢复时才发现；分叉走单独的提示文案，技术原因只进日志。导出失败时会尝试删掉选择位置时建出的空文档，尽量不留 0 字节文件（删除本身可能被 provider 拒绝，是 best-effort）。`settings.json` 不裁字段，官方解码器的 `ignoreUnknownKeys` 会忽略多余字段，这一点由 `OfficialSettingsCompatibilityTest` 钉住；但官方不认识的枚举值它吞不掉，所以官方出口会把工作区选项去掉（C29）。WebDAV 出口暂时只产出 `SELF` 格式。上游若改 `createBackup` 的签名或备份页的导出分组，第二个入口要跟着调整。消息 JSON 的 `steps`/`callComplete` 依赖官方解码器的 `ignoreUnknownKeys` 容忍，上游 `ref` 的 `JsonInstant` 已开启；是否要为官方 3.1.1 做 JSON 投影兜底，等样本确认后再定，见 [`backup/acceptance.md`](backup/acceptance.md) 的 B1 待验证。
+- 合并注意：C80 后本仓库 Room 33，C87 后为 Room 34、官方 v32；适配层对一致形状改写路径，对已登记的 `usage_record.outcome` 做列裁剪、对 `file_derivations` 做整表 drop，其它分叉仍失败。失败是刻意的，静默产出官方打不开的备份要等到恢复时才发现；分叉走单独的提示文案，技术原因只进日志。导出失败时会尝试删掉选择位置时建出的空文档，尽量不留 0 字节文件（删除本身可能被 provider 拒绝，是 best-effort）。`settings.json` 不裁字段，官方解码器的 `ignoreUnknownKeys` 会忽略多余字段，这一点由 `OfficialSettingsCompatibilityTest` 钉住；但官方不认识的枚举值它吞不掉，所以官方出口会把工作区选项去掉（C29）。WebDAV 出口暂时只产出 `SELF` 格式。上游若改 `createBackup` 的签名或备份页的导出分组，第二个入口要跟着调整。消息 JSON 的 `steps`/`callComplete` 依赖官方解码器的 `ignoreUnknownKeys` 容忍，上游 `ref` 的 `JsonInstant` 已开启；是否要为官方 3.1.1 做 JSON 投影兜底，等样本确认后再定，见 [`backup/acceptance.md`](backup/acceptance.md) 的 B1 待验证。
 
 ### C19 附件按替换语义导入，导入的原始备份留底
 
@@ -250,7 +250,7 @@
 
 ### C23 导入器接上恢复流程
 
-- 落点：新增 `OfficialRestorePlanner`（按 `user_version` 与 schema 指纹决定迁移链 / 转换 / 拒绝，纯函数）、`OfficialDatabaseHeaders`（只读读两处元数据）、`OfficialDatabaseConverter`（官方库转成当前版本库，动手前对账目标表与列，缺表或缺列直接拒绝）；`BackupManager.stageRestore` 先 `normalize` 再分流，转换后替换暂存库并继续原流程；`OfficialRestorePlannerTest` 七条 JVM 测试、`OfficialSnapshotFilesTest` 两条（v31/v32 快照与各自 schema 文件逐列对账）、`OfficialDatabaseConverterTest` 两条 androidTest、`BackupManagerTest` 补两条（v33 未知 identity 拒绝、高版本明确拒绝），Convert 分支由 planner 显式 v32 快照覆盖；`RikkaHubApp` 在恢复成功后后台重建全文索引；快照生成脚本移到 `tools/gen-official-snapshot.ps1`（`build/` 被 gitignore，脚本放那里不可复现）
+- 落点：新增 `OfficialRestorePlanner`（按 `user_version` 与 schema 指纹决定迁移链 / 转换 / 拒绝，纯函数）、`OfficialDatabaseHeaders`（只读读两处元数据）、`OfficialDatabaseConverter`（官方库转成当前版本库，动手前对账目标表与列，缺表或缺列直接拒绝）；`BackupManager.stageRestore` 先 `normalize` 再分流，转换后替换暂存库并继续原流程；`OfficialRestorePlannerTest` 七条 JVM 测试、`OfficialSnapshotFilesTest` 两条（v31/v32 快照与各自 schema 文件逐列对账）、`OfficialDatabaseConverterTest` 两条 androidTest、`BackupManagerTest` 补两条（当前版本未知 identity 拒绝、高版本明确拒绝），Convert 分支由 planner 显式 v32 快照覆盖；`RikkaHubApp` 在恢复成功后后台重建全文索引；快照生成脚本移到 `tools/gen-official-snapshot.ps1`（`build/` 被 gitignore，脚本放那里不可复现）
 - 理由：迁移链只能往上升，官方库版本高于我们或同版本不同结构时打不开；这是「导入器可用」的最后一段接线
 - 合并注意：判定在读任何业务表之前完成，`ourVersion` 与 `ourIdentity` 都用编译进应用的常量，不从活库读（升级后首次启动时活库可能还停在旧版本）。高版本一律拒绝而不是回落到迁移链：迁移链降不了版本，而官方升版通常是加列，硬写会在插入时崩。同版本但缺 schema 指纹也拒绝，来源判不出来时不猜。`stageRestore` 是热区，上游改恢复流程时按本节复核顺序（normalize → 分流 → 转换 → 打开校验 → checkpoint）
 
@@ -630,8 +630,8 @@
 
 - 落点：`UsageRecordEntity` 增加 `outcome`（`UsageOutcome.SUCCESS/FAILED/CANCELLED/UNKNOWN`），默认 `UNKNOWN`；Room 32 到 33 的 `Migration_32_33` 加列，`AppDatabase` 升到 33，`AppDatabaseFactory` 注册迁移。`UsageRecorder` 在 `generateText` 成功、流式正常结束、流式异常和取消时分别写 SUCCESS/FAILED/CANCELLED；流中途已收到的 usage 仍按 `finally` 记下。`UsageRecordDAO.getTotals` 增加只统计非 FAILED/CANCELLED 的 `cachePromptTokens`/`cacheCachedTokens`，总成本仍含所有行；统计页缓存命中率改用这两个字段，`-` 仍然处理 0 分母。官方兼容导出的 C18 裁剪落地：`OfficialSchemaTrimmer` 识别 `usage_record.outcome` 这一处已知额外列，重建表去掉该列、写回官方 v32 identity，`OfficialDatabaseAdapter` 在导出时裁剪；`OfficialDatabaseReader` 允许当前 Room 33 按 v32 快照读取并忽略已知额外列；`OfficialForeignAttachmentPaths` 对 33 也按 v32 快照探测；`OfficialDatabaseSchema` 增加 `ROOM_VERSION=33`、`ROOM_IDENTITY_HASH` 和 `KNOWN_EXTRA_COLUMNS`。
 - 理由：`usage_record` 原来每次尝试一行但没有成功/失败状态，失败和取消的部分 usage 会混进缓存命中率；C80 保留失败成本，只让成功/未知进入缓存率，失败和取消都排除。Room 升版后官方兼容导出本来会因 schema 分叉失败，C80 只对已经明确登记的 `usage_record.outcome` 做裁剪，其它分叉仍然直接失败。
-- 合并注意：`outcome` 是带默认值的 Room 字段，旧数据迁移为 UNKNOWN，迁移前的历史行仍按未知计入缓存率；`generateText` 抛错时没有 usage 可记，流式异常、取消、下游处理失败和流空闲超时才会带部分 usage；下游处理失败按 SUCCESS 记，空闲超时按 FAILED 记；空回复在 provider 层是成功请求，仍记 SUCCESS，是否重试由 AgentLoop 的 `EMPTY_RESPONSE` 决定；失败 attempt 的 attempt/retryId 没有单独落列，P3 的“或等价字段”按 outcome 收口；消息卡片仍只显示成功 attempt 的 usage。官方裁剪只处理 `usage_record.outcome`，只按列名判断、不重建外键、硬编码官方 v32；其它表/列分叉仍抛 `OfficialExportUnsupportedException`，官方升版时要同步 `OfficialDatabaseSchema.VERSION`/identity 和 trimmer；`OfficialDatabaseSchema.ROOM_VERSION`/`ROOM_IDENTITY_HASH` 随下次 Room 升级同步更新。32 到 33 是单向迁移，没有降级迁移；回退到 C80 前的构建时 Room 会拒绝打开 checkpoint 后的 v33 库，需要先保留迁移前的 v32 数据库副本或继续使用新构建。恢复判定改用 Room 版本 33：v32 官方/旧自家库走迁移链，v33 同版本但 identity 未知且没有官方快照直接拒绝；当前 Room 33 的同版本未知 identity 直接拒绝；Convert 分支只在 Room 版本等于官方快照时可达，planner 单测用 v32 覆盖。不改 Settings、备份格式或 `ai/`。
-- 测试：`UsageRecorderTest` 覆盖生成成功、流式成功、取消、异常、下游处理失败、流空闲超时六种 outcome 和部分 usage；`UsageRecordDAOTest` 覆盖总成本含 FAILED/CANCELLED、缓存字段排除两者；`Migration_32_33_Test` 覆盖旧行默认 UNKNOWN 和新行默认；`LiveDatabaseMigrationTest` 在设备上把真实 app 库迁到 33；`OfficialDatabaseSchemaTest` 校验 33 的额外列与 identity 已登记；`OfficialDatabaseReaderTest`/`WriterTest`/`SampleAcceptanceTest` 用 v33 读取并按 v32 快照写出；`OfficialSchemaTrimmerTest` 带 usage 行验证裁剪保留行数与 token、identity 写回和未登记额外列拒绝；全量 `:app:testGithubDebugUnitTest` 791 条，7 条既有 Windows 失败未变；`:ai:testDebugUnitTest` 324 条未变；assemble、spotless、markdownlint 通过。设备数据：`data.sync` 53 条全部通过（含官方导出裁剪、带行 trim 和未登记额外列拒绝）；数据库迁移/DAO/live 4 条通过；真实 app 库迁到 v33，仍 168 会话、61 个 upload 文件、476 条 usage 全部 UNKNOWN；官方兼容出口的 v33 快照被裁成 v32 后能被本仓库 v32 快照读取，官方 3.1.1 手动恢复未重跑。
+- 合并注意：`outcome` 是带默认值的 Room 字段，旧数据迁移为 UNKNOWN，迁移前的历史行仍按未知计入缓存率；`generateText` 抛错时没有 usage 可记，流式异常、取消、下游处理失败和流空闲超时才会带部分 usage；下游处理失败按 SUCCESS 记，空闲超时按 FAILED 记；空回复在 provider 层是成功请求，仍记 SUCCESS，是否重试由 AgentLoop 的 `EMPTY_RESPONSE` 决定；失败 attempt 的 attempt/retryId 没有单独落列，P3 的“或等价字段”按 outcome 收口；消息卡片仍只显示成功 attempt 的 usage。官方裁剪只处理 `usage_record.outcome`；C87 后另登记并 drop `file_derivations` 整张表，只按表名和列名判断、不重建外键、硬编码官方 v32；其它表/列分叉仍抛 `OfficialExportUnsupportedException`，官方升版时要同步 `OfficialDatabaseSchema.VERSION`/identity 和 trimmer；`OfficialDatabaseSchema.ROOM_VERSION`/`ROOM_IDENTITY_HASH` 随下次 Room 升级同步更新。32 到 33 是单向迁移，没有降级迁移；回退到 C80 前的构建时 Room 会拒绝打开 checkpoint 后的 v33 库，需要先保留迁移前的 v32 数据库副本或继续使用新构建。恢复判定改用 Room 版本 34：v32 官方/旧自家库走迁移链，同版本但 identity 未知且没有官方快照直接拒绝；Convert 分支只在 Room 版本等于官方快照时可达，planner 单测用 v32 覆盖。不改 Settings、备份格式或 `ai/`。
+- 测试：`UsageRecorderTest` 覆盖生成成功、流式成功、取消、异常、下游处理失败、流空闲超时六种 outcome 和部分 usage；`UsageRecordDAOTest` 覆盖总成本含 FAILED/CANCELLED、缓存字段排除两者；`Migration_32_33_Test` 覆盖旧行默认 UNKNOWN 和新行默认；`LiveDatabaseMigrationTest` 在设备上把真实 app 库迁到当前 Room 版本；`OfficialDatabaseSchemaTest` 校验当前版本的额外列/额外表与 identity 已登记；`OfficialDatabaseReaderTest`/`WriterTest`/`SampleAcceptanceTest` 用 v33 读取并按 v32 快照写出；`OfficialSchemaTrimmerTest` 带 usage 行验证裁剪保留行数与 token、identity 写回和未登记额外列拒绝；全量 `:app:testGithubDebugUnitTest` 791 条，7 条既有 Windows 失败未变；`:ai:testDebugUnitTest` 324 条未变；assemble、spotless、markdownlint 通过。设备数据：`data.sync` 53 条全部通过（含官方导出裁剪、带行 trim 和未登记额外列拒绝）；数据库迁移/DAO/live 4 条通过；真实 app 库迁到 v33，仍 168 会话、61 个 upload 文件、476 条 usage 全部 UNKNOWN；官方兼容出口的 v33 快照被裁成 v32 后能被本仓库 v32 快照读取，官方 3.1.1 手动恢复未重跑。
 
 ### C81 压缩面板：高级设置、临时模型与思考继承
 
@@ -676,12 +676,12 @@
 - 合并注意：`NOTSET` 是 `Settings` 和会话 config 都会遇到的枚举值，官方客户端不认识；官方兼容出口用 `Settings.forOfficialExport()` 把 assistant、fast、memory 三处归一化成 `OFF`，`OfficialDatabaseAdapter` 同时把 `conversationentity.config` 里的 `"reasoningLevel":"notset"` 替换成 `"off"`。自家备份不经过归一化。通用网关对 `OFF` 仍是省略，这是 C86 的既有取舍；要真正关闭默认开启思考的模型，仍需按 provider 在模型能力表里声明。`ResponseAPI` 的自定义 `reasoningEffort` 回调也排除 `NOTSET`。上游 `6188593c` 只处理了 else 分支，移植时保留本分支的六处 provider 判断和官方归一化。官方 DB 侧的 `conversationentity.config` 用紧凑 JSON 的 REPLACE 匹配，带空白/pretty JSON 不在现有写入路径上，尚无 androidTest。
 - 测试：`ChatCompletionsReasoningEffortTest` 七条（opencode/generic 的 OFF 与 NOTSET 省略、MEDIUM/HIGH 保留、AUTO 不发、openrouter 的 NOTSET 无 reasoning 块且 OFF 发 none）；`ReasoningLevelTest` 覆盖 `-2` 哨兵、AUTO 与 OFF 的 budget 映射；`ChatGPTProviderTest` 覆盖 NOTSET 省略 reasoning 块；`OfficialSettingsCompatibilityTest` 增加 NOTSET 归一化成 OFF 的用例；`:ai:testDebugUnitTest`、`:app:testGithubDebugUnitTest`、assemble、spotless、markdownlint、`pnpm run typecheck` 通过。官方客户端对归一化后 JSON 的真实恢复仍按 `backup/acceptance.md` 的样本待验。
 
-### C87 OCR 结果写回会话，历史图片不再重复识别
+### C87 OCR 结果按 managed file 持久化，历史图片不再重复识别
 
-- 落点：`ai/src/main/java/me/rerere/ai/ui/MessageMetadata.kt` 新增 `OcrMetadata`（key 为 `ocr_text`）与 `withOcrText`/`ocrText`；`app/src/main/java/me/rerere/rikkahub/data/model/Conversation.kt` 新增 `withOcrTexts`，把文本写进所有分支的图片 part；`app/src/main/java/me/rerere/rikkahub/service/ChatService.kt` 新增 `attachOcrTexts`，更新会话并落库；`app/src/main/java/me/rerere/rikkahub/data/ai/transformers/OcrTransformer.kt` 先读 metadata，缓存命中或新识别的结果都写回会话，缓存改存原始文本并加 `v2:` key 前缀，处理状态只在真正调用 OCR 模型时出现；`Transformer.kt` 的 `TransformerContext`/`transforms` 增加 `conversationId`，`ChatRequestFactory.kt` 传入
-- 理由：上游 #1736/#1678。纯文本模型每轮请求都要把历史图片换成文字，识别结果只存在于当次请求里，缓存 3 天过期或超过 64 条被淘汰后，整段历史会重新识别，状态条每轮出现，OCR 用量和首字延迟都随轮数增长。写回会话后同一张图只识别一次，缓存过期或被系统清理也不影响；上传图片按内容寻址，同一张图在别的会话里复用 URL 时也不会重新识别
-- 合并注意：metadata 只加在图片 part 上，图片本体和 UI 不变；写回会 flush 整份会话，所以只在有新结果时调用，没有变化时 `withOcrTexts` 返回原实例、flush 跳过写入；识别失败和空输出都不写回，下一轮重试。没有配置 OCR 模型时保持原来的 `[Image]` 占位，不发请求也不报错。缓存 key 加了 `v2:` 前缀，旧版本存的格式化结果自然失效，升级后第一次会重新识别一次。切换成多模态模型后不再走 OCR，metadata 留着也不发送。`attachOcrTexts` 在请求构建期间调用，只更新会话状态并落库，不派发消息队列
-- 测试：app JVM 803 条（新增 `ConversationOcrTextTest` 5 条：只写匹配的图片、写所有分支、保留已有 metadata、幂等时返回原实例、空输入返回原实例）；ai 345 条全过；assemble、spotless、markdownlint 通过。Windows 上那 7 条既有失败与 JDK 有关：Oracle JDK 23.0.2 下复现，Android Studio JBR 21 下为 0 失败，比较时以同一 JDK 前后对比为准。没有在设备上跑完整链路（发图、杀进程、再发文字）验证「不再触发识别」
+- 落点：Room 34 新增 `file_derivations`，`file_id` 指向 `managed_files.id`，`kind=ocr`、`producer=ocr:v1`，每个文件每个 producer 一条。`OcrTransformer` 优先读 derivation，其次读旧消息 `OcrMetadata.ocr_text` 并懒回填，再读缓存；只有没有 `managed_files` 行的旧附件才继续调用 `Conversation.withOcrTexts` 和 `ChatService.attachOcrTexts` 写回消息 metadata。删除 managed file 依赖 `ON DELETE CASCADE`；自家备份恢复统一清空 derivation，官方导出由 `OfficialSchemaTrimmer` drop 这张表。设计见 [design/c87-file-derivations.md](design/c87-file-derivations.md)。
+- 理由：metadata 只对当前消息和历史分支有效；同一上传内容在别的会话复用时只能靠 3 天、64 条的缓存，过期后重复识别。文件级派生数据把 OCR 从消息附属物提升为文件属性，跨会话、跨进程和缓存过期都能命中。
+- 合并注意：旧消息的 `OcrMetadata` 保留为兼容回退，不批量迁移；解析不到 `managed_files` 的图片仍走旧 metadata/缓存。`producer` 当前固定 `ocr:v1`，改 OCR 提示词或模型不会让旧文本失效；`edited` 字段为后续编辑入口预留，当前没有写入方。备份恢复不合并 derivation，统一清空后最多重新识别一次。官方 v32 读/写层不认识这张表，官方导出前会 drop；`OfficialDatabaseSchemaTest` 允许已登记额外表，未登记表由 `OfficialSchemaTrimmerTest` 在开发机验证会让导出失败。
+- 测试：`FileDerivationRepositoryTest` 覆盖 put/get、相同文本、更新、edited 保护、空文本、批量读取、URL 解析和目录外拒绝；`OcrTextChoiceTest` 覆盖 derivation 优先、metadata 回填、无文件不回填和空值；`OfficialDatabaseSchemaTest` 覆盖 schema 34、identity、官方表加 `file_derivations`；`Migration_33_34_Test` 在开发机覆盖建表和外键级联；`BackupManagerTest` 在开发机覆盖恢复清空；`OfficialSchemaTrimmerTest` 在开发机覆盖 drop 表、未登记额外表和官方读取；全量 JVM、spotless 和 assemble 通过。没有在设备上跑完整 OCR 链路（上传图片、OCR、杀进程、复用图片），留后续验收。
 
 ### C88 Exa 搜索正文长度上限
 

@@ -393,6 +393,9 @@ class BackupManager(
             DatabaseBackup.checkpoint(database)
             // 附件改名是在解压时按内容算出来的，必须在这份库被发布之前改掉引用
             UploadNames.rewriteDatabase(database, renamed)
+            // file_derivations 是可按文件重新生成的 OCR 缓存：导入会合并同内容文件并删掉落选行，
+            // file_id 无法可靠对应；Phase 1 统一清空，恢复后最多重新识别一次，避免错配或孤儿。
+            room.fileDerivationDao().clear()
             DatabaseBackup.checkpoint(database)
         } finally {
             room.close()

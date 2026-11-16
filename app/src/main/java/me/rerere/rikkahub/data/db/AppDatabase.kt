@@ -8,6 +8,7 @@ import androidx.room.TypeConverters
 import me.rerere.ai.core.TokenUsage
 import me.rerere.rikkahub.data.db.dao.ConversationDAO
 import me.rerere.rikkahub.data.db.dao.FavoriteDAO
+import me.rerere.rikkahub.data.db.dao.FileDerivationDAO
 import me.rerere.rikkahub.data.db.dao.FolderDAO
 import me.rerere.rikkahub.data.db.dao.GenMediaDAO
 import me.rerere.rikkahub.data.db.dao.ManagedFileDAO
@@ -20,6 +21,7 @@ import me.rerere.rikkahub.data.db.dao.UsageRecordDAO
 import me.rerere.rikkahub.data.db.dao.WorkspaceDAO
 import me.rerere.rikkahub.data.db.entity.ConversationEntity
 import me.rerere.rikkahub.data.db.entity.FavoriteEntity
+import me.rerere.rikkahub.data.db.entity.FileDerivationEntity
 import me.rerere.rikkahub.data.db.entity.FolderEntity
 import me.rerere.rikkahub.data.db.entity.GenMediaEntity
 import me.rerere.rikkahub.data.db.entity.ManagedFileEntity
@@ -46,6 +48,7 @@ import me.rerere.rikkahub.utils.JsonInstant
         GenMediaEntity::class,
         MessageNodeEntity::class,
         ManagedFileEntity::class,
+        FileDerivationEntity::class,
         FavoriteEntity::class,
         WorkspaceEntity::class,
         FolderEntity::class,
@@ -55,7 +58,7 @@ import me.rerere.rikkahub.utils.JsonInstant
         TranslationHistoryEntity::class,
         UsageRecordEntity::class,
     ],
-    version = 33,
+    version = 34,
     autoMigrations = [
         AutoMigration(from = 1, to = 2),
         AutoMigration(from = 2, to = 3),
@@ -81,6 +84,7 @@ import me.rerere.rikkahub.utils.JsonInstant
         AutoMigration(from = 28, to = 29, spec = Migration_28_29::class),
         AutoMigration(from = 29, to = 30),
         AutoMigration(from = 31, to = 32),
+        AutoMigration(from = 33, to = 34),
     ]
 )
 @TypeConverters(TokenUsageConverter::class)
@@ -96,6 +100,8 @@ abstract class AppDatabase : RoomDatabase() {
     abstract fun messageNodeDao(): MessageNodeDAO
 
     abstract fun managedFileDao(): ManagedFileDAO
+
+    abstract fun fileDerivationDao(): FileDerivationDAO
 
     abstract fun favoriteDao(): FavoriteDAO
 

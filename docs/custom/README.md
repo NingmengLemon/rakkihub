@@ -12,7 +12,7 @@
 | [`locale.md`](locale.md) | 四份 locale 的增删文案与品牌改写 |
 | [`prompts.md`](prompts.md) | 各功能默认提示词的现状、重写计划与压缩提示词草稿 |
 | [`backup/`](backup/README.md) | 官方备份的导入与导出：恢复链路、导入器、验收 |
-| [`design/`](design/b1-step-commits.md) | 设计中或待实施的设计稿，当前是 B1/B2 的 step 级提交与失败投影 |
+| [`design/`](design/b1-step-commits.md) | 设计稿：B1/B2 的 step 级提交与失败投影，以及 C87 文件级 OCR 派生数据 |
 | [`roadmap.md`](roadmap.md) | 定位、阶段划分、条目索引与依赖、独立更新、分发与合规 |
 
 大的上游同步可以另建一份作业单放在 `upstream/`，合并落地后删除；当前没有作业单，所以那个目录不存在。
@@ -89,7 +89,7 @@ git log --oneline <上次查看点>..upstream/master
 
 需要「记录额外状态」时，优先考虑运行时内存或带默认值的新字段，而不是改已有结构。
 
-改结构还有一个直接后果：官方兼容导出（C18）在双方结构分叉后会直接失败，直到裁剪逻辑落地。C80 已对 `usage_record.outcome` 做已知裁剪，其它分叉仍需补裁剪；失败是刻意行为，不是故障。
+改结构还有一个直接后果：官方兼容导出（C18）在双方结构分叉后会直接失败，直到裁剪逻辑落地。C80 已对 `usage_record.outcome` 做列裁剪，C87 已对 `file_derivations` 做整表裁剪，其它分叉仍需补裁剪；失败是刻意行为，不是故障。
 
 ### 一个定制一个提交
 

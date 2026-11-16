@@ -9,6 +9,7 @@ import me.rerere.rikkahub.data.files.FilesManager
 import me.rerere.rikkahub.data.files.LiveAttachmentReferences
 import me.rerere.rikkahub.data.repository.ConversationRepository
 import me.rerere.rikkahub.data.repository.FavoriteRepository
+import me.rerere.rikkahub.data.repository.FileDerivationRepository
 import me.rerere.rikkahub.data.repository.FilesRepository
 import me.rerere.rikkahub.data.repository.FolderRepository
 import me.rerere.rikkahub.data.repository.GenMediaRepository
@@ -63,6 +64,10 @@ val repositoryModule = module {
 
     single {
         FilesRepository(get())
+    }
+
+    single {
+        FileDerivationRepository(get())
     }
 
     single {

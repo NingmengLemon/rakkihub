@@ -8,7 +8,8 @@ import java.io.File
 internal const val OFFICIAL_APPLICATION_ID = "me.rerere.rikkahub"
 
 /**
- * 我们的数据库已经不在官方形状上；C80 只对已登记的 `usage_record.outcome` 做已知裁剪，其它分叉仍失败。
+ * 我们的数据库已经不在官方形状上；C80 的 `usage_record.outcome` 按列裁，C87 的
+ * `file_derivations` 按表 drop，其它分叉仍失败。
  *
  * 用异常而不是返回空值，是为了让调用方只有一个失败分支；具体原因留给日志，界面上换成
  * 一条可翻译的提示。
@@ -20,7 +21,7 @@ internal class OfficialExportUnsupportedException(
 /**
  * 把我们的数据库快照转成官方客户端能打开的库。
  *
- * schema 一致时把附件引用改写成官方安装的路径再交出；C80 的已知分叉先裁剪，其它分叉仍抛
+ * schema 一致时把附件引用改写成官方安装的路径再交出；C80/C87 的已知分叉先裁剪，其它分叉仍抛
  * [OfficialExportUnsupportedException]。静默产出一份官方打不开的备份比直接失败更糟：失败
  * 当场就能看见，坏备份要等到恢复时才发现。
  */

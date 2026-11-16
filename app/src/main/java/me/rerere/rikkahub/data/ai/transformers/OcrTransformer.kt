@@ -26,6 +26,9 @@ import me.rerere.rikkahub.data.datastore.Settings
 import me.rerere.rikkahub.data.datastore.SettingsStore
 import me.rerere.rikkahub.data.datastore.findModelById
 import me.rerere.rikkahub.data.datastore.findProvider
+import me.rerere.rikkahub.data.files.FileDerivationResolver
+import me.rerere.rikkahub.data.repository.FileDerivationRepository
+import me.rerere.rikkahub.data.repository.FilesRepository
 import me.rerere.rikkahub.service.ChatService
 import org.koin.core.component.KoinComponent
 import org.koin.core.component.get
@@ -72,14 +75,52 @@ object OcrTransformer : InputMessageTransformer, KoinComponent {
         if (images.isEmpty()) return messages
 
         return withContext(Dispatchers.IO) {
-            // 识别结果优先从图片 part 的 metadata 取：写回过会话的图片不用再识别，
-            // 缓存过期或被清理也不影响
+            val context = get<Context>()
+            val filesRepository = get<FilesRepository>()
+            val derivations = get<FileDerivationRepository>()
+            // 派生数据只是缓存：数据库读失败时退回 metadata/缓存，不能让 OCR 把整轮发送拖垮
+            val resolvedFiles = runCatching {
+                FileDerivationResolver.resolveAll(
+                    urls = images.map { it.url },
+                    filesDir = context.filesDir,
+                    filesRepository = filesRepository,
+                )
+            }.onFailure {
+                if (it is CancellationException) throw it
+                Log.w(TAG, "resolve file derivations failed", it)
+            }.getOrDefault(emptyMap())
+            val storedByFileId = runCatching {
+                derivations.listForFiles(resolvedFiles.values.map { it.id })
+            }.onFailure {
+                if (it is CancellationException) throw it
+                Log.w(TAG, "read file derivations failed", it)
+            }.getOrDefault(emptyMap())
+            // file-level derivation 优先；旧消息 metadata 作为兼容回退，命中后懒写一条 derivation
             val replacements = mutableMapOf<String, String>()
+            val backfill = mutableListOf<Pair<Long, String>>()
             images.forEach { part ->
-                part.ocrText()?.let { text -> replacements[part.url] = formatOcr(text) }
+                val file = resolvedFiles[part.url]
+                val stored = file?.let { storedByFileId[it.id] }
+                val choice = chooseOcrText(
+                    fileId = file?.id,
+                    derivationText = stored?.text,
+                    metadataText = part.ocrText(),
+                )
+                choice.text?.let { text ->
+                    replacements[part.url] = formatOcr(text)
+                    choice.backfillFileId?.let { backfill += it to text }
+                }
             }
+            backfill.forEach { (fileId, text) ->
+                runCatching { derivations.putOcr(fileId, text) }
+                    .onFailure {
+                        if (it is CancellationException) throw it
+                        Log.w(TAG, "backfill file derivation failed for $fileId", it)
+                    }
+            }
+
             val missing = images.filter { part -> part.url !in replacements }
-            // 缓存命中的也要写回，否则同一张图在别的会话里每轮都只能靠缓存
+            // 只有没有 managed file 的旧附件才继续写回 metadata；有文件行的新结果只落 derivation
             val toPersist = mutableMapOf<String, String>()
 
             try {
@@ -112,7 +153,16 @@ object OcrTransformer : InputMessageTransformer, KoinComponent {
                             }
                             if (text != null) {
                                 replacements[part.url] = formatOcr(text)
-                                toPersist[part.url] = text
+                                val file = resolvedFiles[part.url]
+                                if (file != null) {
+                                    runCatching { derivations.putOcr(file.id, text) }
+                                        .onFailure {
+                                            if (it is CancellationException) throw it
+                                            Log.w(TAG, "write file derivation failed for ${file.id}", it)
+                                        }
+                                } else {
+                                    toPersist[part.url] = text
+                                }
                             } else {
                                 // 失败不写回，下一轮还会重试
                                 replacements[part.url] = OCR_ERROR_PLACEHOLDER

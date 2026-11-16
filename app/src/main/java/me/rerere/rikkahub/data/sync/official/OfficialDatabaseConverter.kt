@@ -13,9 +13,9 @@ import java.io.File
 /**
  * 把官方库转换成当前版本的空库。
  *
- * 用于「版本相同但结构不同」的官方库，以及 v33 自家库带外来附件路径的恢复：前者 Room 的
+ * 用于「版本相同但结构不同」的官方库，以及当前版本自家库带外来附件路径的恢复：前者 Room 的
  * identity 校验会拒绝，后者迁移链不会改写路径，所以要用读取层按官方快照读出来、再写进
- * 一个新建的当前版本库。v33 源库的 usage outcome 在写完后按 id 补回。转换完交给现有的
+ * 一个新建的当前版本库。自家源库的 usage outcome 在写完后按 id 补回。转换完交给现有的
  * `stageRestore` 流程继续走。
  *
  * 只转换，不安装：目标文件写在 staging 下，由调用方决定怎么用。
@@ -48,8 +48,8 @@ internal class OfficialDatabaseConverter(
     }
 
     /**
-     * 转换器按官方 v32 列写库，当前 Room 33 的 `usage_record.outcome` 不在官方快照里，
-     * 写完后会回默认 UNKNOWN。v33 自家库带外来附件路径时也会走这条转换器，所以要把
+     * 转换器按官方 v32 列写库，当前 Room 34 的 `usage_record.outcome` 不在官方快照里，
+     * 写完后会回默认 UNKNOWN。当前版本自家库带外来附件路径时也会走这条转换器，所以要把
      * outcome 按 id 从源库补回去；官方 v32 源没有这一列，跳过。
      */
     private fun preserveUsageOutcome(source: java.io.File, target: SupportSQLiteDatabase) {

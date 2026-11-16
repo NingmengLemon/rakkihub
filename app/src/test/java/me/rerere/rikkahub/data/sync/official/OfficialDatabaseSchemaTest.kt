@@ -43,7 +43,10 @@ class OfficialDatabaseSchemaTest {
             assertEquals(OfficialDatabaseSchema.ROOM_VERSION, highest)
             val officialColumns = tableColumns(schemaFile)
             val latestColumns = tableColumns(File(schemaDir, "$highest.json"))
-            assertEquals(officialColumns.keys, latestColumns.keys)
+            assertEquals(
+                officialColumns.keys + OfficialDatabaseSchema.KNOWN_EXTRA_TABLES,
+                latestColumns.keys,
+            )
             val latest = Json.parseToJsonElement(File(schemaDir, "$highest.json").readText())
                 .jsonObject.getValue("database").jsonObject
             assertEquals(
@@ -56,6 +59,9 @@ class OfficialDatabaseSchemaTest {
                     OfficialDatabaseSchema.KNOWN_EXTRA_COLUMNS[table].orEmpty(),
                     latestColumns.getValue(table) - officialColumns.getValue(table).toSet(),
                 )
+            }
+            for (table in OfficialDatabaseSchema.KNOWN_EXTRA_TABLES) {
+                assertTrue("自定义表 $table 没有在 Room schema 里生成", latestColumns.containsKey(table))
             }
         }
     }

@@ -19,6 +19,8 @@ import me.rerere.rikkahub.data.datastore.WebDavConfig
 import me.rerere.rikkahub.data.db.AppDatabase
 import me.rerere.rikkahub.data.db.AppDatabaseFactory
 import me.rerere.rikkahub.data.db.entity.WorkspaceEntity
+import me.rerere.rikkahub.data.db.entity.FileDerivationEntity
+import me.rerere.rikkahub.data.db.entity.ManagedFileEntity
 import me.rerere.rikkahub.data.model.Avatar
 import me.rerere.rikkahub.data.sync.official.OFFICIAL_APPLICATION_ID
 import me.rerere.rikkahub.data.sync.official.OfficialDatabaseHeaders
@@ -62,8 +64,7 @@ class BackupManagerTest {
             }
         }
         liveDatabase = AppDatabaseFactory.create(context)
-        liveDatabase.openHelper.writableDatabase.execSQL("CREATE TABLE backup_probe (text TEXT)")
-        liveDatabase.openHelper.writableDatabase.execSQL("INSERT INTO backup_probe VALUES ('live')")
+        createProbe()
         manager = BackupManager(context, liveDatabase, GlobalContext.get().get<SettingsStore>(), JsonInstant)
     }
 
@@ -105,6 +106,41 @@ class BackupManagerTest {
         ZipFile(archive).use { assertTrue(it.getEntry(DatabaseBackup.SHM) != null) }
     }
 
+    @Test fun stageRestoreClearsFileDerivationsForTheImportedDatabase() = runBlocking {
+        val managed = liveDatabase.managedFileDao().insert(
+            ManagedFileEntity(
+                folder = "upload",
+                relativePath = "upload/H1.png",
+                displayName = "H1.png",
+                mimeType = "image/png",
+                sizeBytes = 3,
+                createdAt = 1,
+                updatedAt = 1,
+            )
+        )
+        liveDatabase.fileDerivationDao().insert(
+            FileDerivationEntity(
+                fileId = managed,
+                kind = "ocr",
+                text = "old text",
+                producer = "ocr:v1",
+                createdAt = 1,
+                updatedAt = 1,
+            )
+        )
+        val archive = manager.createBackup(includeFiles = false)
+        manager.stageRestore(archive, includeFiles = false)
+
+        val staged = File(context.noBackupFilesDir, "backup-restore/pending/payload/database/rikka_hub")
+        val room = AppDatabaseFactory.create(context, staged.absolutePath)
+        try {
+            assertEquals(0, room.fileDerivationDao().get(managed, "ocr", "ocr:v1")?.id ?: 0)
+            assertEquals("H1.png", room.managedFileDao().getById(managed)?.displayName)
+        } finally {
+            room.close()
+        }
+    }
+
     @Test fun newArchiveContainsStandaloneDatabaseAndNoWalOrShm() = runBlocking {
         val archive = manager.createBackup(includeFiles = false)
         ZipFile(archive).use { zip ->
@@ -124,14 +160,16 @@ class BackupManagerTest {
     /**
      * 官方兼容出口的核心安全属性：schema 一致时改写附件路径后交出，已知分叉裁剪，其它分叉失败。
      *
-     * 现在本仓库 Room 33、官方 v32；C80 的 usage_record.outcome 走已知裁剪，其它分叉的
+     * 现在本仓库 Room 34、官方 v32；C80 的 usage_record.outcome 和 C87 的 file_derivations 走已知裁剪，其它分叉的
      * 负向用例在 `OfficialSchemaTrimmerTest`。
      */
     @Test fun officialTargetWritesArchiveThatStagingAccepts() = runBlocking {
+        dropProbe()
         val archive = manager.createBackup(
             includeFiles = false,
             backupTarget = BackupTarget.OFFICIAL,
         )
+        createProbe()
         ZipFile(archive).use { zip ->
             assertTrue(zip.getEntry("settings.json") != null)
             assertTrue(zip.getEntry(DatabaseBackup.ARCHIVE_DATABASE) != null)
@@ -175,6 +213,15 @@ class BackupManagerTest {
         manager.stageRestore(archive, includeFiles = false)
         val staged = File(context.noBackupFilesDir, "backup-restore/pending/${BackupManager.SETTINGS_ENTRY}").readText()
         assertEquals(0, launchCountOf(staged))
+    }
+
+    private fun createProbe() {
+        liveDatabase.openHelper.writableDatabase.execSQL("CREATE TABLE IF NOT EXISTS backup_probe (text TEXT)")
+        liveDatabase.openHelper.writableDatabase.execSQL("INSERT INTO backup_probe VALUES ('live')")
+    }
+
+    private fun dropProbe() {
+        liveDatabase.openHelper.writableDatabase.execSQL("DROP TABLE IF EXISTS backup_probe")
     }
 
     private fun launchCountOf(settingsJson: String): Int? =
@@ -274,7 +321,7 @@ class BackupManagerTest {
         withRoom(source) { room ->
             val db = room.openHelper.writableDatabase
             DatabaseBackup.checkpoint(db)
-            db.execSQL("PRAGMA user_version = 34")
+            db.execSQL("PRAGMA user_version = ${OfficialDatabaseSchema.ROOM_VERSION + 1}")
         }
         ZipOutputStream(archive.outputStream()).use { zip ->
             addSettingsEntry(zip)
@@ -415,6 +462,7 @@ class BackupManagerTest {
      * settings.json 里也不能出现它。
      */
     @Test fun officialTargetSettingsStayDecodableByTheOfficialApp() = runBlocking {
+        dropProbe()
         val store = GlobalContext.get().get<SettingsStore>()
         // 这里改的是进程内共享的 SettingsStore，finally 会还原；跑 test 的构建被打断时，
         // 设备上可能留在「全选」状态，只影响这台测试机。
@@ -550,6 +598,7 @@ class BackupManagerTest {
      * 导出时换掉，否则装过去之后图片与文档全断。自家的出口不能改。
      */
     @Test fun officialExportPointsAttachmentsAtTheOfficialInstall() = runBlocking {
+        dropProbe()
         val ours = canonicalFileUrl("upload/x.png")
         liveDatabase.openHelper.writableDatabase.execSQL(
             "INSERT INTO ConversationEntity (id, title, nodes, create_at, update_at) " +
@@ -590,6 +639,7 @@ class BackupManagerTest {
      * 这是本批改动新触发的路径，值得钉住。
      */
     @Test fun officialArchiveRestoresBackIntoThisInstall() = runBlocking {
+        dropProbe()
         liveDatabase.openHelper.writableDatabase.execSQL(
             "INSERT INTO ConversationEntity (id, title, nodes, create_at, update_at) " +
                 "VALUES ('c1', 'demo', '[]', 1, 2)",
@@ -618,6 +668,7 @@ class BackupManagerTest {
 
     /** settings 里的头像同样是绝对路径，官方出口也要换成官方安装的位置。 */
     @Test fun officialExportPointsAvatarsAtTheOfficialInstall() = runBlocking {
+        dropProbe()
         val store = GlobalContext.get().get<SettingsStore>()
         val original = store.settingsFlow.value.displaySetting.userAvatar
         // settings 那条改写走的是「任何安装的绝对 files 路径」正则，所以这里按真机布局构造
