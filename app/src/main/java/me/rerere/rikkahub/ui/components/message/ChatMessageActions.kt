@@ -40,7 +40,7 @@ import me.rerere.ai.provider.Model
 import me.rerere.ai.ui.UIMessage
 import me.rerere.ai.ui.UIMessagePart
 import me.rerere.hugeicons.HugeIcons
-import me.rerere.hugeicons.stroke.ArrowReloadHorizontal
+import me.rerere.hugeicons.stroke.ArrowTurnBackward
 import me.rerere.hugeicons.stroke.Copy01
 import me.rerere.hugeicons.stroke.Delete01
 import me.rerere.hugeicons.stroke.Edit01
@@ -97,7 +97,7 @@ fun ColumnScope.ChatMessageActionButtons(
 
         if (onRetryStep != null) {
             ChatMessageActionButton(
-                icon = HugeIcons.ArrowReloadHorizontal,
+                icon = HugeIcons.ArrowTurnBackward,
                 contentDescription = stringResource(R.string.chat_message_retry_step),
                 onClick = onRetryStep,
             )
@@ -249,7 +249,7 @@ fun ChatMessageActionsSheet(
             if (onRetryStep != null) {
                 add(
                     MessageSheetAction(
-                        HugeIcons.ArrowReloadHorizontal,
+                        HugeIcons.ArrowTurnBackward,
                         stringResource(R.string.chat_message_retry_step),
                         onClick = onRetryStep,
                     )
