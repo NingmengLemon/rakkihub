@@ -50,6 +50,7 @@ import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.material3.rememberBottomSheetState
 import androidx.compose.material3.toShape
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -128,6 +129,12 @@ fun SettingFilesPage(
     var pendingDelete by remember { mutableStateOf<ManagedFileEntity?>(null) }
     var editingOcr by remember { mutableStateOf<ManagedFileEntity?>(null) }
     var ocrDraft by remember { mutableStateOf("") }
+
+    // 切换目标时 LaunchedEffect 会取消上一次加载，避免旧文件的异步结果覆盖当前草稿
+    LaunchedEffect(editingOcr?.id) {
+        val target = editingOcr ?: return@LaunchedEffect
+        ocrDraft = derivations.getAnyOcr(target.id)?.text.orEmpty()
+    }
     var showCleanSheet by remember { mutableStateOf(false) }
     var showCleanUnused by remember { mutableStateOf(false) }
     var selectedCleanRange by remember { mutableStateOf(CleanRange.DAYS_7) }
@@ -392,10 +399,8 @@ fun SettingFilesPage(
                             fileOnDisk = filesManager.getFile(file),
                             onDelete = { pendingDelete = file },
                             onEditOcr = {
-                                scope.launch {
-                                    ocrDraft = derivations.getAnyOcr(file.id)?.text.orEmpty()
-                                    editingOcr = file
-                                }
+                                ocrDraft = ""
+                                editingOcr = file
                             },
                         )
                     }
