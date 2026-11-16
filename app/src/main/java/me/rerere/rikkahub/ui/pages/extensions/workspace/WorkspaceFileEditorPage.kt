@@ -1,13 +1,18 @@
 package me.rerere.rikkahub.ui.pages.extensions.workspace
 
+import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.text.input.TextFieldLineLimits
 import androidx.compose.foundation.text.input.TextFieldState
 import androidx.compose.foundation.text.input.setTextAndPlaceCursorAtEnd
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.LocalTextStyle
 import androidx.compose.material3.MaterialTheme
@@ -42,6 +47,8 @@ import kotlinx.coroutines.launch
 import me.rerere.rikkahub.data.repository.WorkspaceRepository
 import me.rerere.rikkahub.R
 import me.rerere.rikkahub.ui.components.nav.BackButton
+import me.rerere.rikkahub.ui.components.richtext.MaterialMarkdown
+import me.rerere.rikkahub.ui.context.LocalNavController
 import me.rerere.rikkahub.ui.context.LocalToaster
 import me.rerere.rikkahub.ui.theme.CustomColors
 import me.rerere.rikkahub.ui.theme.JetbrainsMono
@@ -67,7 +74,8 @@ fun WorkspaceFileEditorPage(
     val editable = area == WorkspaceStorageArea.FILES
     val fileName = path.substringAfterLast('/').ifBlank { path }
     val extension = fileName.substringAfterLast('.', "").lowercase()
-    val supportsPreview = extension in setOf("html", "htm", "svg")
+    val supportsMarkdownPreview = extension in setOf("md", "markdown")
+    val supportsPreview = supportsMarkdownPreview || extension in setOf("html", "htm", "svg")
     var showPreview by rememberSaveable(id, area, path) { mutableStateOf(supportsPreview) }
 
     // 不能用 rememberTextFieldState: 它会把全文存进 saved state Bundle, 大文件切后台时触发 TransactionTooLargeException (#1953).
@@ -76,6 +84,11 @@ fun WorkspaceFileEditorPage(
     var loading by remember { mutableStateOf(true) }
     var loadError by remember { mutableStateOf<String?>(null) }
     var saving by remember { mutableStateOf(false) }
+    var loadedText by remember { mutableStateOf("") }
+    var showUnsavedDialog by remember { mutableStateOf(false) }
+    val navController = LocalNavController.current
+    val dirty = editable && !loading && loadError == null &&
+        textState.text.toString() != loadedText
     val scrollState = rememberScrollState()
     var savedScroll by rememberSaveable(id, area, path) { mutableIntStateOf(0) }
     val focusManager = LocalFocusManager.current
@@ -111,12 +124,51 @@ fun WorkspaceFileEditorPage(
         runCatching {
             repository.readTextForPreview(id, area, path)
         }.onSuccess { content ->
+            loadedText = content
             textState.setTextAndPlaceCursorAtEnd(content)
             loading = false
         }.onFailure {
             loadError = it.message ?: "读取文件失败"
             loading = false
         }
+    }
+
+    fun save(onSaved: (() -> Unit)? = null) {
+        if (saving) return
+        saving = true
+        val text = textState.text.toString()
+        scope.launch {
+            try {
+                runCatching {
+                    repository.writeText(
+                        id = id,
+                        path = path,
+                        text = text,
+                        overwrite = true,
+                    )
+                }.onSuccess {
+                    loadedText = text
+                    toaster.show("已保存", type = ToastType.Success)
+                    onSaved?.invoke()
+                }.onFailure {
+                    toaster.show(it.message ?: "保存失败", type = ToastType.Error)
+                }
+            } finally {
+                saving = false
+            }
+        }
+    }
+
+    fun requestExit() {
+        if (dirty) {
+            showUnsavedDialog = true
+        } else {
+            navController.popBackStack()
+        }
+    }
+
+    BackHandler(enabled = dirty) {
+        showUnsavedDialog = true
     }
 
     Scaffold(
@@ -129,7 +181,7 @@ fun WorkspaceFileEditorPage(
                         overflow = TextOverflow.Ellipsis,
                     )
                 },
-                navigationIcon = { BackButton() },
+                navigationIcon = { BackButton(onClick = ::requestExit) },
                 actions = {
                     if (supportsPreview && !loading && loadError == null) {
                         TextButton(onClick = { showPreview = !showPreview }) {
@@ -138,25 +190,7 @@ fun WorkspaceFileEditorPage(
                     }
                     if (editable && !loading && loadError == null) {
                         TextButton(
-                            onClick = {
-                                if (saving) return@TextButton
-                                saving = true
-                                scope.launch {
-                                    runCatching {
-                                        repository.writeText(
-                                            id = id,
-                                            path = path,
-                                            text = textState.text.toString(),
-                                            overwrite = true,
-                                        )
-                                    }.onSuccess {
-                                        toaster.show("已保存", type = ToastType.Success)
-                                    }.onFailure {
-                                        toaster.show(it.message ?: "保存失败", type = ToastType.Error)
-                                    }
-                                    saving = false
-                                }
-                            },
+                            onClick = { save() },
                             enabled = !saving,
                         ) {
                             Text("Save")
@@ -190,11 +224,26 @@ fun WorkspaceFileEditorPage(
                 )
             }
 
-            showPreview -> WorkspaceWebPreview(
-                content = textState.text.toString(),
-                isSvg = extension == "svg",
-                modifier = Modifier.fillMaxSize().padding(innerPadding),
-            )
+            showPreview -> if (supportsMarkdownPreview) {
+                LazyColumn(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .padding(innerPadding),
+                ) {
+                    item {
+                        MaterialMarkdown(
+                            content = textState.text.toString(),
+                            modifier = Modifier.padding(16.dp),
+                        )
+                    }
+                }
+            } else {
+                WorkspaceWebPreview(
+                    content = textState.text.toString(),
+                    isSvg = extension == "svg",
+                    modifier = Modifier.fillMaxSize().padding(innerPadding),
+                )
+            }
 
             else -> TextField(
                 state = textState,
@@ -212,6 +261,43 @@ fun WorkspaceFileEditorPage(
                 ),
             )
         }
+    }
+
+    if (showUnsavedDialog) {
+        AlertDialog(
+            onDismissRequest = { showUnsavedDialog = false },
+            title = { Text(stringResource(R.string.workspace_file_unsaved_title)) },
+            text = { Text(stringResource(R.string.workspace_file_unsaved_message)) },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        save {
+                            showUnsavedDialog = false
+                            navController.popBackStack()
+                        }
+                    },
+                    enabled = !saving,
+                ) {
+                    Text(stringResource(R.string.common_save))
+                }
+            },
+            dismissButton = {
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    TextButton(onClick = { showUnsavedDialog = false }) {
+                        Text(stringResource(R.string.common_cancel))
+                    }
+                    TextButton(
+                        onClick = {
+                            showUnsavedDialog = false
+                            navController.popBackStack()
+                        },
+                        enabled = !saving,
+                    ) {
+                        Text(stringResource(R.string.workspace_file_unsaved_discard))
+                    }
+                }
+            },
+        )
     }
 }
 

@@ -1461,6 +1461,9 @@
   <string name="workspace_detail_area_root">根目錄</string>
   <string name="workspace_ssh_editor_title_new">新增 SSH 工作區</string>
   <string name="workspace_ssh_editor_title_edit">編輯 SSH 連線</string>
+  <string name="workspace_file_unsaved_title">未儲存的變更</string>
+  <string name="workspace_file_unsaved_message">離開前要儲存變更嗎？</string>
+  <string name="workspace_file_unsaved_discard">捨棄</string>
   <string name="workspace_ssh_editor_save">儲存</string>
   <string name="workspace_ssh_editor_basic">基本資訊</string>
   <string name="workspace_ssh_editor_name">名稱</string>

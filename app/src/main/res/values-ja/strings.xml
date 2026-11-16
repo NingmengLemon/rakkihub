@@ -1463,6 +1463,9 @@ mDNSアドレス: .localホスト名を使用し、IPを知らなくても同じ
   <string name="workspace_detail_area_root">ルート</string>
   <string name="workspace_ssh_editor_title_new">新規SSHワークスペース</string>
   <string name="workspace_ssh_editor_title_edit">SSH接続を編集</string>
+  <string name="workspace_file_unsaved_title">未保存の変更</string>
+  <string name="workspace_file_unsaved_message">終了する前に変更を保存しますか？</string>
+  <string name="workspace_file_unsaved_discard">破棄</string>
   <string name="workspace_ssh_editor_save">保存</string>
   <string name="workspace_ssh_editor_basic">基本情報</string>
   <string name="workspace_ssh_editor_name">名前</string>

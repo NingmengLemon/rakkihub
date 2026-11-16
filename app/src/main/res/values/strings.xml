@@ -1461,6 +1461,9 @@
   <string name="workspace_detail_area_root">Root</string>
   <string name="workspace_ssh_editor_title_new">New SSH workspace</string>
   <string name="workspace_ssh_editor_title_edit">Edit SSH connection</string>
+  <string name="workspace_file_unsaved_title">Unsaved changes</string>
+  <string name="workspace_file_unsaved_message">Save changes before leaving?</string>
+  <string name="workspace_file_unsaved_discard">Discard</string>
   <string name="workspace_ssh_editor_save">Save</string>
   <string name="workspace_ssh_editor_basic">Basic info</string>
   <string name="workspace_ssh_editor_name">Name</string>
