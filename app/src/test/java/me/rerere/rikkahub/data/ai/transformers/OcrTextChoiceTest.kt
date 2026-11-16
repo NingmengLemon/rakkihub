@@ -2,6 +2,7 @@ package me.rerere.rikkahub.data.ai.transformers
 
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
+import org.junit.Assert.assertTrue
 import org.junit.Test
 
 class OcrTextChoiceTest {
@@ -27,6 +28,28 @@ class OcrTextChoiceTest {
 
         assertEquals("old", choice.text)
         assertNull(choice.backfillFileId)
+    }
+
+    @Test
+    fun `fingerprinted producer ignores metadata for a managed file`() {
+        val choice = chooseOcrText(
+            fileId = 7,
+            derivationText = null,
+            metadataText = "old",
+            useMetadata = false,
+        )
+
+        assertNull(choice.text)
+        assertNull(choice.backfillFileId)
+    }
+
+    @Test
+    fun `cache key includes the producer`() {
+        val first = ocrCacheKey("ocr:v1:aaaa", "file:upload/H1.png")
+        val second = ocrCacheKey("ocr:v1:bbbb", "file:upload/H1.png")
+
+        assertTrue(first != second)
+        assertTrue(first.contains("ocr:v1:aaaa"))
     }
 
     @Test

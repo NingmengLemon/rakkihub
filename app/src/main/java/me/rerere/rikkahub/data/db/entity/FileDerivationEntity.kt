@@ -37,7 +37,7 @@ data class FileDerivationEntity(
     // 原始文本，不存展示用的标签；格式化在读取时做
     @ColumnInfo("text")
     val text: String,
-    // 生成方式标识；Phase 1 固定为 "ocr:v1"，不随提示词或模型变化
+    // 生成方式标识；OCR 为 ocr:v1:<prompt+model 指纹>，随 OCR 设置变化；旧 ocr:v1 行保留但不读
     @ColumnInfo("producer")
     val producer: String,
     // Phase 1 没有编辑入口，保留字段给后续附件管理；为 true 时 upsert 不覆盖

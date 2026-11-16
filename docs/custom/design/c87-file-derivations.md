@@ -1,4 +1,4 @@
-# C87 文件级 OCR 派生数据（Phase 1）
+# C87 文件级 OCR 派生数据
 
 ## 状态
 
@@ -47,8 +47,8 @@ CREATE UNIQUE INDEX index_file_derivations_file_id_kind_producer
 `OcrTransformer` 的顺序：
 
 1. 有 `file_id` 且 derivation 命中时直接使用；
-2. derivation 缺失但旧消息 metadata 命中时使用，并懒写一条 derivation；
-3. 缓存命中时使用，有 `file_id` 就写 derivation；
+2. derivation 缺失但旧消息 metadata 命中时使用，并懒写一条 derivation；指纹 producer 下，有文件行的图片跳过这一步，让 OCR 重新识别，避免旧文本被重标为新 producer；
+3. 缓存命中时使用，有 `file_id` 就写 derivation；缓存 key 带 producer；
 4. 调 OCR 模型，成功后写 derivation；只有没有 `managed_files` 行的旧附件才继续写回消息 metadata。
 
 新结果不再触发 `ChatService.attachOcrTexts` 的整会话 flush；该路径只保留给无法解析文件行的附件。
@@ -69,6 +69,7 @@ CREATE UNIQUE INDEX index_file_derivations_file_id_kind_producer
 ## 测试
 
 - `FileDerivationRepositoryTest`：put/get、相同文本跳过、更新、edited 不覆盖、空文本忽略、按文件列表、producer 指纹稳定/隔离、`resolveAll` 的相对/绝对/目录外/未登记 URL 过滤与批量映射。
+- `OcrTextChoiceTest`：derivation 优先、metadata 回填、无文件不回填、空值、指纹 producer 下忽略 metadata，以及缓存 key 带 producer。
 - `OfficialDatabaseSchemaTest`：schema 34、identity、官方表集合加 `file_derivations`、已知额外列。
 - `Migration_33_34_Test`（开发机）：表创建、字段读取、外键级联删除。
 - `OfficialSchemaTrimmerTest`（开发机）：裁剪后 `file_derivations` 消失、usage 行保留、官方读取层可打开；未登记额外表会抛 `OfficialExportUnsupportedException`。
@@ -79,6 +80,6 @@ CREATE UNIQUE INDEX index_file_derivations_file_id_kind_producer
 ## 已知限制
 
 - 没有 OCR 编辑 UI，`edited` 目前没有写入方。
-- producer 随 OCR 提示词和模型 id 变化，旧 producer 行保留但不再读取；换设置后首次发送会重新识别一次。
+- producer 现在随 OCR 提示词和模型 id 变化，旧 producer 行保留但不再读取；有文件行的图片换设置后首次发送会重新识别一次。没有文件行的旧附件仍只能使用 metadata。
 - 备份恢复不合并 derivation，统一清空后重新识别。
 - 只处理能映射到 `managed_files` 的本地图片；本安装 `filesDir` 下的绝对和相对地址都会解析，别的安装路径、目录外文件和未登记文件走旧回退。

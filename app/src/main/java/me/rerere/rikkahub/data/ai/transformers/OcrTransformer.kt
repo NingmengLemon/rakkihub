@@ -38,8 +38,10 @@ import kotlin.uuid.Uuid
 
 private const val TAG = "OcrTransformer"
 
-/** 缓存里存的是原始识别文本，key 带版本前缀，旧版本存过的格式化结果自然失效 */
+/** 缓存里存的是原始识别文本，key 带版本前缀和 producer，旧版本/旧 OCR 配置自然失效 */
 private const val CACHE_KEY_PREFIX = "v2:"
+
+internal fun ocrCacheKey(producer: String, url: String): String = CACHE_KEY_PREFIX + producer + ":" + url
 
 object OcrTransformer : InputMessageTransformer, KoinComponent {
     private val cache by lazy {
@@ -112,6 +114,9 @@ object OcrTransformer : InputMessageTransformer, KoinComponent {
                     fileId = file?.id,
                     derivationText = stored?.text,
                     metadataText = part.ocrText(),
+                    // 指纹 producer 表示 OCR 配置已变化；有文件行的图片不复用旧 metadata，
+                    // 否则旧文本会被重新写成新 producer，之后的会话永远不会重识别。
+                    useMetadata = file == null || producer == FileDerivationRepository.OCR_PRODUCER,
                 )
                 choice.text?.let { text ->
                     replacements[part.url] = formatOcr(text)
@@ -144,7 +149,7 @@ object OcrTransformer : InputMessageTransformer, KoinComponent {
                         )
                         var statusShown = false
                         missing.forEach { part ->
-                            val cacheKey = CACHE_KEY_PREFIX + producer + ":" + part.url
+                            val cacheKey = ocrCacheKey(producer, part.url)
                             val cached = cache.get(cacheKey)
                             val text = if (cached != null) {
                                 cached

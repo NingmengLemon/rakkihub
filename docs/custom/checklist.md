@@ -686,9 +686,10 @@
 
 ### C87 OCR 结果按 managed file 持久化，历史图片不再重复识别
 
-- 落点：Room 34 新增 `file_derivations`，`file_id` 指向 `managed_files.id`，`kind=ocr`、`producer=ocr:v1`，每个文件每个 producer 一条。`OcrTransformer` 优先读 derivation，其次读旧消息 `OcrMetadata.ocr_text` 并懒回填，再读缓存；只有没有 `managed_files` 行的旧附件才继续调用 `Conversation.withOcrTexts` 和 `ChatService.attachOcrTexts` 写回消息 metadata。删除 managed file 依赖 `ON DELETE CASCADE`；自家备份恢复统一清空 derivation，官方导出由 `OfficialSchemaTrimmer` drop 这张表。设计见 [design/c87-file-derivations.md](design/c87-file-derivations.md)。
+- 落点：Room 34 新增 `file_derivations`，`file_id` 指向 `managed_files.id`，`kind=ocr`、`producer=ocr:v1`（C108 起为 `ocr:v1:<prompt+model 指纹>`），每个文件每个 producer 一条。`OcrTransformer` 优先读 derivation，其次读旧消息 `OcrMetadata.ocr_text` 并懒回填，再读缓存；只有没有 `managed_files` 行的旧附件才继续调用 `Conversation.withOcrTexts` 和 `ChatService.attachOcrTexts` 写回消息 metadata。删除 managed file 依赖 `ON DELETE CASCADE`；自家备份恢复统一清空 derivation，官方导出由 `OfficialSchemaTrimmer` drop 这张表。设计见 [design/c87-file-derivations.md](design/c87-file-derivations.md)。
 - 理由：metadata 只对当前消息和历史分支有效；同一上传内容在别的会话复用时只能靠 3 天、64 条的缓存，过期后重复识别。文件级派生数据把 OCR 从消息附属物提升为文件属性，跨会话、跨进程和缓存过期都能命中。
-- 合并注意：旧消息的 `OcrMetadata` 保留为兼容回退，不批量迁移；解析不到 `managed_files` 的图片仍走旧 metadata/缓存。`producer` 当前固定 `ocr:v1`，改 OCR 提示词或模型不会让旧文本失效；`edited` 字段为后续编辑入口预留，当前没有写入方。备份恢复不合并 derivation，统一清空后最多重新识别一次。官方 v32 读/写层不认识这张表，官方导出前会 drop；`OfficialDatabaseSchemaTest` 允许已登记额外表，未登记表由 `OfficialSchemaTrimmerTest` 在开发机验证会让导出失败。
+- 合并注意：旧消息的 `OcrMetadata` 保留为兼容回退，不批量迁移；解析不到 `managed_files` 的图片仍走旧 metadata/缓存。C108 起 producer 为 `ocr:v1:<prompt+model 指纹>`，有文件行的图片在指纹 producer 下不再回退/回填旧 metadata，换设置后首次发送会重新识别；`edited` 字段为后续编辑入口预留，当前没有写入方。备份恢复不合并 derivation，统一清空后最多重新识别一次。官方 v32 读/写层不认识这张表，官方导出前会 drop；`OfficialDatabaseSchemaTest` 允许已登记额外表，未登记表由 `OfficialSchemaTrimmerTest` 在开发机验证会让导出失败。
+- 追加（C108）：producer 指纹失效、OCR 缓存 key 带 producer，以及有文件行时禁止旧 metadata 重标为新 producer；producer 参数和测试见 C108。
 - 测试：`FileDerivationRepositoryTest` 覆盖 put/get、相同文本、更新、edited 保护、空文本、批量读取、URL 解析和目录外拒绝；`OcrTextChoiceTest` 覆盖 derivation 优先、metadata 回填、无文件不回填和空值；`OfficialDatabaseSchemaTest` 覆盖 schema 34、identity、官方表加 `file_derivations`；`Migration_33_34_Test` 在开发机覆盖建表和外键级联；`BackupManagerTest` 在开发机覆盖恢复清空；`OfficialSchemaTrimmerTest` 在开发机覆盖 drop 表、未登记额外表和官方读取；全量 JVM、spotless 和 assemble 通过。设备链路：上传图片后 OCR 生成一条 derivation，同一会话第二轮和 force-stop 重启后的第三轮都只发聊天请求，derivation 始终只有一条。
 
 ### C88 Exa 搜索正文长度上限
@@ -836,5 +837,5 @@
 
 - 落点：`FileDerivationRepository` 的 `get` / `listForFiles` / `putOcr` 接受 producer，新增 `ocrProducer(prompt, modelId)`，对提示词和模型 id 做 SHA-256 取前 8 字节生成 `ocr:v1:<hash>`；`OcrTransformer` 按当前设置计算 producer，读取、回填和写入都用它，文件缓存 key 也带上 producer。
 - 理由：旧实现 producer 固定 `ocr:v1`，换 OCR 提示词或模型后仍会读到旧文本；缓存 key 只按 URL，也会绕过派生失效。
-- 合并注意：升级后首次发送会因 producer 变化重新识别一次，旧 `ocr:v1` 行保留但不再被读取；`edited` 行仍不会被覆盖。producer 变化不删除旧行，避免误删历史；如果以后要清理，按 producer 前缀和编辑标记单独做。备份恢复仍统一清空 `file_derivations`。
-- 测试：`FileDerivationRepositoryTest` 覆盖同配置指纹稳定、提示词或模型变化产生不同 producer、不同 producer 行互不覆盖；app JVM 测试通过。设备上的 OCR 重识别未在本次单独重跑。
+- 合并注意：升级后首次发送时，有文件行的图片会因 producer 变化重新识别一次；没有文件行的旧附件仍只能使用 metadata。旧 `ocr:v1` 行保留但不再被读取；`edited` 行仍不会被覆盖。producer 变化不删除旧行，避免误删历史；如果以后要清理，按 producer 前缀和编辑标记单独做。备份恢复仍统一清空 `file_derivations`。
+- 测试：`FileDerivationRepositoryTest` 覆盖同配置指纹稳定、16 位小写十六进制、提示词或模型变化产生不同 producer、不同 producer 行互不覆盖；`OcrTextChoiceTest` 覆盖指纹 producer 下忽略 metadata 和缓存 key 带 producer；app JVM 测试通过。设备上的 OCR 重识别未在本次单独重跑。

@@ -42,6 +42,7 @@ class FileDerivationRepositoryTest {
         val third = FileDerivationRepository.ocrProducer("prompt-a", "model-b")
 
         assertEquals(first, FileDerivationRepository.ocrProducer("prompt-a", "model-a"))
+        assertTrue(first.substringAfterLast(':').matches(Regex("[0-9a-f]{16}")))
         assertNotEquals(first, second)
         assertNotEquals(first, third)
         assertTrue(repository.putOcr(7, "old", first, now = 100))
