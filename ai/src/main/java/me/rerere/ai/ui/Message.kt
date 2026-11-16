@@ -52,6 +52,19 @@ enum class StepStatus {
     CANCELLED,
 }
 
+const val MAX_RECORDED_ATTEMPTS = 20
+
+@Serializable
+data class MessageAttempt(
+    val attempt: Int,
+    val maxRetries: Int,
+    val code: String? = null,
+    val message: String? = null,
+    val delayMs: Long = 0,
+    val durationMs: Long = 0,
+    val recordedAt: Instant,
+)
+
 /**
  * 一次模型请求在 [UIMessage.parts] 里的范围，左闭右开。
  *
@@ -64,6 +77,7 @@ data class MessageStep(
     val endPartIndex: Int,
     val startedAt: Instant,
     val finishedAt: Instant? = null,
+    val attempts: List<MessageAttempt> = emptyList(),
     // 接管旧消息时补的前缀 step，合并了多次原生响应，不能按原生 pairing 回放推理
     val legacy: Boolean = false,
 )

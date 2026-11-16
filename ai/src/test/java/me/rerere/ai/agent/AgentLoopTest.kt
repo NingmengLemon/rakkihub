@@ -706,6 +706,58 @@ class AgentLoopTest {
         assertEquals(listOf("full"), finished.message.texts())
         assertEquals(setOf(finished.message.id), events.messageIds())
         assertEquals(2, provider.requests.size)
+        val recorded = finished.message.steps.single().attempts.single()
+        assertEquals(1, recorded.attempt)
+        assertEquals(3, recorded.maxRetries)
+        assertTrue(recorded.delayMs in 900..1_100)
+    }
+
+    @Test
+    fun `exhausted retries keep a capped attempt summary on the failed step`() = runTest {
+        repeat(22) {
+            provider.stream {
+                text("partial")
+                throw IOException("connection reset")
+            }
+        }
+
+        val messages = mutableListOf<UIMessage>()
+        val error = runCatching {
+            runAgent(
+                request(
+                    retry = RetryPolicy(
+                        maxRetries = 21,
+                        initialDelay = Duration.ZERO,
+                        maxDelay = Duration.ZERO,
+                        jitterRatio = 0.0,
+                    )
+                ),
+                hooks,
+            ).collect { event ->
+                if (event is AgentEvent.MessageUpdated) messages += event.message
+            }
+        }.exceptionOrNull()
+
+        assertTrue(error is IOException)
+        val failed = messages.last { it.steps.lastOrNull()?.status == StepStatus.FAILED }
+        val step = failed.steps.last()
+        assertEquals(StepStatus.FAILED, step.status)
+        assertEquals(20, step.attempts.size)
+        assertEquals(2, step.attempts.first().attempt)
+        assertEquals(21, step.attempts.last().attempt)
+    }
+
+    @Test
+    fun `non-stream retry records an attempt on the successful step`() = runTest {
+        provider.resultFailure(IOException("connection reset"))
+        provider.result(UIMessage.assistant("ok"))
+
+        val finished = runToEnd(request(stream = false, retry = RetryPolicy.NETWORK)).finished()
+
+        assertEquals(listOf("ok"), finished.message.texts())
+        val recorded = finished.message.steps.single().attempts.single()
+        assertEquals(1, recorded.attempt)
+        assertEquals(3, recorded.maxRetries)
     }
 
     @Test
@@ -778,6 +830,7 @@ private class FakeProvider : Provider<ProviderSetting> {
     val requests = mutableListOf<Request>()
     private val streams = ArrayDeque<suspend FlowCollector<StreamChunk>.() -> Unit>()
     private val results = ArrayDeque<TextGenerationResult>()
+    private val resultFailures = ArrayDeque<Throwable>()
 
     fun stream(block: suspend FlowCollector<StreamChunk>.() -> Unit) {
         streams += block
@@ -785,6 +838,10 @@ private class FakeProvider : Provider<ProviderSetting> {
 
     fun result(message: UIMessage, usage: TokenUsage? = null) {
         results += TextGenerationResult(id = "result", model = "test-model", message = message, usage = usage)
+    }
+
+    fun resultFailure(error: Throwable) {
+        resultFailures += error
     }
 
     override suspend fun listModels(providerSetting: ProviderSetting): List<Model> = emptyList()
@@ -795,6 +852,7 @@ private class FakeProvider : Provider<ProviderSetting> {
         params: TextGenerationParams,
     ): TextGenerationResult {
         requests += Request(messages, params)
+        resultFailures.removeFirstOrNull()?.let { throw it }
         return results.removeFirst()
     }
 

@@ -83,7 +83,7 @@
 | C73 | 发送前上下文裁剪 | 撤销 |
 | C74 | 上下文水位与压缩建议 | 新增 |
 | C75 | 自动重试次数可调 | 改造（默认关闭） |
-| C76 | 重试 attempt 可见化 | 改造（内存态） |
+| C76 | 重试 attempt 可见化 | 改造 |
 | C77 | 错误卡片重试本步 | 永久取消 |
 | C78 | 工具失败日志分级 | 改造 |
 | C79 | 本地导出默认包含工作区文件 | 改造 |
@@ -598,10 +598,11 @@
 
 ### C76 重试 attempt 可见化
 
-- 现状：内存态卡片已随 C75 恢复（2026-11-16）。自动重试产生 `AgentEvent.Retrying` 时 `ChatService` 写入 `session.retryAttempts`，聊天底部重新出现 `RetryAttemptsCard` 与 `retryRemainingSeconds`；attempt 仍不落盘，持久化留 B2。
+- 现状：历史 step 的 attempt 摘要已持久化（2026-11-16）。`MessageStep.attempts` 保存 attempt、maxRetries、code、message、delayMs、durationMs、recordedAt，最多 20 条；AgentLoop 在每次重试和 step 收尾时写入，ChatService 随消息落库。实时倒计时继续用 `session.retryAttempts`，重启后从最后一个 assistant 的 steps 重建历史卡片。
 - 理由：用户需要看到自动重试正在进行、失败原因和剩余等待时间；默认关闭时没有事件，卡片自然不出现。
-- 合并注意：`ConversationSession.retryAttempts` 仍会随 `replace`/新一轮清空，不落盘；C76 的历史持久化仍按 B2 设计使用 `MessageStep.attempts`，当前只恢复内存态卡片。
-- 测试：`RetryAttemptsTest` 保留并通过。
+- 合并注意：`ConversationSession.retryAttempts` 仍只服务本轮倒计时，随新一轮/`replace` 清空；`MessageStep.attempts` 只存摘要，不存流内容，旧 JSON 默认空列表。历史卡片从最后一个 assistant 的 steps 读取，实时卡片存在时不叠加历史，避免同一次重试显示两遍；用户在重试等待中停止时 step 收尾为 CANCELLED，等待中的 attempt 不落盘，设计只要求 FAILED step 保留摘要。
+- 测试：`RetryAttemptsTest` 覆盖实时记录与清空；`AgentLoopTest` 断言流式重试后 step 的 attempts 摘要；`UIMessageSerializationTest` 覆盖 attempts 的 JSON 往返与旧消息空列表。
+- 设备验证：2026-11-16 开发机 429 重试成功后，数据库 `message_node.messages[0].steps[-1].attempts` 含 `attempt=1`、`code=RATE_LIMIT`、`delayMs=2000`；force-stop 重启并重新打开会话后，历史卡片仍显示 `Attempt 1/3`、`rate limited`、`Waited 2s`。
 
 ### C77 错误卡片重试本步
 
@@ -748,7 +749,7 @@
 
 - 落点：`ai/ui/Message.kt` 增加 `MessageStep`、`StepStatus` 与 `UIMessage.steps`；`AgentRequest.allowToolApproval` 与 `AgentFinishReason.ApprovalUnavailable` 让中间节点生成不进入审批，`ChatService` 用 `settleUnavailableTools()` 给未执行工具补恢复结果、丢掉 `callComplete=false` 的半截调用、把消息置 COMPLETE 并把 step 记 SUCCEEDED；无 job 的审批停止会先加载会话，按最后一条 assistant 的 id 标 INTERRUPTED 后一次 flush；`isAwaitingToolApproval`/`pendingToolCalls` 对有 steps 的消息只看最后一条 assistant，旧消息仍扫描全部；`withToolApproval`、聊天列表的审批回调与悬浮窗同步收口；`UIMessagePart.Tool` 增加 `callComplete`，流式 `ToolCallStart` 置 false、`ToolCallEnd` 置 true，`merge` 取逻辑或；`AgentLoop` 在每次请求成功后追加 step，记录 part 范围与 RUNNING/TOOLS/SUCCEEDED/FAILED 终态；`ClaudeProvider` 对带 step 的消息按 step 拆分 assistant/user 消息，thinking 只随同一 step 的 tool_use 回放，旧消息和带 `legacy` 前缀的消息在自定义中转下不回放 thinking；`projectForRequest()` 替代聊天请求里的 `filterModelVisible()`，失败消息只保留已执行的 Tool parts；`ConversationMessages` 的取消/加载恢复关闭未终结 step，工具都已执行时收 SUCCEEDED，否则 CANCELLED
 - 理由：一个 turn 仍是一条 assistant 消息，多个原生响应追加在同一条 parts 里。中转层按原生思考缓存校验时，前一步的 thinking 和后一步的 tool_use 拼在同一条消息里会被判成关联不匹配；失败消息整条过滤又会把已经执行的写入和查询从模型历史里抹掉。step 范围让请求重建能恢复原生配对，失败投影让“继续”还能看到失败前的工具事实
-- 合并注意：`steps`、`callComplete` 都是带默认值的字段，旧消息解码为空 steps、true；`MessageStep.legacy` 只用于接管旧消息时补的前缀范围，带 legacy 的消息不做原生 pairing 回放。自定义中转（非 `api.anthropic.com`）的旧消息不回放 thinking；官方域名保持原行为。投影后消息清空 steps，原始消息不受影响。本阶段做 step 记录、请求投影、失败工具事实、审批/取消结算与最后节点审批；自动重试 C75 已默认关闭恢复，C76 内存态卡片随之恢复，持久化与消费方收尾仍按 B2 设计处理；手动 step 重试见 C98；C58 的摘要过滤、C67 的加载恢复语义不变
+- 合并注意：`steps`、`callComplete` 都是带默认值的字段，旧消息解码为空 steps、true；`MessageStep.legacy` 只用于接管旧消息时补的前缀范围，带 legacy 的消息不做原生 pairing 回放。自定义中转（非 `api.anthropic.com`）的旧消息不回放 thinking；官方域名保持原行为。投影后消息清空 steps，原始消息不受影响。本阶段做 step 记录、请求投影、失败工具事实、审批/取消结算与最后节点审批；自动重试 C75 已默认关闭恢复，C76 attempt 摘要已持久化，剩余消费方收尾仍按 B2 设计处理；手动 step 重试见 C98；C58 的摘要过滤、C67 的加载恢复语义不变
 - 测试：`AgentLoopTest` 覆盖中间节点 `ApprovalUnavailable`；`ConversationMessagesTest` 覆盖中间节点按 messageId 补结果、丢弃半截调用、置 COMPLETE 并收 SUCCEEDED；`ClaudeThinkingReplayTest` 覆盖 legacy 全剥离、step 内 thinking 与 tool_use 配对、跨 step 的纯文本 step 不把 thinking 带到下一步；`UIMessageSerializationTest` 覆盖旧 JSON 空 steps、steps/callComplete 往返、FAILED 请求投影保留已执行工具并丢掉正文；`ConversationMessagesTest`、`ConversationToolCallsTest` 覆盖停止/加载恢复关闭 RUNNING/TOOLS step、已执行工具收 SUCCEEDED 和最后一条 assistant 的审批收口；`:ai:testDebugUnitTest`、`:app:testGithubDebugUnitTest`、`assembleGithubRelease`、spotless 通过。设备上长工具链连续 48 次请求、8510 条消息无 `native_thinking_replay_mismatch`，消息序列无连续 assistant、无 thinking 落在 tool_use 之后；U+FFFD 单独另案
 
 ### C98 消息操作手动重试失败 step

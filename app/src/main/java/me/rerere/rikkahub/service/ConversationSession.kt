@@ -19,6 +19,7 @@ import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
 import me.rerere.ai.agent.RetryAttempt
 import me.rerere.ai.core.MessageRole
+import me.rerere.ai.ui.MAX_RECORDED_ATTEMPTS
 import me.rerere.ai.ui.MessageStatus
 import me.rerere.ai.ui.UIMessagePart
 import me.rerere.ai.ui.finishReasoning
@@ -494,7 +495,7 @@ class ConversationSession(
 
     fun recordRetryAttempt(attempt: RetryAttempt) {
         retrying.value = true
-        retryAttempts.update { (it + RecordedRetryAttempt(attempt)).takeLast(20) }
+        retryAttempts.update { (it + RecordedRetryAttempt(attempt)).takeLast(MAX_RECORDED_ATTEMPTS) }
     }
 
     fun clearRetryAttempts() {

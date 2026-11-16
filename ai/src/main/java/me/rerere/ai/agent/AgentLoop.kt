@@ -16,6 +16,8 @@ import kotlinx.serialization.json.put
 import me.rerere.ai.core.MessageRole
 import me.rerere.ai.core.sum
 import me.rerere.ai.provider.TextGenerationParams
+import me.rerere.ai.ui.MAX_RECORDED_ATTEMPTS
+import me.rerere.ai.ui.MessageAttempt
 import me.rerere.ai.ui.MessageStatus
 import me.rerere.ai.ui.MessageStep
 import me.rerere.ai.ui.StepStatus
@@ -137,16 +139,17 @@ internal class AgentLoop(
         ).also { stepBase = it }).startStep()
         if (current == null) stepBase = base
         lastAttempt = null
+        val attempts = mutableListOf<MessageAttempt>()
         try {
             val generated = if (request.stream) {
-                stream(step.messages, params, base)
+                stream(step.messages, params, base, attempts)
             } else {
-                generate(step.messages, params, base)
+                generate(step.messages, params, base, attempts)
             }
             val finished = hooks.finishStep(generated, newPartsFrom = base.parts.size)
             val withStep = finished.finishCurrentStep(
                 if (finishedTools(finished)) StepStatus.TOOLS else StepStatus.SUCCEEDED,
-            )
+            ).withCurrentStepAttempts(attempts)
             update(withStep.copy(finishedAt = now()))
             lastAttempt = null
             stepBase = null
@@ -159,6 +162,7 @@ internal class AgentLoop(
                 it.steps.lastOrNull()?.status == StepStatus.RUNNING
             } ?: base)
                 .finishCurrentStep(StepStatus.FAILED)
+                .withCurrentStepAttempts(attempts)
             // 新消息在收到任何内容前就失败时不落空回复，只让错误卡片可见
             if (failed.parts.isNotEmpty()) {
                 try {
@@ -179,12 +183,16 @@ internal class AgentLoop(
         messages: List<UIMessage>,
         params: TextGenerationParams,
         base: UIMessage,
+        attempts: MutableList<MessageAttempt>,
     ): UIMessage {
         // 多轮工具调用共用同一条助手消息，消息上已有的 usage 和耗时来自之前的步骤。
         // 本步从清空的统计开始（merge 只适合同一次请求内的快照），再与之前的步骤累加。
         val stepStart = base.copy(usage = null, generationTimeMs = null)
         return try {
-            withRetry(request.retry, onRetry = { events.emit(AgentEvent.Retrying(it)) }) {
+            withRetry(request.retry, onRetry = { attempt ->
+                attempts += attempt.toMessageAttempt()
+                events.emit(AgentEvent.Retrying(attempt))
+            }) {
                 // 每次重试都从本步开始时的消息重新合并，不会把重试的响应接在已经展示的半截回复后面；
                 // 各次尝试共用同一个消息 id，调用方直接覆盖即可。
                 val handler = StreamChunkHandler(params.model)
@@ -231,10 +239,14 @@ internal class AgentLoop(
         messages: List<UIMessage>,
         params: TextGenerationParams,
         base: UIMessage,
+        attempts: MutableList<MessageAttempt>,
     ): UIMessage {
         // 非流式拿不到首 token 时间，只能统计最后一次尝试的整个请求耗时
         var requestMark = TimeSource.Monotonic.markNow()
-        val result = withRetry(request.retry, onRetry = { events.emit(AgentEvent.Retrying(it)) }) {
+        val result = withRetry(request.retry, onRetry = { attempt ->
+            attempts += attempt.toMessageAttempt()
+            events.emit(AgentEvent.Retrying(attempt))
+        }) {
             requestMark = TimeSource.Monotonic.markNow()
             val result = request.provider.generateText(request.providerSetting, messages, params)
             if (!result.message.hasGeneratedContent()) {
@@ -408,6 +420,26 @@ private fun UIMessage.finishCurrentStep(status: StepStatus): UIMessage {
         finishedAt = Clock.System.now(),
     )
     return copy(steps = updated)
+}
+
+private fun RetryAttempt.toMessageAttempt(): MessageAttempt = MessageAttempt(
+    attempt = retry,
+    maxRetries = maxRetries,
+    code = code,
+    message = cause.message?.take(160),
+    delayMs = delay.inWholeMilliseconds,
+    durationMs = durationMs,
+    recordedAt = Clock.System.now(),
+)
+
+private fun UIMessage.withCurrentStepAttempts(attempts: List<MessageAttempt>): UIMessage {
+    if (attempts.isEmpty()) return this
+    val last = steps.lastOrNull() ?: return this
+    return copy(
+        steps = steps.dropLast(1) + last.copy(
+            attempts = attempts.takeLast(MAX_RECORDED_ATTEMPTS),
+        ),
+    )
 }
 
 private fun errorOutput(error: String): List<UIMessagePart> =

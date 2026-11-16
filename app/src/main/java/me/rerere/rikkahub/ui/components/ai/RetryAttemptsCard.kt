@@ -24,18 +24,19 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import kotlinx.coroutines.delay
+import me.rerere.ai.ui.MessageAttempt
 import me.rerere.rikkahub.R
 import me.rerere.rikkahub.service.RecordedRetryAttempt
 import me.rerere.rikkahub.service.retryRemainingSeconds
 
 /**
- * 当前一轮的自动重试记录。只显示会话内存中的 attempt，不落盘；新一轮发送/压缩、审批恢复或
- * replace 时由 ChatService 清空。最新一条在等待重试时显示倒计时，成功后留下计划等待时间，
- * 失败时和错误卡片一起保留；重试记录在错误浮层上方，不会被错误卡片盖住。
+ * 自动重试记录。当前一轮用会话内存中的 attempt 显示倒计时，历史 step 用持久化的摘要重放；
+ * 历史记录没有实时倒计时，只显示计划等待时间。重试记录在错误浮层上方，不会被错误卡片盖住。
  */
 @Composable
 internal fun RetryAttemptsCard(
     attempts: List<RecordedRetryAttempt>,
+    historicalAttempts: List<MessageAttempt> = emptyList(),
     isRetrying: Boolean,
     modifier: Modifier = Modifier,
 ) {
@@ -45,8 +46,8 @@ internal fun RetryAttemptsCard(
         modifier = modifier.fillMaxWidth(),
     ) {
         val scrollState = rememberScrollState()
-        LaunchedEffect(attempts.size) {
-            if (attempts.isEmpty()) return@LaunchedEffect
+        LaunchedEffect(attempts.size + historicalAttempts.size) {
+            if (attempts.isEmpty() && historicalAttempts.isEmpty()) return@LaunchedEffect
             withFrameNanos { }
             if (scrollState.maxValue != Int.MAX_VALUE) {
                 scrollState.scrollTo(scrollState.maxValue)
@@ -63,6 +64,9 @@ internal fun RetryAttemptsCard(
                 text = stringResource(R.string.chat_retry_attempts_title),
                 style = MaterialTheme.typography.titleSmall,
             )
+            historicalAttempts.forEach { record ->
+                HistoryRetryAttemptRow(record)
+            }
             attempts.forEachIndexed { index, record ->
                 RetryAttemptRow(
                     record = record,
@@ -70,6 +74,45 @@ internal fun RetryAttemptsCard(
                 )
             }
         }
+    }
+}
+
+@Composable
+private fun HistoryRetryAttemptRow(record: MessageAttempt) {
+    val reason = record.message
+        ?.take(160)
+        ?.ifBlank { null }
+        ?: record.code
+        ?: stringResource(R.string.chat_retry_attempt_unknown)
+    Row(
+        verticalAlignment = Alignment.Top,
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
+    ) {
+        Column(modifier = Modifier.weight(1f)) {
+            Text(
+                text = stringResource(
+                    R.string.chat_retry_attempt_row,
+                    record.attempt,
+                    record.maxRetries,
+                ),
+                style = MaterialTheme.typography.labelLarge,
+            )
+            Text(
+                text = reason,
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                maxLines = 2,
+                overflow = TextOverflow.Ellipsis,
+            )
+        }
+        Text(
+            text = stringResource(
+                R.string.chat_retry_attempt_waited,
+                retryRemainingSeconds(0, record.delayMs, 0),
+            ),
+            style = MaterialTheme.typography.labelSmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
     }
 }
 

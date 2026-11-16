@@ -320,6 +320,9 @@ private fun ChatListNormal(
             .associateBy { it.id }
     }
     val lastMessageIndex = conversation.messageNodes.lastIndex
+    val persistedRetryAttempts = conversation.messageNodes.lastOrNull()?.currentMessage?.steps
+        ?.flatMap { it.attempts }
+        .orEmpty()
     val pendingToolIds = conversation.pendingToolCalls.mapTo(mutableSetOf()) { it.toolCallId }
 
     Box(
@@ -530,9 +533,11 @@ private fun ChatListNormal(
                     .onSizeChanged { bottomOverlayHeight = it.height },
                 horizontalAlignment = Alignment.CenterHorizontally,
             ) {
-                if (!selecting && retryAttempts.isNotEmpty()) {
+                val historicalAttempts = if (retryAttempts.isEmpty()) persistedRetryAttempts else emptyList()
+                if (!selecting && (retryAttempts.isNotEmpty() || historicalAttempts.isNotEmpty())) {
                     RetryAttemptsCard(
                         attempts = retryAttempts,
+                        historicalAttempts = historicalAttempts,
                         isRetrying = retryInProgress,
                         modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
                     )

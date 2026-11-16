@@ -100,14 +100,39 @@ class UIMessageSerializationTest {
                     callComplete = false,
                 ),
             ),
-            steps = listOf(MessageStep(StepStatus.SUCCEEDED, 0, 2, now, now)),
+            steps = listOf(
+                MessageStep(
+                    StepStatus.SUCCEEDED, 0, 2, now, now,
+                    attempts = listOf(
+                        MessageAttempt(
+                            attempt = 1,
+                            maxRetries = 3,
+                            code = "SERVER",
+                            message = "upstream failed",
+                            delayMs = 1_000,
+                            recordedAt = now,
+                        )
+                    ),
+                )
+            ),
         )
 
         val decoded = Json.decodeFromString<UIMessage>(Json.encodeToString(message))
 
         assertEquals(StepStatus.SUCCEEDED, decoded.steps.single().status)
         assertEquals(now, decoded.steps.single().startedAt)
+        assertEquals(1, decoded.steps.single().attempts.single().attempt)
+        assertEquals("SERVER", decoded.steps.single().attempts.single().code)
         assertFalse(decoded.parts.filterIsInstance<UIMessagePart.Tool>().single().callComplete)
+    }
+
+    @Test
+    fun `steps stored before attempts existed decode with empty attempts`() {
+        val legacy = """{"id":"00000000-0000-0000-0000-000000000001","role":"assistant","parts":[],"steps":[{"status":"succeeded","startPartIndex":0,"endPartIndex":0,"startedAt":"1970-01-01T00:00:01Z"}]}"""
+
+        val step = Json.decodeFromString<UIMessage>(legacy).steps.single()
+
+        assertTrue(step.attempts.isEmpty())
     }
 
     @Test

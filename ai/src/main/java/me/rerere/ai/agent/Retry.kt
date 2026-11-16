@@ -11,6 +11,7 @@ import kotlin.random.Random
 import kotlin.time.Duration
 import kotlin.time.Duration.Companion.milliseconds
 import kotlin.time.Duration.Companion.seconds
+import kotlin.time.TimeSource
 
 /**
  * 请求模型失败时的重试策略：最多重试 [maxRetries] 次，等待时间从 [initialDelay] 开始每次翻倍，
@@ -54,6 +55,8 @@ data class RetryAttempt(
     val retry: Int,
     val maxRetries: Int,
     val delay: Duration,
+    val code: String? = null,
+    val durationMs: Long = 0,
 )
 
 /**
@@ -65,6 +68,7 @@ suspend fun <T> withRetry(
     block: suspend () -> T,
 ): T {
     var retries = 0
+    var attemptMark = TimeSource.Monotonic.markNow()
     while (true) {
         try {
             return block()
@@ -77,8 +81,19 @@ suspend fun <T> withRetry(
             }
             retries++
             val backoff = retryDelay(error, policy, retries)
-            onRetry(RetryAttempt(error, retries, policy.maxRetries, backoff))
+            val durationMs = attemptMark.elapsedNow().inWholeMilliseconds
+            onRetry(
+                RetryAttempt(
+                    cause = error,
+                    retry = retries,
+                    maxRetries = policy.maxRetries,
+                    delay = backoff,
+                    code = (error as? LlmFailure)?.code?.name,
+                    durationMs = durationMs,
+                )
+            )
             delay(backoff)
+            attemptMark = TimeSource.Monotonic.markNow()
         }
     }
 }
