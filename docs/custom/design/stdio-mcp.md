@@ -117,6 +117,7 @@ interface WorkspaceProcessLauncher {
 - env 通过 `ProcessBuilder.environment()` 注入，不拼进命令行，避免 `/proc/<pid>/cmdline` 泄露；`--kill-on-exit`、`PROOT_LOADER`、`PROOT_TMP_DIR`、`TMPDIR` 仍由 launcher 维护。
 - `stdin/stdout/stderr` 全部保持 pipe，不做 PTY；stderr 交给 MCP transport 独占，不再另开一个 64 KiB reader，避免两个读者抢同一根 pipe。
 - 进程组终止复用现有的 `terminateProot`/pid 文件逻辑；启动失败、rootfs 不可用、SSH 工作区直接返回明确错误。
+- `RikkaHubApp` 启动时的 tempDir 清理必须在 MCP 启动之前完成，并跳过仍存活进程的 `PROOT_TMP_DIR`/`TMPDIR`；否则会删掉正在运行的 stdio Server 的临时目录。
 
 ## MCP SDK 接入
 
