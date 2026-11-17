@@ -55,7 +55,6 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -68,7 +67,6 @@ import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
-import kotlinx.coroutines.launch
 import me.rerere.ai.core.InputSchema
 import me.rerere.hugeicons.HugeIcons
 import me.rerere.hugeicons.stroke.Add01
@@ -129,7 +127,6 @@ fun SettingMcpDetailPage(id: Uuid, vm: SettingVM = koinViewModel()) {
     var draft by remember { mutableStateOf(config) }
     val stdioDraft = draft as? McpServerConfig.StdioServer
     val mcpManager = koinInject<McpManager>()
-    val scope = rememberCoroutineScope()
     val status by mcpManager.getStatus(config).collectAsStateWithLifecycle(McpStatus.Idle)
     val workspaceConflict = stdioDraft != null && stdioDraft.workspaceId.isNotBlank() &&
         settings.stdioMcpServers.any { it.id != id && it.workspaceId == stdioDraft.workspaceId }
@@ -280,8 +277,8 @@ fun SettingMcpDetailPage(id: Uuid, vm: SettingVM = koinViewModel()) {
                             draft = draft,
                             status = status,
                             workspaceConflict = workspaceConflict,
-                            onStop = { scope.launch { mcpManager.removeClient(config) } },
-                            onRestart = { scope.launch { mcpManager.addClient(config) } },
+                            onStop = { mcpManager.stopClient(config) },
+                            onRestart = { mcpManager.restartClient(config) },
                             onEdit = { draft = it },
                             onSave = onSave,
                             onDelete = onDelete,
