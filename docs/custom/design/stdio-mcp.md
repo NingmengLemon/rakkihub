@@ -2,7 +2,7 @@
 
 ## 状态
 
-设计稿已复审 PASS。配置持久化（C111）、rootfs 长期进程 launcher（C112）、MCP registry 接线（C113）、stdio 配置 UI（C114）、UI 收尾（C115：状态/停止重启、工作区唯一性、env 显示、删除提示）、归一化唯一性兜底（C116）、引用收口（C117）和手动停止持久化（C118）已落地；开发机已验证 initialize、tools/list 和 Connected，callTool 的真实 UI 路径待补；无工作区入口已跳到工作区页（C119）。
+设计稿已复审 PASS。C111 按配置持久化、rootfs 长期进程 launcher、MCP registry 接线、stdio 配置 UI、UI 收尾（状态/停止重启、工作区唯一性、env 显示、删除提示）、归一化唯一性兜底、引用收口、手动停止持久化和无工作区导航九个阶段落地；开发机已验证 initialize、tools/list 和 Connected，callTool 的真实 UI 路径待补。
 
 ## 目标
 
@@ -145,7 +145,7 @@ client.connect(transport)
 
 `Client` 构造只接受 `Implementation` 和可选的 `ClientOptions`；连接是 `sdkClient.connect(transport)`，不是构造时注入 transport。`kotlinx.io` 的 `asSource`/`asSink` 返回 `RawSource`/`RawSink`，必须 `.buffered()` 才能满足 `StdioClientTransport` 的 `Source`/`Sink` 参数。`kotlinx-io-core` 目前由 MCP SDK 传递提供；如果 compile classpath 不暴露它，需要在版本目录里显式加依赖。
 
-`McpSessionRegistry` 增加 stdio 分支。凡是直接读 `settings.mcpServers` 的路径都要改成 `settings.allMcpServers()`：`McpManager.init` 的 `reconcile` 输入、`McpManager.getAllAvailableTools` 的过滤、`McpSessionRegistry.addClient` 按 id 查当前配置、`McpSessionRegistry.syncTools` 把发现结果写回；其中 `syncTools` 要按运行类型写回 `mcpServers` 或 `stdioMcpServers`，不能一律写回 HTTP 列表。C114 已把 `AssistantDetailVM.mcpServerConfigs` 和聊天附件面板的 MCP 入口切到 `allMcpServers()`；`ConversationConfig` 和两个 Web 路由的 id 校验已改成 HTTP+stdio 并集。
+`McpSessionRegistry` 增加 stdio 分支。凡是直接读 `settings.mcpServers` 的路径都要改成 `settings.allMcpServers()`：`McpManager.init` 的 `reconcile` 输入、`McpManager.getAllAvailableTools` 的过滤、`McpSessionRegistry.addClient` 按 id 查当前配置、`McpSessionRegistry.syncTools` 把发现结果写回；其中 `syncTools` 要按运行类型写回 `mcpServers` 或 `stdioMcpServers`，不能一律写回 HTTP 列表。C111.4 已把 `AssistantDetailVM.mcpServerConfigs` 和聊天附件面板的 MCP 入口切到 `allMcpServers()`；`ConversationConfig` 和两个 Web 路由的 id 校验已改成 HTTP+stdio 并集。
 
 - `McpSessionRegistry` 在 stdio 分支直接构造上述 transport；`createTransport` 只处理 HTTP，遇到 stdio 会报错。`createSdkClient` 仍用 `Client(clientInfo = Implementation(...))`。
 - 连接、重连、状态和工具同步复用现有 `connectSession` / `syncTools` / `MAX_RECONNECT_ATTEMPTS`（5 次）和 `calculateBackoffDelay`，不另造一套 3 次策略。

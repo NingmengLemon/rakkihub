@@ -1,8 +1,10 @@
 # 定制清单
 
-本分支相对上游的全部定制，一项一个编号。编号连续，不复用已作废的编号。
+本分支相对上游的全部定制，一项一个编号。编号按顺序分配；已作废的编号不复用，已被提交信息当作阶段号使用的编号也不复用。
 
 新增定制时先往索引表加一行，再在「明细」里写对应小节。三项内容分别回答「改在哪」「为什么改」「上游合并时要注意什么」。合并冲突时按明细逐项复核，确保定制意图没有在合并中被静默丢掉。
+
+一项只占一个顶层编号。项内分阶段推进时用 `C111.1` 这样的子号，不再另起顶层编号。历史登记用过的编号段整体保留，不再用作顶层编号，新项从保留段之后继续。
 
 ## 索引
 
@@ -118,15 +120,9 @@
 | C108 | C87 OCR producer 指纹失效 | 改造 |
 | C109 | C87 OCR 文本编辑入口 | 新增 |
 | C110 | C87 备份恢复保留手改 OCR | 改造 |
-| C111 | stdio MCP 配置与持久化 | 新增 |
-| C112 | stdio MCP rootfs 进程 launcher | 新增 |
-| C113 | stdio MCP registry 接线 | 新增 |
-| C114 | stdio MCP 配置 UI | 新增 |
-| C115 | stdio MCP UI 收尾 | 新增 |
-| C116 | stdio MCP workspace 唯一性与列表提示 | 新增 |
-| C117 | stdio MCP 归一化引用收口 | 新增 |
-| C118 | stdio MCP 手动停止持久化 | 新增 |
-| C119 | stdio MCP 无工作区导航 | 新增 |
+| C111 | stdio MCP 服务器（专用工作区 rootfs 子进程） | 新增 |
+
+C112 至 C119 是 C111 历史阶段的保留段，不再用作顶层编号；下一个新项从 C120 起。
 
 ## 明细
 
@@ -865,65 +861,69 @@
 - 合并注意：保留行已有同 producer 的手改时保留保留行，不覆盖；落选手改行随后显式删除，避免外键未开启时留下孤儿。同版本外来路径转换会由 `OfficialDatabaseConverter` 按原 `file_id` 补回手改行，再做 UploadNames 合并。官方导出仍 drop 整张表，手改文本不随官方备份保留。恢复后首次发送会重新识别自动行，但手改行继续覆盖。
 - 测试：`BackupManagerTest`（开发机）覆盖自动行清空、手改行保留，两份同内容上传合并后只保留落选行的手改文本，以及同版本外来路径转换后手改行仍在；`connectedGithubDebugAndroidTest` 通过。
 
-### C111 stdio MCP 配置与持久化
+### C111 stdio MCP 服务器
+
+本项是一个功能，按 9 个阶段落地。早期登记用了 C111 至 C119 九个顶层编号，依次对应 C111.1 至 C111.9；C112 至 C119 保留，不再用作顶层编号，下一个新项从 C120 起。
+
+#### C111.1 配置与持久化
 
 - 落点：`McpConfig.kt` 新增 `StdioMcpServer`（id、commonOptions、workspaceId、command、args、env、cwd、启动超时，`toString` 对 env 脱敏）；`Settings.stdioMcpServers` 默认空列表；`SettingsStore.STDIO_MCP_SERVERS` 新 DataStore key 和 `SETTINGS_FIELDS` 条目；`Settings.allMcpServerIds()` 统一 HTTP+stdio id，`SettingsNormalization`、`ConversationConfig.getAssistantOf`、`SettingsRoutes`、`ConversationRoutes` 都用它；`OfficialSettings.forOfficialExport` 清空 stdio 并过滤 assistant 引用。
 - 理由：stdio 配置不能塞进 sealed `McpServerConfig` 的 `mcpServers` JSON，否则旧构建遇到未知 `"stdio"` 判别值会整份设置解码失败；独立 key 让旧构建忽略配置，新构建仍能识别 assistant 引用。
-- 合并注意：旧构建能解码但无法运行 stdio，保存设置时不会删除新 key；旧构建的归一化只认 HTTP id，会清掉 assistant 的 stdio 引用，这是已知降级。官方导出不包含 stdio；自家备份保留。该阶段只落配置，进程启动和 registry 接线在后续阶段；workspace 唯一性、command/NUL/cwd 校验在保存入口和 launcher 阶段补齐。`ConversationConfig`、`SettingsRoutes`、`ConversationRoutes` 已改用 HTTP+stdio id 并集；`AssistantDetailVM` 的 MCP 列表和聊天附件面板的 MCP 入口在 C114 已切到 `allMcpServers()`。
+- 合并注意：旧构建能解码但无法运行 stdio，保存设置时不会删除新 key；旧构建的归一化只认 HTTP id，会清掉 assistant 的 stdio 引用，这是已知降级。官方导出不包含 stdio；自家备份保留。该阶段只落配置，进程启动和 registry 接线在后续阶段；workspace 唯一性、command/NUL/cwd 校验在保存入口和 launcher 阶段补齐。`ConversationConfig`、`SettingsRoutes`、`ConversationRoutes` 已改用 HTTP+stdio id 并集；`AssistantDetailVM` 的 MCP 列表和聊天附件面板的 MCP 入口在 C111.4 已切到 `allMcpServers()`。
 - 测试：`SettingsStdioMcpTest` 覆盖序列化往返、旧 JSON 默认空、env `toString` 脱敏、归一化保留 stdio assistant 引用、官方导出清空 stdio 和引用；`ConversationConfigTest` 覆盖绑定会话保留 stdio 引用；`SettingsFieldsTest` 的字段清单和落盘 key 快照同步。
 
-### C112 stdio MCP rootfs 进程 launcher
+#### C111.2 rootfs 进程 launcher
 
 - 落点：`WorkspaceShellRunner` 增加 `launchProcess`；新增 `WorkspaceProcessSpec` / `WorkspaceProcessContext` / `WorkspaceProcess` / `WorkspaceProcessLauncher`；`WorkspaceManager.launchProcess` 负责 id/cwd 校验和上下文组装；`ProotShellRunner.launchProcess` 复用 `prootArgs`、`ROOTFS_ENV`、`--kill-on-exit` 和 pid 文件，使用非登录 `-c`，把 env 写成 rootfs `/tmp/rikkahub/mcp/<id>-<launch-token>.env`（每次 launch 唯一），wrapper 先 `set -a` 注入环境再 `exec`；`WorkspaceProcess.close(graceMillis)` 走 `terminateProot`，MCP 层不需要直接结束 PRoot；`WorkspaceManagerProcessLauncher` 给 MCP 层使用。
 - 理由：stdio MCP 需要长期 stdin/stdout/stderr，不能走一次性 `executeCommand`；进程必须运行在 rootfs 里，并保留现有 PRoot 进程组终止和 rootfs 临时目录清理语义。
-- 合并注意：cwd 按 rootfs 绝对路径处理，不复用 workspace 相对映射；env 文件不进入备份/WebDAV/文件浏览器，但同一工作区的 workspace 工具和 shell 仍可访问 rootfs `/tmp` 及运行中进程的 `/proc/<pid>/environ`，这是已声明的非沙箱边界；启动失败返回明确错误，HostShellRunner 不支持长期进程；registry 接线见 C113，配置 UI 见 C114。
+- 合并注意：cwd 按 rootfs 绝对路径处理，不复用 workspace 相对映射；env 文件不进入备份/WebDAV/文件浏览器，但同一工作区的 workspace 工具和 shell 仍可访问 rootfs `/tmp` 及运行中进程的 `/proc/<pid>/environ`，这是已声明的非沙箱边界；启动失败返回明确错误，HostShellRunner 不支持长期进程；registry 接线见 C111.3，配置 UI 见 C111.4。
 - 测试：`ProotShellRunnerProcessCommandTest` 覆盖 proot 参数、rootfs cwd、唯一 env/pid 路径、env/pid 文件参数和 wrapper；`WorkspaceManagerProcessLauncherTest` 覆盖上下文转发、`close(graceMillis)` 转发、非法 id/cwd 拒绝和 HostShellRunner 不支持错误。Windows 上完整 `:workspace:test` 仍有既有的 `/bin/sh`/路径基线失败，新增定向测试通过。
 
-### C113 stdio MCP registry 接线
+#### C111.3 registry 接线
 
 - 落点：`McpServerConfig` 新增运行时子类 `StdioServer`（不写回 `mcpServers` 持久化列表）；`StdioMcpServer.toRuntimeConfig()`；`Settings.allMcpServers()` 合并 HTTP 与 stdio；`McpManager` 用合并列表 reconcile、过滤工具；`McpSessionRegistry` 对 stdio 启动 `WorkspaceProcessLauncher`，用 `StdioClientTransport` 接 stdin/stdout/stderr，`withTimeout(startupTimeoutMs)` 包住 connect（工具同步仍走 SDK 默认超时），独立协程观察进程退出并触发重连，关闭时先关 client 再 `close(5s)`；成功连接后 60 秒稳定期才清零重连预算，避免握手后崩溃无限重启；HTTP 仍保持连接成功即清零；`syncTools` 把发现结果写回 `stdioMcpServers`；`McpConnectionKey` 把 workspace/command/args/env/cwd 纳入重连判断；DI 注入 `WorkspaceManagerProcessLauncher` 和 `WorkspaceDAO`。
 - 理由：stdio 和 HTTP 共用现有 session 状态机、重连预算和工具同步；不能让运行时子类进入旧构建的 `mcpServers` JSON，也不能把 stdio 工具写回 HTTP 列表。
-- 合并注意：stdio 配置从 C114 起有添加/编辑入口；`AssistantDetailVM` 和聊天附件面板的 MCP 入口都使用 `allMcpServers()`。OAuth 对 stdio 不生效；启动 tempDir 清理和 `McpManager` 初始化的顺序仍留到启动阶段。进程退出只把 exit code 写进状态，stderr 由 transport/SDK debug 输出，registry 暂无摘要或日志入口，后续再补。
+- 合并注意：stdio 配置从 C111.4 起有添加/编辑入口；`AssistantDetailVM` 和聊天附件面板的 MCP 入口都使用 `allMcpServers()`。OAuth 对 stdio 不生效；启动 tempDir 清理和 `McpManager` 初始化的顺序仍留到启动阶段。进程退出只把 exit code 写进状态，stderr 由 transport/SDK debug 输出，registry 暂无摘要或日志入口，后续再补。
 - 测试：`McpConnectionKeyTest` 覆盖 stdio command/args/env/cwd/workspace 变化触发重连、工具元数据不触发；`SettingsStdioMcpTest` 覆盖 `allMcpServers()` 合并和 runtime 字段。真实 rootfs echo Server 的 initialize/listTools/callTool 验收留到设备阶段。
 
-### C114 stdio MCP 配置 UI
+#### C111.4 配置 UI
 
 - 落点：`SettingMcpPage` 列表合并 HTTP 与 stdio，Add 菜单分 HTTP/stdio，删除按类型写回对应列表；`SettingMcpDetailPage` 从 `allMcpServers()` 查找，stdio 走独立的 `StdioMcpConfigure`（启用/名称、专用工作区、命令、参数、env、cwd、启动超时），保存/删除/工具开关按类型写回 `mcpServers` 或 `stdioMcpServers`；`AssistantDetailVM.mcpServerConfigs` 也改用 `allMcpServers()`，助手 MCP 页才能选择和显示 stdio Server；工作区列表只显示 `capabilities().rootfs`、`READY` 且已有 rootfs 的本地工作区；保存按钮要求名称、工作区、命令、非相对 cwd 和不小于 1000ms 的启动超时；`AssistantDetailVM` 和聊天附件面板的 MCP 入口也改用 `allMcpServers()`。
 - 理由：配置结构已经落地，但没有 UI 就无法创建或编辑 stdio Server；复用现有 MCP 详情页可以把工具开关和状态显示一起带过来。
-- 合并注意：新增文案目前用中文硬编码，未走四份 locale，后续统一走 i18n；env 输入用密码视觉变换，多行参数/环境变量用本地文本状态，避免过滤空行后无法输入第二行；workspace 绑定唯一性由 C115 在保存入口补，C116 又在归一化层兜底；命令 NUL/换行和 rootfs 二次校验仍由启动阶段补。
-- 测试：现有 C111 的 JVM 测试覆盖配置归一化和 runtime 合并；C114 没有新增 Compose/JVM UI 测试，靠开发机手动验收添加、编辑、删除、助手 MCP 选择和聊天附件面板入口。本地 workspace rootfs 用 perl 写了一个最小 stdio MCP Server，验证 initialize、tools/list、工具写回和 Connected 状态。callTool 的真实 UI 路径尚未验收，留到后续设备阶段。
+- 合并注意：新增文案目前用中文硬编码，未走四份 locale，后续统一走 i18n；env 输入用密码视觉变换，多行参数/环境变量用本地文本状态，避免过滤空行后无法输入第二行；workspace 绑定唯一性由 C111.5 在保存入口补，C111.6 又在归一化层兜底；命令 NUL/换行和 rootfs 二次校验仍由启动阶段补。
+- 测试：现有 C111 的 JVM 测试覆盖配置归一化和 runtime 合并；本阶段没有新增 Compose/JVM UI 测试，靠开发机手动验收添加、编辑、删除、助手 MCP 选择和聊天附件面板入口。本地 workspace rootfs 用 perl 写了一个最小 stdio MCP Server，验证 initialize、tools/list、工具写回和 Connected 状态。callTool 的真实 UI 路径尚未验收，留到后续设备阶段。
 
-### C115 stdio MCP UI 收尾
+#### C111.5 UI 收尾
 
-- 落点：`SettingMcpDetailPage` 的 stdio 基础页增加连接状态、重启/停止按钮、工作区冲突提示和 env 显示切换；保存按钮在 workspace 已被其它 stdio Server 占用时禁用；删除确认明确工作区不删除。`McpManager.removeClient`/`addClient` 分别用于停止和重启，仍走现有 session 生命周期，不新增运行时状态；C118 起改为 `stopClient`/`restartClient`，并增加内存停止标记。`AssistantMcpPage` 顶栏增加设置入口，已有 Server 时也能进入全局 MCP 配置页。
-- 理由：C114 已经能配置和连接，但详情页看不到状态、无法手动停止/重启，两个 Server 也能静默绑定同一个工作区；已有 Server 后助手 MCP 页没有入口回全局配置，也会把状态/停止功能藏在不可达位置。
-- 合并注意：停止只结束当前 session，配置和工作区保留；重启先移除旧 session 再重新 addClient，避免旧 client 仍在时提前返回；C118 起手动停止会阻止后续 reconcile 自动拉起，直到重启或配置被禁用；未保存的草稿不会生效；没有可用工作区时仍只显示提示，不跳转扩展页；CardGroup 形态和四份 locale 仍未处理，后者记为 i18n debt。
+- 落点：`SettingMcpDetailPage` 的 stdio 基础页增加连接状态、重启/停止按钮、工作区冲突提示和 env 显示切换；保存按钮在 workspace 已被其它 stdio Server 占用时禁用；删除确认明确工作区不删除。停止/重启按钮经 `McpManager.stopClient`/`restartClient` 落到现有 session 生命周期；手动停止的保留语义见 C111.8。`AssistantMcpPage` 顶栏增加设置入口，已有 Server 时也能进入全局 MCP 配置页。
+- 理由：C111.4 已经能配置和连接，但详情页看不到状态、无法手动停止/重启，两个 Server 也能静默绑定同一个工作区；已有 Server 后助手 MCP 页没有入口回全局配置，也会把状态/停止功能藏在不可达位置。
+- 合并注意：停止只结束当前 session，配置和工作区保留；重启先移除旧 session 再重新 addClient，避免旧 client 仍在时提前返回；C111.8 起手动停止会阻止后续 reconcile 自动拉起，直到重启或配置被禁用；未保存的草稿不会生效；没有可用工作区时仍只显示提示，不跳转扩展页；CardGroup 形态和四份 locale 仍未处理，后者记为 i18n debt。
 - 测试：`:app:compileGithubDebugKotlin`、`:app:testGithubDebugUnitTest`；开发机手动验收停止/重启、管理入口和 `Connected` 状态；工作区冲突提示按代码路径核对。callTool 真实 UI 路径仍待补。
 
-### C116 stdio MCP workspace 唯一性与列表提示
+#### C111.6 workspace 唯一性与列表提示
 
 - 落点：`SettingsNormalization` 在按 id 去重后再按 `workspaceId` 去重，空 workspace 用自身 id 作为键，保留第一条；`SettingMcpPage` 的删除确认对 stdio 明确“专用工作区和 rootfs 不会被删除”，与详情页一致。
-- 理由：C115 的唯一性只在保存按钮上，恢复/导入的重复配置仍会启动两个 Server；列表页删除提示还沿用通用文案，和详情页不一致。
-- 合并注意：归一化会静默丢弃后出现的重复 workspace 配置，只保留第一条；UI 保存入口的冲突提示仍在，防止用户新建重复配置。停止在 C115 时只是 session 级；C118 起手动停止由 `manuallyStopped` 保留，后续 `allMcpServers()` 写入不会再经 reconcile 自动拉起；标记只在内存，app 重启后恢复启用。
+- 理由：C111.5 的唯一性只在保存按钮上，恢复/导入的重复配置仍会启动两个 Server；列表页删除提示还沿用通用文案，和详情页不一致。
+- 合并注意：归一化会静默丢弃后出现的重复 workspace 配置，只保留第一条；UI 保存入口的冲突提示仍在，防止用户新建重复配置。停止在 C111.5 时只是 session 级；C111.8 起手动停止由 `manuallyStopped` 保留，后续 `allMcpServers()` 写入不会再经 reconcile 自动拉起；标记只在内存，app 重启后恢复启用。
 - 测试：`SettingsStdioMcpTest` 新增同 workspace 去重、不同 workspace 保留；`:app:testGithubDebugUnitTest`。
 
-### C117 stdio MCP 归一化引用收口
+#### C111.7 归一化引用收口
 
 - 落点：`SettingsNormalization` 先算出按 workspace 去重后的 `stdioMcpServers`，再用这份列表构造 `validMcpServerIds`，使被丢弃的重复项在同一个归一化轮次里也从 assistant 引用中移除；补 test 覆盖“丢弃项的 assistant 引用同轮清掉”和“空 workspace 按 id 保留”。
-- 理由：C116 的 `validMcpServerIds` 在去重前计算，引用被丢弃项会残留一轮，虽然运行时解析不到、下次设置写入会自愈，但状态不一致。
+- 理由：C111.6 的 `validMcpServerIds` 在去重前计算，引用被丢弃项会残留一轮，虽然运行时解析不到、下次设置写入会自愈，但状态不一致。
 - 合并注意：归一化仍然静默保留第一条；被丢弃项的 assistant 选择不会迁移到保留项，只会在同一轮被清掉，这是有意的。
 - 测试：`SettingsStdioMcpTest` 覆盖同 workspace 去重、不同 workspace 保留、空 workspace 不同 id 保留、丢弃项引用同轮移除。
 
-### C118 stdio MCP 手动停止持久化
+#### C111.8 手动停止持久化
 
 - 落点：`McpSessionRegistry` 维护运行时 `manuallyStopped` 集合；`stopClient` 先标记再移除 session，`reconcile` 对已标记的配置不再自动拉起；`restartClient` 清除标记后 remove+add；配置被禁用/删除时集合自动清理。
-- 理由：C115 的停止只是移除当前 session，之后任何 `allMcpServers()` 写入（工具开关、另一个 Server 的 syncTools 回写）都会经 reconcile 重新启动，用户会看到“停止后自己又连上”。
+- 理由：C111.5 的停止只是移除当前 session，之后任何 `allMcpServers()` 写入（工具开关、另一个 Server 的 syncTools 回写）都会经 reconcile 重新启动，用户会看到“停止后自己又连上”。
 - 合并注意：`manuallyStopped` 只在内存里，app 重启后会恢复为启用状态；停止期间配置编辑仍保留，点重启才恢复；配置被禁用、删除或暂时无效（如名称为空）时标记清除，重新有效后会再启动；没有新增持久化字段。
 - 测试：编译和现有 MCP 测试；开发机手动验收可补“停止后切工具开关或写设置不自动重连”。
 
-### C119 stdio MCP 无工作区导航
+#### C111.9 无工作区导航
 
 - 落点：`StdioMcpConfigure` 的工作区下拉在没有 eligible 项时，点击直达 `Screen.Workspaces`，提示文案改为“去工作区页安装 rootfs”。
-- 理由：C114 的空状态下拉只关闭菜单，用户需要自己找到扩展页；这是配置流程的断点。
+- 理由：C111.4 的空状态下拉只关闭菜单，用户需要自己找到扩展页；这是配置流程的断点。
 - 合并注意：仍然只列本地、READY 且有 rootfs 的工作区；到工作区页后用户需自行创建/安装，再回来选中。
 - 测试：编译；设备上可在无 eligible 工作区时点击该项验证导航。
