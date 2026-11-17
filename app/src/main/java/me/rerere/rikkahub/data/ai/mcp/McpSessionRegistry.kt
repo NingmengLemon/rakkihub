@@ -201,6 +201,11 @@ internal class McpSessionRegistry(
             removeClient(desiredConfig)
             return
         }
+        // 手动停止后，晚到的 addClient（restart 的 IO 收尾、reconcile、syncSession）不能再拉起
+        if (desiredConfig.id in manuallyStopped) {
+            removeClient(desiredConfig)
+            return
+        }
 
         val session = sessions.computeIfAbsent(desiredConfig.id) { McpSession(desiredConfig) }
         session.config = desiredConfig

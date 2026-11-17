@@ -895,7 +895,7 @@
 
 ### C115 stdio MCP UI 收尾
 
-- 落点：`SettingMcpDetailPage` 的 stdio 基础页增加连接状态、重启/停止按钮、工作区冲突提示和 env 显示切换；保存按钮在 workspace 已被其它 stdio Server 占用时禁用；删除确认明确工作区不删除。`McpManager.removeClient`/`addClient` 分别用于停止和重启，仍走现有 session 生命周期，不新增运行时状态。`AssistantMcpPage` 顶栏增加设置入口，已有 Server 时也能进入全局 MCP 配置页。
+- 落点：`SettingMcpDetailPage` 的 stdio 基础页增加连接状态、重启/停止按钮、工作区冲突提示和 env 显示切换；保存按钮在 workspace 已被其它 stdio Server 占用时禁用；删除确认明确工作区不删除。`McpManager.removeClient`/`addClient` 分别用于停止和重启，仍走现有 session 生命周期，不新增运行时状态；C118 起改为 `stopClient`/`restartClient`，并增加内存停止标记。`AssistantMcpPage` 顶栏增加设置入口，已有 Server 时也能进入全局 MCP 配置页。
 - 理由：C114 已经能配置和连接，但详情页看不到状态、无法手动停止/重启，两个 Server 也能静默绑定同一个工作区；已有 Server 后助手 MCP 页没有入口回全局配置，也会把状态/停止功能藏在不可达位置。
 - 合并注意：停止只结束当前 session，配置和工作区保留；重启先移除旧 session 再重新 addClient，避免旧 client 仍在时提前返回；C118 起手动停止会阻止后续 reconcile 自动拉起，直到重启或配置被禁用；未保存的草稿不会生效；没有可用工作区时仍只显示提示，不跳转扩展页；CardGroup 形态和四份 locale 仍未处理，后者记为 i18n debt。
 - 测试：`:app:compileGithubDebugKotlin`、`:app:testGithubDebugUnitTest`；开发机手动验收停止/重启、管理入口和 `Connected` 状态；工作区冲突提示按代码路径核对。callTool 真实 UI 路径仍待补。
@@ -904,7 +904,7 @@
 
 - 落点：`SettingsNormalization` 在按 id 去重后再按 `workspaceId` 去重，空 workspace 用自身 id 作为键，保留第一条；`SettingMcpPage` 的删除确认对 stdio 明确“专用工作区和 rootfs 不会被删除”，与详情页一致。
 - 理由：C115 的唯一性只在保存按钮上，恢复/导入的重复配置仍会启动两个 Server；列表页删除提示还沿用通用文案，和详情页不一致。
-- 合并注意：归一化会静默丢弃后出现的重复 workspace 配置，只保留第一条；UI 保存入口的冲突提示仍在，防止用户新建重复配置。停止仍只是 session 级，后续 `allMcpServers()` 写入会经 reconcile 重新启动，这是已知行为。
+- 合并注意：归一化会静默丢弃后出现的重复 workspace 配置，只保留第一条；UI 保存入口的冲突提示仍在，防止用户新建重复配置。停止在 C115 时只是 session 级；C118 起手动停止由 `manuallyStopped` 保留，后续 `allMcpServers()` 写入不会再经 reconcile 自动拉起；标记只在内存，app 重启后恢复启用。
 - 测试：`SettingsStdioMcpTest` 新增同 workspace 去重、不同 workspace 保留；`:app:testGithubDebugUnitTest`。
 
 ### C117 stdio MCP 归一化引用收口
@@ -918,7 +918,7 @@
 
 - 落点：`McpSessionRegistry` 维护运行时 `manuallyStopped` 集合；`stopClient` 先标记再移除 session，`reconcile` 对已标记的配置不再自动拉起；`restartClient` 清除标记后 remove+add；配置被禁用/删除时集合自动清理。
 - 理由：C115 的停止只是移除当前 session，之后任何 `allMcpServers()` 写入（工具开关、另一个 Server 的 syncTools 回写）都会经 reconcile 重新启动，用户会看到“停止后自己又连上”。
-- 合并注意：`manuallyStopped` 只在内存里，app 重启后会恢复为启用状态；停止期间配置编辑仍保留，点重启才恢复；没有新增持久化字段。
+- 合并注意：`manuallyStopped` 只在内存里，app 重启后会恢复为启用状态；停止期间配置编辑仍保留，点重启才恢复；配置被禁用、删除或暂时无效（如名称为空）时标记清除，重新有效后会再启动；没有新增持久化字段。
 - 测试：编译和现有 MCP 测试；开发机手动验收可补“停止后切工具开关或写设置不自动重连”。
 
 ### C119 stdio MCP 无工作区导航
