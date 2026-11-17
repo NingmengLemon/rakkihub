@@ -106,7 +106,7 @@ data class WorkspaceProcess(
     val stdin: OutputStream,
     val stdout: InputStream,
     val stderr: InputStream,
-    val terminate: (graceMillis: Long) -> Unit,
+    val terminate: (graceMillis: Long) -> Unit = { process.destroyForcibly() },
 ) {
     fun close(graceMillis: Long = 0) = terminate(graceMillis)
 }

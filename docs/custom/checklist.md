@@ -867,7 +867,7 @@
 
 ### C112 stdio MCP rootfs 进程 launcher
 
-- 落点：`WorkspaceShellRunner` 增加 `launchProcess`；新增 `WorkspaceProcessSpec` / `WorkspaceProcessContext` / `WorkspaceProcess` / `WorkspaceProcessLauncher`；`WorkspaceManager.launchProcess` 负责 id/cwd 校验和上下文组装；`ProotShellRunner.launchProcess` 复用 `prootArgs`、`ROOTFS_ENV`、`--kill-on-exit` 和 pid 文件，使用非登录 `-c`，把 env 写成 rootfs `/tmp/rikkahub/mcp/<id>.env`，wrapper 先 `set -a` 注入环境再 `exec`；`WorkspaceProcess.close(graceMillis)` 走 `terminateProot`，MCP 层不需要直接结束 PRoot；`WorkspaceManagerProcessLauncher` 给 MCP 层使用。
+- 落点：`WorkspaceShellRunner` 增加 `launchProcess`；新增 `WorkspaceProcessSpec` / `WorkspaceProcessContext` / `WorkspaceProcess` / `WorkspaceProcessLauncher`；`WorkspaceManager.launchProcess` 负责 id/cwd 校验和上下文组装；`ProotShellRunner.launchProcess` 复用 `prootArgs`、`ROOTFS_ENV`、`--kill-on-exit` 和 pid 文件，使用非登录 `-c`，把 env 写成 rootfs `/tmp/rikkahub/mcp/<id>-<launch-token>.env`（每次 launch 唯一），wrapper 先 `set -a` 注入环境再 `exec`；`WorkspaceProcess.close(graceMillis)` 走 `terminateProot`，MCP 层不需要直接结束 PRoot；`WorkspaceManagerProcessLauncher` 给 MCP 层使用。
 - 理由：stdio MCP 需要长期 stdin/stdout/stderr，不能走一次性 `executeCommand`；进程必须运行在 rootfs 里，并保留现有 PRoot 进程组终止和 rootfs 临时目录清理语义。
 - 合并注意：cwd 按 rootfs 绝对路径处理，不复用 workspace 相对映射；env 文件不进入备份/WebDAV/文件浏览器，但同一工作区的 workspace 工具和 shell 仍可访问 rootfs `/tmp` 及运行中进程的 `/proc/<pid>/environ`，这是已声明的非沙箱边界；启动失败返回明确错误，HostShellRunner 不支持长期进程；MCP registry 接线和 UI 仍在后续阶段。
 - 测试：`ProotShellRunnerProcessCommandTest` 覆盖 proot 参数、rootfs cwd、唯一 env/pid 路径、env/pid 文件参数和 wrapper；`WorkspaceManagerProcessLauncherTest` 覆盖上下文转发、`close(graceMillis)` 转发、非法 id/cwd 拒绝和 HostShellRunner 不支持错误。Windows 上完整 `:workspace:test` 仍有既有的 `/bin/sh`/路径基线失败，新增定向测试通过。
