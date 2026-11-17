@@ -144,14 +144,11 @@ class McpManager(
 
     /** 停止后重新启动，避免 addClient 在旧 client 仍存在时提前返回。 */
     fun restartClient(config: McpServerConfig) {
-        appScope.launch {
-            sessionRegistry.removeClient(config)
-            sessionRegistry.addClient(config)
-        }
+        appScope.launch { sessionRegistry.restartClient(config) }
     }
 
     fun stopClient(config: McpServerConfig) {
-        appScope.launch { sessionRegistry.removeClient(config) }
+        appScope.launch { sessionRegistry.stopClient(config) }
     }
 
     suspend fun syncAll() = sessionRegistry.syncAll()

@@ -120,13 +120,19 @@ internal class McpSessionRegistry(
 ) {
     private val sessions = ConcurrentHashMap<Uuid, McpSession>()
 
+    // 用户手动停止的 Server，后续 settings 变化经 reconcile 也不自动拉起；重启或禁用后清除
+    private val manuallyStopped = ConcurrentHashMap.newKeySet<Uuid>()
+
     fun getClient(configId: Uuid): Client? = sessions[configId]?.client
 
     fun getStatus(configId: Uuid): Flow<McpStatus> = statusStore.get(configId)
 
     fun reconcile(configs: List<McpServerConfig>) {
-        val activeConfigs = configs
+        val enabledConfigs = configs
             .filter { it.commonOptions.enable && it.commonOptions.name.isNotBlank() }
+        manuallyStopped.retainAll(enabledConfigs.mapTo(HashSet()) { it.id })
+        val activeConfigs = enabledConfigs
+            .filter { it.id !in manuallyStopped }
             .associateBy { it.id }
 
         (sessions.keys - activeConfigs.keys).forEach { configId ->
@@ -204,6 +210,17 @@ internal class McpSessionRegistry(
             cancelPendingReconnect = true,
             forceReconnect = false,
         )
+    }
+
+    suspend fun stopClient(config: McpServerConfig) {
+        manuallyStopped += config.id
+        removeClient(config)
+    }
+
+    suspend fun restartClient(config: McpServerConfig) {
+        manuallyStopped -= config.id
+        removeClient(config)
+        addClient(config)
     }
 
     suspend fun removeClient(config: McpServerConfig) {
