@@ -5,6 +5,7 @@ import me.rerere.ai.provider.BuiltInTools
 import me.rerere.ai.provider.Model
 import me.rerere.ai.provider.ProviderSetting
 import me.rerere.rikkahub.data.ai.mcp.McpServerConfig
+import me.rerere.rikkahub.data.ai.mcp.StdioMcpServer
 import me.rerere.rikkahub.data.datastore.Settings
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
@@ -147,6 +148,19 @@ class ConversationConfigTest {
     }
 
     @Test
+    fun `bound conversation keeps stdio MCP references`() {
+        val stdio = StdioMcpServer(workspaceId = "workspace-1", command = "node")
+        val withStdio = assistant.copy(mcpServers = setOf(mcpServer, stdio.id))
+        val base = settings(withStdio).copy(stdioMcpServers = listOf(stdio))
+        val bound = conversation(withStdio).bindConfig(base)
+
+        val resolved = base.getAssistantOf(bound)
+
+        assertTrue(stdio.id in resolved.mcpServers)
+        assertTrue(mcpServer in resolved.mcpServers)
+    }
+
+    @Test
     fun `bound conversation drops references to removed items`() {
         val bound = conversation().bindConfig(settings())
         val emptied = settings().copy(mcpServers = emptyList(), modeInjections = emptyList(), lorebooks = emptyList())
@@ -202,7 +216,10 @@ class ConversationConfigTest {
         val bound = conversation().bindConfig(settings()).copy(workspaceCwd = "/workspace/project")
         val assistantView = settings().getAssistantOf(bound)
 
-        val sameWorkspace = bound.withAssistantUpdate(assistantView.copy(reasoningLevel = ReasoningLevel.LOW), settings())
+        val sameWorkspace = bound.withAssistantUpdate(
+            assistantView.copy(reasoningLevel = ReasoningLevel.LOW),
+            settings()
+        )
         val otherWorkspace = bound.withAssistantUpdate(assistantView.copy(workspaceId = Uuid.random()), settings())
 
         assertEquals("/workspace/project", sameWorkspace.workspaceCwd)

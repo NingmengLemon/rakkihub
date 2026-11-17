@@ -52,7 +52,7 @@ data class StdioMcpServer(
 }
 ```
 
-单独字段的原因：`McpServerConfig` 是带 `@SerialName` 的 sealed class，旧构建的 `ignoreUnknownKeys` 只能忽略未知字段，不能忽略未知的子类判别值。把 stdio 放进新的 `stdioMcpServers` 字段，旧构建不读这个 key，不会因为 `"stdio"` 反序列化失败而拒绝整份设置。设置按字段存储，落地时要同时加 `SETTINGS_FIELDS` 条目和 `SettingsStore` 的 preference key，默认空列表；旧构建不认识这个 key，保存设置时也不会碰它。
+单独字段的原因：`McpServerConfig` 是带 `@SerialName` 的 sealed class，旧构建的 `ignoreUnknownKeys` 只能忽略未知字段，不能忽略未知的子类判别值。把 stdio 放进新的 `stdioMcpServers` 字段，旧构建不读这个 key，不会因为 `"stdio"` 反序列化失败而拒绝整份设置。设置按字段存储，已加 `SETTINGS_FIELDS` 条目和 `SettingsStore` 的 preference key，默认空列表；旧构建不认识这个 key，保存设置时也不会碰它。
 
 运行时把两份配置合并：
 
@@ -63,7 +63,7 @@ fun Settings.allMcpServers(): List<McpServerConfig> =
 
 `StdioMcpServer.toRuntimeConfig()` 生成 `McpServerConfig.StdioServer`（实现 `clone()`；`serverUrl` 返回空串，`connectionKey` 带 stdio 字段）。HTTP 的序列化列表不变，stdio 不参与 OAuth；UI 对 stdio 不显示授权入口。
 
-`SettingsNormalization.validMcpServerIds` 也要改成两份列表的 id 并集；否则每次设置写入都会把 assistant 的 stdio 引用过滤掉。
+`SettingsNormalization.validMcpServerIds` 已改为两份列表的 id 并集；否则每次设置写入都会把 assistant 的 stdio 引用过滤掉。`ConversationConfig.getAssistantOf`、`SettingsRoutes`、`ConversationRoutes` 也按同一并集校验。
 
 约束：
 
@@ -140,7 +140,7 @@ client.connect(transport)
 
 `Client` 构造只接受 `Implementation` 和可选的 `ClientOptions`；连接是 `sdkClient.connect(transport)`，不是构造时注入 transport。`kotlinx.io` 的 `asSource`/`asSink` 返回 `RawSource`/`RawSink`，必须 `.buffered()` 才能满足 `StdioClientTransport` 的 `Source`/`Sink` 参数。`kotlinx-io-core` 目前由 MCP SDK 传递提供；如果 compile classpath 不暴露它，需要在版本目录里显式加依赖。
 
-`McpSessionRegistry` 增加 stdio 分支。凡是直接读 `settings.mcpServers` 的路径都要改成 `settings.allMcpServers()`：`McpManager.init` 的 `reconcile` 输入、`McpManager.getAllAvailableTools` 的过滤、`McpSessionRegistry.addClient` 按 id 查当前配置、`McpSessionRegistry.syncTools` 把发现结果写回；其中 `syncTools` 要按运行类型写回 `mcpServers` 或 `stdioMcpServers`，不能一律写回 HTTP 列表。
+`McpSessionRegistry` 增加 stdio 分支。凡是直接读 `settings.mcpServers` 的路径都要改成 `settings.allMcpServers()`：`McpManager.init` 的 `reconcile` 输入、`McpManager.getAllAvailableTools` 的过滤、`McpSessionRegistry.addClient` 按 id 查当前配置、`McpSessionRegistry.syncTools` 把发现结果写回；其中 `syncTools` 要按运行类型写回 `mcpServers` 或 `stdioMcpServers`，不能一律写回 HTTP 列表。`AssistantDetailVM.mcpServerConfigs` 目前是 UI 用的 HTTP 列表，stdio UI 阶段再合并展示；`ConversationConfig` 和两个 Web 路由的 id 校验已改成 HTTP+stdio 并集。
 
 - `createTransport` 为 stdio 构造上述 transport；`createSdkClient` 仍用 `Client(clientInfo = Implementation(...))`。
 - 连接、重连、状态和工具同步复用现有 `connectSession` / `syncTools` / `MAX_RECONNECT_ATTEMPTS`（5 次）和 `calculateBackoffDelay`，不另造一套 3 次策略。
@@ -169,7 +169,7 @@ MCP 设置页新增传输类型“stdio”，字段：
 - 工具审批沿用 `McpTool.needsApproval` 和会话审批状态；stdio 不绕过审批。
 - 仅作为工具的 MCP Server 不进入聊天请求上下文；服务端 `notifications` 先只记日志，不做 UI 推送。
 - 官方兼容导出过滤 `stdioMcpServers` 和引用它们的 assistant id，避免官方客户端解码未知配置；自家备份保留完整配置。
-- 旧构建不认识新的 DataStore key，会忽略 `stdioMcpServers`，能正常解码设置；该配置本身在旧构建保存设置时不会被删除，但旧构建的 `SettingsNormalization` 只把 HTTP id 视为有效，会从 assistant 的 `mcpServers` 里清掉 stdio 引用。旧构建也无法运行这些 Server，这是已知降级限制，要写进 README。
+- 旧构建不认识新的 DataStore key，会忽略 `stdioMcpServers`，能正常解码设置；该配置本身在旧构建保存设置时不会被删除，但旧构建的 `SettingsNormalization` 只把 HTTP id 视为有效，会从 assistant 的 `mcpServers` 里清掉 stdio 引用。旧构建也无法运行这些 Server，这是已知降级限制，已写进 README。
 - 日志只记 Server id、命令 basename、退出码和 stderr 摘要；不记录 env 值、完整命令行或协议正文。`StdioMcpServer.toString()` 已对 env 做 key 级脱敏。
 
 ## 失败处理

@@ -114,6 +114,13 @@ data class Settings(
     }
 }
 
+/** HTTP 与 stdio MCP 的 id 集合；校验 assistant 引用时不要只看 mcpServers。 */
+fun Settings.allMcpServerIds(): Set<Uuid> =
+    buildSet {
+        addAll(mcpServers.map { it.id })
+        addAll(stdioMcpServers.map { it.id })
+    }
+
 @Serializable
 data class NetworkSetting(
     val userAgent: String = "",

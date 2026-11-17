@@ -5,6 +5,7 @@ import me.rerere.ai.core.ReasoningLevel
 import me.rerere.ai.provider.BuiltInTools
 import me.rerere.ai.provider.Model
 import me.rerere.rikkahub.data.datastore.Settings
+import me.rerere.rikkahub.data.datastore.allMcpServerIds
 import me.rerere.rikkahub.data.datastore.findModelById
 import me.rerere.rikkahub.data.datastore.getAssistantById
 import me.rerere.rikkahub.data.datastore.getCurrentAssistant
@@ -101,7 +102,7 @@ fun Settings.getAssistantOf(conversation: Conversation): Assistant {
     if (conversation.config == null) return assistant
     // 助手自身的失效引用在读取设置时已清理，会话上固定的这份在这里滤掉
     return assistant.copy(
-        mcpServers = assistant.mcpServers.filterTo(mutableSetOf()) { id -> mcpServers.any { it.id == id } },
+        mcpServers = assistant.mcpServers.filterTo(mutableSetOf()) { id -> id in allMcpServerIds() },
         modeInjectionIds = assistant.modeInjectionIds
             .filterTo(mutableSetOf()) { id -> modeInjections.any { it.id == id } },
         lorebookIds = assistant.lorebookIds.filterTo(mutableSetOf()) { id -> lorebooks.any { it.id == id } },

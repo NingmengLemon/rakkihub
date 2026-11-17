@@ -3,20 +3,21 @@ package me.rerere.rikkahub.web.routes
 import io.ktor.http.HttpStatusCode
 import io.ktor.server.request.receive
 import io.ktor.server.response.respond
-import io.ktor.server.routing.post
 import io.ktor.server.routing.Route
+import io.ktor.server.routing.post
 import io.ktor.server.routing.route
 import me.rerere.ai.provider.BuiltInTools
 import me.rerere.ai.provider.ModelType
 import me.rerere.rikkahub.data.datastore.SettingsStore
+import me.rerere.rikkahub.data.datastore.allMcpServerIds
 import me.rerere.rikkahub.data.datastore.findModelById
 import me.rerere.rikkahub.web.BadRequestException
 import me.rerere.rikkahub.web.NotFoundException
-import me.rerere.rikkahub.web.dto.UpdateAssistantModelRequest
-import me.rerere.rikkahub.web.dto.UpdateAssistantRequest
-import me.rerere.rikkahub.web.dto.UpdateAssistantReasoningLevelRequest
-import me.rerere.rikkahub.web.dto.UpdateAssistantMcpServersRequest
 import me.rerere.rikkahub.web.dto.UpdateAssistantInjectionsRequest
+import me.rerere.rikkahub.web.dto.UpdateAssistantMcpServersRequest
+import me.rerere.rikkahub.web.dto.UpdateAssistantModelRequest
+import me.rerere.rikkahub.web.dto.UpdateAssistantReasoningLevelRequest
+import me.rerere.rikkahub.web.dto.UpdateAssistantRequest
 import me.rerere.rikkahub.web.dto.UpdateBuiltInToolRequest
 import me.rerere.rikkahub.web.dto.UpdateFavoriteModelsRequest
 import me.rerere.rikkahub.web.dto.UpdateSearchEnabledRequest
@@ -77,7 +78,7 @@ fun Route.settingsRoutes(
                 throw NotFoundException("Assistant not found")
             }
 
-            val validServerIds = settings.mcpServers.map { it.id }.toSet()
+            val validServerIds = settings.allMcpServerIds()
             val requestedServerIds = request.mcpServerIds.map { it.toUuid("mcpServerIds") }.toSet()
             if (!validServerIds.containsAll(requestedServerIds)) {
                 throw BadRequestException("mcpServerIds contains unknown server id")

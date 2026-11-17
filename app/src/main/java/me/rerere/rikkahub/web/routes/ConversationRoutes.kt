@@ -17,6 +17,7 @@ import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.merge
 import me.rerere.ai.provider.ModelType
 import me.rerere.rikkahub.data.datastore.SettingsStore
+import me.rerere.rikkahub.data.datastore.allMcpServerIds
 import me.rerere.rikkahub.data.datastore.findModelById
 import me.rerere.rikkahub.data.repository.ConversationRepository
 import me.rerere.rikkahub.data.repository.FolderRepository
@@ -229,7 +230,7 @@ fun Route.conversationRoutes(
                 }
             }
             val mcpServers = request.mcpServerIds?.map { it.toUuid("mcpServerIds") }?.toSet()?.also { ids ->
-                if (!settings.mcpServers.map { it.id }.containsAll(ids)) {
+                if (!settings.allMcpServerIds().containsAll(ids)) {
                     throw BadRequestException("mcpServerIds contains unknown server id")
                 }
             }
