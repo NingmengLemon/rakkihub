@@ -28,7 +28,7 @@
 
 ## 配置与持久化
 
-`McpServerConfig` 仍只描述 HTTP 传输。stdio 配置单独放在 `Settings.stdioMcpServers`，用新的 JSON key 持久化：
+`McpServerConfig` 的持久化形态仍只含 HTTP 子类；运行时有非持久化的 `McpServerConfig.StdioServer`。stdio 配置单独放在 `Settings.stdioMcpServers`，用新的 DataStore preference key 持久化（不是把新子类塞进 `mcp_servers` 的 JSON）：
 
 ```kotlin
 @Serializable
@@ -52,15 +52,18 @@ data class StdioMcpServer(
 }
 ```
 
-单独 key 的原因：`McpServerConfig` 是带 `@SerialName` 的 sealed class，旧构建的 `ignoreUnknownKeys` 只能忽略未知字段，不能忽略未知的子类判别值。把 stdio 放进新的 `stdioMcpServers` 字段，旧构建会忽略整个字段，不会因为 `"stdio"` 反序列化失败而拒绝整份设置。
+单独字段的原因：`McpServerConfig` 是带 `@SerialName` 的 sealed class，旧构建的 `ignoreUnknownKeys` 只能忽略未知字段，不能忽略未知的子类判别值。把 stdio 放进新的 `stdioMcpServers` 字段，旧构建不读这个 key，不会因为 `"stdio"` 反序列化失败而拒绝整份设置。设置按字段存储，落地时要同时加 `SETTINGS_FIELDS` 条目和 `SettingsStore` 的 preference key，默认空列表；旧构建不认识这个 key，保存设置时也不会碰它。
 
 运行时把两份配置合并：
 
 ```kotlin
-val allServers = settings.mcpServers + settings.stdioMcpServers.map { it.toRuntimeConfig() }
+fun Settings.allMcpServers(): List<McpServerConfig> =
+    mcpServers + stdioMcpServers.map { it.toRuntimeConfig() }
 ```
 
 `StdioMcpServer.toRuntimeConfig()` 生成 `McpServerConfig.StdioServer`（实现 `clone()`；`serverUrl` 返回空串，`connectionKey` 带 stdio 字段）。HTTP 的序列化列表不变，stdio 不参与 OAuth；UI 对 stdio 不显示授权入口。
+
+`SettingsNormalization.validMcpServerIds` 也要改成两份列表的 id 并集；否则每次设置写入都会把 assistant 的 stdio 引用过滤掉。
 
 约束：
 
@@ -81,7 +84,7 @@ val allServers = settings.mcpServers + settings.stdioMcpServers.map { it.toRunti
 
 app 不自动创建隐藏工作区，也不自动触发 rootfs 下载。删除 MCP Server 不删除工作区。
 
-删除工作区或重装 rootfs 时，必须先停止绑定到它的 stdio 进程。收尾放在数据层：`WorkspaceRepository.delete` 和 `WorkspaceRepository.installRootfs` 在删除/替换 `linuxDir` 之前调用 `McpManager.stopServersForWorkspace(workspace.id)`。`RootfsInstaller` 会 `deleteRecursively()` 再改名，不能只靠 UI 层关闭终端。
+删除工作区或重装 rootfs 时，必须先停止绑定到它的 stdio 进程。收尾放在数据层：`WorkspaceRepository.delete` 和 `WorkspaceRepository.installRootfs` 在删除/替换 `linuxDir` 之前调用 `McpManager.stopServersForWorkspace(workspace.id)`。`RootfsInstaller` 会 `deleteRecursively()` 再改名，不能只靠 UI 层关闭终端。MCP 侧不要注入 `WorkspaceRepository`，否则 `WorkspaceRepository → McpManager → WorkspaceRepository` 会形成 Koin 环；MCP 侧只依赖 `WorkspaceDAO` 和 `WorkspaceManager` 来解析 root、校验 READY/rootfs。
 
 ## 进程启动与 IO
 
@@ -114,10 +117,10 @@ interface WorkspaceProcessLauncher {
 - 先调用 `patcher.patch(linuxDir)`，再做进程启动；否则子进程可能没有 DNS 配置。
 - 用非登录 `-c`，不用 `-lc`，避免 `/etc/profile` 或 rc 文件往 stdout 输出提示，污染 JSON-RPC。
 - 命令通过 `exec "$0" "$@"` 形式传入，参数逐项传递，不拼接 shell 字符串；cwd 按 rootfs 绝对路径直接使用。
-- env 通过 `ProcessBuilder.environment()` 注入，不拼进命令行，避免 `/proc/<pid>/cmdline` 泄露；`--kill-on-exit`、`PROOT_LOADER`、`PROOT_TMP_DIR`、`TMPDIR` 仍由 launcher 维护。
+- env 通过 rootfs 内的临时 env 文件注入，而不是 `ProcessBuilder.environment()`：`ROOTFS_ENV` 使用 `/usr/bin/env -i`，会清空继承环境，直接设 ProcessBuilder 环境变量到不了子进程。launcher 把 `KEY=VALUE` 做 shell 转义写到 `/workspace/.rikkahub/mcp/<server-id>.env`（模式 600），wrapper 执行 `set -a; . "$file"; set +a; exec "$0" "$@"`，进程结束或下一次启动时清理；这样 env 值不进入 `/proc/<pid>/cmdline`。`--kill-on-exit`、`PROOT_LOADER`、`PROOT_TMP_DIR`、`TMPDIR` 仍由 launcher 维护。
 - `stdin/stdout/stderr` 全部保持 pipe，不做 PTY；stderr 交给 MCP transport 独占，不再另开一个 64 KiB reader，避免两个读者抢同一根 pipe。
 - 进程组终止复用现有的 `terminateProot`/pid 文件逻辑；启动失败、rootfs 不可用、SSH 工作区直接返回明确错误。
-- `RikkaHubApp` 启动时的 tempDir 清理必须在 MCP 启动之前完成，并跳过仍存活进程的 `PROOT_TMP_DIR`/`TMPDIR`；否则会删掉正在运行的 stdio Server 的临时目录。
+- `RikkaHubApp` 启动时的 tempDir 清理必须在 `McpManager` 初始化之前完成，不能两个各自 `appScope.launch` 竞跑：把清理做成可等待的 startup step，或让 `McpManager` 等清理完成的信号。清理跳过 pid 文件登记表中仍存活的进程的 `PROOT_TMP_DIR`/`TMPDIR`，否则会删掉正在运行的 stdio Server 的临时目录。
 
 ## MCP SDK 接入
 
@@ -137,7 +140,7 @@ client.connect(transport)
 
 `Client` 构造只接受 `Implementation` 和可选的 `ClientOptions`；连接是 `sdkClient.connect(transport)`，不是构造时注入 transport。`kotlinx.io` 的 `asSource`/`asSink` 返回 `RawSource`/`RawSink`，必须 `.buffered()` 才能满足 `StdioClientTransport` 的 `Source`/`Sink` 参数。`kotlinx-io-core` 目前由 MCP SDK 传递提供；如果 compile classpath 不暴露它，需要在版本目录里显式加依赖。
 
-`McpSessionRegistry` 增加 stdio 分支：
+`McpSessionRegistry` 增加 stdio 分支。凡是直接读 `settings.mcpServers` 的路径都要改成 `settings.allMcpServers()`：`McpManager.init` 的 `reconcile` 输入、`McpManager.getAllAvailableTools` 的过滤、`McpSessionRegistry.addClient` 按 id 查当前配置、`McpSessionRegistry.syncTools` 把发现结果写回；其中 `syncTools` 要按运行类型写回 `mcpServers` 或 `stdioMcpServers`，不能一律写回 HTTP 列表。
 
 - `createTransport` 为 stdio 构造上述 transport；`createSdkClient` 仍用 `Client(clientInfo = Implementation(...))`。
 - 连接、重连、状态和工具同步复用现有 `connectSession` / `syncTools` / `MAX_RECONNECT_ATTEMPTS`（5 次）和 `calculateBackoffDelay`，不另造一套 3 次策略。
@@ -145,9 +148,9 @@ client.connect(transport)
 - 增加 `StdioSession` 需要的进程句柄、`lastUsedAt` 和退出监控；`McpSession` 现有的 mutex、reconnectJob、statusStore 继续复用，不复制状态机。
 - 进程退出由独立协程 `process.waitFor()` 观察，记录 exit code 和 stderr 摘要后更新 `McpStatus`；`onClose`/`onError` 本身不带退出码，不能代替 wait。
 - `McpConnectionKey` 增加 `workspaceId`、`command`、`args`、`env`、`cwd`；否则编辑这些字段不会触发重连，旧子进程会继续跑。
-- 需要补的 exhaustive `when` 包括 `McpConfig.serverUrl`、`McpSessionRegistry.createTransport`、`connectionKey`、`installTransportCallbacks`、`SettingMcpDetailPage` 的传输展示和 `SettingMcpPage` 的服务器列表。
+- 需要补的 exhaustive `when` 包括 `McpConfig.serverUrl`、`McpSessionRegistry.createTransport`、`connectionKey`、`SettingMcpDetailPage` 的传输展示和 `SettingMcpPage` 的服务器列表；`installTransportCallbacks` 是传输无关的闭合回调，不在这个列表里。
 - 关闭顺序：close transport → close stdin → 等待 5 秒 → `terminateProot` 宽限终止 → SIGKILL。`--kill-on-exit` 只作为兜底，不作为正常关闭路径。
-- 禁用、删除 Server、工作区删除、rootfs 重装、app 正常退出都调用同一 `stopStdioSession`。
+- 禁用、删除 Server、工作区删除、rootfs 重装都调用同一 `stopStdioSession`；Android 真实设备不会调用 `Application.onTerminate`，app 进程被杀时依赖 `--kill-on-exit` 和进程组清理，不把正常退出当保证路径。
 
 ## UI
 
@@ -166,7 +169,7 @@ MCP 设置页新增传输类型“stdio”，字段：
 - 工具审批沿用 `McpTool.needsApproval` 和会话审批状态；stdio 不绕过审批。
 - 仅作为工具的 MCP Server 不进入聊天请求上下文；服务端 `notifications` 先只记日志，不做 UI 推送。
 - 官方兼容导出过滤 `stdioMcpServers` 和引用它们的 assistant id，避免官方客户端解码未知配置；自家备份保留完整配置。
-- 旧构建会忽略 `stdioMcpServers` 字段，能正常解码设置；但保存设置时会丢掉该字段和 assistant 里的 stdio id，这是已知降级限制，要写进 README。
+- 旧构建不认识新的 DataStore key，会忽略 `stdioMcpServers`，能正常解码设置；该配置本身在旧构建保存设置时不会被删除，但旧构建的 `SettingsNormalization` 只把 HTTP id 视为有效，会从 assistant 的 `mcpServers` 里清掉 stdio 引用。旧构建也无法运行这些 Server，这是已知降级限制，要写进 README。
 - 日志只记 Server id、命令 basename、退出码和 stderr 摘要；不记录 env 值、完整命令行或协议正文。`StdioMcpServer.toString()` 已对 env 做 key 级脱敏。
 
 ## 失败处理
@@ -191,7 +194,7 @@ JVM：
 - 官方导出过滤 stdio 配置和 assistant id。
 - `ProotWorkspaceProcessLauncher` 的参数构造用 fake launcher 验证，不依赖真实 PRoot。
 - `McpConnectionKey` 对 command/args/env/cwd/workspaceId 变化敏感。
-- 旧构建降级：用 B 落地前 APK 解码含 `stdioMcpServers` 的设置，确认不崩、保存后字段丢失但不影响正文；JVM 侧用不带该字段的旧 DTO 反序列化新 JSON。
+- 旧构建降级：用本设计落地前 APK 解码含 `stdioMcpServers` 的设置，确认不崩、新配置仍在、assistant 的 stdio 引用按旧构建归一化被清掉；JVM 侧用不带该字段的旧 DTO 反序列化新 JSON。
 
 开发机 instrumentation：
 
