@@ -55,6 +55,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -67,6 +68,7 @@ import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import kotlinx.coroutines.launch
 import me.rerere.ai.core.InputSchema
 import me.rerere.hugeicons.HugeIcons
 import me.rerere.hugeicons.stroke.Add01
@@ -81,6 +83,7 @@ import me.rerere.hugeicons.stroke.ViewOff
 import me.rerere.rikkahub.R
 import me.rerere.rikkahub.data.ai.mcp.McpManager
 import me.rerere.rikkahub.data.ai.mcp.McpServerConfig
+import me.rerere.rikkahub.data.ai.mcp.McpStatus
 import me.rerere.rikkahub.data.ai.mcp.McpTool
 import me.rerere.rikkahub.data.datastore.allMcpServers
 import me.rerere.rikkahub.data.repository.WorkspaceRepository
@@ -125,6 +128,11 @@ fun SettingMcpDetailPage(id: Uuid, vm: SettingVM = koinViewModel()) {
     // 草稿放在页面这一层，切到工具页再切回来不会丢掉没保存的修改
     var draft by remember { mutableStateOf(config) }
     val stdioDraft = draft as? McpServerConfig.StdioServer
+    val mcpManager = koinInject<McpManager>()
+    val scope = rememberCoroutineScope()
+    val status by mcpManager.getStatus(config).collectAsStateWithLifecycle(McpStatus.Idle)
+    val workspaceConflict = stdioDraft != null && stdioDraft.workspaceId.isNotBlank() &&
+        settings.stdioMcpServers.any { it.id != id && it.workspaceId == stdioDraft.workspaceId }
 
     val onSave = {
         // 只合并基础设置里能改的字段，工具列表和 OAuth 状态以后台同步写回的为准
@@ -270,6 +278,10 @@ fun SettingMcpDetailPage(id: Uuid, vm: SettingVM = koinViewModel()) {
                     McpDetailTab.BASIC -> {
                         McpBasicSettingsTab(
                             draft = draft,
+                            status = status,
+                            workspaceConflict = workspaceConflict,
+                            onStop = { scope.launch { mcpManager.removeClient(config) } },
+                            onRestart = { scope.launch { mcpManager.addClient(config) } },
                             onEdit = { draft = it },
                             onSave = onSave,
                             onDelete = onDelete,
@@ -291,6 +303,10 @@ fun SettingMcpDetailPage(id: Uuid, vm: SettingVM = koinViewModel()) {
 @Composable
 private fun McpBasicSettingsTab(
     draft: McpServerConfig,
+    status: McpStatus,
+    workspaceConflict: Boolean,
+    onStop: () -> Unit,
+    onRestart: () -> Unit,
     onEdit: (McpServerConfig) -> Unit,
     onSave: () -> Unit,
     onDelete: () -> Unit,
@@ -299,6 +315,7 @@ private fun McpBasicSettingsTab(
     var expanded by rememberSaveable { mutableStateOf(true) }
     val canSave = draft.commonOptions.name.isNotBlank() &&
         isValidMcpName(draft.commonOptions.name) &&
+        !workspaceConflict &&
         (draft !is McpServerConfig.StdioServer ||
             (draft.workspaceId.isNotBlank() && draft.command.isNotBlank() &&
                 draft.cwd.startsWith("/") && draft.startupTimeoutMs >= 1_000))
@@ -312,6 +329,10 @@ private fun McpBasicSettingsTab(
         if (stdio != null) {
             StdioMcpConfigure(
                 config = stdio,
+                status = status,
+                workspaceConflict = workspaceConflict,
+                onStop = onStop,
+                onRestart = onRestart,
                 update = onEdit,
                 modifier = Modifier.floatingToolbarVerticalNestedScroll(
                     expanded = expanded,
@@ -387,13 +408,21 @@ private fun McpBasicSettingsTab(
         },
         onDismiss = { showDeleteDialog = false },
     ) {
-        Text(stringResource(R.string.common_delete_confirm_message, draft.commonOptions.name))
+        if (draft is McpServerConfig.StdioServer) {
+            Text("删除 ${draft.commonOptions.name}？专用工作区和 rootfs 不会被删除。")
+        } else {
+            Text(stringResource(R.string.common_delete_confirm_message, draft.commonOptions.name))
+        }
     }
 }
 
 @Composable
 private fun StdioMcpConfigure(
     config: McpServerConfig.StdioServer,
+    status: McpStatus,
+    workspaceConflict: Boolean,
+    onStop: () -> Unit,
+    onRestart: () -> Unit,
     update: (McpServerConfig) -> Unit,
     modifier: Modifier = Modifier,
 ) {
@@ -411,6 +440,7 @@ private fun StdioMcpConfigure(
         mutableStateOf(config.env.joinToString("\n") { (key, value) -> "$key=$value" })
     }
     var timeoutText by remember(config.id) { mutableStateOf(config.startupTimeoutMs.toString()) }
+    var envVisible by remember(config.id) { mutableStateOf(false) }
     val selectedName = eligible.find { it.id == config.workspaceId }?.name
         ?: config.workspaceId.ifBlank { "选择专用工作区" }
 
@@ -452,32 +482,57 @@ private fun StdioMcpConfigure(
         }
 
         FormItem(
+            label = { Text("连接状态") },
+            description = { Text("停止只结束当前进程，不删除配置；重启会重新读取已保存配置。") },
+        ) {
+            Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                Text(statusText(status))
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    TextButton(onClick = onRestart) { Text("重启") }
+                    TextButton(
+                        onClick = onStop,
+                        enabled = status != McpStatus.Idle,
+                    ) { Text("停止") }
+                }
+            }
+        }
+
+        FormItem(
             label = { Text("专用工作区") },
             description = { Text("只列出本地、rootfs 已安装且 READY 的工作区；每个 stdio Server 用一个专用工作区。") },
         ) {
-            Box {
-                TextButton(onClick = { workspaceMenu = true }) {
-                    Text(selectedName)
+            Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                Box {
+                    TextButton(onClick = { workspaceMenu = true }) {
+                        Text(selectedName)
+                    }
+                    DropdownMenu(
+                        expanded = workspaceMenu,
+                        onDismissRequest = { workspaceMenu = false },
+                    ) {
+                        if (eligible.isEmpty()) {
+                            DropdownMenuItem(
+                                text = { Text("没有可用工作区，请先到扩展页安装 rootfs") },
+                                onClick = { workspaceMenu = false },
+                            )
+                        }
+                        eligible.forEach { workspace ->
+                            DropdownMenuItem(
+                                text = { Text(workspace.name) },
+                                onClick = {
+                                    workspaceMenu = false
+                                    update(config.copy(workspaceId = workspace.id))
+                                },
+                            )
+                        }
+                    }
                 }
-                DropdownMenu(
-                    expanded = workspaceMenu,
-                    onDismissRequest = { workspaceMenu = false },
-                ) {
-                    if (eligible.isEmpty()) {
-                        DropdownMenuItem(
-                            text = { Text("没有可用工作区，请先到扩展页安装 rootfs") },
-                            onClick = { workspaceMenu = false },
-                        )
-                    }
-                    eligible.forEach { workspace ->
-                        DropdownMenuItem(
-                            text = { Text(workspace.name) },
-                            onClick = {
-                                workspaceMenu = false
-                                update(config.copy(workspaceId = workspace.id))
-                            },
-                        )
-                    }
+                if (workspaceConflict) {
+                    Text(
+                        text = "这个工作区已经绑定另一个 stdio Server，请换一个专用工作区",
+                        color = MaterialTheme.colorScheme.error,
+                        style = MaterialTheme.typography.bodySmall,
+                    )
                 }
             }
         }
@@ -534,7 +589,15 @@ private fun StdioMcpConfigure(
                 },
                 modifier = Modifier.fillMaxWidth(),
                 minLines = 2,
-                visualTransformation = PasswordVisualTransformation(),
+                visualTransformation = if (envVisible) VisualTransformation.None else PasswordVisualTransformation(),
+                trailingIcon = {
+                    IconButton(onClick = { envVisible = !envVisible }) {
+                        Icon(
+                            if (envVisible) HugeIcons.ViewOff else HugeIcons.View,
+                            contentDescription = null,
+                        )
+                    }
+                },
             )
         }
 
@@ -573,6 +636,16 @@ private fun StdioMcpConfigure(
             )
         }
     }
+}
+
+private fun statusText(status: McpStatus): String = when (status) {
+    McpStatus.Idle -> "未启动"
+    McpStatus.Connecting -> "连接中"
+    McpStatus.Connected -> "已连接"
+    is McpStatus.Reconnecting -> "重连中 (${status.attempt}/${status.maxAttempts})"
+    is McpStatus.Error -> "错误：${status.message}"
+    McpStatus.NeedsAuthorization -> "需要授权"
+    McpStatus.Authorizing -> "授权中"
 }
 
 @Composable

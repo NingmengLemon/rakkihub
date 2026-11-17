@@ -2,7 +2,7 @@
 
 ## 状态
 
-设计稿已复审 PASS。配置持久化（C111）、rootfs 长期进程 launcher（C112）、MCP registry 接线（C113）和 stdio 配置 UI（C114）已落地；开发机已验证 initialize、tools/list 和 Connected，callTool 的真实 UI 路径待补。
+设计稿已复审 PASS。配置持久化（C111）、rootfs 长期进程 launcher（C112）、MCP registry 接线（C113）、stdio 配置 UI（C114）和 UI 收尾（C115：状态/停止重启、工作区唯一性、env 显示、删除提示）已落地；开发机已验证 initialize、tools/list 和 Connected，callTool 的真实 UI 路径待补。
 
 ## 目标
 
