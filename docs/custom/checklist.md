@@ -121,6 +121,7 @@
 | C111 | stdio MCP 配置与持久化 | 新增 |
 | C112 | stdio MCP rootfs 进程 launcher | 新增 |
 | C113 | stdio MCP registry 接线 | 新增 |
+| C114 | stdio MCP 配置 UI | 新增 |
 
 ## 明细
 
@@ -879,3 +880,10 @@
 - 理由：stdio 和 HTTP 共用现有 session 状态机、重连预算和工具同步；不能让运行时子类进入旧构建的 `mcpServers` JSON，也不能把 stdio 工具写回 HTTP 列表。
 - 合并注意：UI 还未提供添加/编辑 stdio Server 的入口，当前只能由已有设置或后续阶段写入；`AssistantDetailVM` 的 MCP 列表仍只展示 HTTP；OAuth 对 stdio 不生效；启动 tempDir 清理和 `McpManager` 初始化的顺序留给 UI/启动阶段。进程退出只把 exit code 写进状态，stderr 由 transport/SDK debug 输出，registry 暂无摘要或日志入口，后续再补。
 - 测试：`McpConnectionKeyTest` 覆盖 stdio command/args/env/cwd/workspace 变化触发重连、工具元数据不触发；`SettingsStdioMcpTest` 覆盖 `allMcpServers()` 合并和 runtime 字段。真实 rootfs echo Server 的 initialize/listTools/callTool 验收留到设备阶段。
+
+### C114 stdio MCP 配置 UI
+
+- 落点：`SettingMcpPage` 列表合并 HTTP 与 stdio，Add 菜单分 HTTP/stdio，删除按类型写回对应列表；`SettingMcpDetailPage` 从 `allMcpServers()` 查找，stdio 走独立的 `StdioMcpConfigure`（启用/名称、专用工作区、命令、参数、env、cwd、启动超时），保存/删除/工具开关按类型写回 `mcpServers` 或 `stdioMcpServers`；`AssistantDetailVM.mcpServerConfigs` 也改用 `allMcpServers()`，助手 MCP 页才能选择和显示 stdio Server；工作区列表只显示 `capabilities().rootfs`、`READY` 且已有 rootfs 的本地工作区；保存按钮要求名称、工作区、命令和非相对 cwd。
+- 理由：配置结构已经落地，但没有 UI 就无法创建或编辑 stdio Server；复用现有 MCP 详情页可以把工具开关和状态显示一起带过来。
+- 合并注意：新增文案目前用中文硬编码，未走四份 locale，后续统一走 i18n；env 输入用密码视觉变换，多行参数/环境变量用本地文本状态，避免过滤空行后无法输入第二行；工作区绑定唯一性、命令 NUL/换行和 rootfs 二次校验仍由保存/启动阶段补。
+- 测试：JVM 覆盖配置归一化和 runtime 合并；开发机手动验收添加、编辑、删除、助手 MCP 选择；本地 workspace rootfs 用 perl 写了一个最小 stdio MCP Server，验证 initialize、tools/list、工具写回和 Connected 状态。callTool 的真实 UI 路径尚未验收，留到后续设备阶段。

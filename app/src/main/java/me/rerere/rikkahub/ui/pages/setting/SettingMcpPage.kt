@@ -25,6 +25,8 @@ import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.LargeFlexibleTopAppBar
@@ -73,6 +75,8 @@ import me.rerere.rikkahub.data.ai.mcp.McpCommonOptions
 import me.rerere.rikkahub.data.ai.mcp.McpManager
 import me.rerere.rikkahub.data.ai.mcp.McpServerConfig
 import me.rerere.rikkahub.data.ai.mcp.McpStatus
+import me.rerere.rikkahub.data.ai.mcp.StdioMcpServer
+import me.rerere.rikkahub.data.ai.mcp.toRuntimeConfig
 import me.rerere.rikkahub.ui.components.nav.BackButton
 import me.rerere.rikkahub.ui.components.ui.ItemAction
 import me.rerere.rikkahub.ui.components.ui.ItemActionMenu
@@ -89,9 +93,10 @@ import org.koin.compose.koinInject
 @Composable
 fun SettingMcpPage(vm: SettingVM = koinViewModel()) {
     val settings by vm.settings.collectAsStateWithLifecycle()
-    val mcpConfigs = settings.mcpServers
+    val mcpConfigs = settings.mcpServers + settings.stdioMcpServers.map { it.toRuntimeConfig() }
     val navController = LocalNavController.current
     var showImportDialog by remember { mutableStateOf(false) }
+    var showAddMenu by remember { mutableStateOf(false) }
     val scrollBehavior = TopAppBarDefaults.exitUntilCollapsedScrollBehavior()
     Scaffold(
         topBar = {
@@ -110,17 +115,45 @@ fun SettingMcpPage(vm: SettingVM = koinViewModel()) {
                     ) {
                         Icon(HugeIcons.FileImport, null)
                     }
-                    IconButton(
-                        onClick = {
-                            // 名称为空的配置不会连接，先加进列表，具体配置到详情页里填
-                            val config = McpServerConfig.StreamableHTTPServer()
-                            vm.updateSettings { latest ->
-                                latest.copy(mcpServers = latest.mcpServers + config)
+                    Box {
+                        IconButton(
+                            onClick = {
+                                showAddMenu = true
                             }
-                            navController.navigate(Screen.SettingMcpDetail(serverId = config.id.toString()))
+                        ) {
+                            Icon(HugeIcons.Add01, null)
                         }
-                    ) {
-                        Icon(HugeIcons.Add01, null)
+                        DropdownMenu(
+                            expanded = showAddMenu,
+                            onDismissRequest = { showAddMenu = false },
+                        ) {
+                            DropdownMenuItem(
+                                text = { Text("Streamable HTTP") },
+                                onClick = {
+                                    showAddMenu = false
+                                    val config = McpServerConfig.StreamableHTTPServer()
+                                    vm.updateSettings { latest ->
+                                        latest.copy(mcpServers = latest.mcpServers + config)
+                                    }
+                                    navController.navigate(Screen.SettingMcpDetail(serverId = config.id.toString()))
+                                },
+                            )
+                            DropdownMenuItem(
+                                text = { Text("stdio") },
+                                onClick = {
+                                    showAddMenu = false
+                                    val config = StdioMcpServer(
+                                        commonOptions = McpCommonOptions(),
+                                        workspaceId = "",
+                                        command = "",
+                                    )
+                                    vm.updateSettings { latest ->
+                                        latest.copy(stdioMcpServers = latest.stdioMcpServers + config)
+                                    }
+                                    navController.navigate(Screen.SettingMcpDetail(serverId = config.id.toString()))
+                                },
+                            )
+                        }
                     }
                 },
                 scrollBehavior = scrollBehavior,
@@ -165,9 +198,15 @@ fun SettingMcpPage(vm: SettingVM = koinViewModel()) {
                         },
                         onDelete = {
                             vm.updateSettings { latest ->
-                                latest.copy(
-                                    mcpServers = latest.mcpServers.filter { it.id != mcpConfig.id }
-                                )
+                                if (mcpConfig is McpServerConfig.StdioServer) {
+                                    latest.copy(
+                                        stdioMcpServers = latest.stdioMcpServers.filter { it.id != mcpConfig.id }
+                                    )
+                                } else {
+                                    latest.copy(
+                                        mcpServers = latest.mcpServers.filter { it.id != mcpConfig.id }
+                                    )
+                                }
                             }
                         },
                         modifier = Modifier.animateItem()

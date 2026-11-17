@@ -16,6 +16,7 @@ import me.rerere.rikkahub.data.ai.MemoryConsolidationScheduler
 import me.rerere.rikkahub.data.ai.MemoryConsolidationStatus
 import me.rerere.rikkahub.data.datastore.Settings
 import me.rerere.rikkahub.data.datastore.SettingsStore
+import me.rerere.rikkahub.data.datastore.allMcpServers
 import me.rerere.rikkahub.data.db.entity.WorkspaceEntity
 import me.rerere.rikkahub.data.model.Assistant
 import me.rerere.rikkahub.data.model.MemoryFile
@@ -52,7 +53,7 @@ class AssistantDetailVM(
 
     val mcpServerConfigs = settingsStore
         .settingsFlow.map { settings ->
-            settings.mcpServers
+            settings.allMcpServers()
         }.stateIn(
             scope = viewModelScope,
             started = SharingStarted.Eagerly,

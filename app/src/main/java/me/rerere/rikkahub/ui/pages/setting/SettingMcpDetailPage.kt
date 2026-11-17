@@ -34,6 +34,8 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.FloatingToolbarDefaults.ScreenOffset
 import androidx.compose.material3.FloatingToolbarDefaults.floatingToolbarVerticalNestedScroll
 import androidx.compose.material3.HorizontalDivider
@@ -47,6 +49,7 @@ import androidx.compose.material3.SegmentedButton
 import androidx.compose.material3.SegmentedButtonDefaults
 import androidx.compose.material3.SingleChoiceSegmentedButtonRow
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -79,6 +82,8 @@ import me.rerere.rikkahub.R
 import me.rerere.rikkahub.data.ai.mcp.McpManager
 import me.rerere.rikkahub.data.ai.mcp.McpServerConfig
 import me.rerere.rikkahub.data.ai.mcp.McpTool
+import me.rerere.rikkahub.data.datastore.allMcpServers
+import me.rerere.rikkahub.data.repository.WorkspaceRepository
 import me.rerere.rikkahub.ui.components.nav.BackButton
 import me.rerere.rikkahub.ui.components.ui.PagerTab
 import me.rerere.rikkahub.ui.components.ui.PagerTabs
@@ -92,6 +97,8 @@ import me.rerere.ui.components.RikkaConfirmDialog
 import me.rerere.ui.components.Switch
 import me.rerere.ui.components.SwitchSize
 import me.rerere.ui.toast.ToastType
+import me.rerere.workspace.WorkspaceManager
+import me.rerere.workspace.WorkspaceShellStatus
 import org.koin.androidx.compose.koinViewModel
 import org.koin.compose.koinInject
 import kotlin.uuid.Uuid
@@ -111,31 +118,55 @@ private enum class McpDetailTab(
 fun SettingMcpDetailPage(id: Uuid, vm: SettingVM = koinViewModel()) {
     val settings by vm.settings.collectAsStateWithLifecycle()
     val navController = LocalNavController.current
-    val config = settings.mcpServers.find { it.id == id } ?: return
+    val config = settings.allMcpServers().find { it.id == id } ?: return
     val pager = rememberPagerState { McpDetailTab.entries.size }
     val toaster = LocalToaster.current
     val context = LocalContext.current
     // 草稿放在页面这一层，切到工具页再切回来不会丢掉没保存的修改
     var draft by remember { mutableStateOf(config) }
+    val stdioDraft = draft as? McpServerConfig.StdioServer
 
     val onSave = {
         // 只合并基础设置里能改的字段，工具列表和 OAuth 状态以后台同步写回的为准
         vm.updateSettings { latest ->
-            latest.copy(
-                mcpServers = latest.mcpServers.map { server ->
-                    if (server.id == id) {
-                        draft.clone(
-                            commonOptions = server.commonOptions.copy(
-                                enable = draft.commonOptions.enable,
-                                name = draft.commonOptions.name,
-                                headers = draft.commonOptions.headers,
+            if (stdioDraft != null) {
+                latest.copy(
+                    stdioMcpServers = latest.stdioMcpServers.map { server ->
+                        if (server.id == id) {
+                            server.copy(
+                                commonOptions = server.commonOptions.copy(
+                                    enable = stdioDraft.commonOptions.enable,
+                                    name = stdioDraft.commonOptions.name,
+                                ),
+                                workspaceId = stdioDraft.workspaceId,
+                                command = stdioDraft.command,
+                                args = stdioDraft.args,
+                                env = stdioDraft.env,
+                                cwd = stdioDraft.cwd,
+                                startupTimeoutMs = stdioDraft.startupTimeoutMs,
                             )
-                        )
-                    } else {
-                        server
+                        } else {
+                            server
+                        }
                     }
-                }
-            )
+                )
+            } else {
+                latest.copy(
+                    mcpServers = latest.mcpServers.map { server ->
+                        if (server.id == id) {
+                            draft.clone(
+                                commonOptions = server.commonOptions.copy(
+                                    enable = draft.commonOptions.enable,
+                                    name = draft.commonOptions.name,
+                                    headers = draft.commonOptions.headers,
+                                )
+                            )
+                        } else {
+                            server
+                        }
+                    }
+                )
+            }
         }
         toaster.show(
             context.getString(R.string.setting_provider_page_save_success),
@@ -144,31 +175,57 @@ fun SettingMcpDetailPage(id: Uuid, vm: SettingVM = koinViewModel()) {
     }
     val onDelete = {
         vm.updateSettings { latest ->
-            latest.copy(mcpServers = latest.mcpServers.filter { it.id != id })
+            if (stdioDraft != null) {
+                latest.copy(stdioMcpServers = latest.stdioMcpServers.filter { it.id != id })
+            } else {
+                latest.copy(mcpServers = latest.mcpServers.filter { it.id != id })
+            }
         }
         navController.popBackStack()
     }
     val onToolChange = { tool: McpTool ->
         vm.updateSettings { latest ->
-            latest.copy(
-                mcpServers = latest.mcpServers.map { server ->
-                    if (server.id == id) {
-                        server.clone(
-                            commonOptions = server.commonOptions.copy(
-                                tools = server.commonOptions.tools.map {
-                                    if (it.name == tool.name) {
-                                        it.copy(enable = tool.enable, needsApproval = tool.needsApproval)
-                                    } else {
-                                        it
+            if (stdioDraft != null) {
+                latest.copy(
+                    stdioMcpServers = latest.stdioMcpServers.map { server ->
+                        if (server.id == id) {
+                            server.copy(
+                                commonOptions = server.commonOptions.copy(
+                                    tools = server.commonOptions.tools.map {
+                                        if (it.name == tool.name) {
+                                            it.copy(enable = tool.enable, needsApproval = tool.needsApproval)
+                                        } else {
+                                            it
+                                        }
                                     }
-                                }
+                                )
                             )
-                        )
-                    } else {
-                        server
+                        } else {
+                            server
+                        }
                     }
-                }
-            )
+                )
+            } else {
+                latest.copy(
+                    mcpServers = latest.mcpServers.map { server ->
+                        if (server.id == id) {
+                            server.clone(
+                                commonOptions = server.commonOptions.copy(
+                                    tools = server.commonOptions.tools.map {
+                                        if (it.name == tool.name) {
+                                            it.copy(enable = tool.enable, needsApproval = tool.needsApproval)
+                                        } else {
+                                            it
+                                        }
+                                    }
+                                )
+                            )
+                        } else {
+                            server
+                        }
+                    }
+                )
+            }
         }
     }
 
@@ -240,23 +297,38 @@ private fun McpBasicSettingsTab(
 ) {
     var showDeleteDialog by remember { mutableStateOf(false) }
     var expanded by rememberSaveable { mutableStateOf(true) }
-    val canSave = draft.commonOptions.name.isNotBlank() && isValidMcpName(draft.commonOptions.name)
+    val canSave = draft.commonOptions.name.isNotBlank() &&
+        isValidMcpName(draft.commonOptions.name) &&
+        (draft !is McpServerConfig.StdioServer ||
+            (draft.workspaceId.isNotBlank() && draft.command.isNotBlank() && draft.cwd.startsWith("/")))
+    val stdio = draft as? McpServerConfig.StdioServer
 
     Box(
         modifier = Modifier
             .fillMaxSize()
             .imePadding()
     ) {
-        McpCommonOptionsConfigure(
-            config = draft,
-            update = onEdit,
-            modifier = Modifier.floatingToolbarVerticalNestedScroll(
-                expanded = expanded,
-                onExpand = { expanded = true },
-                onCollapse = { expanded = false },
-            ),
-        )
-
+        if (stdio != null) {
+            StdioMcpConfigure(
+                config = stdio,
+                update = onEdit,
+                modifier = Modifier.floatingToolbarVerticalNestedScroll(
+                    expanded = expanded,
+                    onExpand = { expanded = true },
+                    onCollapse = { expanded = false },
+                ),
+            )
+        } else {
+            McpCommonOptionsConfigure(
+                config = draft,
+                update = onEdit,
+                modifier = Modifier.floatingToolbarVerticalNestedScroll(
+                    expanded = expanded,
+                    onExpand = { expanded = true },
+                    onCollapse = { expanded = false },
+                ),
+            )
+        }
         // 键盘弹出时收起，不然会盖住正在输入的那一行
         AnimatedVisibility(
             visible = !WindowInsets.isImeVisible,
@@ -315,6 +387,182 @@ private fun McpBasicSettingsTab(
         onDismiss = { showDeleteDialog = false },
     ) {
         Text(stringResource(R.string.common_delete_confirm_message, draft.commonOptions.name))
+    }
+}
+
+@Composable
+private fun StdioMcpConfigure(
+    config: McpServerConfig.StdioServer,
+    update: (McpServerConfig) -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    val repository = koinInject<WorkspaceRepository>()
+    val workspaceManager = koinInject<WorkspaceManager>()
+    val workspaces by repository.listFlow().collectAsStateWithLifecycle(initialValue = emptyList())
+    val eligible = workspaces.filter {
+        it.capabilities().rootfs &&
+            it.shellStatus == WorkspaceShellStatus.READY.name &&
+            workspaceManager.hasRootfs(it.root)
+    }
+    var workspaceMenu by remember { mutableStateOf(false) }
+    var argsText by remember(config.id) { mutableStateOf(config.args.joinToString("\n")) }
+    var envText by remember(config.id) {
+        mutableStateOf(config.env.joinToString("\n") { (key, value) -> "$key=$value" })
+    }
+    val selectedName = eligible.find { it.id == config.workspaceId }?.name
+        ?: config.workspaceId.ifBlank { "选择专用工作区" }
+
+    Column(
+        modifier = modifier
+            .fillMaxSize()
+            .verticalScroll(rememberScrollState())
+            .padding(start = 16.dp, top = 16.dp, end = 16.dp, bottom = 128.dp),
+        verticalArrangement = Arrangement.spacedBy(12.dp),
+    ) {
+        FormItem(
+            label = { Text(stringResource(R.string.setting_mcp_page_enable)) },
+            description = { Text(stringResource(R.string.setting_mcp_page_enable_desc)) },
+        ) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Switch(
+                    checked = config.commonOptions.enable,
+                    onCheckedChange = { enabled ->
+                        update(config.copy(commonOptions = config.commonOptions.copy(enable = enabled)))
+                    },
+                )
+            }
+        }
+
+        FormItem(
+            label = { Text(stringResource(R.string.setting_mcp_page_name)) },
+            description = { Text(stringResource(R.string.setting_mcp_page_name_desc)) },
+        ) {
+            OutlinedTextField(
+                value = config.commonOptions.name,
+                onValueChange = { name ->
+                    update(config.copy(commonOptions = config.commonOptions.copy(name = name)))
+                },
+                label = { Text(stringResource(R.string.setting_mcp_page_name)) },
+                modifier = Modifier.fillMaxWidth(),
+                singleLine = true,
+                placeholder = { Text(stringResource(R.string.setting_mcp_page_name_placeholder)) },
+            )
+        }
+
+        FormItem(
+            label = { Text("专用工作区") },
+            description = { Text("只列出本地、rootfs 已安装且 READY 的工作区；每个 stdio Server 用一个专用工作区。") },
+        ) {
+            Box {
+                TextButton(onClick = { workspaceMenu = true }) {
+                    Text(selectedName)
+                }
+                DropdownMenu(
+                    expanded = workspaceMenu,
+                    onDismissRequest = { workspaceMenu = false },
+                ) {
+                    if (eligible.isEmpty()) {
+                        DropdownMenuItem(
+                            text = { Text("没有可用工作区，请先到扩展页安装 rootfs") },
+                            onClick = { workspaceMenu = false },
+                        )
+                    }
+                    eligible.forEach { workspace ->
+                        DropdownMenuItem(
+                            text = { Text(workspace.name) },
+                            onClick = {
+                                workspaceMenu = false
+                                update(config.copy(workspaceId = workspace.id))
+                            },
+                        )
+                    }
+                }
+            }
+        }
+
+        FormItem(
+            label = { Text("命令") },
+            description = { Text("可执行文件名或 rootfs 内绝对路径，不经过 shell 解析。") },
+        ) {
+            OutlinedTextField(
+                value = config.command,
+                onValueChange = { command -> update(config.copy(command = command)) },
+                modifier = Modifier.fillMaxWidth(),
+                singleLine = true,
+                placeholder = { Text("node") },
+            )
+        }
+
+        FormItem(
+            label = { Text("参数") },
+            description = { Text("每行一个参数，逐项传给进程，不做 shell 拼接。") },
+        ) {
+            OutlinedTextField(
+                value = argsText,
+                onValueChange = { text ->
+                    argsText = text
+                    update(
+                        config.copy(
+                            args = text.lines().map { it.trim() }.filter { it.isNotEmpty() },
+                        )
+                    )
+                },
+                modifier = Modifier.fillMaxWidth(),
+                minLines = 2,
+                placeholder = { Text("server.js") },
+            )
+        }
+
+        FormItem(
+            label = { Text("环境变量") },
+            description = { Text("每行 KEY=VALUE；值可能含密钥，不会写进日志。") },
+        ) {
+            OutlinedTextField(
+                value = envText,
+                onValueChange = { text ->
+                    envText = text
+                    update(
+                        config.copy(
+                            env = text.lines().mapNotNull { line ->
+                                val index = line.indexOf('=')
+                                if (index <= 0) null else line.substring(0, index).trim() to line.substring(index + 1)
+                            },
+                        )
+                    )
+                },
+                modifier = Modifier.fillMaxWidth(),
+                minLines = 2,
+                visualTransformation = PasswordVisualTransformation(),
+            )
+        }
+
+        FormItem(
+            label = { Text("工作目录") },
+            description = { Text("rootfs 内绝对路径，默认 /workspace。") },
+        ) {
+            OutlinedTextField(
+                value = config.cwd,
+                onValueChange = { cwd -> update(config.copy(cwd = cwd)) },
+                modifier = Modifier.fillMaxWidth(),
+                singleLine = true,
+            )
+        }
+
+        FormItem(
+            label = { Text("启动超时（毫秒）") },
+            description = { Text("只约束 MCP initialize；工具同步使用 SDK 默认超时。") },
+        ) {
+            OutlinedTextField(
+                value = config.startupTimeoutMs.toString(),
+                onValueChange = { value ->
+                    value.toLongOrNull()?.let { timeout ->
+                        update(config.copy(startupTimeoutMs = timeout.coerceAtLeast(1_000)))
+                    }
+                },
+                modifier = Modifier.fillMaxWidth(),
+                singleLine = true,
+            )
+        }
     }
 }
 
