@@ -2,7 +2,7 @@
 
 ## 状态
 
-设计稿已复审 PASS。配置持久化阶段已落地（C111）；rootfs 长期进程 launcher 已落地（C112）；MCP registry 接线和 UI 尚未实现。
+设计稿已复审 PASS。配置持久化（C111）、rootfs 长期进程 launcher（C112）和 MCP registry 接线（C113）已落地；stdio 配置 UI 尚未实现。
 
 ## 目标
 

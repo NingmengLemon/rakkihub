@@ -9,6 +9,7 @@ import me.rerere.asr.ASRProviderSetting
 import me.rerere.mediagen.provider.MediaGenerationProviderSetting
 import me.rerere.rikkahub.data.ai.mcp.McpServerConfig
 import me.rerere.rikkahub.data.ai.mcp.StdioMcpServer
+import me.rerere.rikkahub.data.ai.mcp.toRuntimeConfig
 import me.rerere.rikkahub.data.ai.prompts.DEFAULT_COMPRESS_PROMPT
 import me.rerere.rikkahub.data.ai.prompts.DEFAULT_OCR_PROMPT
 import me.rerere.rikkahub.data.ai.prompts.DEFAULT_TITLE_PROMPT
@@ -113,6 +114,10 @@ data class Settings(
         fun dummy() = Settings(init = true)
     }
 }
+
+/** HTTP 与 stdio MCP 的运行时配置；stdio 不写入 `mcpServers` 持久化列表。 */
+fun Settings.allMcpServers(): List<McpServerConfig> =
+    mcpServers + stdioMcpServers.map { it.toRuntimeConfig() }
 
 /** HTTP 与 stdio MCP 的 id 集合；校验 assistant 引用时不要只看 mcpServers。 */
 fun Settings.allMcpServerIds(): Set<Uuid> =

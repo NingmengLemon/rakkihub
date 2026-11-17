@@ -6,6 +6,7 @@ import io.ktor.client.request.HttpRequestBuilder
 import io.ktor.util.StringValues
 import io.modelcontextprotocol.kotlin.sdk.client.Client
 import io.modelcontextprotocol.kotlin.sdk.client.SseClientTransport
+import io.modelcontextprotocol.kotlin.sdk.client.StdioClientTransport
 import io.modelcontextprotocol.kotlin.sdk.client.StreamableHttpClientTransport
 import io.modelcontextprotocol.kotlin.sdk.shared.AbstractTransport
 import io.modelcontextprotocol.kotlin.sdk.shared.RequestOptions
@@ -32,9 +33,20 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
+import kotlinx.coroutines.withTimeout
+import kotlinx.io.asSink
+import kotlinx.io.asSource
+import kotlinx.io.buffered
 import kotlinx.serialization.json.JsonObject
 import me.rerere.rikkahub.AppScope
 import me.rerere.rikkahub.data.datastore.SettingsStore
+import me.rerere.rikkahub.data.datastore.allMcpServers
+import me.rerere.rikkahub.data.db.dao.WorkspaceDAO
+import me.rerere.rikkahub.data.db.entity.WorkspaceEntity
+import me.rerere.workspace.WorkspaceProcess
+import me.rerere.workspace.WorkspaceProcessLauncher
+import me.rerere.workspace.WorkspaceProcessSpec
+import me.rerere.workspace.WorkspaceShellStatus
 import java.util.concurrent.ConcurrentHashMap
 import kotlin.time.Duration.Companion.seconds
 import kotlin.uuid.Uuid
@@ -58,6 +70,8 @@ private class McpSession(initialConfig: McpServerConfig) {
     val lifecycleMutex = Mutex()
     var reconnectJob: Job? = null
     var reconnectAttempt: Int = 0
+    var process: WorkspaceProcess? = null
+    var processExitJob: Job? = null
 }
 
 private sealed interface ConnectResult {
@@ -97,6 +111,8 @@ internal class McpSessionRegistry(
     private val httpClient: HttpClient,
     private val oauthCoordinator: McpOAuthCoordinator,
     private val statusStore: McpStatusStore,
+    private val processLauncher: WorkspaceProcessLauncher,
+    private val workspaceDao: WorkspaceDAO,
 ) {
     private val sessions = ConcurrentHashMap<Uuid, McpSession>()
 
@@ -166,7 +182,7 @@ internal class McpSessionRegistry(
 
     suspend fun addClient(configInput: McpServerConfig) {
         // SettingsStore 是配置真源。旧任务排队后可能晚于新配置执行，不能再写回旧快照。
-        val desiredConfig = settingsStore.settingsFlow.value.mcpServers.find { it.id == configInput.id }
+        val desiredConfig = settingsStore.settingsFlow.value.allMcpServers().find { it.id == configInput.id }
         if (desiredConfig == null) {
             removeClient(configInput)
             return
@@ -229,33 +245,55 @@ internal class McpSessionRegistry(
             session.client = null
             session.connectedConfig = null
             oldClient?.let { closeClient(it, config.commonOptions.name) }
+            closeSessionProcess(session)
 
             val sdkClient = createSdkClient(config)
-            val transport = createTransport(config)
-            installTransportCallbacks(config, sdkClient, transport)
+            var stdioProcess: WorkspaceProcess? = null
 
             try {
-                sdkClient.connect(transport)
+                val transport = if (config is McpServerConfig.StdioServer) {
+                    val started = startStdioProcess(config)
+                    stdioProcess = started
+                    StdioClientTransport(
+                        input = started.stdout.asSource().buffered(),
+                        output = started.stdin.asSink().buffered(),
+                        error = started.stderr.asSource().buffered(),
+                    )
+                } else {
+                    createTransport(config)
+                }
+                installTransportCallbacks(config, sdkClient, transport)
+
+                if (config is McpServerConfig.StdioServer) {
+                    withTimeout(config.startupTimeoutMs) { sdkClient.connect(transport) }
+                } else {
+                    sdkClient.connect(transport)
+                }
                 val syncedConfig = syncTools(session, sdkClient, config)
                 if (sessions[config.id] !== session ||
                     !hasSameConnectionParameters(config, syncedConfig)
                 ) {
                     closeClient(sdkClient, config.commonOptions.name)
+                    stdioProcess?.close(5_000)
                     return@withLock ConnectResult.Stale
                 }
 
                 session.config = syncedConfig
                 session.connectedConfig = syncedConfig
                 session.client = sdkClient
+                session.process = stdioProcess
+                stdioProcess?.let { watchStdioProcess(session, it, sdkClient, syncedConfig) }
                 session.reconnectAttempt = 0
                 statusStore.update(config.id, McpStatus.Connected)
                 Log.i(TAG, "Connected MCP server ${config.id} (${config.commonOptions.name})")
                 ConnectResult.Success
             } catch (e: CancellationException) {
                 closeClient(sdkClient, config.commonOptions.name)
+                stdioProcess?.close(5_000)
                 throw e
             } catch (e: Exception) {
                 closeClient(sdkClient, config.commonOptions.name)
+                stdioProcess?.close(5_000)
                 Log.e(TAG, "Failed to connect MCP server ${config.id}", e)
                 if (oauthCoordinator.needsAuthorization(config, e)) {
                     statusStore.update(config.id, McpStatus.NeedsAuthorization)
@@ -266,6 +304,51 @@ internal class McpSessionRegistry(
                 }
             }
         }
+    }
+
+    private suspend fun startStdioProcess(config: McpServerConfig.StdioServer): WorkspaceProcess {
+        val workspace = workspaceDao.getById(config.workspaceId)
+            ?: throw IllegalStateException("Workspace not found: ${config.workspaceId}")
+        check(workspace.capabilities().rootfs) {
+            "Workspace ${workspace.name} does not provide a rootfs"
+        }
+        check(workspace.shellStatus == WorkspaceShellStatus.READY.name) {
+            "Workspace ${workspace.name} is not ready"
+        }
+        return processLauncher.launch(
+            WorkspaceProcessSpec(
+                root = workspace.root,
+                id = config.id.toString(),
+                command = config.command,
+                args = config.args,
+                env = config.env,
+                cwd = config.cwd,
+            )
+        )
+    }
+
+    private fun watchStdioProcess(
+        session: McpSession,
+        process: WorkspaceProcess,
+        client: Client,
+        config: McpServerConfig,
+    ) {
+        session.processExitJob = appScope.launch(Dispatchers.IO) {
+            val exitCode = process.process.waitFor()
+            if (sessions[config.id] === session && session.process === process) {
+                session.process = null
+                statusStore.update(config.id, McpStatus.Error("stdio process exited: $exitCode"))
+                requestReconnect(config.id, client, retryAfterFailure = true)
+            }
+        }
+    }
+
+    private suspend fun closeSessionProcess(session: McpSession) {
+        session.processExitJob?.cancel()
+        session.processExitJob = null
+        val process = session.process
+        session.process = null
+        process?.close(5_000)
     }
 
     private suspend fun syncSession(session: McpSession) {
@@ -313,14 +396,28 @@ internal class McpSessionRegistry(
         Log.i(TAG, "Synced ${serverTools.size} tools from ${connectionConfig.id}")
         var updatedConfig = connectionConfig
         settingsStore.update { old ->
-            old.copy(
-                mcpServers = old.mcpServers.map { storedConfig ->
-                    if (storedConfig.id != connectionConfig.id) return@map storedConfig
-                    val tools = mergeTools(storedConfig.commonOptions.tools, serverTools)
-                    storedConfig.clone(commonOptions = storedConfig.commonOptions.copy(tools = tools))
-                        .also { updatedConfig = it }
-                }
-            )
+            if (connectionConfig is McpServerConfig.StdioServer) {
+                old.copy(
+                    stdioMcpServers = old.stdioMcpServers.map { storedConfig ->
+                        if (storedConfig.id != connectionConfig.id) return@map storedConfig
+                        val tools = mergeTools(storedConfig.commonOptions.tools, serverTools)
+                        val updated = storedConfig.copy(
+                            commonOptions = storedConfig.commonOptions.copy(tools = tools),
+                        )
+                        updatedConfig = updated.toRuntimeConfig()
+                        updated
+                    }
+                )
+            } else {
+                old.copy(
+                    mcpServers = old.mcpServers.map { storedConfig ->
+                        if (storedConfig.id != connectionConfig.id) return@map storedConfig
+                        val tools = mergeTools(storedConfig.commonOptions.tools, serverTools)
+                        storedConfig.clone(commonOptions = storedConfig.commonOptions.copy(tools = tools))
+                            .also { updatedConfig = it }
+                    }
+                )
+            }
         }
         session.config = updatedConfig
         return updatedConfig
@@ -381,7 +478,7 @@ internal class McpSessionRegistry(
         var retry = false
         try {
             delay(delayMs)
-            val latestConfig = settingsStore.settingsFlow.value.mcpServers.find {
+            val latestConfig = settingsStore.settingsFlow.value.allMcpServers().find {
                 it.id == session.config.id &&
                     it.commonOptions.enable &&
                     it.commonOptions.name.isNotBlank()
@@ -415,6 +512,7 @@ internal class McpSessionRegistry(
             session.client = null
             session.connectedConfig = null
             sdkClient?.let { closeClient(it, session.config.commonOptions.name) }
+            closeSessionProcess(session)
         }
     }
 
@@ -439,6 +537,8 @@ internal class McpSessionRegistry(
             client = httpClient,
             requestBuilder = { appendResolvedHeaders(config) },
         )
+
+        is McpServerConfig.StdioServer -> error("Stdio transport requires a launched process")
     }
 
     private fun HttpRequestBuilder.appendResolvedHeaders(config: McpServerConfig) {
@@ -466,16 +566,27 @@ internal data class McpConnectionKey(
     val serverUrl: String,
     val clientName: String,
     val headers: List<Pair<String, String>>,
+    val workspaceId: String = "",
+    val command: String = "",
+    val args: List<String> = emptyList(),
+    val env: List<Pair<String, String>> = emptyList(),
+    val cwd: String = "",
 )
 
 internal fun McpServerConfig.connectionKey(): McpConnectionKey = McpConnectionKey(
     transportType = when (this) {
         is McpServerConfig.SseTransportServer -> "sse"
         is McpServerConfig.StreamableHTTPServer -> "streamable_http"
+        is McpServerConfig.StdioServer -> "stdio"
     },
     serverUrl = serverUrl,
     clientName = commonOptions.name,
     headers = resolvedHeaders(),
+    workspaceId = (this as? McpServerConfig.StdioServer)?.workspaceId.orEmpty(),
+    command = (this as? McpServerConfig.StdioServer)?.command.orEmpty(),
+    args = (this as? McpServerConfig.StdioServer)?.args.orEmpty(),
+    env = (this as? McpServerConfig.StdioServer)?.env.orEmpty(),
+    cwd = (this as? McpServerConfig.StdioServer)?.cwd.orEmpty(),
 )
 
 private fun hasSameConnectionParameters(

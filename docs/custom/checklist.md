@@ -120,6 +120,7 @@
 | C110 | C87 备份恢复保留手改 OCR | 改造 |
 | C111 | stdio MCP 配置与持久化 | 新增 |
 | C112 | stdio MCP rootfs 进程 launcher | 新增 |
+| C113 | stdio MCP registry 接线 | 新增 |
 
 ## 明细
 
@@ -871,3 +872,10 @@
 - 理由：stdio MCP 需要长期 stdin/stdout/stderr，不能走一次性 `executeCommand`；进程必须运行在 rootfs 里，并保留现有 PRoot 进程组终止和 rootfs 临时目录清理语义。
 - 合并注意：cwd 按 rootfs 绝对路径处理，不复用 workspace 相对映射；env 文件不进入备份/WebDAV/文件浏览器，但同一工作区的 workspace 工具和 shell 仍可访问 rootfs `/tmp` 及运行中进程的 `/proc/<pid>/environ`，这是已声明的非沙箱边界；启动失败返回明确错误，HostShellRunner 不支持长期进程；MCP registry 接线和 UI 仍在后续阶段。
 - 测试：`ProotShellRunnerProcessCommandTest` 覆盖 proot 参数、rootfs cwd、唯一 env/pid 路径、env/pid 文件参数和 wrapper；`WorkspaceManagerProcessLauncherTest` 覆盖上下文转发、`close(graceMillis)` 转发、非法 id/cwd 拒绝和 HostShellRunner 不支持错误。Windows 上完整 `:workspace:test` 仍有既有的 `/bin/sh`/路径基线失败，新增定向测试通过。
+
+### C113 stdio MCP registry 接线
+
+- 落点：`McpServerConfig` 新增运行时子类 `StdioServer`（不写回 `mcpServers` 持久化列表）；`StdioMcpServer.toRuntimeConfig()`；`Settings.allMcpServers()` 合并 HTTP 与 stdio；`McpManager` 用合并列表 reconcile、过滤工具；`McpSessionRegistry` 对 stdio 启动 `WorkspaceProcessLauncher`，用 `StdioClientTransport` 接 stdin/stdout/stderr，`withTimeout(startupTimeoutMs)` 包住初始化，独立协程观察进程退出并触发重连，关闭时先关 client 再 `close(5s)`；`syncTools` 把发现结果写回 `stdioMcpServers`；`McpConnectionKey` 把 workspace/command/args/env/cwd 纳入重连判断；DI 注入 `WorkspaceManagerProcessLauncher` 和 `WorkspaceDAO`。
+- 理由：stdio 和 HTTP 共用现有 session 状态机、重连预算和工具同步；不能让运行时子类进入旧构建的 `mcpServers` JSON，也不能把 stdio 工具写回 HTTP 列表。
+- 合并注意：UI 还未提供添加/编辑 stdio Server 的入口，当前只能由已有设置或后续阶段写入；`AssistantDetailVM` 的 MCP 列表仍只展示 HTTP；OAuth 对 stdio 不生效；启动 tempDir 清理和 `McpManager` 初始化的顺序留给 UI/启动阶段。进程退出的 stderr 摘要目前只用于状态错误，后续再补日志入口。
+- 测试：`McpConnectionKeyTest` 覆盖 stdio command/args/env/cwd/workspace 变化触发重连、工具元数据不触发；`SettingsStdioMcpTest` 覆盖 `allMcpServers()` 合并和 runtime 字段。真实 rootfs echo Server 的 initialize/listTools/callTool 验收留到设备阶段。

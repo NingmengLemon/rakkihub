@@ -57,4 +57,28 @@ class McpConnectionKeyTest {
         )
         assertEquals(manualAuthWithoutOAuth.connectionKey(), manualAuth.connectionKey())
     }
+
+    @Test
+    fun `stdio command, args, env, cwd and workspace affect connection key`() {
+        val stdio = McpServerConfig.StdioServer(
+            commonOptions = McpCommonOptions(name = "local"),
+            workspaceId = "workspace-1",
+            command = "node",
+            args = listOf("server.js"),
+            env = listOf("TOKEN" to "secret"),
+            cwd = "/workspace/app",
+        )
+
+        assertEquals("stdio", stdio.connectionKey().transportType)
+        assertEquals("", stdio.serverUrl)
+        assertNotEquals(stdio.connectionKey(), stdio.copy(command = "python").connectionKey())
+        assertNotEquals(stdio.connectionKey(), stdio.copy(args = listOf("other.js")).connectionKey())
+        assertNotEquals(stdio.connectionKey(), stdio.copy(env = emptyList()).connectionKey())
+        assertNotEquals(stdio.connectionKey(), stdio.copy(cwd = "/workspace").connectionKey())
+        assertNotEquals(stdio.connectionKey(), stdio.copy(workspaceId = "workspace-2").connectionKey())
+        assertEquals(
+            stdio.connectionKey(),
+            stdio.copy(commonOptions = stdio.commonOptions.copy(tools = listOf(McpTool(name = "x")))).connectionKey()
+        )
+    }
 }

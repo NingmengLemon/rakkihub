@@ -24,10 +24,13 @@ import me.rerere.oauth.OAuthHttpClient
 import me.rerere.oauth.OAuthLoopbackCallbackServer
 import me.rerere.rikkahub.AppScope
 import me.rerere.rikkahub.data.datastore.SettingsStore
+import me.rerere.rikkahub.data.datastore.allMcpServers
+import me.rerere.rikkahub.data.db.dao.WorkspaceDAO
 import me.rerere.rikkahub.data.files.FilesManager
 import me.rerere.rikkahub.data.files.saveUploadFromBytes
 import me.rerere.rikkahub.data.model.Assistant
 import me.rerere.rikkahub.utils.JsonInstant
+import me.rerere.workspace.WorkspaceProcessLauncher
 import okhttp3.OkHttpClient
 import java.util.concurrent.TimeUnit
 import kotlin.io.encoding.Base64
@@ -43,6 +46,8 @@ class McpManager(
     private val settingsStore: SettingsStore,
     private val appScope: AppScope,
     private val filesManager: FilesManager,
+    processLauncher: WorkspaceProcessLauncher,
+    workspaceDao: WorkspaceDAO,
 ) {
     private val okHttpClient = OkHttpClient.Builder()
         .connectTimeout(20, TimeUnit.SECONDS)
@@ -85,12 +90,14 @@ class McpManager(
         httpClient = httpClient,
         oauthCoordinator = oauthCoordinator,
         statusStore = statusStore,
+        processLauncher = processLauncher,
+        workspaceDao = workspaceDao,
     )
 
     init {
         appScope.launch {
             settingsStore.settingsFlow
-                .map { settings -> settings.mcpServers }
+                .map { settings -> settings.allMcpServers() }
                 .distinctUntilChanged()
                 .collect(sessionRegistry::reconcile)
         }
@@ -105,7 +112,7 @@ class McpManager(
 
     fun getAllAvailableTools(assistant: Assistant): List<Triple<Uuid, String, McpTool>> {
         val settings = settingsStore.settingsFlow.value
-        return settings.mcpServers
+        return settings.allMcpServers()
             .filter { it.commonOptions.enable && it.id in assistant.mcpServers }
             .flatMap { server ->
                 server.commonOptions.tools

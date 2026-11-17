@@ -32,6 +32,18 @@ class SettingsStdioMcpTest {
     }
 
     @Test
+    fun `stdio config joins the runtime server list`() {
+        val server = stdioServer()
+
+        val runtime = Settings(stdioMcpServers = listOf(server)).allMcpServers().single()
+
+        assertTrue(runtime is McpServerConfig.StdioServer)
+        assertEquals(server.id, runtime.id)
+        assertEquals("workspace-1", (runtime as McpServerConfig.StdioServer).workspaceId)
+        assertEquals("node", runtime.command)
+    }
+
+    @Test
     fun `old settings json without stdio field decodes as empty`() {
         assertTrue(JsonInstant.decodeFromString<Settings>("{}").stdioMcpServers.isEmpty())
     }

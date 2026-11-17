@@ -118,11 +118,48 @@ sealed class McpServerConfig {
             return copy(id = id, commonOptions = commonOptions)
         }
     }
+
+    /**
+     * 运行时配置，不写进 `mcpServers` 的持久化列表；持久化用 [StdioMcpServer] 独立 key。
+     * 加它只是为了复用 registry 的 session/状态机。
+     */
+    @Serializable
+    @SerialName("stdio")
+    data class StdioServer(
+        override val id: Uuid = Uuid.random(),
+        override val commonOptions: McpCommonOptions = McpCommonOptions(),
+        val workspaceId: String,
+        val command: String,
+        val args: List<String> = emptyList(),
+        val env: List<Pair<String, String>> = emptyList(),
+        val cwd: String = "/workspace",
+        val startupTimeoutMs: Long = 30_000,
+    ) : McpServerConfig() {
+        override fun clone(id: Uuid, commonOptions: McpCommonOptions): McpServerConfig {
+            return copy(id = id, commonOptions = commonOptions)
+        }
+
+        override fun toString(): String =
+            "StdioServer(id=$id, name=${commonOptions.name}, workspaceId=$workspaceId, " +
+                "command=$command, args=${args.size}, envKeys=${env.map { it.first }}, cwd=$cwd)"
+    }
 }
+
+fun StdioMcpServer.toRuntimeConfig(): McpServerConfig.StdioServer = McpServerConfig.StdioServer(
+    id = id,
+    commonOptions = commonOptions,
+    workspaceId = workspaceId,
+    command = command,
+    args = args,
+    env = env,
+    cwd = cwd,
+    startupTimeoutMs = startupTimeoutMs,
+)
 
 /** MCP Server 的连接地址（作为 OAuth 的 canonical resource 标识）。 */
 val McpServerConfig.serverUrl: String
     get() = when (this) {
         is McpServerConfig.SseTransportServer -> url
         is McpServerConfig.StreamableHTTPServer -> url
+        is McpServerConfig.StdioServer -> ""
     }

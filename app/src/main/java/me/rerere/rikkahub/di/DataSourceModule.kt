@@ -38,6 +38,7 @@ import me.rerere.rikkahub.data.sync.BackupManager
 import me.rerere.rikkahub.data.sync.webdav.WebDavSync
 import me.rerere.rikkahub.service.memoryDreamKeepAlive
 import me.rerere.search.SearchService
+import me.rerere.workspace.WorkspaceManagerProcessLauncher
 import okhttp3.OkHttpClient
 import okhttp3.logging.HttpLoggingInterceptor
 import org.koin.dsl.module
@@ -135,7 +136,15 @@ val dataSourceModule = module {
         MessageFtsManager(get())
     }
 
-    single { McpManager(settingsStore = get(), appScope = get(), filesManager = get()) }
+    single {
+        McpManager(
+            settingsStore = get(),
+            appScope = get(),
+            filesManager = get(),
+            processLauncher = WorkspaceManagerProcessLauncher(get()),
+            workspaceDao = get<AppDatabase>().workspaceDao(),
+        )
+    }
 
     single {
         MemoryConsolidator(
