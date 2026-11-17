@@ -79,6 +79,7 @@ import me.rerere.hugeicons.stroke.Tools
 import me.rerere.hugeicons.stroke.View
 import me.rerere.hugeicons.stroke.ViewOff
 import me.rerere.rikkahub.R
+import me.rerere.rikkahub.Screen
 import me.rerere.rikkahub.data.ai.mcp.McpManager
 import me.rerere.rikkahub.data.ai.mcp.McpServerConfig
 import me.rerere.rikkahub.data.ai.mcp.McpStatus
@@ -425,6 +426,7 @@ private fun StdioMcpConfigure(
 ) {
     val repository = koinInject<WorkspaceRepository>()
     val workspaceManager = koinInject<WorkspaceManager>()
+    val navController = LocalNavController.current
     val workspaces by repository.listFlow().collectAsStateWithLifecycle(initialValue = emptyList())
     val eligible = workspaces.filter {
         it.capabilities().rootfs &&
@@ -509,8 +511,11 @@ private fun StdioMcpConfigure(
                     ) {
                         if (eligible.isEmpty()) {
                             DropdownMenuItem(
-                                text = { Text("没有可用工作区，请先到扩展页安装 rootfs") },
-                                onClick = { workspaceMenu = false },
+                                text = { Text("没有可用工作区，去工作区页安装 rootfs") },
+                                onClick = {
+                                    workspaceMenu = false
+                                    navController.navigate(Screen.Workspaces)
+                                },
                             )
                         }
                         eligible.forEach { workspace ->

@@ -126,6 +126,7 @@
 | C116 | stdio MCP workspace 唯一性与列表提示 | 新增 |
 | C117 | stdio MCP 归一化引用收口 | 新增 |
 | C118 | stdio MCP 手动停止持久化 | 新增 |
+| C119 | stdio MCP 无工作区导航 | 新增 |
 
 ## 明细
 
@@ -919,3 +920,10 @@
 - 理由：C115 的停止只是移除当前 session，之后任何 `allMcpServers()` 写入（工具开关、另一个 Server 的 syncTools 回写）都会经 reconcile 重新启动，用户会看到“停止后自己又连上”。
 - 合并注意：`manuallyStopped` 只在内存里，app 重启后会恢复为启用状态；停止期间配置编辑仍保留，点重启才恢复；没有新增持久化字段。
 - 测试：编译和现有 MCP 测试；开发机手动验收可补“停止后切工具开关或写设置不自动重连”。
+
+### C119 stdio MCP 无工作区导航
+
+- 落点：`StdioMcpConfigure` 的工作区下拉在没有 eligible 项时，点击直达 `Screen.Workspaces`，提示文案改为“去工作区页安装 rootfs”。
+- 理由：C114 的空状态下拉只关闭菜单，用户需要自己找到扩展页；这是配置流程的断点。
+- 合并注意：仍然只列本地、READY 且有 rootfs 的工作区；到工作区页后用户需自行创建/安装，再回来选中。
+- 测试：编译；设备上可在无 eligible 工作区时点击该项验证导航。
