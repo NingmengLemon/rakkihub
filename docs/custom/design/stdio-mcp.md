@@ -6,7 +6,7 @@
 
 ## 目标
 
-- 支持通过本地 stdio 连接的 MCP Server，命令和子进程只运行在本地工作区的 PRoot rootfs 里。
+- 支持本地 stdio MCP Server，命令和子进程只运行在本地工作区的 PRoot rootfs 里。
 - stdio Server 的 tool 发现、tool 调用、取消和错误展示，与现有 SSE / Streamable HTTP MCP 使用同一套 `McpSessionRegistry` 和 `McpManager` 出口。
 - 每个 stdio Server 绑定一个专用本地工作区；工作区必须有可用的 rootfs，不给 app 进程裸起子进程，也不在宿主机直接执行命令。
 - 进程崩溃、rootfs 重装、工作区删除和服务禁用都有明确收尾，不留下孤儿进程。
@@ -22,58 +22,70 @@
 ## 为什么必须用专用工作区
 
 - 命令必须在 rootfs 里执行，才能使用用户安装的运行时、依赖和 `/workspace` 挂载；直接在 app 进程或宿主机 shell 起进程会绕过工作区隔离。
-- 一个 stdio Server 对应一个长期子进程，生命周期比一次 `workspace_shell` 长；必须由工作区终端/rootfs 的收尾逻辑统一管理，避免 rootfs 重装后旧进程继续持有已删除的目录。
-- 专用工作区限制 blast radius：MCP Server 默认只能访问自己的工作区文件和应用挂载，不自动获得其它工作区。
-- 现有 `WorkspaceManager` 已经提供 PRoot 参数、`--kill-on-exit`、bind mount 和环境清理；stdio 复用这些能力，而不是另造一套。
+- 一个 stdio Server 对应一个长期子进程，生命周期比一次 `workspace_shell` 长；必须由 rootfs 后端统一收尾，避免 rootfs 重装后旧进程继续持有已删除的目录。
+- 专用工作区把 MCP Server 和聊天工具的副作用分开，不和其它 stdio Server 共用一个 rootfs。它不是安全沙箱：绑定到同一 assistant 的工作区仍可被 `workspace_shell` 使用，界面要提示这一点。
+- 复用 `ProotShellRunner` 的 PRoot 参数、`--kill-on-exit`、bind mount 和 rootfs shell，不另造一套 rootfs 启动逻辑。
 
-## 配置形状
+## 配置与持久化
 
-在 `McpServerConfig` 增加一个子类：
+`McpServerConfig` 仍只描述 HTTP 传输。stdio 配置单独放在 `Settings.stdioMcpServers`，用新的 JSON key 持久化：
 
 ```kotlin
 @Serializable
-@SerialName("stdio")
-data class StdioServer(
-    override val id: Uuid = Uuid.random(),
-    override val commonOptions: McpCommonOptions = McpCommonOptions(),
-    // 专用本地工作区的 id；必须是 WorkspaceEntity.id，不允许 SSH
+data class StdioMcpServer(
+    val id: Uuid = Uuid.random(),
+    val commonOptions: McpCommonOptions = McpCommonOptions(),
+    // 专用本地工作区的 id；必须是 WorkspaceEntity.id
     val workspaceId: String,
     // 可执行文件名或绝对路径，不做 shell 解析
     val command: String,
     val args: List<String> = emptyList(),
-    // 逐项传给子进程；值可能含密钥，日志只记录 key
+    // 逐项传给子进程；值可能含密钥，toString 不打印值
     val env: List<Pair<String, String>> = emptyList(),
-    // rootfs 内的工作目录，默认 /workspace
+    // rootfs 内绝对路径，默认 /workspace
     val cwd: String = "/workspace",
     val startupTimeoutMs: Long = 30_000,
-    val idleTimeoutMs: Long = 10 * 60_000,
-) : McpServerConfig()
+) {
+    override fun toString(): String =
+        "StdioMcpServer(id=$id, name=${commonOptions.name}, workspaceId=$workspaceId, " +
+            "command=$command, args=${args.size}, envKeys=${env.map { it.first }}, cwd=$cwd)"
+}
 ```
+
+单独 key 的原因：`McpServerConfig` 是带 `@SerialName` 的 sealed class，旧构建的 `ignoreUnknownKeys` 只能忽略未知字段，不能忽略未知的子类判别值。把 stdio 放进新的 `stdioMcpServers` 字段，旧构建会忽略整个字段，不会因为 `"stdio"` 反序列化失败而拒绝整份设置。
+
+运行时把两份配置合并：
+
+```kotlin
+val allServers = settings.mcpServers + settings.stdioMcpServers.map { it.toRuntimeConfig() }
+```
+
+`StdioMcpServer.toRuntimeConfig()` 生成 `McpServerConfig.StdioServer`（实现 `clone()`；`serverUrl` 返回空串，`connectionKey` 带 stdio 字段）。HTTP 的序列化列表不变，stdio 不参与 OAuth；UI 对 stdio 不显示授权入口。
 
 约束：
 
-- `command` 不能为空，不能包含换行和 NUL；不提供 `shellCommand` 之类的整串入口，避免注入和不可控的 shell 解释。
+- `command` 不能为空，不能包含换行和 NUL；不提供 `shellCommand` 整串入口。
 - `args` 逐项传给进程，不做拼接。
-- `cwd` 必须是 rootfs 内的绝对路径或以 `/workspace` 开头的相对路径，解析后必须落在工作区内。
-- `workspaceId` 必须指向 `WorkspaceType.LOCAL`、`shellStatus = READY`、`hasRootfs(root)` 为真的工作区。
-- 同一工作区最多绑定一个 stdio Server；绑定冲突时配置保存失败，提示先换工作区或停用旧 Server。
+- `cwd` 是 rootfs 内的绝对路径，默认 `/workspace`，解析后必须落在 rootfs 内；不复用 `ProotShellRunner.prootCwd()` 的 `/workspace/` 相对映射。
+- 工作区必须满足 `capabilities().rootfs`、`shellStatus == READY`、`hasRootfs(root)`；按能力判断，不直接比较 `WorkspaceType`。
+- 同一工作区最多绑定一个 stdio Server；`SettingsNormalization` 和保存入口都要检查，备份恢复后的设置也要走同一检查。
 - `commonOptions.enable` 控制启停；禁用时停止进程但保留配置。
 
 ## 工作区准备
 
 用户流程：
 
-1. 在扩展页创建一个本地工作区，命名为 `MCP: <服务器名>` 之类，明确它只给该 Server 使用。
+1. 在扩展页创建一个本地工作区，命名如 `MCP: <服务器名>`，明确只给该 Server 使用。
 2. 在工作区详情页安装 rootfs，等待 `READY`。
-3. 在 MCP 配置里选择“stdio”，选择该工作区，填写命令、参数和 env。
+3. 在 MCP 配置里选择“stdio”，选择该工作区，填写命令、参数、env 和 cwd。
 
-app 不自动创建隐藏工作区，也不自动触发 rootfs 下载。这样用户能看见磁盘占用和 rootfs 状态；如果以后要提供“一键创建”，作为独立入口，仍复用 `WorkspaceRepository.create` 和 `installRootfs`。
+app 不自动创建隐藏工作区，也不自动触发 rootfs 下载。删除 MCP Server 不删除工作区。
 
-删除 MCP Server 不删除工作区；删除工作区或重装 rootfs 时，必须先停止绑定到它的 stdio 进程。收尾挂在 `WorkspaceRepository` 的删除/重装入口和 `WorkspaceTerminalSessionManager.stopForRoot` 同类位置，不能只靠 `Process.destroy`。
+删除工作区或重装 rootfs 时，必须先停止绑定到它的 stdio 进程。收尾放在数据层：`WorkspaceRepository.delete` 和 `WorkspaceRepository.installRootfs` 在删除/替换 `linuxDir` 之前调用 `McpManager.stopServersForWorkspace(workspace.id)`。`RootfsInstaller` 会 `deleteRecursively()` 再改名，不能只靠 UI 层关闭终端。
 
 ## 进程启动与 IO
 
-在 `workspace` 模块增加一个长期进程接口，和现有一次性 `executeCommand` 分开：
+在 `workspace` 模块增加长期进程接口，和一次性 `executeCommand` 分开：
 
 ```kotlin
 data class WorkspaceProcessSpec(
@@ -86,106 +98,115 @@ data class WorkspaceProcessSpec(
 
 data class WorkspaceProcess(
     val process: Process,
-    val stdin: OutputStream,   // 写给子进程
-    val stdout: InputStream,   // MCP JSON-RPC 输入
-    val stderr: InputStream,   // 日志/诊断
+    val stdin: OutputStream,
+    val stdout: InputStream,
+    val stderr: InputStream,
 )
+
+interface WorkspaceProcessLauncher {
+    fun launch(spec: WorkspaceProcessSpec): WorkspaceProcess
+}
 ```
 
-实现放在本地 PRoot 后端：
+实现为 `ProotWorkspaceProcessLauncher`，放在本地 PRoot 后端：
 
-- 复用 `ProotShellRunner` 的 `prootArgs`、`ROOTFS_ENV`、rootfs shell 和 `--kill-on-exit`。
-- `ProcessBuilder` 用 `context.filesDir` 作为宿主 cwd，子进程的 cwd 通过 rootfs shell 的 `-lc`/`-c` 设置；命令通过 `exec "$0" "$@"` 形式传入，参数逐项传递，不拼接 shell 字符串。
-- `stdin/stdout/stderr` 全部保持 pipe，不做 PTY 转换；`stderr` 单独读取，最多保留 64 KiB 的环形缓冲，用于错误卡片和日志。
-- 进程组终止复用 `terminateProot`/pid 文件逻辑；启动失败、启动超时、rootfs 不可用时返回明确错误。
-- SSH 工作区直接拒绝，错误文案指向“请选择本地工作区”。
-
-接口返回 `WorkspaceProcess` 而不是只返回 `Process`，让 MCP 层不需要知道 PRoot 参数；后续如果支持 SSH，在 backend 层补实现即可。
+- 复用 `ProotShellRunner` 的 `prootArgs`、`ROOTFS_ENV`、rootfs shell 和 `--kill-on-exit`；这些目前是 private，落地时要提到可复用位置或抽成 internal builder，不能复制一份参数拼装。
+- 先调用 `patcher.patch(linuxDir)`，再做进程启动；否则子进程可能没有 DNS 配置。
+- 用非登录 `-c`，不用 `-lc`，避免 `/etc/profile` 或 rc 文件往 stdout 输出提示，污染 JSON-RPC。
+- 命令通过 `exec "$0" "$@"` 形式传入，参数逐项传递，不拼接 shell 字符串；cwd 按 rootfs 绝对路径直接使用。
+- env 通过 `ProcessBuilder.environment()` 注入，不拼进命令行，避免 `/proc/<pid>/cmdline` 泄露；`--kill-on-exit`、`PROOT_LOADER`、`PROOT_TMP_DIR`、`TMPDIR` 仍由 launcher 维护。
+- `stdin/stdout/stderr` 全部保持 pipe，不做 PTY；stderr 交给 MCP transport 独占，不再另开一个 64 KiB reader，避免两个读者抢同一根 pipe。
+- 进程组终止复用现有的 `terminateProot`/pid 文件逻辑；启动失败、rootfs 不可用、SSH 工作区直接返回明确错误。
 
 ## MCP SDK 接入
 
-`com.github.rikkahub.mcp-kotlin-sdk` 的 `StdioClientTransport` 已经接受三个 `kotlinx.io` 流，不需要 SDK 自己拉起进程：
+SDK `0.15.0-rikka.4` 的实际 API 是：
 
 ```kotlin
 val transport = StdioClientTransport(
-    input = process.stdout.asSource(),
-    output = process.stdin.asSink(),
-    error = process.stderr.asSource(),
+    input = process.stdout.asSource().buffered(),
+    output = process.stdin.asSink().buffered(),
+    error = process.stderr.asSource().buffered(),
 )
-val client = Client(transport, clientInfo)
-client.connect()
+val client = Client(
+    clientInfo = Implementation(name = server.commonOptions.name, version = "1.0"),
+)
+client.connect(transport)
 ```
+
+`Client` 构造只接受 `Implementation` 和可选的 `ClientOptions`；连接是 `sdkClient.connect(transport)`，不是构造时注入 transport。`kotlinx.io` 的 `asSource`/`asSink` 返回 `RawSource`/`RawSink`，必须 `.buffered()` 才能满足 `StdioClientTransport` 的 `Source`/`Sink` 参数。`kotlinx-io-core` 目前由 MCP SDK 传递提供；如果 compile classpath 不暴露它，需要在版本目录里显式加依赖。
 
 `McpSessionRegistry` 增加 stdio 分支：
 
-- 按 `StdioServer.id` 维护 `StdioSession(process, transport, client, lastUsedAt)`。
-- 首次需要工具或调用工具时懒启动；启动失败置 `McpStatus.Error`，不阻塞其它 Server。
-- 工具列表走现有 `Client.listTools()` 映射到 `McpTool`，调用走 `Client.callTool()`；图片等结果继续交给现有 `FilesManager` 保存。
-- 配置禁停、binding 变化、工作区删除/rootfs 重装、进程退出时关闭 transport 并清理进程；退出原因写入 `McpStatus`。
-- 崩溃重启最多 3 次，指数退避，超过后停止并显示重启按钮；不无限重启。
-- 空闲超时默认 10 分钟，可配置；有进行中的请求时不回收。
-
-`McpManager` 的 `getClient` / `getAllAvailableTools` / `callTool` 保持现有签名，外部调用方不需要区分传输类型。
+- `createTransport` 为 stdio 构造上述 transport；`createSdkClient` 仍用 `Client(clientInfo = Implementation(...))`。
+- 连接、重连、状态和工具同步复用现有 `connectSession` / `syncTools` / `MAX_RECONNECT_ATTEMPTS`（5 次）和 `calculateBackoffDelay`，不另造一套 3 次策略。
+- `reconcile` 像 HTTP 一样对启用且名称非空的 stdio Server 主动 `addClient`；`syncTools` 在连接时拉 `listTools`，UI 的 `getClient` 和工具可用性沿现有路径工作。不做“懒启动”，否则工具从未发现，UI 会一直显示不可用。
+- 增加 `StdioSession` 需要的进程句柄、`lastUsedAt` 和退出监控；`McpSession` 现有的 mutex、reconnectJob、statusStore 继续复用，不复制状态机。
+- 进程退出由独立协程 `process.waitFor()` 观察，记录 exit code 和 stderr 摘要后更新 `McpStatus`；`onClose`/`onError` 本身不带退出码，不能代替 wait。
+- `McpConnectionKey` 增加 `workspaceId`、`command`、`args`、`env`、`cwd`；否则编辑这些字段不会触发重连，旧子进程会继续跑。
+- 需要补的 exhaustive `when` 包括 `McpConfig.serverUrl`、`McpSessionRegistry.createTransport`、`connectionKey`、`installTransportCallbacks`、`SettingMcpDetailPage` 的传输展示和 `SettingMcpPage` 的服务器列表。
+- 关闭顺序：close transport → close stdin → 等待 5 秒 → `terminateProot` 宽限终止 → SIGKILL。`--kill-on-exit` 只作为兜底，不作为正常关闭路径。
+- 禁用、删除 Server、工作区删除、rootfs 重装、app 正常退出都调用同一 `stopStdioSession`。
 
 ## UI
 
 MCP 设置页新增传输类型“stdio”，字段：
 
-- 工作区：只列出本地且 `READY` 的工作区；不满足时显示去工作区页安装的入口。
-- 命令、参数（每行一个）、env（key=value）、cwd、启动超时、空闲超时。
+- 工作区：列出满足本地 rootfs 和 READY 的工作区；不满足时显示去工作区页安装的入口。
+- 命令、参数（每行一个）、env（key=value）、cwd、启动超时。
 - 状态：未启动、启动中、已连接、错误；显示“停止/重启”动作。
 - 工作区绑定冲突时阻止保存。
-- 删除 Server 提示“不会删除工作区”，删除工作区提示“会先停止绑定到它的 MCP Server”。
-
-四份 locale 文案按现有 MCP 设置页前缀增加，不把命令和 env 值写进日志或导出诊断。
+- 删除 Server 提示“不会删除工作区”；删除工作区提示“会先停止绑定到它的 MCP Server”。
+- 四份 locale 文案按现有 MCP 设置页前缀增加。
 
 ## 与现有功能的关系
 
-- MCP 工具在 assistant 的 `mcpServers` 里按 id 选择，和 HTTP Server 完全混用。
+- MCP 工具在 assistant 的 `mcpServers` 里按 id 选择，stdio 和 HTTP Server 混用；assistant 的 `mcpServers` 不再只校验 HTTP 列表。
 - 工具审批沿用 `McpTool.needsApproval` 和会话审批状态；stdio 不绕过审批。
 - 仅作为工具的 MCP Server 不进入聊天请求上下文；服务端 `notifications` 先只记日志，不做 UI 推送。
-- 官方兼容导出在 `Settings.forOfficialExport()` 里过滤掉 stdio Server，避免官方客户端解码未知 transport 类型；自家备份保留完整配置。
-- MCP OAuth 只作用于 HTTP；stdio 不显示 OAuth 字段。
-- 日志只记 Server id、命令 basename、退出码和 stderr 摘要；不记录 env 值、完整命令行或协议正文。
+- 官方兼容导出过滤 `stdioMcpServers` 和引用它们的 assistant id，避免官方客户端解码未知配置；自家备份保留完整配置。
+- 旧构建会忽略 `stdioMcpServers` 字段，能正常解码设置；但保存设置时会丢掉该字段和 assistant 里的 stdio id，这是已知降级限制，要写进 README。
+- 日志只记 Server id、命令 basename、退出码和 stderr 摘要；不记录 env 值、完整命令行或协议正文。`StdioMcpServer.toString()` 已对 env 做 key 级脱敏。
 
 ## 失败处理
 
 | 场景 | 行为 |
 | --- | --- |
-| 工作区不是 LOCAL / 没有 rootfs | 保存或启动失败，提示先安装 rootfs |
+| 工作区不是 rootfs 工作区 / 没有 rootfs | 保存或启动失败，提示先安装 rootfs |
 | 命令不存在 / 没有执行权限 | 启动失败，状态 Error，stderr 摘要 |
-| 启动超时 | 终止进程，提示运行命令检查 |
-| 进程运行中崩溃 | 置 Error，最多自动重启 3 次 |
-| 工作区删除 / rootfs 重装 | 先停止进程，再执行删除/替换 |
-| app 进程退出 | `--kill-on-exit` 和进程组清理兜底，不依赖下次启动 |
+| 启动超时 | 终止进程并等待退出监控收尾，提示运行命令检查 |
+| 进程运行中崩溃 | 置 Error，最多按现有 5 次预算和退避重启 |
+| 工作区删除 / rootfs 重装 | 先在数据层停止进程，再执行删除/替换 |
+| app 进程被系统回收 | `--kill-on-exit` 和进程组清理兜底；下次启动重新按配置启动 |
 | 工具调用取消 | 取消请求；进程保留，不因单次取消重启 |
-| 同一工作区第二个 Server | 保存失败，要求专用工作区 |
+| 同一工作区第二个 Server | 保存和设置归一化都拒绝，要求专用工作区 |
 
 ## 测试与验收
 
 JVM：
 
-- `StdioServer` 序列化、默认值、旧 settings 解码。
-- 命令/参数/cwd 校验，SSH 工作区拒绝，同一工作区重复绑定拒绝。
-- 官方导出过滤 stdio Server。
-- `WorkspaceProcessLauncher` 的参数构造用 fake runner 验证，不依赖真实 PRoot。
+- `StdioMcpServer` 序列化、默认值、env `toString` 脱敏、旧 settings 解码。
+- 命令/参数/cwd 校验，SSH/无 rootfs 工作区拒绝，同一工作区重复绑定拒绝。
+- 官方导出过滤 stdio 配置和 assistant id。
+- `ProotWorkspaceProcessLauncher` 的参数构造用 fake launcher 验证，不依赖真实 PRoot。
+- `McpConnectionKey` 对 command/args/env/cwd/workspaceId 变化敏感。
+- 旧构建降级：用 B 落地前 APK 解码含 `stdioMcpServers` 的设置，确认不崩、保存后字段丢失但不影响正文；JVM 侧用不带该字段的旧 DTO 反序列化新 JSON。
 
 开发机 instrumentation：
 
-- 用本地工作区 rootfs 启动一个最小 stdio echo Server，完成 initialize、listTools、callTool、关闭。
+- 本地工作区 rootfs 启动一个最小 stdio echo Server，完成 initialize、listTools、callTool、关闭。
 - 启动失败、命令不存在、rootfs 未安装、工作区删除和 rootfs 重装的收尾。
-- 进程崩溃后的重启上限和状态。
+- 进程崩溃后的重连预算和状态。
 - 工具调用取消不影响后续调用。
 
 设备人工验收：
 
 - 创建专用工作区、安装 rootfs、添加 stdio Server、发现工具并在聊天里调用。
-- 重开 app 后按配置懒启动；禁用 Server 后进程消失。
+- 重开 app 后按配置重新启动；禁用 Server 后进程消失。
 - 官方兼容导出不含 stdio Server，自家备份恢复后配置仍在。
 
-## 待定
+## 后续可选
 
-- 专用工作区是否允许自动创建：当前建议手动创建，避免后台下载 rootfs 和隐藏磁盘占用。
-- 空闲超时的默认值和是否允许无限期常驻。
-- stdio Server 的 `stderr` 是否要给用户完整日志入口，还是只显示错误摘要。
-- 是否支持多个 stdio Server 共享同一个 rootfs（当前设计明确禁止，先保证生命周期简单）。
+- stdio Server 的 `stderr` 是否提供完整日志查看入口，还是只显示错误摘要。
+- 是否支持 SSH 工作区上的 stdio 进程。
+- Android cached-process 长期存活时是否要主动空闲回收；当前按配置常驻，禁用或工作区收尾时停止。
