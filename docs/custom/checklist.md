@@ -124,6 +124,7 @@
 | C114 | stdio MCP 配置 UI | 新增 |
 | C115 | stdio MCP UI 收尾 | 新增 |
 | C116 | stdio MCP workspace 唯一性与列表提示 | 新增 |
+| C117 | stdio MCP 归一化引用收口 | 新增 |
 
 ## 明细
 
@@ -903,3 +904,10 @@
 - 理由：C115 的唯一性只在保存按钮上，恢复/导入的重复配置仍会启动两个 Server；列表页删除提示还沿用通用文案，和详情页不一致。
 - 合并注意：归一化会静默丢弃后出现的重复 workspace 配置，只保留第一条；UI 保存入口的冲突提示仍在，防止用户新建重复配置。停止仍只是 session 级，后续 `allMcpServers()` 写入会经 reconcile 重新启动，这是已知行为。
 - 测试：`SettingsStdioMcpTest` 新增同 workspace 去重、不同 workspace 保留；`:app:testGithubDebugUnitTest`。
+
+### C117 stdio MCP 归一化引用收口
+
+- 落点：`SettingsNormalization` 先算出按 workspace 去重后的 `stdioMcpServers`，再用这份列表构造 `validMcpServerIds`，使被丢弃的重复项在同一个归一化轮次里也从 assistant 引用中移除；补 test 覆盖“丢弃项的 assistant 引用同轮清掉”和“空 workspace 按 id 保留”。
+- 理由：C116 的 `validMcpServerIds` 在去重前计算，引用被丢弃项会残留一轮，虽然运行时解析不到、下次设置写入会自愈，但状态不一致。
+- 合并注意：归一化仍然静默保留第一条；被丢弃项的 assistant 选择不会迁移到保留项，只会在同一轮被清掉，这是有意的。
+- 测试：`SettingsStdioMcpTest` 覆盖同 workspace 去重、不同 workspace 保留、空 workspace 不同 id 保留、丢弃项引用同轮移除。

@@ -2,7 +2,7 @@
 
 ## 状态
 
-设计稿已复审 PASS。配置持久化（C111）、rootfs 长期进程 launcher（C112）、MCP registry 接线（C113）、stdio 配置 UI（C114）、UI 收尾（C115：状态/停止重启、工作区唯一性、env 显示、删除提示）和归一化唯一性兜底（C116）已落地；开发机已验证 initialize、tools/list 和 Connected，callTool 的真实 UI 路径待补。
+设计稿已复审 PASS。配置持久化（C111）、rootfs 长期进程 launcher（C112）、MCP registry 接线（C113）、stdio 配置 UI（C114）、UI 收尾（C115：状态/停止重启、工作区唯一性、env 显示、删除提示）、归一化唯一性兜底（C116）和引用收口（C117）已落地；开发机已验证 initialize、tools/list 和 Connected，callTool 的真实 UI 路径待补。
 
 ## 目标
 
@@ -188,14 +188,14 @@ MCP 设置页新增传输类型“stdio”，字段：
 | 工作区删除 / rootfs 重装 | 先在数据层停止进程，再执行删除/替换 |
 | app 进程被系统回收 | `--kill-on-exit` 和进程组清理兜底；下次启动重新按配置启动 |
 | 工具调用取消 | 取消请求；进程保留，不因单次取消重启 |
-| 同一工作区第二个 Server | 保存和设置归一化都拒绝，要求专用工作区 |
+| 同一工作区第二个 Server | 保存按钮拒绝；加载/恢复/导入时归一化保留第一条、静默丢弃后出现的重复项，assistant 对丢弃项的引用同轮清掉 |
 
 ## 测试与验收
 
 JVM：
 
 - `StdioMcpServer` 序列化、默认值、env `toString` 脱敏、旧 settings 解码。
-- 命令/参数/cwd 校验，SSH/无 rootfs 工作区拒绝，同一工作区重复绑定拒绝。
+- 命令/参数/cwd 校验，SSH/无 rootfs 工作区拒绝，同一工作区重复绑定在保存按钮拒绝、在归一化层保留第一条。
 - 官方导出过滤 stdio 配置和 assistant id。
 - `WorkspaceManagerProcessLauncher` 的上下文转发和 `ProotShellRunner.buildProcessArgs` 的参数构造用 fake/定向测试验证，不依赖真实 PRoot；同 id 连续 launch 的 env/pid 路径必须不同。
 - `McpConnectionKey` 对 command/args/env/cwd/workspaceId 变化敏感。

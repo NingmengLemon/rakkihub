@@ -55,6 +55,30 @@ class SettingsStdioMcpTest {
     }
 
     @Test
+    fun `dropped duplicate workspace reference is removed from assistant in the same pass`() {
+        val first = stdioServer()
+        val duplicate = stdioServer().copy(workspaceId = first.workspaceId, command = "python")
+        val assistant = Settings().assistants.first().copy(mcpServers = setOf(duplicate.id))
+
+        val normalized = Settings(
+            assistants = listOf(assistant),
+            stdioMcpServers = listOf(first, duplicate),
+        ).normalized()
+
+        assertTrue(normalized.assistants.first { it.id == assistant.id }.mcpServers.isEmpty())
+    }
+
+    @Test
+    fun `blank workspace entries remain distinct by id`() {
+        val first = stdioServer().copy(workspaceId = "")
+        val second = stdioServer().copy(workspaceId = "", command = "python")
+
+        val normalized = Settings(stdioMcpServers = listOf(first, second)).normalized()
+
+        assertEquals(listOf(first, second), normalized.stdioMcpServers)
+    }
+
+    @Test
     fun `old settings json without stdio field decodes as empty`() {
         assertTrue(JsonInstant.decodeFromString<Settings>("{}").stdioMcpServers.isEmpty())
     }
