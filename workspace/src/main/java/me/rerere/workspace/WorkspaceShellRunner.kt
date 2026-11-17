@@ -3,6 +3,7 @@ package me.rerere.workspace
 import java.io.File
 import java.io.IOException
 import java.io.InputStream
+import java.io.OutputStream
 import java.util.concurrent.TimeUnit
 
 interface WorkspaceShellRunner {
@@ -10,6 +11,44 @@ interface WorkspaceShellRunner {
 
     /** 交互式终端的启动参数, 不支持交互式终端时返回 null */
     fun terminalLaunch(context: WorkspaceTerminalContext): WorkspaceTerminalLaunch? = null
+
+    /** 长期运行的 pipe 进程, 不支持时返回 null */
+    fun launchProcess(context: WorkspaceProcessContext): WorkspaceProcess? = null
+}
+
+data class WorkspaceProcessSpec(
+    val root: String,
+    val id: String,
+    val command: String,
+    val args: List<String> = emptyList(),
+    val env: List<Pair<String, String>> = emptyList(),
+    val cwd: String = "/workspace",
+    val shellCompatibilityMode: Boolean = false,
+)
+
+data class WorkspaceProcessContext(
+    val root: String,
+    val id: String,
+    val command: String,
+    val args: List<String>,
+    val env: List<Pair<String, String>>,
+    val cwd: String,
+    val filesDir: File,
+    val linuxDir: File,
+    val tempDir: File,
+    val bindMounts: List<WorkspaceBindMount> = emptyList(),
+    val shellCompatibilityMode: Boolean = false,
+)
+
+data class WorkspaceProcess(
+    val process: Process,
+    val stdin: OutputStream,
+    val stdout: InputStream,
+    val stderr: InputStream,
+)
+
+interface WorkspaceProcessLauncher {
+    fun launch(spec: WorkspaceProcessSpec): WorkspaceProcess
 }
 
 data class WorkspaceTerminalContext(

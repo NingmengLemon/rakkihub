@@ -2,7 +2,7 @@
 
 ## 状态
 
-设计稿已复审 PASS。配置持久化阶段已落地（C111）：`StdioMcpServer`、独立 DataStore key、归一化和官方导出过滤；进程启动、MCP registry 接线和 UI 尚未实现。
+设计稿已复审 PASS。配置持久化阶段已落地（C111）；rootfs 长期进程 launcher 已落地（C112）；MCP registry 接线和 UI 尚未实现。
 
 ## 目标
 
@@ -93,10 +93,12 @@ app 不自动创建隐藏工作区，也不自动触发 rootfs 下载。删除 M
 ```kotlin
 data class WorkspaceProcessSpec(
     val root: String,
+    val id: String,
     val command: String,
     val args: List<String>,
     val env: List<Pair<String, String>>,
     val cwd: String,
+    val shellCompatibilityMode: Boolean = false,
 )
 
 data class WorkspaceProcess(

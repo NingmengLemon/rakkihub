@@ -231,6 +231,28 @@ class WorkspaceManager(
         )
     }
 
+    fun launchProcess(root: String, spec: WorkspaceProcessSpec): WorkspaceProcess {
+        require(spec.command.isNotBlank()) { "Command is required" }
+        require(spec.id.matches(PROCESS_ID_REGEX)) { "Invalid process id: ${spec.id}" }
+        require(spec.cwd.startsWith("/")) { "Process cwd must be absolute: ${spec.cwd}" }
+        val process = shellRunner.launchProcess(
+            WorkspaceProcessContext(
+                root = root,
+                id = spec.id,
+                command = spec.command,
+                args = spec.args,
+                env = spec.env,
+                cwd = spec.cwd,
+                filesDir = filesDir(root),
+                linuxDir = linuxDir(root),
+                tempDir = tempDir(root),
+                bindMounts = bindMounts,
+                shellCompatibilityMode = spec.shellCompatibilityMode,
+            )
+        ) ?: error("This workspace backend does not support long-running stdio processes")
+        return process
+    }
+
     /** 交互式终端启动前的准备: 补齐目录, 并按当前网络刷新 Rootfs 的 DNS 等配置 */
     fun prepareTerminal(root: String, nameservers: List<String>) {
         ensureWorkspace(root)
@@ -291,6 +313,7 @@ class WorkspaceManager(
         val KERNEL_FS_MOUNTS = listOf("/dev", "/proc", "/sys")
 
         private val ROOT_NAME_REGEX = Regex("[A-Za-z0-9._-]+")
+        private val PROCESS_ID_REGEX = Regex("[A-Za-z0-9._-]+")
 
         /** Rootfs 是否可用, 以 /bin/sh 存在为准 */
         fun isUsableRootfs(linuxDir: File): Boolean =

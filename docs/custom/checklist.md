@@ -119,6 +119,7 @@
 | C109 | C87 OCR 文本编辑入口 | 新增 |
 | C110 | C87 备份恢复保留手改 OCR | 改造 |
 | C111 | stdio MCP 配置与持久化 | 新增 |
+| C112 | stdio MCP rootfs 进程 launcher | 新增 |
 
 ## 明细
 
@@ -863,3 +864,10 @@
 - 理由：stdio 配置不能塞进 sealed `McpServerConfig` 的 `mcpServers` JSON，否则旧构建遇到未知 `"stdio"` 判别值会整份设置解码失败；独立 key 让旧构建忽略配置，新构建仍能识别 assistant 引用。
 - 合并注意：旧构建能解码但无法运行 stdio，保存设置时不会删除新 key；旧构建的归一化只认 HTTP id，会清掉 assistant 的 stdio 引用，这是已知降级。官方导出不包含 stdio；自家备份保留。该阶段只落配置，进程启动和 registry 接线在后续阶段；workspace 唯一性、command/NUL/cwd 校验在保存入口和 launcher 阶段补齐。`ConversationConfig`、`SettingsRoutes`、`ConversationRoutes` 已改用 HTTP+stdio id 并集；`AssistantDetailVM` 的 MCP 列表仍是 HTTP-only，等 stdio UI 阶段再接。
 - 测试：`SettingsStdioMcpTest` 覆盖序列化往返、旧 JSON 默认空、env `toString` 脱敏、归一化保留 stdio assistant 引用、官方导出清空 stdio 和引用；`ConversationConfigTest` 覆盖绑定会话保留 stdio 引用；`SettingsFieldsTest` 的字段清单和落盘 key 快照同步。
+
+### C112 stdio MCP rootfs 进程 launcher
+
+- 落点：`WorkspaceShellRunner` 增加 `launchProcess`；新增 `WorkspaceProcessSpec` / `WorkspaceProcessContext` / `WorkspaceProcess` / `WorkspaceProcessLauncher`；`WorkspaceManager.launchProcess` 负责 id/cwd 校验和上下文组装；`ProotShellRunner.launchProcess` 复用 `prootArgs`、`ROOTFS_ENV`、`--kill-on-exit` 和 pid 文件，使用非登录 `-c`，把 env 写成 rootfs `/tmp/rikkahub/mcp/<id>.env`，wrapper 先 `set -a` 注入环境再 `exec`；`WorkspaceManagerProcessLauncher` 给 MCP 层使用。
+- 理由：stdio MCP 需要长期 stdin/stdout/stderr，不能走一次性 `executeCommand`；进程必须运行在 rootfs 里，并保留现有 PRoot 进程组终止和 rootfs 临时目录清理语义。
+- 合并注意：cwd 按 rootfs 绝对路径处理，不复用 workspace 相对映射；env 文件只在 rootfs tmp，不进入备份/文件工具；启动失败返回明确错误，HostShellRunner 不支持长期进程；MCP registry 接线和 UI 仍在后续阶段。
+- 测试：`ProotShellRunnerProcessCommandTest` 覆盖 proot 参数、rootfs cwd、env/pid 文件路径和 wrapper；`WorkspaceManagerProcessLauncherTest` 覆盖上下文转发、非法 id/cwd 拒绝和 HostShellRunner 不支持错误。Windows 上完整 `:workspace:test` 仍有既有的 `/bin/sh`/路径基线失败，新增定向测试通过。
