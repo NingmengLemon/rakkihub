@@ -891,7 +891,7 @@
 
 ### C115 stdio MCP UI 收尾
 
-- 落点：`SettingMcpDetailPage` 的 stdio 基础页增加连接状态、重启/停止按钮、工作区冲突提示和 env 显示切换；保存按钮在 workspace 已被其它 stdio Server 占用时禁用；删除确认明确工作区不删除。`McpManager.removeClient`/`addClient` 分别用于停止和重启，仍走现有 session 生命周期，不新增运行时状态。
-- 理由：C114 已经能配置和连接，但详情页看不到状态、无法手动停止/重启，两个 Server 也能静默绑定同一个工作区；这些是实际使用中会卡住的缺口。
+- 落点：`SettingMcpDetailPage` 的 stdio 基础页增加连接状态、重启/停止按钮、工作区冲突提示和 env 显示切换；保存按钮在 workspace 已被其它 stdio Server 占用时禁用；删除确认明确工作区不删除。`McpManager.removeClient`/`addClient` 分别用于停止和重启，仍走现有 session 生命周期，不新增运行时状态。`AssistantMcpPage` 顶栏增加设置入口，已有 Server 时也能进入全局 MCP 配置页。
+- 理由：C114 已经能配置和连接，但详情页看不到状态、无法手动停止/重启，两个 Server 也能静默绑定同一个工作区；已有 Server 后助手 MCP 页没有入口回全局配置，也会把状态/停止功能藏在不可达位置。
 - 合并注意：停止只结束当前 session，配置和工作区保留；重启读取已保存配置，未保存的草稿不会生效；没有可用工作区时仍只显示提示，不跳转扩展页；CardGroup 形态和四份 locale 仍未处理，后者记为 i18n debt。
-- 测试：`:app:compileGithubDebugKotlin`、`:app:testGithubDebugUnitTest`；开发机手动验收停止/重启和工作区冲突提示。callTool 真实 UI 路径仍待补。
+- 测试：`:app:compileGithubDebugKotlin`、`:app:testGithubDebugUnitTest`；开发机手动验收停止/重启、管理入口和 `Connected` 状态；工作区冲突提示按代码路径核对。callTool 真实 UI 路径仍待补。
