@@ -300,7 +300,8 @@ private fun McpBasicSettingsTab(
     val canSave = draft.commonOptions.name.isNotBlank() &&
         isValidMcpName(draft.commonOptions.name) &&
         (draft !is McpServerConfig.StdioServer ||
-            (draft.workspaceId.isNotBlank() && draft.command.isNotBlank() && draft.cwd.startsWith("/")))
+            (draft.workspaceId.isNotBlank() && draft.command.isNotBlank() &&
+                draft.cwd.startsWith("/") && draft.startupTimeoutMs >= 1_000))
     val stdio = draft as? McpServerConfig.StdioServer
 
     Box(
@@ -409,6 +410,7 @@ private fun StdioMcpConfigure(
     var envText by remember(config.id) {
         mutableStateOf(config.env.joinToString("\n") { (key, value) -> "$key=$value" })
     }
+    var timeoutText by remember(config.id) { mutableStateOf(config.startupTimeoutMs.toString()) }
     val selectedName = eligible.find { it.id == config.workspaceId }?.name
         ?: config.workspaceId.ifBlank { "选择专用工作区" }
 
@@ -553,14 +555,21 @@ private fun StdioMcpConfigure(
             description = { Text("只约束 MCP initialize；工具同步使用 SDK 默认超时。") },
         ) {
             OutlinedTextField(
-                value = config.startupTimeoutMs.toString(),
+                value = timeoutText,
                 onValueChange = { value ->
-                    value.toLongOrNull()?.let { timeout ->
-                        update(config.copy(startupTimeoutMs = timeout.coerceAtLeast(1_000)))
+                    timeoutText = value
+                    value.toLongOrNull()?.takeIf { it > 0 }?.let { timeout ->
+                        update(config.copy(startupTimeoutMs = timeout))
                     }
                 },
                 modifier = Modifier.fillMaxWidth(),
                 singleLine = true,
+                isError = timeoutText.toLongOrNull()?.let { it < 1_000 } ?: true,
+                supportingText = {
+                    if (timeoutText.toLongOrNull()?.let { it < 1_000 } ?: true) {
+                        Text("请输入不小于 1000 的毫秒数")
+                    }
+                },
             )
         }
     }

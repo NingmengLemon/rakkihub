@@ -76,7 +76,7 @@ import me.rerere.rikkahub.data.ai.mcp.McpManager
 import me.rerere.rikkahub.data.ai.mcp.McpServerConfig
 import me.rerere.rikkahub.data.ai.mcp.McpStatus
 import me.rerere.rikkahub.data.ai.mcp.StdioMcpServer
-import me.rerere.rikkahub.data.ai.mcp.toRuntimeConfig
+import me.rerere.rikkahub.data.datastore.allMcpServers
 import me.rerere.rikkahub.ui.components.nav.BackButton
 import me.rerere.rikkahub.ui.components.ui.ItemAction
 import me.rerere.rikkahub.ui.components.ui.ItemActionMenu
@@ -93,7 +93,7 @@ import org.koin.compose.koinInject
 @Composable
 fun SettingMcpPage(vm: SettingVM = koinViewModel()) {
     val settings by vm.settings.collectAsStateWithLifecycle()
-    val mcpConfigs = settings.mcpServers + settings.stdioMcpServers.map { it.toRuntimeConfig() }
+    val mcpConfigs = settings.allMcpServers()
     val navController = LocalNavController.current
     var showImportDialog by remember { mutableStateOf(false) }
     var showAddMenu by remember { mutableStateOf(false) }

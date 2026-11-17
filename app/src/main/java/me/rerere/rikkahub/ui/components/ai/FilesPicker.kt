@@ -72,6 +72,7 @@ import me.rerere.rikkahub.R
 import me.rerere.rikkahub.Screen
 import me.rerere.rikkahub.data.ai.mcp.McpManager
 import me.rerere.rikkahub.data.datastore.Settings
+import me.rerere.rikkahub.data.datastore.allMcpServers
 import me.rerere.rikkahub.data.datastore.findProvider
 import me.rerere.rikkahub.data.db.entity.WorkspaceEntity
 import me.rerere.rikkahub.data.model.Assistant
@@ -133,6 +134,7 @@ internal fun FilesPicker(
     onSketch: () -> Unit,
 ) {
     val settings = LocalSettings.current
+    val allMcpServers = settings.allMcpServers()
     val provider = chatModel?.findProvider(providers = settings.providers)
     val navController = LocalNavController.current
     val workspaceRepository: WorkspaceRepository = koinInject()
@@ -165,7 +167,7 @@ internal fun FilesPicker(
         when (currentPage) {
             FilesPickerPage.MCP -> McpPickerPage(
                 assistant = assistant,
-                servers = settings.mcpServers,
+                servers = allMcpServers,
                 mcpManager = mcpManager,
                 onUpdateAssistant = onUpdateAssistant,
                 onBack = { page = FilesPickerPage.MAIN },
@@ -222,7 +224,7 @@ internal fun FilesPicker(
 
                 // 分段列表：各项按显示条件依次占位，首尾项才有大圆角
                 val showWorkspace = workspaces.isNotEmpty()
-                val showMcp = settings.mcpServers.isNotEmpty()
+                val showMcp = allMcpServers.isNotEmpty()
                 // 搜索、扩展、上下文管理三项始终在
                 val itemCount = 3 + listOf(showWorkspace, showWorkspace && showCwd, showMcp).count { it }
                 var itemIndex = 0
@@ -285,7 +287,7 @@ internal fun FilesPicker(
                     if (showMcp) {
                         McpPickerListItem(
                             assistant = assistant,
-                            servers = settings.mcpServers,
+                            servers = allMcpServers,
                             mcpManager = mcpManager,
                             shapes = ListItemDefaults.segmentedShapes(index = itemIndex++, count = itemCount),
                             onClick = { page = FilesPickerPage.MCP },
