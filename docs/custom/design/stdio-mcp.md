@@ -106,20 +106,23 @@ data class WorkspaceProcess(
     val stdin: OutputStream,
     val stdout: InputStream,
     val stderr: InputStream,
-)
+    val terminate: (graceMillis: Long) -> Unit,
+) {
+    fun close(graceMillis: Long = 0) = terminate(graceMillis)
+}
 
 interface WorkspaceProcessLauncher {
     fun launch(spec: WorkspaceProcessSpec): WorkspaceProcess
 }
 ```
 
-实现为 `ProotWorkspaceProcessLauncher`，放在本地 PRoot 后端：
+实现放在本地 PRoot 后端：`ProotShellRunner.launchProcess` 负责进程，MCP 层通过 `WorkspaceManagerProcessLauncher` 调用 `WorkspaceManager.launchProcess`。
 
 - 复用 `ProotShellRunner` 的 `prootArgs`、`ROOTFS_ENV`、rootfs shell 和 `--kill-on-exit`；这些目前是 private，落地时要提到可复用位置或抽成 internal builder，不能复制一份参数拼装。
 - 先调用 `patcher.patch(linuxDir)`，再做进程启动；否则子进程可能没有 DNS 配置。
 - 用非登录 `-c`，不用 `-lc`，避免 `/etc/profile` 或 rc 文件往 stdout 输出提示，污染 JSON-RPC。
-- 命令通过 `exec "$0" "$@"` 形式传入，参数逐项传递，不拼接 shell 字符串；cwd 按 rootfs 绝对路径直接使用。
-- env 通过 rootfs 内的临时 env 文件注入，而不是 `ProcessBuilder.environment()`：`ROOTFS_ENV` 使用 `/usr/bin/env -i`，会清空继承环境，直接设 ProcessBuilder 环境变量到不了子进程。launcher 把 `KEY=VALUE` 做 shell 转义写到宿主的 `linuxDir(root)/tmp/rikkahub/mcp/<server-id>.env`，子进程看到的是 `/tmp/rikkahub/mcp/<server-id>.env`（模式 600）。不要放进 `/workspace`：那是 `filesDir(root)` 的 bind mount，会进自家备份、WebDAV 上传、文件浏览器和 `workspace_read_file`，assistant 还能改写它。`/tmp` 在 rootfs 内，复用现有 `cleanupAllTempDirs` 的清理，rootfs 重装也会整目录消失，和 pid 文件同族。wrapper 用非登录 shell，参数布局固定为 `shell -c 'set -a; . "$1"; set +a; shift; exec "$@"' rikkahub <envfile> <cmd> <args...>`；进程结束或下一次启动时清理 env 文件。这样 env 值不进入 `/proc/<pid>/cmdline`。`--kill-on-exit`、`PROOT_LOADER`、`PROOT_TMP_DIR`、`TMPDIR` 仍由 launcher 维护。
+- 命令通过 `rikkahub <envfile> <pidfile> <cmd> <args...>` 传给非登录 shell，参数逐项传递，不拼接 shell 字符串；cwd 按 rootfs 绝对路径直接使用。wrapper 是 `set -a; . "$1" || exit 1; set +a; echo "$$ $PPID" > "$2"; shift 2; exec "$@"`，env 读取失败直接退出，pid 文件在 exec 前写好。
+- env 通过 rootfs 内的临时 env 文件注入，而不是 `ProcessBuilder.environment()`：`ROOTFS_ENV` 使用 `/usr/bin/env -i`，会清空继承环境，直接设 ProcessBuilder 环境变量到不了子进程。launcher 把 `KEY=VALUE` 做 shell 转义写到宿主的 `linuxDir(root)/tmp/rikkahub/mcp/<server-id>-<launch-token>.env`，子进程看到的是同名 rootfs `/tmp` 路径（模式 600），每次 launch 用新的 UUID 后缀，旧进程的 cleanup 不会删掉新进程的文件。不要放进 `/workspace`：那是 `filesDir(root)` 的 bind mount，会进自家备份、WebDAV 上传和文件浏览器。rootfs `/tmp` 不进这些导出，但同一工作区的 `workspace_read_file`/`workspace_write_file`/`workspace_shell` 仍能访问它和 `/proc/<pid>/environ`，这是设计声明的非沙箱边界，UI 要提示。`/tmp` 复用现有 `cleanupAllTempDirs` 的清理，rootfs 重装也会整目录消失，和 pid 文件同族。进程结束或下一次启动时清理 env 文件；这样 env 值不进入 `/proc/<pid>/cmdline`。`--kill-on-exit`、`PROOT_LOADER`、`PROOT_TMP_DIR`、`TMPDIR` 仍由 launcher 维护。
 - `stdin/stdout/stderr` 全部保持 pipe，不做 PTY；stderr 交给 MCP transport 独占，不再另开一个 64 KiB reader，避免两个读者抢同一根 pipe。
 - 进程组终止复用现有的 `terminateProot`/pid 文件逻辑；启动失败、rootfs 不可用、SSH 工作区直接返回明确错误。
 - `RikkaHubApp` 启动时的 tempDir 清理必须在 `McpManager` 初始化之前完成，不能两个各自 `appScope.launch` 竞跑：把清理做成可等待的 startup step，或让 `McpManager` 等清理完成的信号。清理跳过 launcher 当前内存 pid 登记表中仍存活的进程的 `PROOT_TMP_DIR`/`TMPDIR`；上一次 app 运行留在磁盘上的 pid 文件已无效，`--kill-on-exit` 已保证旧 tracee 消失，不需要按旧 pid 文件保留目录。
@@ -194,7 +197,7 @@ JVM：
 - `StdioMcpServer` 序列化、默认值、env `toString` 脱敏、旧 settings 解码。
 - 命令/参数/cwd 校验，SSH/无 rootfs 工作区拒绝，同一工作区重复绑定拒绝。
 - 官方导出过滤 stdio 配置和 assistant id。
-- `ProotWorkspaceProcessLauncher` 的参数构造用 fake launcher 验证，不依赖真实 PRoot。
+- `WorkspaceManagerProcessLauncher` 的上下文转发和 `ProotShellRunner.buildProcessArgs` 的参数构造用 fake/定向测试验证，不依赖真实 PRoot；同 id 连续 launch 的 env/pid 路径必须不同。
 - `McpConnectionKey` 对 command/args/env/cwd/workspaceId 变化敏感。
 - 旧构建降级：用本设计落地前 APK 解码含 `stdioMcpServers` 的设置，确认不崩、新配置仍在、assistant 的 stdio 引用按旧构建归一化被清掉；JVM 侧用不带该字段的旧 DTO 反序列化新 JSON。
 

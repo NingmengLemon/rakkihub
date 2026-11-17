@@ -110,33 +110,38 @@ class ProotShellRunner(
         patcher.patch(context.linuxDir)
         context.bindMounts.forEach { it.source.mkdirs() }
 
-        val envFile = File(context.linuxDir, "tmp/rikkahub/mcp/${context.id}.env")
-        val pidFile = File(context.linuxDir, "tmp/rikkahub/exec/${context.id}.pid")
-        envFile.parentFile?.mkdirs()
-        pidFile.parentFile?.mkdirs()
-        writeEnvFile(envFile, context.env)
+        val files = nextProcessFiles(context)
+        files.envHost.parentFile?.mkdirs()
+        files.pidHost.parentFile?.mkdirs()
+        writeEnvFile(files.envHost, context.env)
 
-        val args = buildProcessArgs(context)
+        val args = buildProcessArgs(context, files)
 
-        val process = ProcessBuilder(args)
-            .directory(context.filesDir)
-            .redirectErrorStream(false)
-            .apply {
-                if (context.shellCompatibilityMode) {
-                    environment()["PROOT_NO_SECCOMP"] = "1"
-                } else {
-                    environment().remove("PROOT_NO_SECCOMP")
+        val process = try {
+            ProcessBuilder(args)
+                .directory(context.filesDir)
+                .redirectErrorStream(false)
+                .apply {
+                    if (context.shellCompatibilityMode) {
+                        environment()["PROOT_NO_SECCOMP"] = "1"
+                    } else {
+                        environment().remove("PROOT_NO_SECCOMP")
+                    }
+                    environment()["PROOT_LOADER"] = loader.absolutePath
+                    environment()["PROOT_TMP_DIR"] = context.tempDir.absolutePath
+                    environment()["TMPDIR"] = context.tempDir.absolutePath
                 }
-                environment()["PROOT_LOADER"] = loader.absolutePath
-                environment()["PROOT_TMP_DIR"] = context.tempDir.absolutePath
-                environment()["TMPDIR"] = context.tempDir.absolutePath
-            }
-            .start()
-        // 正常退出和崩溃都清掉临时环境文件；下次启动也会覆盖，不依赖这条线程
+                .start()
+        } catch (t: Throwable) {
+            files.envHost.delete()
+            files.pidHost.delete()
+            throw t
+        }
+        // 每次 launch 的文件名都带随机后缀，旧进程的 cleanup 不会删掉新进程的 env/pid
         Thread {
             process.waitFor()
-            envFile.delete()
-            pidFile.delete()
+            files.envHost.delete()
+            files.pidHost.delete()
         }.apply {
             name = "rikkahub-mcp-cleanup-${context.id}"
             isDaemon = true
@@ -146,11 +151,31 @@ class ProotShellRunner(
             stdin = process.outputStream,
             stdout = process.inputStream,
             stderr = process.errorStream,
-            terminate = { graceMillis -> terminateProot(process, pidFile, graceMillis) },
+            terminate = { graceMillis -> terminateProot(process, files.pidHost, graceMillis) },
         )
     }
 
-    internal fun buildProcessArgs(context: WorkspaceProcessContext): List<String> {
+    internal data class ProcessFiles(
+        val envHost: File,
+        val pidHost: File,
+        val envGuest: String,
+        val pidGuest: String,
+    )
+
+    internal fun nextProcessFiles(context: WorkspaceProcessContext): ProcessFiles {
+        val token = UUID.randomUUID().toString()
+        return ProcessFiles(
+            envHost = File(context.linuxDir, "tmp/rikkahub/mcp/${context.id}-$token.env"),
+            pidHost = File(context.linuxDir, "tmp/rikkahub/exec/${context.id}-$token.pid"),
+            envGuest = "/tmp/rikkahub/mcp/${context.id}-$token.env",
+            pidGuest = "/tmp/rikkahub/exec/${context.id}-$token.pid",
+        )
+    }
+
+    internal fun buildProcessArgs(
+        context: WorkspaceProcessContext,
+        files: ProcessFiles = nextProcessFiles(context),
+    ): List<String> {
         val args = mutableListOf(File(nativeLibraryDir, PROOT_EXEC).absolutePath)
         args += prootArgs(context.linuxDir, context.filesDir, context.cwd, context.bindMounts)
         args += ROOTFS_ENV
@@ -159,8 +184,8 @@ class ProotShellRunner(
             "-c",
             PROCESS_WRAPPER,
             "rikkahub",
-            "/tmp/rikkahub/mcp/${context.id}.env",
-            "/tmp/rikkahub/exec/${context.id}.pid",
+            files.envGuest,
+            files.pidGuest,
             context.command,
         )
         args += context.args
@@ -269,7 +294,7 @@ class ProotShellRunner(
 
         // 参数: 0=rikkahub, 1=env 文件, 2=pid 文件, 3=命令, 4..=参数
         private const val PROCESS_WRAPPER =
-            "set -a; . \"\$1\"; set +a; echo \"\$\$ \$PPID\" > \"\$2\"; shift 2; exec \"\$@\""
+            "set -a; . \"\$1\" || exit 1; set +a; echo \"\$\$ \$PPID\" > \"\$2\"; shift 2; exec \"\$@\""
         private val ENV_NAME_REGEX = Regex("[A-Za-z_][A-Za-z0-9_]*")
 
         /** 清空宿主机环境变量后 Rootfs 内的基础环境 */

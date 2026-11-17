@@ -232,7 +232,11 @@ class WorkspaceManager(
     }
 
     fun launchProcess(root: String, spec: WorkspaceProcessSpec): WorkspaceProcess {
+        require(root == spec.root) { "Workspace root mismatch: $root != ${spec.root}" }
         require(spec.command.isNotBlank()) { "Command is required" }
+        require('\u0000' !in spec.command && '\n' !in spec.command && '\r' !in spec.command) {
+            "Command must be a single line without NUL"
+        }
         require(spec.id.matches(PROCESS_ID_REGEX)) { "Invalid process id: ${spec.id}" }
         require(spec.cwd.startsWith("/")) { "Process cwd must be absolute: ${spec.cwd}" }
         val process = shellRunner.launchProcess(

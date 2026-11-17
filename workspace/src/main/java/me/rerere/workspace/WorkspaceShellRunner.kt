@@ -24,7 +24,11 @@ data class WorkspaceProcessSpec(
     val env: List<Pair<String, String>> = emptyList(),
     val cwd: String = "/workspace",
     val shellCompatibilityMode: Boolean = false,
-)
+) {
+    override fun toString(): String =
+        "WorkspaceProcessSpec(root=$root, id=$id, command=$command, args=${args.size}, " +
+            "envKeys=${env.map { it.first }}, cwd=$cwd)"
+}
 
 data class WorkspaceProcessContext(
     val root: String,
@@ -38,7 +42,11 @@ data class WorkspaceProcessContext(
     val tempDir: File,
     val bindMounts: List<WorkspaceBindMount> = emptyList(),
     val shellCompatibilityMode: Boolean = false,
-)
+) {
+    override fun toString(): String =
+        "WorkspaceProcessContext(root=$root, id=$id, command=$command, args=${args.size}, " +
+            "envKeys=${env.map { it.first }}, cwd=$cwd)"
+}
 
 data class WorkspaceProcess(
     val process: Process,
@@ -49,6 +57,8 @@ data class WorkspaceProcess(
     val terminate: (graceMillis: Long) -> Unit = { process.destroyForcibly() },
 ) {
     fun close(graceMillis: Long = 0) = terminate(graceMillis)
+
+    override fun toString(): String = "WorkspaceProcess(alive=${runCatching { process.isAlive }.getOrDefault(false)})"
 }
 
 interface WorkspaceProcessLauncher {
