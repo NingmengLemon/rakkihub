@@ -19,6 +19,7 @@ import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.NonCancellable
+import kotlinx.coroutines.TimeoutCancellationException
 import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.Flow
@@ -42,12 +43,12 @@ import me.rerere.rikkahub.AppScope
 import me.rerere.rikkahub.data.datastore.SettingsStore
 import me.rerere.rikkahub.data.datastore.allMcpServers
 import me.rerere.rikkahub.data.db.dao.WorkspaceDAO
-import me.rerere.rikkahub.data.db.entity.WorkspaceEntity
 import me.rerere.workspace.WorkspaceProcess
 import me.rerere.workspace.WorkspaceProcessLauncher
 import me.rerere.workspace.WorkspaceProcessSpec
 import me.rerere.workspace.WorkspaceShellStatus
 import java.util.concurrent.ConcurrentHashMap
+import java.util.concurrent.atomic.AtomicReference
 import kotlin.time.Duration.Companion.seconds
 import kotlin.uuid.Uuid
 
@@ -55,6 +56,7 @@ private const val TAG = "McpSessionRegistry"
 private const val MAX_RECONNECT_ATTEMPTS = 5
 private const val BASE_RECONNECT_DELAY_MS = 1000L
 private const val MAX_RECONNECT_DELAY_MS = 30000L
+private const val STABLE_CONNECTION_MS = 60_000L
 
 /** 单个 MCP Server 的全部运行时状态。 */
 private class McpSession(initialConfig: McpServerConfig) {
@@ -70,8 +72,9 @@ private class McpSession(initialConfig: McpServerConfig) {
     val lifecycleMutex = Mutex()
     var reconnectJob: Job? = null
     var reconnectAttempt: Int = 0
-    var process: WorkspaceProcess? = null
+    val process = AtomicReference<WorkspaceProcess?>(null)
     var processExitJob: Job? = null
+    var stableResetJob: Job? = null
 }
 
 private sealed interface ConnectResult {
@@ -281,12 +284,24 @@ internal class McpSessionRegistry(
                 session.config = syncedConfig
                 session.connectedConfig = syncedConfig
                 session.client = sdkClient
-                session.process = stdioProcess
+                session.process.set(stdioProcess)
                 stdioProcess?.let { watchStdioProcess(session, it, sdkClient, syncedConfig) }
-                session.reconnectAttempt = 0
+                scheduleStableReset(session, sdkClient, syncedConfig.id)
                 statusStore.update(config.id, McpStatus.Connected)
                 Log.i(TAG, "Connected MCP server ${config.id} (${config.commonOptions.name})")
                 ConnectResult.Success
+            } catch (e: TimeoutCancellationException) {
+                closeClient(sdkClient, config.commonOptions.name)
+                stdioProcess?.close(5_000)
+                Log.e(TAG, "stdio startup timed out for ${config.id}", e)
+                statusStore.update(
+                    config.id,
+                    McpStatus.Error(
+                        "stdio startup timed out after " +
+                            "${(config as? McpServerConfig.StdioServer)?.startupTimeoutMs ?: 0}ms"
+                    ),
+                )
+                ConnectResult.Failed
             } catch (e: CancellationException) {
                 closeClient(sdkClient, config.commonOptions.name)
                 stdioProcess?.close(5_000)
@@ -323,6 +338,7 @@ internal class McpSessionRegistry(
                 args = config.args,
                 env = config.env,
                 cwd = config.cwd,
+                shellCompatibilityMode = workspace.shellCompatibilityMode,
             )
         )
     }
@@ -335,10 +351,29 @@ internal class McpSessionRegistry(
     ) {
         session.processExitJob = appScope.launch(Dispatchers.IO) {
             val exitCode = process.process.waitFor()
-            if (sessions[config.id] === session && session.process === process) {
-                session.process = null
-                statusStore.update(config.id, McpStatus.Error("stdio process exited: $exitCode"))
+            var shouldReconnect = false
+            session.lifecycleMutex.withLock {
+                if (sessions[config.id] === session &&
+                    session.process.compareAndSet(process, null)
+                ) {
+                    statusStore.update(config.id, McpStatus.Error("stdio process exited: $exitCode"))
+                    shouldReconnect = true
+                }
+            }
+            if (shouldReconnect) {
                 requestReconnect(config.id, client, retryAfterFailure = true)
+            }
+        }
+    }
+
+    private fun scheduleStableReset(session: McpSession, client: Client, configId: Uuid) {
+        session.stableResetJob?.cancel()
+        session.stableResetJob = appScope.launch {
+            delay(STABLE_CONNECTION_MS)
+            session.lifecycleMutex.withLock {
+                if (sessions[configId] === session && session.client === client) {
+                    session.reconnectAttempt = 0
+                }
             }
         }
     }
@@ -346,8 +381,7 @@ internal class McpSessionRegistry(
     private suspend fun closeSessionProcess(session: McpSession) {
         session.processExitJob?.cancel()
         session.processExitJob = null
-        val process = session.process
-        session.process = null
+        val process = session.process.getAndSet(null)
         process?.close(5_000)
     }
 
@@ -460,6 +494,7 @@ internal class McpSessionRegistry(
                     session.client = null
                     session.connectedConfig = null
                     failedClient?.let { closeClient(it, session.config.commonOptions.name) }
+                    closeSessionProcess(session)
                     statusStore.update(configId, McpStatus.Error("连接断开，已达最大重连次数"))
                     return@withLock
                 }
@@ -507,6 +542,8 @@ internal class McpSessionRegistry(
         session.lifecycleMutex.withLock {
             session.reconnectJob?.cancel()
             session.reconnectJob = null
+            session.stableResetJob?.cancel()
+            session.stableResetJob = null
             session.reconnectAttempt = 0
             val sdkClient = session.client
             session.client = null
@@ -571,7 +608,12 @@ internal data class McpConnectionKey(
     val args: List<String> = emptyList(),
     val env: List<Pair<String, String>> = emptyList(),
     val cwd: String = "",
-)
+) {
+    override fun toString(): String =
+        "McpConnectionKey(transportType=$transportType, clientName=$clientName, " +
+            "workspaceId=$workspaceId, command=$command, args=${args.size}, " +
+            "envKeys=${env.map { it.first }}, cwd=$cwd)"
+}
 
 internal fun McpServerConfig.connectionKey(): McpConnectionKey = McpConnectionKey(
     transportType = when (this) {

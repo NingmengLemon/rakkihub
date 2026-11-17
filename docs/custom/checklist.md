@@ -875,7 +875,7 @@
 
 ### C113 stdio MCP registry 接线
 
-- 落点：`McpServerConfig` 新增运行时子类 `StdioServer`（不写回 `mcpServers` 持久化列表）；`StdioMcpServer.toRuntimeConfig()`；`Settings.allMcpServers()` 合并 HTTP 与 stdio；`McpManager` 用合并列表 reconcile、过滤工具；`McpSessionRegistry` 对 stdio 启动 `WorkspaceProcessLauncher`，用 `StdioClientTransport` 接 stdin/stdout/stderr，`withTimeout(startupTimeoutMs)` 包住初始化，独立协程观察进程退出并触发重连，关闭时先关 client 再 `close(5s)`；`syncTools` 把发现结果写回 `stdioMcpServers`；`McpConnectionKey` 把 workspace/command/args/env/cwd 纳入重连判断；DI 注入 `WorkspaceManagerProcessLauncher` 和 `WorkspaceDAO`。
+- 落点：`McpServerConfig` 新增运行时子类 `StdioServer`（不写回 `mcpServers` 持久化列表）；`StdioMcpServer.toRuntimeConfig()`；`Settings.allMcpServers()` 合并 HTTP 与 stdio；`McpManager` 用合并列表 reconcile、过滤工具；`McpSessionRegistry` 对 stdio 启动 `WorkspaceProcessLauncher`，用 `StdioClientTransport` 接 stdin/stdout/stderr，`withTimeout(startupTimeoutMs)` 包住 connect（工具同步仍走 SDK 默认超时），独立协程观察进程退出并触发重连，关闭时先关 client 再 `close(5s)`；成功连接后 60 秒稳定期才清零重连预算，避免握手后崩溃无限重启；`syncTools` 把发现结果写回 `stdioMcpServers`；`McpConnectionKey` 把 workspace/command/args/env/cwd 纳入重连判断；DI 注入 `WorkspaceManagerProcessLauncher` 和 `WorkspaceDAO`。
 - 理由：stdio 和 HTTP 共用现有 session 状态机、重连预算和工具同步；不能让运行时子类进入旧构建的 `mcpServers` JSON，也不能把 stdio 工具写回 HTTP 列表。
-- 合并注意：UI 还未提供添加/编辑 stdio Server 的入口，当前只能由已有设置或后续阶段写入；`AssistantDetailVM` 的 MCP 列表仍只展示 HTTP；OAuth 对 stdio 不生效；启动 tempDir 清理和 `McpManager` 初始化的顺序留给 UI/启动阶段。进程退出的 stderr 摘要目前只用于状态错误，后续再补日志入口。
+- 合并注意：UI 还未提供添加/编辑 stdio Server 的入口，当前只能由已有设置或后续阶段写入；`AssistantDetailVM` 的 MCP 列表仍只展示 HTTP；OAuth 对 stdio 不生效；启动 tempDir 清理和 `McpManager` 初始化的顺序留给 UI/启动阶段。进程退出只把 exit code 写进状态，stderr 由 transport/SDK debug 输出，registry 暂无摘要或日志入口，后续再补。
 - 测试：`McpConnectionKeyTest` 覆盖 stdio command/args/env/cwd/workspace 变化触发重连、工具元数据不触发；`SettingsStdioMcpTest` 覆盖 `allMcpServers()` 合并和 runtime 字段。真实 rootfs echo Server 的 initialize/listTools/callTool 验收留到设备阶段。

@@ -147,11 +147,11 @@ client.connect(transport)
 
 `McpSessionRegistry` 增加 stdio 分支。凡是直接读 `settings.mcpServers` 的路径都要改成 `settings.allMcpServers()`：`McpManager.init` 的 `reconcile` 输入、`McpManager.getAllAvailableTools` 的过滤、`McpSessionRegistry.addClient` 按 id 查当前配置、`McpSessionRegistry.syncTools` 把发现结果写回；其中 `syncTools` 要按运行类型写回 `mcpServers` 或 `stdioMcpServers`，不能一律写回 HTTP 列表。`AssistantDetailVM.mcpServerConfigs` 目前是 UI 用的 HTTP 列表，stdio UI 阶段再合并展示；`ConversationConfig` 和两个 Web 路由的 id 校验已改成 HTTP+stdio 并集。
 
-- `createTransport` 为 stdio 构造上述 transport；`createSdkClient` 仍用 `Client(clientInfo = Implementation(...))`。
+- `McpSessionRegistry` 在 stdio 分支直接构造上述 transport；`createTransport` 只处理 HTTP，遇到 stdio 会报错。`createSdkClient` 仍用 `Client(clientInfo = Implementation(...))`。
 - 连接、重连、状态和工具同步复用现有 `connectSession` / `syncTools` / `MAX_RECONNECT_ATTEMPTS`（5 次）和 `calculateBackoffDelay`，不另造一套 3 次策略。
 - `reconcile` 像 HTTP 一样对启用且名称非空的 stdio Server 主动 `addClient`；`syncTools` 在连接时拉 `listTools`，UI 的 `getClient` 和工具可用性沿现有路径工作。不做“懒启动”，否则工具从未发现，UI 会一直显示不可用。
 - 增加 `StdioSession` 需要的进程句柄、`lastUsedAt` 和退出监控；`McpSession` 现有的 mutex、reconnectJob、statusStore 继续复用，不复制状态机。
-- 进程退出由独立协程 `process.waitFor()` 观察，记录 exit code 和 stderr 摘要后更新 `McpStatus`；`onClose`/`onError` 本身不带退出码，不能代替 wait。
+- 进程退出由独立协程 `process.waitFor()` 观察，记录 exit code 后更新 `McpStatus`；stderr 由 transport 独占并走 SDK 的 debug 输出，registry 不另做摘要。`onClose`/`onError` 本身不带退出码，不能代替 wait。
 - `McpConnectionKey` 增加 `workspaceId`、`command`、`args`、`env`、`cwd`；否则编辑这些字段不会触发重连，旧子进程会继续跑。
 - 需要补的 exhaustive `when` 包括 `McpConfig.serverUrl`、`McpSessionRegistry.createTransport`、`connectionKey`、`SettingMcpDetailPage` 的传输展示和 `SettingMcpPage` 的服务器列表；`installTransportCallbacks` 是传输无关的闭合回调，不在这个列表里。
 - 关闭顺序：close transport → close stdin → 等待 5 秒 → `terminateProot` 宽限终止 → SIGKILL。`--kill-on-exit` 只作为兜底，不作为正常关闭路径。
@@ -175,14 +175,14 @@ MCP 设置页新增传输类型“stdio”，字段：
 - 仅作为工具的 MCP Server 不进入聊天请求上下文；服务端 `notifications` 先只记日志，不做 UI 推送。
 - 官方兼容导出过滤 `stdioMcpServers` 和引用它们的 assistant id，避免官方客户端解码未知配置；自家备份保留完整配置。
 - 旧构建不认识新的 DataStore key，会忽略 `stdioMcpServers`，能正常解码设置；该配置本身在旧构建保存设置时不会被删除，但旧构建的 `SettingsNormalization` 只把 HTTP id 视为有效，会从 assistant 的 `mcpServers` 里清掉 stdio 引用。旧构建也无法运行这些 Server，这是已知降级限制，已写进 README。
-- 日志只记 Server id、命令 basename、退出码和 stderr 摘要；不记录 env 值、完整命令行或协议正文。`StdioMcpServer.toString()` 已对 env 做 key 级脱敏。
+- 日志只记 Server id、命令 basename 和退出码；stderr 由 SDK debug 输出，registry 暂不汇总；不记录 env 值、完整命令行或协议正文。`StdioMcpServer.toString()` 已对 env 做 key 级脱敏。
 
 ## 失败处理
 
 | 场景 | 行为 |
 | --- | --- |
 | 工作区不是 rootfs 工作区 / 没有 rootfs | 保存或启动失败，提示先安装 rootfs |
-| 命令不存在 / 没有执行权限 | 启动失败，状态 Error，stderr 摘要 |
+| 命令不存在 / 没有执行权限 | 启动失败，状态 Error，stderr 由 SDK debug 输出 |
 | 启动超时 | 终止进程并等待退出监控收尾，提示运行命令检查 |
 | 进程运行中崩溃 | 置 Error，最多按现有 5 次预算和退避重启 |
 | 工作区删除 / rootfs 重装 | 先在数据层停止进程，再执行删除/替换 |

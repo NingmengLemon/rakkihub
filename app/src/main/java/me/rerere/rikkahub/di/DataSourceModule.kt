@@ -142,7 +142,7 @@ val dataSourceModule = module {
             appScope = get(),
             filesManager = get(),
             processLauncher = WorkspaceManagerProcessLauncher(get()),
-            workspaceDao = get<AppDatabase>().workspaceDao(),
+            workspaceDao = get(),
         )
     }
 

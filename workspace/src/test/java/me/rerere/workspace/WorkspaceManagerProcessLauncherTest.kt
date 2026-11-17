@@ -60,6 +60,7 @@ class WorkspaceManagerProcessLauncherTest {
                 args = listOf("server.js"),
                 env = listOf("TOKEN" to "secret"),
                 cwd = "/workspace/app",
+                shellCompatibilityMode = true,
             )
         )
         process.close(graceMillis = 2_500)
@@ -69,6 +70,7 @@ class WorkspaceManagerProcessLauncherTest {
         assertEquals("server-1", context.id)
         assertEquals("/workspace/app", context.cwd)
         assertEquals(listOf("TOKEN" to "secret"), context.env)
+        assertEquals(true, context.shellCompatibilityMode)
         assertEquals(manager.filesDir("ws").absolutePath, context.filesDir.absolutePath)
         assertEquals(manager.linuxDir("ws").absolutePath, context.linuxDir.absolutePath)
         assertEquals(2_500L, runner.terminatedWith)
