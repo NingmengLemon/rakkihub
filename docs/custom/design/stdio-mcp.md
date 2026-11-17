@@ -117,10 +117,10 @@ interface WorkspaceProcessLauncher {
 - 先调用 `patcher.patch(linuxDir)`，再做进程启动；否则子进程可能没有 DNS 配置。
 - 用非登录 `-c`，不用 `-lc`，避免 `/etc/profile` 或 rc 文件往 stdout 输出提示，污染 JSON-RPC。
 - 命令通过 `exec "$0" "$@"` 形式传入，参数逐项传递，不拼接 shell 字符串；cwd 按 rootfs 绝对路径直接使用。
-- env 通过 rootfs 内的临时 env 文件注入，而不是 `ProcessBuilder.environment()`：`ROOTFS_ENV` 使用 `/usr/bin/env -i`，会清空继承环境，直接设 ProcessBuilder 环境变量到不了子进程。launcher 把 `KEY=VALUE` 做 shell 转义写到 `/workspace/.rikkahub/mcp/<server-id>.env`（模式 600），wrapper 执行 `set -a; . "$file"; set +a; exec "$0" "$@"`，进程结束或下一次启动时清理；这样 env 值不进入 `/proc/<pid>/cmdline`。`--kill-on-exit`、`PROOT_LOADER`、`PROOT_TMP_DIR`、`TMPDIR` 仍由 launcher 维护。
+- env 通过 rootfs 内的临时 env 文件注入，而不是 `ProcessBuilder.environment()`：`ROOTFS_ENV` 使用 `/usr/bin/env -i`，会清空继承环境，直接设 ProcessBuilder 环境变量到不了子进程。launcher 把 `KEY=VALUE` 做 shell 转义写到宿主的 `linuxDir(root)/tmp/rikkahub/mcp/<server-id>.env`，子进程看到的是 `/tmp/rikkahub/mcp/<server-id>.env`（模式 600）。不要放进 `/workspace`：那是 `filesDir(root)` 的 bind mount，会进自家备份、WebDAV 上传、文件浏览器和 `workspace_read_file`，assistant 还能改写它。`/tmp` 在 rootfs 内，复用现有 `cleanupAllTempDirs` 的清理，rootfs 重装也会整目录消失，和 pid 文件同族。wrapper 用非登录 shell，参数布局固定为 `shell -c 'set -a; . "$1"; set +a; shift; exec "$@"' rikkahub <envfile> <cmd> <args...>`；进程结束或下一次启动时清理 env 文件。这样 env 值不进入 `/proc/<pid>/cmdline`。`--kill-on-exit`、`PROOT_LOADER`、`PROOT_TMP_DIR`、`TMPDIR` 仍由 launcher 维护。
 - `stdin/stdout/stderr` 全部保持 pipe，不做 PTY；stderr 交给 MCP transport 独占，不再另开一个 64 KiB reader，避免两个读者抢同一根 pipe。
 - 进程组终止复用现有的 `terminateProot`/pid 文件逻辑；启动失败、rootfs 不可用、SSH 工作区直接返回明确错误。
-- `RikkaHubApp` 启动时的 tempDir 清理必须在 `McpManager` 初始化之前完成，不能两个各自 `appScope.launch` 竞跑：把清理做成可等待的 startup step，或让 `McpManager` 等清理完成的信号。清理跳过 pid 文件登记表中仍存活的进程的 `PROOT_TMP_DIR`/`TMPDIR`，否则会删掉正在运行的 stdio Server 的临时目录。
+- `RikkaHubApp` 启动时的 tempDir 清理必须在 `McpManager` 初始化之前完成，不能两个各自 `appScope.launch` 竞跑：把清理做成可等待的 startup step，或让 `McpManager` 等清理完成的信号。清理跳过 launcher 当前内存 pid 登记表中仍存活的进程的 `PROOT_TMP_DIR`/`TMPDIR`；上一次 app 运行留在磁盘上的 pid 文件已无效，`--kill-on-exit` 已保证旧 tracee 消失，不需要按旧 pid 文件保留目录。
 
 ## MCP SDK 接入
 
