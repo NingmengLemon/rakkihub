@@ -344,7 +344,7 @@
 - 更换应用图标已完成（C90、C92、C94、C101）：launcher 各密度用关于页同一张插画生成，monochrome 层去掉（插画剪影会变成黑块），README 使用安全区裁切的 `docs/readme-icon.png`（`docs/icon.png` 保留为通用图标）；`web-ui/public/favicon.ico` 统一用插画（48/64/128/256 四帧，16px 标签页由浏览器缩），Web UI 新会话空状态改用 `web-ui/public/icon.png`，没有引用的 `docs/img/` 整个目录已删除。通知栏小图标 `ic_stat_rikkahub` 是有意保留的兔子头剪影：插画在 24dp 下是一团色块，这枚单色剪影反而清楚
 - RikkaHub 提供商残留已清理（C95）：上游 `0533acde` 删掉默认提供商后，本分支删掉 `assets/icons/rikkahub.svg`、`AIIconMatcher` 的 `rikka|auto` 分支、四份 `rikkahub_provider_description`，以及只给它用的空 `RikkaHubAPI` 与指向 `api.rikka-ai.com` 的 Retrofit 单例；`DEFAULT_AUTO_MODEL_ID` 改名 `DEFAULT_MODEL_ID` 并注明当前预置里没有对应模型（老设置里那个提供商的 auto 模型仍是这个 id）。搜索服务 `RikkaHubSearchService` 仍保留，但它的选项里 `displayName` 是 `RikkaHub`，同样走这个 matcher，图标回退成首字母
 - 发给 OpenRouter 的来源标识头已移除（C96）：`configureReferHeaders` 只在 host 是 `openrouter.ai` 时加 `X-Title` 与 `HTTP-Referer`，Referer 指官方站点，等于把本分支的调用算成官方 app；函数、十一处调用与 `mediagen` 生图那两行一并删掉，用户自定义请求头不受影响
-- Gradle 模块目录收进 `packages/`（未排期）：把根目录平铺的 `app/`、`workspace/`、`terminal/`、`web/`、`ai/` 等收进 `packages/`，用 `settings.gradle.kts` 的 `projectDir` 映射保留 `:app`、`:workspace` 等 project path 和 `./gradlew :app:...` 任务名不变；同步 `.gitignore`、构建脚本、CI 产物路径和文档里的 `app/build/...` 路径。单独做一个 `refactor:` 提交，不和功能改动混在一起；Gradle 的 `include` 需要显式列出模块，不能像 uv 的 `members = ["packages/*"]` 那样自动发现。
+- Gradle 模块目录收进子一级目录（未排期，目录名待定，候选 `packages/`）：把根目录平铺的 `app/`、`workspace/`、`terminal/`、`web/`、`ai/` 等收进一个统一的子目录，用 `settings.gradle.kts` 的 `projectDir` 映射保留 `:app`、`:workspace` 等 project path 和 `./gradlew :app:...` 任务名不变；同步 `.gitignore`、构建脚本、CI 产物路径和文档里的 `app/build/...` 路径。单独做一个 `refactor:` 提交，不和功能改动混在一起；Gradle 的 `include` 需要显式列出模块，不能像 uv 的 `members = ["packages/*"]` 那样自动发现。
 
 ### B 系列完成之后
 
