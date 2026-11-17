@@ -45,7 +45,11 @@ data class WorkspaceProcess(
     val stdin: OutputStream,
     val stdout: InputStream,
     val stderr: InputStream,
-)
+    /** 走 PRoot 的进程组终止；不支持时退回直接结束进程。 */
+    val terminate: (graceMillis: Long) -> Unit = { process.destroyForcibly() },
+) {
+    fun close(graceMillis: Long = 0) = terminate(graceMillis)
+}
 
 interface WorkspaceProcessLauncher {
     fun launch(spec: WorkspaceProcessSpec): WorkspaceProcess

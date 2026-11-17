@@ -146,6 +146,7 @@ class ProotShellRunner(
             stdin = process.outputStream,
             stdout = process.inputStream,
             stderr = process.errorStream,
+            terminate = { graceMillis -> terminateProot(process, pidFile, graceMillis) },
         )
     }
 

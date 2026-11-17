@@ -16,6 +16,7 @@ class WorkspaceManagerProcessLauncherTest {
 
     private class FakeRunner : WorkspaceShellRunner {
         var captured: WorkspaceProcessContext? = null
+        var terminatedWith: Long? = null
 
         override fun execute(context: WorkspaceShellContext): WorkspaceCommandResult =
             error("not used")
@@ -34,7 +35,13 @@ class WorkspaceManagerProcessLauncherTest {
                 override fun exitValue(): Int = 0
                 override fun destroy() = Unit
             }
-            return WorkspaceProcess(process, process.outputStream, process.inputStream, process.errorStream)
+            return WorkspaceProcess(
+                process = process,
+                stdin = process.outputStream,
+                stdout = process.inputStream,
+                stderr = process.errorStream,
+                terminate = { graceMillis -> terminatedWith = graceMillis },
+            )
         }
     }
 
@@ -45,7 +52,7 @@ class WorkspaceManagerProcessLauncherTest {
         manager.ensureWorkspace("ws")
         val launcher = WorkspaceManagerProcessLauncher(manager)
 
-        launcher.launch(
+        val process = launcher.launch(
             WorkspaceProcessSpec(
                 root = "ws",
                 id = "server-1",
@@ -55,6 +62,7 @@ class WorkspaceManagerProcessLauncherTest {
                 cwd = "/workspace/app",
             )
         )
+        process.close(graceMillis = 2_500)
 
         val context = requireNotNull(runner.captured)
         assertEquals("ws", context.root)
@@ -63,6 +71,7 @@ class WorkspaceManagerProcessLauncherTest {
         assertEquals(listOf("TOKEN" to "secret"), context.env)
         assertEquals(manager.filesDir("ws").absolutePath, context.filesDir.absolutePath)
         assertEquals(manager.linuxDir("ws").absolutePath, context.linuxDir.absolutePath)
+        assertEquals(2_500L, runner.terminatedWith)
     }
 
     @Test
