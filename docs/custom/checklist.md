@@ -859,7 +859,7 @@
 
 ### C111 stdio MCP 配置与持久化
 
-- 落点：`McpConfig.kt` 新增 `StdioMcpServer`（id、commonOptions、workspaceId、command、args、env、cwd、启动超时，`toString` 对 env 脱敏）；`Settings.stdioMcpServers` 默认空列表；`SettingsStore.STDIO_MCP_SERVERS` 新 DataStore key 和 `SETTINGS_FIELDS` 条目；`SettingsNormalization.validMcpServerIds` 取 HTTP 与 stdio id 并集；`OfficialSettings.forOfficialExport` 清空 stdio 并过滤 assistant 引用。
+- 落点：`McpConfig.kt` 新增 `StdioMcpServer`（id、commonOptions、workspaceId、command、args、env、cwd、启动超时，`toString` 对 env 脱敏）；`Settings.stdioMcpServers` 默认空列表；`SettingsStore.STDIO_MCP_SERVERS` 新 DataStore key 和 `SETTINGS_FIELDS` 条目；`Settings.allMcpServerIds()` 统一 HTTP+stdio id，`SettingsNormalization`、`ConversationConfig.getAssistantOf`、`SettingsRoutes`、`ConversationRoutes` 都用它；`OfficialSettings.forOfficialExport` 清空 stdio 并过滤 assistant 引用。
 - 理由：stdio 配置不能塞进 sealed `McpServerConfig` 的 `mcpServers` JSON，否则旧构建遇到未知 `"stdio"` 判别值会整份设置解码失败；独立 key 让旧构建忽略配置，新构建仍能识别 assistant 引用。
 - 合并注意：旧构建能解码但无法运行 stdio，保存设置时不会删除新 key；旧构建的归一化只认 HTTP id，会清掉 assistant 的 stdio 引用，这是已知降级。官方导出不包含 stdio；自家备份保留。该阶段只落配置，进程启动和 registry 接线在后续阶段；workspace 唯一性、command/NUL/cwd 校验在保存入口和 launcher 阶段补齐。`ConversationConfig`、`SettingsRoutes`、`ConversationRoutes` 已改用 HTTP+stdio id 并集；`AssistantDetailVM` 的 MCP 列表仍是 HTTP-only，等 stdio UI 阶段再接。
 - 测试：`SettingsStdioMcpTest` 覆盖序列化往返、旧 JSON 默认空、env `toString` 脱敏、归一化保留 stdio assistant 引用、官方导出清空 stdio 和引用；`ConversationConfigTest` 覆盖绑定会话保留 stdio 引用；`SettingsFieldsTest` 的字段清单和落盘 key 快照同步。

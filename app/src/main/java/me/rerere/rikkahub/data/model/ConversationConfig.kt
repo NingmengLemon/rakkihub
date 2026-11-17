@@ -100,9 +100,10 @@ fun Settings.getStoredAssistantOf(conversation: Conversation): Assistant =
 fun Settings.getAssistantOf(conversation: Conversation): Assistant {
     val assistant = getStoredAssistantOf(conversation).withConversation(conversation)
     if (conversation.config == null) return assistant
+    val validMcpIds = allMcpServerIds()
     // 助手自身的失效引用在读取设置时已清理，会话上固定的这份在这里滤掉
     return assistant.copy(
-        mcpServers = assistant.mcpServers.filterTo(mutableSetOf()) { id -> id in allMcpServerIds() },
+        mcpServers = assistant.mcpServers.filterTo(mutableSetOf()) { id -> id in validMcpIds },
         modeInjectionIds = assistant.modeInjectionIds
             .filterTo(mutableSetOf()) { id -> modeInjections.any { it.id == id } },
         lorebookIds = assistant.lorebookIds.filterTo(mutableSetOf()) { id -> lorebooks.any { it.id == id } },

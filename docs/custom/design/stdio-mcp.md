@@ -63,7 +63,7 @@ fun Settings.allMcpServers(): List<McpServerConfig> =
 
 `StdioMcpServer.toRuntimeConfig()` 生成 `McpServerConfig.StdioServer`（实现 `clone()`；`serverUrl` 返回空串，`connectionKey` 带 stdio 字段）。HTTP 的序列化列表不变，stdio 不参与 OAuth；UI 对 stdio 不显示授权入口。
 
-`SettingsNormalization.validMcpServerIds` 已改为两份列表的 id 并集；否则每次设置写入都会把 assistant 的 stdio 引用过滤掉。`ConversationConfig.getAssistantOf`、`SettingsRoutes`、`ConversationRoutes` 也按同一并集校验。
+`SettingsNormalization.validMcpServerIds` 已改为两份列表的 id 并集；之所以要并集，是因为每次设置写入都会按它过滤 assistant 的 stdio 引用。`ConversationConfig.getAssistantOf`、`SettingsRoutes`、`ConversationRoutes` 也按同一并集校验。
 
 约束：
 

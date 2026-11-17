@@ -120,8 +120,9 @@ This repository carries personal customizations on top of upstream `rikkahub/rik
   customizations, independent-update direction, distribution/compliance), `docs/custom/backup/` the backup
   import/export chain with its acceptance procedure, and `docs/custom/build.md` / `docs/custom/locale.md` the build
   and string-resource operations.
-- Tag customization commits with the `custom` scope, e.g. `feat(custom): ...`, and add the item to
-  `docs/custom/checklist.md` (an index row plus a detail section) so a later upstream port can be checked against it.
+- Commit messages follow Conventional Commits; the `custom` scope is optional now that the branch is on independent
+  updates. Every customization still gets an item in `docs/custom/checklist.md` (an index row plus a detail section)
+  so a later upstream port can be checked against it.
 - The persisted-data freeze is lifted: the official-backup importer exists, and the criteria verified on the real samples
   are v32/v31 tables and converted output plus v32 attachments and settings. The freeze was about official backups
   coming in, and that path works. The criteria that are untested or only partially tested are listed class by class in
