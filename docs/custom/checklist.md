@@ -118,6 +118,7 @@
 | C108 | C87 OCR producer 指纹失效 | 改造 |
 | C109 | C87 OCR 文本编辑入口 | 新增 |
 | C110 | C87 备份恢复保留手改 OCR | 改造 |
+| C111 | stdio MCP 配置与持久化 | 新增 |
 
 ## 明细
 
@@ -855,3 +856,10 @@
 - 理由：手改 OCR 是用户内容，不是可重新生成的缓存；整表清空会让恢复后的附件丢掉手工修正。自动行仍可重新识别，不需要保留。
 - 合并注意：保留行已有同 producer 的手改时保留保留行，不覆盖；落选手改行随后显式删除，避免外键未开启时留下孤儿。同版本外来路径转换会由 `OfficialDatabaseConverter` 按原 `file_id` 补回手改行，再做 UploadNames 合并。官方导出仍 drop 整张表，手改文本不随官方备份保留。恢复后首次发送会重新识别自动行，但手改行继续覆盖。
 - 测试：`BackupManagerTest`（开发机）覆盖自动行清空、手改行保留，两份同内容上传合并后只保留落选行的手改文本，以及同版本外来路径转换后手改行仍在；`connectedGithubDebugAndroidTest` 通过。
+
+### C111 stdio MCP 配置与持久化
+
+- 落点：`McpConfig.kt` 新增 `StdioMcpServer`（id、commonOptions、workspaceId、command、args、env、cwd、启动超时，`toString` 对 env 脱敏）；`Settings.stdioMcpServers` 默认空列表；`SettingsStore.STDIO_MCP_SERVERS` 新 DataStore key 和 `SETTINGS_FIELDS` 条目；`SettingsNormalization.validMcpServerIds` 取 HTTP 与 stdio id 并集；`OfficialSettings.forOfficialExport` 清空 stdio 并过滤 assistant 引用。
+- 理由：stdio 配置不能塞进 sealed `McpServerConfig` 的 `mcpServers` JSON，否则旧构建遇到未知 `"stdio"` 判别值会整份设置解码失败；独立 key 让旧构建忽略配置，新构建仍能识别 assistant 引用。
+- 合并注意：旧构建能解码但无法运行 stdio，保存设置时不会删除新 key；旧构建的归一化只认 HTTP id，会清掉 assistant 的 stdio 引用，这是已知降级。官方导出不包含 stdio；自家备份保留。该阶段只落配置，进程启动和 registry 接线在后续阶段。
+- 测试：`SettingsStdioMcpTest` 覆盖序列化往返、旧 JSON 默认空、env `toString` 脱敏、归一化保留 stdio assistant 引用、官方导出清空 stdio 和引用；`SettingsFieldsTest` 的字段清单和落盘 key 快照同步。

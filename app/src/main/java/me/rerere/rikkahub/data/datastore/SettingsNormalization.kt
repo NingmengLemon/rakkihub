@@ -48,7 +48,7 @@ internal fun Settings.withBuiltInDefaults(): Settings {
 // 去重并清理无效引用
 internal fun Settings.withoutInvalidReferences(): Settings {
     val settings = this
-    val validMcpServerIds = settings.mcpServers.map { it.id }.toSet()
+    val validMcpServerIds = (settings.mcpServers.map { it.id } + settings.stdioMcpServers.map { it.id }).toSet()
     val validModeInjectionIds = settings.modeInjections.map { it.id }.toSet()
     val validLorebookIds = settings.lorebooks.map { it.id }.toSet()
     val validQuickMessageIds = settings.quickMessages.map { it.id }.toSet()
@@ -87,6 +87,7 @@ internal fun Settings.withoutInvalidReferences(): Settings {
         modeInjections = settings.modeInjections.distinctBy { it.id },
         lorebooks = settings.lorebooks.distinctBy { it.id },
         quickMessages = settings.quickMessages.distinctBy { it.id },
+        stdioMcpServers = settings.stdioMcpServers.distinctBy { it.id },
     )
 }
 

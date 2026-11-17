@@ -46,7 +46,7 @@ data class McpOAuthState(
     private fun String?.masked(): String = when {
         this == null -> "null"
         isBlank() -> "***"
-        else -> "***(${length})"
+        else -> "***($length)"
     }
 }
 
@@ -58,6 +58,32 @@ data class McpTool(
     val inputSchema: InputSchema? = null,
     val needsApproval: Boolean = false
 )
+
+/**
+ * 本地 stdio MCP 的持久化配置。
+ *
+ * 不塞进 [McpServerConfig] 的 `mcpServers` 列表：那是带 `@SerialName` 的 sealed class，
+ * 旧构建遇到未知子类会整份设置解码失败。stdio 单独存一个 DataStore key，旧构建忽略即可。
+ */
+@Serializable
+data class StdioMcpServer(
+    val id: Uuid = Uuid.random(),
+    val commonOptions: McpCommonOptions = McpCommonOptions(),
+    // 专用本地工作区的 id；必须是 WorkspaceEntity.id
+    val workspaceId: String,
+    // 可执行文件名或绝对路径，不做 shell 解析
+    val command: String,
+    val args: List<String> = emptyList(),
+    // 逐项传给子进程；值可能含密钥，toString 不打印值
+    val env: List<Pair<String, String>> = emptyList(),
+    // rootfs 内绝对路径，默认 /workspace
+    val cwd: String = "/workspace",
+    val startupTimeoutMs: Long = 30_000,
+) {
+    override fun toString(): String =
+        "StdioMcpServer(id=$id, name=${commonOptions.name}, workspaceId=$workspaceId, " +
+            "command=$command, args=${args.size}, envKeys=${env.map { it.first }}, cwd=$cwd)"
+}
 
 @Serializable
 sealed class McpServerConfig {

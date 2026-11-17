@@ -8,7 +8,9 @@ import me.rerere.ai.core.ReasoningLevel
 import me.rerere.ai.provider.ProviderSetting
 import me.rerere.asr.ASRProviderSetting
 import me.rerere.mediagen.provider.MediaGenerationProviderSetting
+import me.rerere.rikkahub.data.ai.mcp.McpCommonOptions
 import me.rerere.rikkahub.data.ai.mcp.McpServerConfig
+import me.rerere.rikkahub.data.ai.mcp.StdioMcpServer
 import me.rerere.rikkahub.data.ai.prompts.DEFAULT_COMPRESS_PROMPT
 import me.rerere.rikkahub.data.model.Assistant
 import me.rerere.rikkahub.data.model.Lorebook
@@ -157,6 +159,14 @@ private val SAMPLE = Settings(
     searchCommonOptions = SearchCommonOptions(resultSize = 3),
     searchServiceSelected = 1,
     mcpServers = listOf(McpServerConfig.SseTransportServer(id = id(8), url = "https://example.com/sse")),
+    stdioMcpServers = listOf(
+        StdioMcpServer(
+            id = id(9),
+            commonOptions = McpCommonOptions(name = "local"),
+            workspaceId = "workspace-1",
+            command = "node",
+        )
+    ),
     webDavConfig = WebDavConfig(url = "https://dav.example.com"),
     s3Config = S3Config(bucket = "backup"),
     uploadS3Config = S3Config(bucket = "upload"),
@@ -220,6 +230,7 @@ private val STORED_KEYS = setOf(
     "search_common",
     "search_selected",
     "mcp_servers",
+    "stdio_mcp_servers",
     "webdav_config",
     "s3_config",
     "upload_s3_config",

@@ -1,0 +1,73 @@
+package me.rerere.rikkahub.data.datastore
+
+import me.rerere.rikkahub.data.ai.mcp.McpCommonOptions
+import me.rerere.rikkahub.data.ai.mcp.McpServerConfig
+import me.rerere.rikkahub.data.ai.mcp.StdioMcpServer
+import me.rerere.rikkahub.data.sync.official.forOfficialExport
+import me.rerere.rikkahub.utils.JsonInstant
+import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
+import org.junit.Assert.assertTrue
+import org.junit.Test
+
+class SettingsStdioMcpTest {
+    private fun stdioServer() = StdioMcpServer(
+        commonOptions = McpCommonOptions(name = "local"),
+        workspaceId = "workspace-1",
+        command = "node",
+        args = listOf("server.js"),
+        env = listOf("TOKEN" to "super-secret"),
+    )
+
+    @Test
+    fun `stdio config round trips and masks env values`() {
+        val server = stdioServer()
+        val decoded = JsonInstant.decodeFromString<Settings>(
+            JsonInstant.encodeToString(Settings(stdioMcpServers = listOf(server)))
+        )
+
+        assertEquals(server, decoded.stdioMcpServers.single())
+        assertFalse(server.toString().contains("super-secret"))
+        assertTrue(server.toString().contains("TOKEN"))
+    }
+
+    @Test
+    fun `old settings json without stdio field decodes as empty`() {
+        assertTrue(JsonInstant.decodeFromString<Settings>("{}").stdioMcpServers.isEmpty())
+    }
+
+    @Test
+    fun `normalization keeps assistant references to stdio servers`() {
+        val server = stdioServer()
+        val assistant = Settings().assistants.first().copy(mcpServers = setOf(server.id))
+        val normalized = Settings(
+            assistants = listOf(assistant),
+            stdioMcpServers = listOf(server),
+        ).normalized()
+
+        val preserved = normalized.assistants.first { it.id == assistant.id }
+        assertTrue(server.id in preserved.mcpServers)
+    }
+
+    @Test
+    fun `official export drops stdio config and its assistant references`() {
+        val http = McpServerConfig.StreamableHTTPServer(
+            commonOptions = McpCommonOptions(name = "remote"),
+        )
+        val stdio = stdioServer()
+        val assistant = Settings().assistants.first().copy(
+            mcpServers = setOf(http.id, stdio.id),
+        )
+
+        val exported = Settings(
+            mcpServers = listOf(http),
+            stdioMcpServers = listOf(stdio),
+            assistants = listOf(assistant),
+        ).forOfficialExport()
+
+        assertTrue(exported.stdioMcpServers.isEmpty())
+        val exportedAssistant = exported.assistants.first { it.id == assistant.id }
+        assertTrue(http.id in exportedAssistant.mcpServers)
+        assertFalse(stdio.id in exportedAssistant.mcpServers)
+    }
+}
