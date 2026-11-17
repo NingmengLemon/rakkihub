@@ -44,6 +44,17 @@ class SettingsStdioMcpTest {
     }
 
     @Test
+    fun `normalization keeps one stdio server per workspace`() {
+        val first = stdioServer()
+        val second = stdioServer().copy(workspaceId = first.workspaceId, command = "python")
+        val third = stdioServer().copy(workspaceId = "workspace-2", command = "node")
+
+        val normalized = Settings(stdioMcpServers = listOf(first, second, third)).normalized()
+
+        assertEquals(listOf(first, third), normalized.stdioMcpServers)
+    }
+
+    @Test
     fun `old settings json without stdio field decodes as empty`() {
         assertTrue(JsonInstant.decodeFromString<Settings>("{}").stdioMcpServers.isEmpty())
     }

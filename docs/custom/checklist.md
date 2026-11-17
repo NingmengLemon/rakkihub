@@ -123,6 +123,7 @@
 | C113 | stdio MCP registry 接线 | 新增 |
 | C114 | stdio MCP 配置 UI | 新增 |
 | C115 | stdio MCP UI 收尾 | 新增 |
+| C116 | stdio MCP workspace 唯一性与列表提示 | 新增 |
 
 ## 明细
 
@@ -886,7 +887,7 @@
 
 - 落点：`SettingMcpPage` 列表合并 HTTP 与 stdio，Add 菜单分 HTTP/stdio，删除按类型写回对应列表；`SettingMcpDetailPage` 从 `allMcpServers()` 查找，stdio 走独立的 `StdioMcpConfigure`（启用/名称、专用工作区、命令、参数、env、cwd、启动超时），保存/删除/工具开关按类型写回 `mcpServers` 或 `stdioMcpServers`；`AssistantDetailVM.mcpServerConfigs` 也改用 `allMcpServers()`，助手 MCP 页才能选择和显示 stdio Server；工作区列表只显示 `capabilities().rootfs`、`READY` 且已有 rootfs 的本地工作区；保存按钮要求名称、工作区、命令、非相对 cwd 和不小于 1000ms 的启动超时；`AssistantDetailVM` 和聊天附件面板的 MCP 入口也改用 `allMcpServers()`。
 - 理由：配置结构已经落地，但没有 UI 就无法创建或编辑 stdio Server；复用现有 MCP 详情页可以把工具开关和状态显示一起带过来。
-- 合并注意：新增文案目前用中文硬编码，未走四份 locale，后续统一走 i18n；env 输入用密码视觉变换，多行参数/环境变量用本地文本状态，避免过滤空行后无法输入第二行；workspace 绑定唯一性由 C115 在保存入口补，命令 NUL/换行和 rootfs 二次校验仍由启动阶段补。
+- 合并注意：新增文案目前用中文硬编码，未走四份 locale，后续统一走 i18n；env 输入用密码视觉变换，多行参数/环境变量用本地文本状态，避免过滤空行后无法输入第二行；workspace 绑定唯一性由 C115 在保存入口补，C116 又在归一化层兜底；命令 NUL/换行和 rootfs 二次校验仍由启动阶段补。
 - 测试：现有 C111 的 JVM 测试覆盖配置归一化和 runtime 合并；C114 没有新增 Compose/JVM UI 测试，靠开发机手动验收添加、编辑、删除、助手 MCP 选择和聊天附件面板入口。本地 workspace rootfs 用 perl 写了一个最小 stdio MCP Server，验证 initialize、tools/list、工具写回和 Connected 状态。callTool 的真实 UI 路径尚未验收，留到后续设备阶段。
 
 ### C115 stdio MCP UI 收尾
@@ -895,3 +896,10 @@
 - 理由：C114 已经能配置和连接，但详情页看不到状态、无法手动停止/重启，两个 Server 也能静默绑定同一个工作区；已有 Server 后助手 MCP 页没有入口回全局配置，也会把状态/停止功能藏在不可达位置。
 - 合并注意：停止只结束当前 session，配置和工作区保留；重启先移除旧 session 再重新 addClient，避免旧 client 仍在时提前返回；未保存的草稿不会生效；没有可用工作区时仍只显示提示，不跳转扩展页；CardGroup 形态和四份 locale 仍未处理，后者记为 i18n debt。
 - 测试：`:app:compileGithubDebugKotlin`、`:app:testGithubDebugUnitTest`；开发机手动验收停止/重启、管理入口和 `Connected` 状态；工作区冲突提示按代码路径核对。callTool 真实 UI 路径仍待补。
+
+### C116 stdio MCP workspace 唯一性与列表提示
+
+- 落点：`SettingsNormalization` 在按 id 去重后再按 `workspaceId` 去重，空 workspace 用自身 id 作为键，保留第一条；`SettingMcpPage` 的删除确认对 stdio 明确“专用工作区和 rootfs 不会被删除”，与详情页一致。
+- 理由：C115 的唯一性只在保存按钮上，恢复/导入的重复配置仍会启动两个 Server；列表页删除提示还沿用通用文案，和详情页不一致。
+- 合并注意：归一化会静默丢弃后出现的重复 workspace 配置，只保留第一条；UI 保存入口的冲突提示仍在，防止用户新建重复配置。停止仍只是 session 级，后续 `allMcpServers()` 写入会经 reconcile 重新启动，这是已知行为。
+- 测试：`SettingsStdioMcpTest` 新增同 workspace 去重、不同 workspace 保留；`:app:testGithubDebugUnitTest`。

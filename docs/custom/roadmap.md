@@ -350,7 +350,7 @@
 
 - 错误请求日志里打出完整响应体已按 C99 落地：失败响应的 body 按块写入 logcat 的 `ProviderError`，只记录 path 与状态码。
 - MCP 工具失败无感重试：在 MCP 面板由用户逐工具标注是否可重试、是否可重入；运行时只对标记过的工具自动重试，未标记的工具保持现状。非幂等工具默认不重试。
-- stdio 形式的 MCP：需要借助专用的工作区与 rootfs 实现，由工作区 rootfs 后端负责子进程的启动、输入输出和环境隔离；不要直接在 app 进程内裸起子进程。设计见 [design/stdio-mcp.md](design/stdio-mcp.md)，配置持久化（C111）、进程 launcher（C112）、registry 接线（C113）、配置 UI（C114）和 UI 收尾（C115）已落地；开发机已验证 initialize/tools/list，callTool UI 路径待补。
+- stdio 形式的 MCP：需要借助专用的工作区与 rootfs 实现，由工作区 rootfs 后端负责子进程的启动、输入输出和环境隔离；不要直接在 app 进程内裸起子进程。设计见 [design/stdio-mcp.md](design/stdio-mcp.md)，配置持久化（C111）、进程 launcher（C112）、registry 接线（C113）、配置 UI（C114）、UI 收尾（C115）和 workspace 唯一性归一化（C116）已落地；开发机已验证 initialize/tools/list，callTool UI 路径待补。
 
 ### 用户反馈问题与功能请求（已处理）
 

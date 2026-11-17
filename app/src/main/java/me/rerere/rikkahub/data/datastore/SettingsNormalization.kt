@@ -87,7 +87,9 @@ internal fun Settings.withoutInvalidReferences(): Settings {
         modeInjections = settings.modeInjections.distinctBy { it.id },
         lorebooks = settings.lorebooks.distinctBy { it.id },
         quickMessages = settings.quickMessages.distinctBy { it.id },
-        stdioMcpServers = settings.stdioMcpServers.distinctBy { it.id },
+        stdioMcpServers = settings.stdioMcpServers
+            .distinctBy { it.id }
+            .distinctBy { server -> server.workspaceId.ifBlank { server.id.toString() } },
     )
 }
 
