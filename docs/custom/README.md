@@ -7,13 +7,16 @@
 | 文档 | 内容 |
 | --- | --- |
 | `README.md` | 分支模型、上游同步流程、定制原则 |
-| [`checklist.md`](checklist.md) | 定制清单：索引与逐项的落点、理由、合并注意 |
+| [`checklist.md`](checklist.md) | 定制清单索引；编号、内容与性质 |
+| [`checklist/`](checklist/) | 逐项明细：落点、理由、合并注意与测试 |
 | [`build.md`](build.md) | 构建、测试、格式检查、文档检查、设备上的 androidTest |
 | [`locale.md`](locale.md) | 四份 locale 的增删文案与品牌改写 |
 | [`prompts.md`](prompts.md) | 各功能默认提示词的现状、重写计划与压缩提示词草稿 |
 | [`backup/`](backup/README.md) | 官方备份的导入与导出：恢复链路、导入器、验收 |
 | [`design/`](design/b1-step-commits.md) | 设计稿：B1/B2 的 step 级提交与失败投影、C87 文件级 OCR 派生数据、stdio MCP |
 | [`roadmap.md`](roadmap.md) | 定位、阶段划分、条目索引与依赖、独立更新、分发与合规 |
+| [`history/`](history/) | 已完成的落地记录、上游查看点与 issue 调研 |
+| [`audit/`](audit/) | DSH 对照审计 |
 
 大的上游同步可以另建一份作业单放在 `upstream/`，合并落地后删除；当前没有作业单，所以那个目录不存在。
 
@@ -54,15 +57,13 @@ git push origin ref
 git log --oneline <上次查看点>..upstream/master
 ```
 
-按 [`roadmap.md`](roadmap.md) 的模块参考表筛：保命层读 diff 自己移植，能力层评估后自己实现，地基层跳过。移植之后跑测试，判据是「没有新增失败」，Windows 上固定失败的那批用例见 [`build.md`](build.md) 的测试一节。移植时按 [`checklist.md`](checklist.md) 复核已登记的定制没有被覆盖，新增或删除文案按 [`locale.md`](locale.md) 处理。
+按 [`roadmap.md`](roadmap.md) 的模块参考表筛：保命层读 diff 自己移植，能力层评估后自己实现，地基层跳过。移植之后跑测试，判据是「没有新增失败」，Windows 上固定失败的那批用例见 [`build.md`](build.md) 的测试一节。移植时按 [`checklist.md`](checklist.md) 索引与 [`checklist/`](checklist/) 明细复核已登记的定制没有被覆盖，新增或删除文案按 [`locale.md`](locale.md) 处理。
 
 完整的移植流程与模块划分见 [`roadmap.md`](roadmap.md) 的「独立更新」一节。
 
 ### 上次查看点
 
-上游镜像停在 `5ad19405`。2026-11-13 已查看 `upstream/master` 到 `b10c1685`（3.2.0），本轮 50 个提交；镜像 `ref` 尚未更新，下一次查看从 `b10c1685` 之后开始。
-
-本轮值得关注的上游变化：Phone Use 无障碍操作、按上下文比例/轮次中途自动压缩、Claude thinking 块签名修复、Mistral 多轮 422 修复、模型列表手动刷新、快捷消息短按追加、导出保存为文件、SSH 跳板机与后台 shell、信任用户 CA、推荐提供商/余额查询。自动压缩与本分支不做自动压缩的决定冲突，未移植；Phone Use 完全不做（不移植）。其余更新往后放；上游 issue 区本轮只做调研。
+上游镜像停在 `5ad19405`，`ref` 尚未更新；查看点、每轮提交与 issue 调研记录见 [`history/upstream.md`](history/upstream.md)。下一次查看从 `b10c1685` 之后开始。
 
 ## 定制原则
 
@@ -70,7 +71,7 @@ git log --oneline <上次查看点>..upstream/master
 
 ### 改动尽量小，优先断入口
 
-这条现在只约束 `ai/`：它仍要参考上游，改动越小，移植上游对同一文件的改动时越容易比对。删除 `ai/` 里的功能时优先改条件、去掉入口，而不是删掉整段实现。确实要删整个文件，把路径记进 [`checklist.md`](checklist.md)，移植上游对该文件的改动时专门核对。
+这条现在只约束 `ai/`：它仍要参考上游，改动越小，移植上游对同一文件的改动时越容易比对。删除 `ai/` 里的功能时优先改条件、去掉入口，而不是删掉整段实现。确实要删整个文件，把路径记进 [`checklist/`](checklist/) 明细的对应项，移植上游对该文件的改动时专门核对。
 
 `app/` 不受这条约束：该删的实现在那里可以直接删掉，不必为了可合并性留入口或死代码。
 
@@ -94,7 +95,7 @@ git log --oneline <上次查看点>..upstream/master
 
 ### 一个定制一个提交
 
-提交信息用 Conventional Commits；scope 可省略，进入自己的迭代阶段后不再要求 `custom`。一项定制一个提交，同时在 [`checklist.md`](checklist.md) 里登记。
+提交信息用 Conventional Commits；scope 可省略，进入自己的迭代阶段后不再要求 `custom`。一项定制一个提交，同时在 [`checklist.md`](checklist.md) 索引与 [`checklist/`](checklist/) 明细里登记。
 
 例外：几项定制共用同一批实现（同一个函数签名、同一个 ViewModel 的状态、同一批文件的布局），拆开需要为同一批文件维护多个只存在于历史里的中间版本时，可以合成一个提交。正文逐项写清编号与合并原因，checklist 仍一项一行；能单独编译、单独回滚的项不适用这一条。
 
@@ -148,7 +149,7 @@ git log --oneline ref..main
 | `RouteActivity.kt` | 8 |
 | `FilesPicker.kt` | 6 |
 
-两个口径会给出不同结论。C1 与 C2 按全历史属于动了最密集的两个文件，按近窗口则是中等热度。C5 的语音清理落在 `ChatService.kt` 上，它是近期最热的文件之一，合并时按 [`checklist.md`](checklist.md) 的合并注意逐项复核。
+两个口径会给出不同结论。C1 与 C2 按全历史属于动了最密集的两个文件，按近窗口则是中等热度。C5 的语音清理落在 `ChatService.kt` 上，它是近期最热的文件之一，移植上游改动时按 [`checklist/`](checklist/) 明细里的合并注意逐项复核。
 
 `GenerationLoop.kt` 已随上游 3.0.0 的重构删除，多步生成循环迁到 `ai/src/main/java/me/rerere/ai/agent/AgentLoop.kt`。后者随 3.1.0 的合并进来，此后上游每次改它都在累计热度，目前仍然偏低。
 

@@ -1,6 +1,6 @@
 # 长期路线
 
-本文件记方向、阶段划分与策略。具体定制的落点见 [`checklist.md`](checklist.md)，数据层的现状见 [`backup/README.md`](backup/README.md)。
+本文件记方向、阶段划分与策略。具体定制的落点见 [`checklist/`](checklist/) 的明细，数据层的现状见 [`backup/README.md`](backup/README.md)。
 
 ## 定位
 
@@ -152,7 +152,7 @@
 
 - `ref` 只作上游镜像：`git fetch upstream`、`git merge --ff-only`，更新后推 `origin/ref`，不合进 `main`。
 - 保命层（provider 适配、上游 API 破坏性变更、崩溃与安全修复）读 diff 自己移植，不 cherry-pick。
-- 能力层（上游新功能）按需自己实现；借了哪次提交的思路，在 [`checklist.md`](checklist.md) 里注明来源。
+- 能力层（上游新功能）按需自己实现；借了哪次提交的思路，在 [`checklist/`](checklist/) 明细的对应项里注明来源。
 - 地基层（架构重构、UI 大改）不看，也不移植。
 - 测试判据不变：没有新增失败。
 
@@ -190,7 +190,7 @@
 2. 按模块参考表筛出要看的提交：保命层读 diff 自己移植，能力层评估后自己实现，地基层跳过。
 3. 移植时不许覆盖登记过的定制（尤其 C3 与 C96 的删除）；落进 `app/` 的改动不受合并成本限制。
 4. 跑测试，判据是没有新增失败。
-5. 在 `checklist.md` 里记一条，写明参考的上游提交。
+5. 在 checklist 明细的对应项里记一条，写明参考的上游提交。
 
 ### 定制原则的适用范围
 
@@ -213,7 +213,7 @@
 
 ## 条目索引与依赖
 
-[`checklist.md`](checklist.md) 的索引回答「有哪些条目」；这里给它一个依赖视图：哪些是原始定制要求，哪些是为了满足要求先建的前提条件，以及它们所处的层级。直接依赖只列「没有它这项要求做不成或做不安全」的前置，不列所有相关项；明细以 checklist 为准。
+[`checklist.md`](checklist.md) 的索引回答「有哪些条目」；这里给它一个依赖视图：哪些是原始定制要求，哪些是为了满足要求先建的前提条件，以及它们所处的层级。直接依赖只列「没有它这项要求做不成或做不安全」的前置，不列所有相关项；明细以 [`checklist/`](checklist/) 为准。
 
 ### 层级
 
@@ -330,36 +330,22 @@
 - C1、C5 保留数据模型与序列化类，是为了让旧备份与官方兼容导出仍能解码；这是对移除项自身的约束，不构成对其它条目的依赖。
 - C12、C45、C48 同时是需求与前提；C31、C32 也是「本身是需求、同时作为清理与去重的前提」，所以放在前提表并注明。
 - C30、C36 是 C18 的扩展：C30 给导出加附件路径改写，C36 在此之上加相对路径；C36 又是 C40 导入的前提，所以同时出现在依赖里。
-- 这张表是当前实现的直接依赖视图，不是落地顺序；待办方向的计划项（默认提示词重写、压缩面板等）不预留编号，落地时再登记。
+- 这张表是当前实现的直接依赖视图，不是落地顺序；待办方向的计划项（默认提示词重写、压缩面板等）不预留编号，落地时再登记。C81 起的项尚未补入依赖表，这些项的直接依赖以 [`checklist.md`](checklist.md) 索引指向的明细为准。
 
 ## 待办方向
 
 - 默认提示词重写（含压缩提示词和摘要文案）暂缓：现状、调研结论与草稿保留在 [`prompts.md`](prompts.md)，等压缩面板和交互稳定后再按同一套方法过标题、翻译、OCR。
 - Gemini 缓存控制已调研，结论是不做 explicit `cachedContents`：默认 generateContent 路径的 implicit caching 已自动生效并解析成 cachedTokens，explicit 只支持 Gemini 3/2.5 且是 Beta，有 4096/2048 token 下限和按小时计的存储费，约 18 到 60 次复用才回本，还会关闭同一请求的 implicit caching。剩余可选小项：给 OpenAI 兼容入口的 usage 解析补一个 cached token 字段的兜底。
-- 上游 issue 区已做一轮只读调研（2026-11-13，293 个 open）。优先候选：GoogleProvider 遇到独立 `thoughtSignature` 直接抛错（#2316）、Claude thinking 签名与 `redacted_thinking` 处理缺失（#2206/#1629，上游 3.2.0 的 `e1667163` 已移植，见 C85；上游标记 Fixes #2308）、OCR 默认 `reasoning_effort=none`（#1644，已修，见 C86）、Exa 正文没有长度上限（#1569，已修，见 C88）、历史图片每次请求重复 OCR（#1736/#1678，已修，见 C87）、workspace shell 超时后残留进程（#2225，已修前台命令，见 C89；后台命令未移植）。Phone Use 和自动压缩相关的一律不做；这批修复往后排。
-- `tools/i18n` 已重写成 Python（C93）：用 `uv run --project tools/i18n i18n <command>` 运行，config、术语表、缺条目与未使用检查都保留；本机没有 `.env`，自动翻译仍需配 key。
 - U+FFFD 替换字符按 C100 重新登记为独立行为对齐项，低优先级、不排期：经中转使用 Claude 时偶发，用户侧对照显示同一中转下官方 Claude Code 正常，中转方称不是服务端问题；根因尚未定位，可能在 SSE 分块、UTF-8 边界、流式合并或中转改写。等 B2 剩余消费方和 C87 之后，用同一 prompt 对照官方 Claude Code、官方 API 与中转，抓原始字节确认第一处替换字符出现在哪一层，再决定改 decoder 还是只记兼容性说明。不要先做全局替换字符清洗。
 - 提示词注入、世界书与酒馆先搁置，必要时可整体删除；若重做，按“提示词注入与世界书的搁置决定”一节的方向，把系统触发的提示作为新轮次追加到消息列表末尾，而不是修改已有消息。
-- 仓库改名为 `rakkihub` 已完成：GitHub 仓库名和本地 remote 已改，`docs/custom/README.md` 的 remote 表同步；上游链接不动。
-- 更换应用图标已完成（C90、C92、C94、C101）：launcher 各密度用关于页同一张插画生成，monochrome 层去掉（插画剪影会变成黑块），README 使用安全区裁切的 `docs/readme-icon.png`（`docs/icon.png` 保留为通用图标）；`web-ui/public/favicon.ico` 统一用插画（48/64/128/256 四帧，16px 标签页由浏览器缩），Web UI 新会话空状态改用 `web-ui/public/icon.png`，没有引用的 `docs/img/` 整个目录已删除。通知栏小图标 `ic_stat_rikkahub` 是有意保留的兔子头剪影：插画在 24dp 下是一团色块，这枚单色剪影反而清楚
-- RikkaHub 提供商残留已清理（C95）：上游 `0533acde` 删掉默认提供商后，本分支删掉 `assets/icons/rikkahub.svg`、`AIIconMatcher` 的 `rikka|auto` 分支、四份 `rikkahub_provider_description`，以及只给它用的空 `RikkaHubAPI` 与指向 `api.rikka-ai.com` 的 Retrofit 单例；`DEFAULT_AUTO_MODEL_ID` 改名 `DEFAULT_MODEL_ID` 并注明当前预置里没有对应模型（老设置里那个提供商的 auto 模型仍是这个 id）。搜索服务 `RikkaHubSearchService` 仍保留，但它的选项里 `displayName` 是 `RikkaHub`，同样走这个 matcher，图标回退成首字母
-- 发给 OpenRouter 的来源标识头已移除（C96）：`configureReferHeaders` 只在 host 是 `openrouter.ai` 时加 `X-Title` 与 `HTTP-Referer`，Referer 指官方站点，等于把本分支的调用算成官方 app；函数、十一处调用与 `mediagen` 生图那两行一并删掉，用户自定义请求头不受影响
 - Gradle 模块目录收进子一级目录（未排期，目录名待定，候选 `packages/`）：把根目录平铺的 `app/`、`workspace/`、`terminal/`、`web/`、`ai/` 等收进一个统一的子目录，用 `settings.gradle.kts` 的 `projectDir` 映射保留 `:app`、`:workspace` 等 project path 和 `./gradlew :app:...` 任务名不变；同步 `.gitignore`、构建脚本、CI 产物路径和文档里的 `app/build/...` 路径。单独做一个 `refactor:` 提交，不和功能改动混在一起；Gradle 的 `include` 需要显式列出模块，不能像 uv 的 `members = ["packages/*"]` 那样自动发现。
 
-### B 系列完成之后
+上游查看与 issue 调研记录见 [`history/upstream.md`](history/upstream.md)，已完成的落地批次见 [`history/milestones.md`](history/milestones.md)。
 
-- 错误请求日志里打出完整响应体已按 C99 落地：失败响应的 body 按块写入 logcat 的 `ProviderError`，只记录 path 与状态码。
+### 后续事项
+
 - MCP 工具失败无感重试：在 MCP 面板由用户逐工具标注是否可重试、是否可重入；运行时只对标记过的工具自动重试，未标记的工具保持现状。非幂等工具默认不重试。
-- stdio 形式的 MCP：需要借助专用的工作区与 rootfs 实现，由工作区 rootfs 后端负责子进程的启动、输入输出和环境隔离；不要直接在 app 进程内裸起子进程。设计见 [design/stdio-mcp.md](design/stdio-mcp.md)，按配置持久化、rootfs 进程 launcher、registry 接线、配置 UI、UI 收尾、workspace 唯一性、引用收口、手动停止和无工作区导航九个阶段（C111）落地；开发机已验证 initialize/tools/list，callTool UI 路径待补。
-
-### 用户反馈问题与功能请求（已处理）
-
-- 消息操作里的“重试”和“重新生成”图标没有区分度：已处理（2026-11-16），失败 step 的重试改用 `ArrowTurnBackward`，整轮重新生成保持 `Refresh03`，聊天快捷栏与更多菜单同步；两者语义仍分别对应重跑当前 step 和新建整轮候选。
-- Gemini 协议下写文件/编辑文件时没有“正在写入/正在编辑”状态：已处理（2026-11-16），`workspace_write_file` / `workspace_edit_file` 的标题在 `loading && callComplete && !isPending` 时改用“Writing/Editing”文案，执行完成后回到普通标题；Gemini 的 `functionCall` 仍是整块到达，因此参数生成阶段没有可展示的 part，进入工具执行后卡片和状态会立即出现。
-- 工作区文件编辑器从多任务视图切回时自动弹出输入法并滚回光标位置，丢失切出前的浏览进度：已处理（2026-11-16），编辑页在 `ON_PAUSE` 保存 `ScrollState`、清焦点并收起输入法，`ON_RESUME` 和加载完成后恢复滚动位置；`TextField` 现在持有同一个 `scrollState`，回来不再自动聚焦。设备上用 200 行文件验证了无键盘和键盘打开两种切出场景。
-- 工作区终端不能输入其他语言：已处理（2026-11-16），终端页增加一个隐藏的 `TerminalImeEditText` 作为正常文本输入宿主，IME 的 `commitText` 按 UTF-8 写给 `TerminalSession`，删除/Enter/Tab 和控制键单独转发，`TerminalView` 不再抢焦点。开发机装 Rootfs 后用 Fcitx5 拼音验证了“你好”提交、bash 执行和错误回显；用户随后在 Gboard 中文和日文下复核正常。
-- 从工作区文件目录打开 Markdown 文件时，目前只有 raw 编辑视图：已处理（2026-11-16），`.md`/`.markdown` 默认渲染预览，顶栏可在“预览/源码”间切换；静态 HTML/SVG 原本已有 WebView 预览，本次没有重复改。
-- 工作区文件编辑器缺少未保存状态保护：已处理（2026-11-16），编辑器跟踪加载基线和当前文本，返回时若有改动弹出保存/放弃/取消，保存成功才退出；系统返回键同样拦截。
+- stdio 形式的 MCP：需要借助专用的工作区与 rootfs 实现，由工作区 rootfs 后端负责子进程的启动、输入输出和环境隔离；不要直接在 app 进程内裸起子进程。设计见 [design/stdio-mcp.md](design/stdio-mcp.md)，实现按 C111 的九个阶段落地；开发机已验证 initialize/tools/list，callTool UI 路径待补。
 
 ### 提示词注入与世界书的搁置决定
 
@@ -368,17 +354,9 @@
 
 ### 失败恢复与上下文的返工
 
-冻结已解除（2026-11-15）：B1 第一阶段已落地（C97），step 记录与请求投影、失败消息保留已执行工具都已在设备上验证；自动重试已恢复为默认关闭的可选项（C75），C76 的 attempt 摘要已持久化；手动 step 重试已按 C98 落地；审批/取消的 step 结算已落地，最后节点审批收口也已完成。B1 设计稿在 [`design/b1-step-commits.md`](design/b1-step-commits.md)，B2 草稿在 [`design/b2-step-messages.md`](design/b2-step-messages.md)。
+失败恢复与消息模型的冻结已解除。B1 第一阶段已落地（C97）：step 记录与请求投影、失败消息保留已执行工具已在设备上验证；自动重试恢复为默认关闭的可选项（C75），C76 的 attempt 摘要已持久化；手动 step 重试按 C98 落地；审批/取消的 step 结算与最后节点审批收口已完成。B1 设计稿在 [`design/b1-step-commits.md`](design/b1-step-commits.md)，B2 草稿在 [`design/b2-step-messages.md`](design/b2-step-messages.md)。
 
-2026-11-14 本轮已落地：
-
-- 自动重试整体下线：`Settings.retryPolicy()` 恒返回 `RetryPolicy.NONE`；网络设置去掉自动重试开关与次数滑块；`NetworkSetting.maxRetries` 与已保存 JSON 保留；C76 的 attempt 卡片失去触发来源（代码保留）；C77 的错误卡片 Retry 撤销，错误卡片只提示错误信息。
-- C63 撤销：`AgentHooks.onContextOverflow`、`overflowWindow`、`shrinkActive`、`contextOverflowRetried` 与测试删除，超限只出错误卡片。
-- C73 撤销：`ContextPruning.kt`、`buildStep` 的裁剪调用与测试删除，请求装配不再隐式改写消息。
-- C62 补心跳与开关：Claude 的 ping 产出 `StreamChunk.Heartbeat` 重置看门狗，`NetworkSetting.streamIdleTimeoutEnabled` 可整条关闭。
-- C65 补设置：`AgentSetting` 增加工具超时（0 表示不限制）与 `workspace_shell` 默认/最大命令超时；工具声明 `timeoutMillis`，外层取较大值，不会先于工具自己的超时触发。
-
-仍挂起：
+当前状态与剩余：
 
 - 重试恢复与消息模型 B1：已完成 step 记录、Claude step 级请求投影、失败工具事实、审批/取消 step 结算、最后节点审批收口（C97）与默认关闭的自动重试（C75）；C76 的 attempt 摘要已持久化，设计见 [design/b1-step-commits.md](design/b1-step-commits.md)。B2 已开始：Web DTO 的 status/steps、conversation_search 的失败消息过滤（单次会话加载）、上下文边界投影对齐已落地；C107 补了 step 稳定 id 与 failureCode；官方导出按上游 `ignoreUnknownKeys` 容忍未知字段，普通消息（无 steps 字段）与带 steps 样本均已验；手动 step 重试已落地（C98），搜索加载优化见 [design/b2-step-messages.md](design/b2-step-messages.md)。
 - C58 半途失败投影已由 B1 第一阶段落地（C97）：聊天请求投影保留失败前已执行的工具事实，失败 step 的正文与推理不进请求；标题、记忆与摘要投影仍整条丢弃失败消息。B2 只收尾搜索、Web 与错误卡片等消费方。
@@ -402,39 +380,13 @@ RikkaHub 现状：
 - 停止或下一次发送时，未执行工具补恢复结果，按 `startedAt` 区分 `not_started`/`outcome_unknown`；审批恢复路径中的 Approved/Denied/Answered 工具仍交给 AgentLoop 继续执行。
 - UI 有失败/中断标记；C76 的 attempt 行已随 C75 默认关闭的重试恢复，默认不出现，历史 step 的摘要会持久化；C77 的错误卡片重试永久取消，错误卡片只提示错误信息；C80 给 `usage_record` 加 outcome，失败成本保留、缓存命中率排除失败。
 
-待办：
+当前状态：
 
-- P0 失败 attempt 与成功消息分开：C58 已实现 `UIMessage.status` 标记、`FAILED` 消息从请求/标题/记忆/`conversation_read` 过滤、相邻 user 合并和 UI 失败/中断标签。剩余：失败消息的 step 级请求投影已由 C97 落地，标题、记忆与摘要仍整条隔离；完整审批/取消 step 状态机已落地，自动重试已由 C75 以默认关闭恢复。工具恢复结果已由 C65 处理。
-- P1 稳定错误码与可配置策略。C61 已把 provider 非 2xx 和空回复统一成带 `code`、`status`、`retryAfterMs` 的失败类型，覆盖 `AUTH`、`QUOTA`、`RATE_LIMIT`、`SERVER`、`TIMEOUT`、`EMPTY_RESPONSE`、`CONTEXT_WINDOW_EXCEEDED`、`INVALID_REQUEST`、`UNKNOWN`；裸传输错误仍按 `IOException` 重试，`TRANSPORT` 留给调用方包装。策略是 normal mode：`maxRetries`、`retryableCodes`、`initialDelay`、`maxDelay`、`jitter`；默认只重试瞬时错误，读取 `Retry-After` 并设上限；C75 把 `maxRetries` 放回网络设置并默认关闭；`Settings.retryPolicy()` 只在用户开启后返回策略。保留 step 级重试的实现，不做 prefill 续写。验收：429、5xx、空回复可重试；400、401、403、额度、上下文超限不重试；用户停止可取消等待；重试不重复工具副作用；重试请求与前缀缓存兼容。
-- P2 重试状态 UI。C75 已恢复为默认关闭的网络设置入口，C76 的 attempt 摘要已随 step 持久化；C77 的错误卡片 Retry 永久取消，错误卡片只做信息提示；见「失败恢复与上下文的返工」。
-- P3 用量区分成功与失败 attempt。C80 已给 `usage_record` 加 `outcome`（SUCCESS/FAILED/CANCELLED/UNKNOWN，旧数据 UNKNOWN），失败成本保留、统计页缓存命中率排除 FAILED/CANCELLED；消息卡片继续只显示成功 attempt 的 usage。attempt/retryId 没有单独落列，按 outcome 收口。验收：Room 32 到 33 迁移、旧数据默认 UNKNOWN、真实 app 库迁移、data.sync 53 条和官方导出裁剪都通过。32 到 33 没有降级迁移，回退旧构建前要保留 v32 库副本或继续用新构建。
+- 失败 attempt 与成功消息分开（剩余）：C58 已实现 `UIMessage.status` 标记、`FAILED` 消息从请求/标题/记忆/`conversation_read` 过滤、相邻 user 合并和 UI 失败/中断标签。剩余：失败消息的 step 级请求投影已由 C97 落地，标题、记忆与摘要仍整条隔离；完整审批/取消 step 状态机已落地，自动重试已由 C75 以默认关闭恢复。工具恢复结果已由 C65 处理。
+- 稳定错误码与可配置策略（已落地）：C61 已把 provider 非 2xx 和空回复统一成带 `code`、`status`、`retryAfterMs` 的失败类型，覆盖 `AUTH`、`QUOTA`、`RATE_LIMIT`、`SERVER`、`TIMEOUT`、`EMPTY_RESPONSE`、`CONTEXT_WINDOW_EXCEEDED`、`INVALID_REQUEST`、`UNKNOWN`；裸传输错误仍按 `IOException` 重试，`TRANSPORT` 留给调用方包装。策略是 normal mode：`maxRetries`、`retryableCodes`、`initialDelay`、`maxDelay`、`jitter`；默认只重试瞬时错误，读取 `Retry-After` 并设上限；C75 把 `maxRetries` 放回网络设置并默认关闭；`Settings.retryPolicy()` 只在用户开启后返回策略。保留 step 级重试的实现，不做 prefill 续写。验收：429、5xx、空回复可重试；400、401、403、额度、上下文超限不重试；用户停止可取消等待；重试不重复工具副作用；重试请求与前缀缓存兼容。
+- 重试状态 UI（已落地）：C75 已恢复为默认关闭的网络设置入口，C76 的 attempt 摘要已随 step 持久化；C77 的错误卡片 Retry 永久取消，错误卡片只做信息提示；见「失败恢复与上下文的返工」。
+- 用量区分成功与失败 attempt（已落地）：C80 已给 `usage_record` 加 `outcome`（SUCCESS/FAILED/CANCELLED/UNKNOWN，旧数据 UNKNOWN），失败成本保留、统计页缓存命中率排除 FAILED/CANCELLED；消息卡片继续只显示成功 attempt 的 usage。attempt/retryId 没有单独落列，按 outcome 收口。验收：Room 32 到 33 迁移、旧数据默认 UNKNOWN、真实 app 库迁移、data.sync 53 条和官方导出裁剪都通过。32 到 33 没有降级迁移，回退旧构建前要保留 v32 库副本或继续用新构建。
 
-### DSH 对照检查记录
+### DSH 对照审计
 
-检查基线 `dsh-v0.2.1-rc.5`（`b830ec950f`）。以下是本轮只读审计确认的问题，按修复优先级排列；路径都是 RikkaHub 侧位置。
-
-| 优先级 | 领域 | 现状与风险 | 建议 |
-| --- | --- | --- | --- |
-| P1 | 截断的 SSE 被当成正常完成（C59 已修） | C59 前 Claude 的 `onClosed` 无条件补 `Finish`，没有 `message_stop` 的半截流会被提交为完整回复；OpenAI/Google 的 `onClosed` 同样无条件调用 `decoder.finish()`。C59 起五个 decoder 未见终止事件时抛 `IOException`，provider `onClosed` 转成 `close(e)`，`onFailure` 空 body 不再静默正常关闭。`ClaudeProvider.kt`、`ClaudeStreamDecoder.kt`、`ChatCompletionsAPI.kt`、`ChatCompletionsStreamDecoder.kt`、`ResponseAPI.kt`、`ResponseApiStreamDecoder.kt`、`GoogleProvider.kt`、`GoogleStreamDecoder.kt`、`InteractionsAPI.kt`、`InteractionsStreamDecoder.kt`。 | 已按此实现；严格判定对不发终止事件的中转会变成可重试错误，按 provider 加宽松条件而不是全局关掉。 |
-| P1 | 停止的 pending 结算不保证执行（C59 已修） | C59 前 `stopGeneration` 先 pause/cancelJobs，再 join，join 后才 `finishInterruptedPendingTools`，不在 `NonCancellable`；页面退出导致 join 取消时 pending 工具不结算。C59 起 join 与工具收尾放进 `withContext(NonCancellable)`，发送前的 `finishInterruptedPendingTools` 仍保留作崩溃补偿。`ChatService.kt:1481-1493`、`ChatVM.kt:386-390`。 | 已按此实现；NonCancellable 只包 join 和工具收尾，不包 UI 状态。 |
-| P1 | 分支切换绕过审批门禁（C60 已修） | C60 前 `selectMessageNode` 只挡压缩，不挡审批；切走分支后 `isAwaitingToolApproval` 变 false，队列可派发，pending 调用留在未选中分支。C60 起 `isAwaitingToolApproval` 或 `pendingApprovalTurn` 非空时直接抛 `ConflictException`。`ChatService.selectMessageNode`、`Conversation.isAwaitingToolApproval`。 | 已按此实现；ChatVM 目前只记日志，Web 返回 409。 |
-| P1 | 审批恢复重新解析配置（C60 已修） | C60 前审批期间 `setChatModel` 没有门禁，`handleToolApproval` 恢复时重新 `runTurn`/`createContext`，工具结果和工具 schema 会落到新模型/provider。C60 起 `ConversationSession.pendingApprovalTurn` 冻结本轮 `ChatTurnContext`，审批恢复复用它；配置变化从下一轮生效。`ChatService.runTurn`、`ConversationSession.pendingApprovalTurn`；`ChatVM.setChatModel` 没有改，允许改但只影响下一轮。 | 已按此实现；冻结只在内存，进程死亡后退化为当前配置。 |
-| P1 | 没有流内 idle watchdog（C62 已加，含心跳与开关） | C62 前只有 OkHttp/Ktor 的 10 分钟 per-read timeout；无 chunk 无心跳会卡 10 分钟，有 SSE 心跳时 read timeout 被不断重置，可能永久停在生成中。C62 起 `AgentRequest.streamIdleTimeout` 默认 90 秒，`AgentLoop.stream` 用 `Flow.timeout` 在相邻 chunk 间超时；Claude 的 ping 解码成 `StreamChunk.Heartbeat` 重置看门狗，`NetworkSetting.streamIdleTimeoutEnabled` 可以整条关掉。`AgentLoop.kt`、`Agent.kt`、`ClaudeStreamDecoder.kt`。 | 已按此实现；自动重试关闭时超时直接出错误卡片，开启后按策略重试。 |
-| P1 | 没有 error-driven overflow 恢复（C63 已撤销） | C63 曾用 `AgentHooks.onContextOverflow` 把窗口缩到最后一条 user 后重试，但它静默丢掉整段历史且每轮重演，已撤销：hook、`overflowWindow`、`shrinkActive` 与相关测试都删除，超限只按 `CONTEXT_WINDOW_EXCEEDED` 出错误卡片。`AgentLoop.kt`、`Agent.kt`、`ChatRequestFactory.kt`。 | 已按撤销处理；是否恢复等失败恢复与消息模型重做。 |
-| P2 | 工具恢复语义失真（C65 已修恢复结果与超时设置） | C65 起按 `startedAt` 区分 `not_started` 与 `outcome_unknown`，`cancelInterruptedTools` 和 `withoutUnresumableToolCalls` 共用恢复结果，逐 part 保留文本与推理；工具错误只给模型摘要，堆栈只进日志（C78 起 `Log.e`）。工具声明 `timeoutMillis`，外层 `AgentSetting.toolTimeoutSeconds`（0 表示不限制）与它取较大值；`workspace_shell` 的默认与最大命令超时也进设置。output 的 NonCancellable 写入仍受 FlowCollector 跨协程发射限制，留后续。 | 已按恢复语义、超时设置与声明超时实现；日志分级已完成，取消写入待后续。 |
-| P2 | `withoutUnresumableToolCalls` 删除整条消息（C65 已修） | C65 起逐 part 处理，只把不可恢复的 Tool part 换成恢复结果，保留文本、推理和其它 part，不再删除整条 assistant 消息。`Conversation.kt`。 | 已按此实现。 |
-| P2 | 进程死亡丢失重试与收尾状态（C67 已恢复半截回复，C70 已持久化队列，C71 已持久化错误卡片） | 只周期保存回复节点，5/15/30 秒分档，小节点最迟 60 秒；C67 的 `isGenerating` 随消息落库，加载时把半截回复补成 `INTERRUPTED` 并补工具结果；C70 把未出队消息落到 `noBackupFilesDir`，恢复为暂停态；C71 把错误卡片落到 `noBackupFilesDir`，启动时恢复。实时 `Retrying (n/m)` 状态仍不跨进程：进程死亡后没有在途请求，半截回复按 `INTERRUPTED` 恢复，重试倒计时恢复出来只会误导；首次保存前死亡仍会丢。C50 在节点漂移或含 base64 图片时静默跳过。`MessageSaveLoop.kt`、`ConversationSession.kt`、`ChatService.kt`、`ChatErrorStore.kt`。 | 继续持久化 turn 状态或时间戳心跳；保存失败要上报；live retrying 不跨进程，重试 attempt 的 UI 并入 B1，用量仍按 C80 口径。 |
-| P2 | 消息队列暂停后静默滞留（C66 已修派发与回插，C70 已持久化） | C66 前队列 paused 且非空时，新消息只 enqueue，`takeNext` 因 paused 返回 null，消息不发也不进正文；先 `takeNext` 出队再写历史，中间失败会丢消息。C66 起显式发送总是 resume，发送失败且未落库时回插队首。C70 起未出队消息按会话落到 `noBackupFilesDir`，恢复为暂停态，用队列 id 与已落库消息去重。`ChatService.kt`、`MessageQueue.kt`、`MessageQueueStore.kt`。 | 已按此实现派发恢复、失败回插和跨进程持久化；编辑占位与暂停状态不落盘。 |
-| P2 | 上下文压力与压缩管理（C72/C74 已做，C73 已撤销） | C72 前发送前没有 token 估算或 usage 水位；摘要请求 `maxTokens = null`，截断即整次压缩失败；截断 keep=1 且末条是 assistant 时会丢掉产生它的 user。C72 起保留起点按 user 轮次对齐，摘要输出和输入都有保守 token 预算，超预算先提示截断/多保留，摘要被截断时退回部分摘要；C74 起当前窗口最近 usage 加尾部估算，达到 80% 在主聊天页底部显示压缩建议条，手动打开管理上下文，不自动压缩。C73 的发送前裁剪已撤销（静默改写请求、破坏消息段前缀缓存），超限只出错误卡片。`ChatRequestFactory.kt`、`CompressionPlan.kt`、`ContextPressure.kt`、`ChatPage.kt`、`ChatService.kt`。 | 自动压缩仍不做；C73 已撤销，C72/C74 的预算与水位保留。 |
-| P2 | scratch 生命周期只靠调用点清理（C68 已清理崩溃对并过滤请求/导出/Web 快照/搜索） | 压缩失败或取消留下的 prompt 与半截回复只在发送、截断、再次压缩前清理；C68 起加载会话时删除回复仍为 `COMPLETE` 的崩溃对，失败/取消对标 `FAILED` 后跨 reload 保留，请求派生、导出、Web/SSE 的 `Conversation.toDto` 和 App/Web/agent 搜索结果会过滤；浮动窗口只预览当前回复，压缩轮次结束即清空，不列出孤儿对。`ChatService.kt`、`ConversationSession.kt`、`ConversationMessages.kt`、`ConversationRepository.kt`、`ai/ui/Message.kt`。 | 给 scratch 打逐 part 不可发送标记；C68 已做崩溃对载入清理、请求/导出/Web 快照/搜索过滤。 |
-
-修复顺序：
-
-P1 分批：P1a 截断 SSE 与停止结算，P1b 审批分支与配置快照，P1c idle watchdog 与稳定错误码重试（overflow 兜底原先列在 P1c，已随 C63 撤销）。
-
-1. P0 失败 attempt 隔离已由 C58 完成；多步工具调用的 per-step 细化并入 B1，工具恢复结果已由 C65 处理。
-2. P1a 截断 SSE 与停止结算已由 C59 完成；P1b 审批分支与配置快照已由 C60 完成。
-3. P1c 的稳定错误码重试已由 C61、idle watchdog 由 C62（含心跳与开关）完成；overflow 兜底（C63）与发送前裁剪（C73）已撤销，超限只出错误卡片；自动重试（C75）已恢复为默认关闭的可选项，P1 收尾后进入 P2。
-4. P2 工具恢复结果、工具声明超时与超时设置由 C65 完成，队列派发与失败回插由 C66 完成，进程死亡半截回复由 C67 完成，scratch 加载清理与请求/导出/Web 快照/搜索过滤由 C68 完成，队列持久化由 C70 完成，错误卡片持久化由 C71 完成，压缩计划对齐、摘要预算、部分摘要和范围检查由 C72 完成，usage 水位建议条由 C74 完成；C76 的 attempt 卡片随重试下线、C77 的错误卡片重试撤销；B1 已恢复默认关闭的自动重试与 C76 attempt 卡片，C76 摘要已持久化，B2 做剩余消费方与手动 step 重试，C77 永久取消；剩余自动压缩（不做）、取消写入、失败 attempt 的 usage 区分、C58 的投影与新消息模型（B1/B2）。
-
-范围说明：C59 已逐行核对五个 decoder 的终止判定和五个 provider 接线点的 `onClosed`，并用 `:ai:testDebugUnitTest` 全量验证；工具并发没有展开，当前 RikkaHub 按顺序执行，未发现正确性问题，只是并发效率较低。
+DSH 对照检查记录、修复顺序与范围说明见 [`audit/dsh.md`](audit/dsh.md)。

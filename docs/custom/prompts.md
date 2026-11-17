@@ -1,6 +1,6 @@
 # 默认提示词
 
-本文件记各功能默认提示词的现状与重写计划。定制登记仍以 [`checklist.md`](checklist.md) 为准，方向与阶段见 [`roadmap.md`](roadmap.md)。
+本文件记各功能默认提示词的现状与重写计划。定制登记仍以 [`checklist.md`](checklist.md) 索引与 [`checklist/`](checklist/) 明细为准，方向与阶段见 [`roadmap.md`](roadmap.md)。
 
 状态：压缩提示词已按 C44 改成可编辑，其余仍是计划；本文件里的草稿还没有实施。
 
@@ -31,7 +31,7 @@
 1. 默认值更换，保留变量占位符与调用约定。
 2. 至少一条 JVM 测试钉住占位符替换与关键规则（参照 `CompressPromptTest`）。
 3. 有流式或结构化输出的，加一条「输出不合格」的处理（压缩已有 `compressionSummaryOrNull`，需要补缺段校验）。
-4. `checklist.md` 记一条，写明参考的 harness 与理由。
+4. 在 checklist 明细的对应项里记一条，写明参考的 harness 与理由。
 
 压缩这一项额外要做：插入检查点时由代码加一行框定语（见下面草稿的说明），以及缺段补一次提醒重试。
 

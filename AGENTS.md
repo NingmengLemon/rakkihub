@@ -44,7 +44,7 @@ App 有一个 `distribution` 维度的 product flavor：`github`（默认）和 
 - **search**: Search functionality SDK for multiple providers (Exa, Tavily, Zhipu, Bing, Brave, SearXNG, and others)
 - **speech**: Only the serialized `TTSProviderSetting` and `ASRProviderSetting` data classes remain (kept so persisted
   settings still decode). The TTS and ASR runtime implementations were removed on this branch, see C5 in
-  `docs/custom/checklist.md`.
+  `docs/custom/checklist/removals.md`.
 - **web**: Embedded web server module that provides Ktor server startup function and hosts static frontend build files (
   built from web-ui/ React project)
 - **workspace**: Sandboxed per-workspace file system and shell execution environment exposed to the AI as tools.
@@ -115,14 +115,14 @@ This repository carries personal customizations on top of upstream `rikkahub/rik
 
 - Work on `main`. `ref` only follows upstream and must stay fast-forwardable; never commit to it.
 - Read `docs/custom/README.md` before adding or removing a feature. It holds the branch model, the upstream sync
-  procedure, and the customization principles. `docs/custom/checklist.md` is the per-customization register,
-  `docs/custom/roadmap.md` the long-term plan (stage split, easy-migration target, dependency index of the
-  customizations, independent-update direction, distribution/compliance), `docs/custom/backup/` the backup
-  import/export chain with its acceptance procedure, and `docs/custom/build.md` / `docs/custom/locale.md` the build
-  and string-resource operations.
+  procedure, and the customization principles. `docs/custom/checklist.md` is the customization register index;
+  per-item details live in the matching file under `docs/custom/checklist/`. `docs/custom/roadmap.md` is the long-term
+  plan (stage split, easy-migration target, dependency index of the customizations, independent-update direction,
+  distribution/compliance), `docs/custom/backup/` the backup import/export chain with its acceptance procedure, and
+  `docs/custom/build.md` / `docs/custom/locale.md` the build and string-resource operations.
 - Commit messages follow Conventional Commits; the `custom` scope is optional now that the branch is on independent
-  updates. Every customization still gets an item in `docs/custom/checklist.md` (an index row plus a detail section)
-  so a later upstream port can be checked against it.
+  updates. Every customization gets an index row in `docs/custom/checklist.md` and a detail section in the matching
+  file under `docs/custom/checklist/`, so a later upstream port can be checked against it.
 - The persisted-data freeze is lifted: the official-backup importer exists, and the criteria verified on the real samples
   are v32/v31 tables and converted output plus v32 attachments and settings. The freeze was about official backups
   coming in, and that path works. The criteria that are untested or only partially tested are listed class by class in

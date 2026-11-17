@@ -19,7 +19,7 @@
 
 ## 定制记录
 
-逐项改动、理由与移植注意事项在 [`docs/custom/checklist.md`](docs/custom/checklist.md)。分支怎么跟上游走、数据层的约束见 [`docs/custom/README.md`](docs/custom/README.md)，构建方式见 [`docs/custom/build.md`](docs/custom/build.md)，备份的导入导出与验收见 [`docs/custom/backup/`](docs/custom/backup/)。
+逐项改动、理由与移植注意事项在 [`docs/custom/checklist.md`](docs/custom/checklist.md) 的索引与 [`docs/custom/checklist/`](docs/custom/checklist/) 的明细里。分支怎么跟上游走、数据层的约束见 [`docs/custom/README.md`](docs/custom/README.md)，构建方式见 [`docs/custom/build.md`](docs/custom/build.md)，备份的导入导出与验收见 [`docs/custom/backup/`](docs/custom/backup/)。
 
 ## 官方仓库
 

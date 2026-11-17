@@ -2,7 +2,7 @@
 
 ## 状态
 
-设计稿已复审 PASS。C111 按配置持久化、rootfs 长期进程 launcher、MCP registry 接线、stdio 配置 UI、UI 收尾（状态/停止重启、工作区唯一性、env 显示、删除提示）、归一化唯一性兜底、引用收口、手动停止持久化和无工作区导航九个阶段落地；开发机已验证 initialize、tools/list 和 Connected，callTool 的真实 UI 路径待补。
+设计稿已复审 PASS。实现状态与阶段见 [`checklist/workspace.md`](../checklist/workspace.md) 的 C111；开发机已验证 initialize、tools/list 和 Connected，callTool 的真实 UI 路径待补。
 
 ## 目标
 
