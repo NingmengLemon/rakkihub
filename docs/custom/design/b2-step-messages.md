@@ -1,6 +1,6 @@
 # B2：step 级提交与失败投影（完整版草稿）
 
-- 状态：部分落地。`MessageStep.id`、`failureCode` 已落地；Web DTO 的 status/steps、conversation_search 的失败消息过滤（scratch 与状态共用一次会话加载）、contextLimitBoundaryIndex 的投影对齐已完成；手动 step 重试与 C76 attempt 持久化已落地；官方普通空 steps 与带 steps 样本均已验，剩余消费方待后续。
+- 状态：部分落地。`MessageStep.id`、`failureCode` 已落地；Web DTO 的 status/steps、conversation_search 的失败消息过滤（scratch 与状态共用一次会话加载）、contextLimitBoundaryIndex 的投影对齐已完成；手动 step 重试与 C76 attempt 持久化已落地；官方普通消息（无 steps 字段）与带 steps 样本均已验，剩余消费方待后续。
 - 日期：2026-11-15
 - 前置：先完成 [`b1-step-commits.md`](b1-step-commits.md)；本文档保留手动重试、错误卡片、C76、搜索过滤、Web/导出兜底等 B2 内容
 - 对齐参考：DSH `dsh-v0.2.2-rc.1`（tag 指向 commit `66491b05e3f05ad35bcdd4f6cd7ed26041d9e3db`，2026-11-04；本地 clone `E:\MyWorkspace\deepseek-harness` 的 HEAD 是 `dsh-v0.2.1-rc.5`，本文档的 0.2.2 事实均用 `git show dsh-v0.2.2-rc.1:<path>` 读取）
@@ -272,8 +272,8 @@ RUNNING 会出现在当前请求里：AgentLoop 把正在生成的 assistant 消
 - 搜索跳转：仍按节点下标，消息数不变。
 - Web/SSE：`MessageDto` 新增可选的 `status` 与 `steps`；`MessageDto.parts` 直接序列化 `UIMessagePart`，`callComplete` 会自动出现在 Web JSON 里，不需要额外字段。Web 的删除、分支、重新生成仍按节点操作；SSE 的 `node_update` 机制不变。
 - 浮动窗口、Markdown 导出、长图、通知：仍按消息处理，不按 step 拆分。
-- 官方兼容导出：行结构与 JSON 字段保留，`OfficialDatabaseAdapter` 的附件路径改写不变；`steps` 作为 `UIMessage` 的未知字段，容忍路径与现有 `status`、`isGenerating` 相同。上游 `ref` 的 `JsonInstant` 已经开了 `ignoreUnknownKeys`，验收仍要用官方 3.1.1 恢复普通消息与带 steps 的消息，样本记入 `docs/custom/backup/acceptance.md`。
-- 官方兜底：上游 `ref` 的 `JsonInstant` 已开启 `ignoreUnknownKeys`，消息节点也用同一解码器；`steps`、`status`、`isGenerating`、`isCompressionPrompt` 和 Tool part 里的 `callComplete` 先按未知字段容忍，不做 JSON 投影。官方 3.1.1 样本确认前不写猜测性的裁剪；若样本拒绝，再在 `OfficialDatabaseAdapter` 对 `messages` JSON 投影，剔除所有官方不认识的字段（至少上述几项），保留 JSON 树里的官方未知键。字段清单按本分支对 `UIMessage` 与 `UIMessagePart` 的新增字段派生，不靠手工记忆；导入侧的 raw copy 不变量不改变，导出侧说明写进 C18 的登记与 `docs/custom/backup/acceptance.md`。
+- 官方兼容导出：行结构与 JSON 字段保留，`OfficialDatabaseAdapter` 的附件路径改写不变；`steps` 作为 `UIMessage` 的未知字段，容忍路径与现有 `status`、`isGenerating` 相同。上游 `ref` 的 `JsonInstant` 已经开了 `ignoreUnknownKeys`，官方 3.1.1 已用普通消息与带 steps 的消息验证，样本记入 `docs/custom/backup/acceptance.md`。
+- 官方兜底：上游 `ref` 的 `JsonInstant` 已开启 `ignoreUnknownKeys`，消息节点也用同一解码器；`steps`、`status`、`isGenerating`、`isCompressionPrompt` 和 Tool part 里的 `callComplete` 按未知字段容忍，不做 JSON 投影。官方 3.1.1 已确认容忍，不需要猜测性的裁剪；若将来拒绝，再在 `OfficialDatabaseAdapter` 对 `messages` JSON 投影，剔除所有官方不认识的字段（至少上述几项），保留 JSON 树里的官方未知键。字段清单按本分支对 `UIMessage` 与 `UIMessagePart` 的新增字段派生，不靠手工记忆；导入侧的 raw copy 不变量不改变，导出侧说明写进 C18 的登记与 `docs/custom/backup/acceptance.md`。
 - 错误卡片（C71）：`ChatErrorStore` 的私有 `StoredError` 也要加 `retryNodeId`、`retryStepId`，旧 `chat-errors.json` 解码为 null，按陈旧卡片处理。
 - 消息队列（C70）：只存 user 消息，不受 steps 影响。
 - 进程死亡（C67）：只处理 `isGenerating = true` 的消息；审批暂停的消息不参与。
@@ -329,7 +329,7 @@ RUNNING 会出现在当前请求里：AgentLoop 把正在生成的 assistant 消
 
 ## 14. 开放问题
 
-1. 官方客户端对分叉字段的容忍需要官方 3.1.1 恢复验证；兜底方案已给出。
+1. 官方客户端对分叉字段的容忍已由官方 3.1.1 的普通消息与带 steps 样本确认；不做 JSON 投影兜底，若未来样本拒绝再启用。
 
 已定的实现约束：
 

@@ -204,6 +204,6 @@ B1 第一阶段已给 `UIMessage` 增加 `steps`，给 `UIMessagePart.Tool` 增�
 
 2026-11-16 开发机验证：构造一条先 500 重试、再调用 `get_time_info`、最后返回 `TOOL DONE` 的 2 step 消息，官方兼容导出包含 `steps`、`callComplete`、`attempts`；官方 3.1.1 导入并重启后会话可读，显示工具调用与 `2 steps`，没有崩溃。官方客户端不显示 `attempts`，按未知字段忽略。
 
-2026-11-17 开发机验证普通消息：把同一份带 steps 的官方样本去掉消息里的 `steps`、`attempts` 和 Tool part 的 `callComplete`，生成普通空 steps 归档；官方 3.1.1 导入并重启后正常打开。读取官方库确认 15 个消息节点，助手消息 `steps` 为空，正文 `MOCK OK: test` 可读；没有因普通消息缺少新增字段崩溃。
+2026-11-17 开发机验证普通消息：把同一份带 steps 的官方样本去掉消息里的 `steps`（其中的 `attempts` 一并去掉）和 Tool part 的 `callComplete`，生成普通归档；官方 3.1.1 导入并重启后正常打开。读取官方库确认 15 个消息节点，助手消息没有 `steps` 字段（样本里已剥掉），正文 `MOCK OK: test` 可读；没有因普通消息缺少新增字段崩溃。这是旧格式的剥离形状，不是本应用新导出的 `steps: []`、`callComplete: true` 形状；新字段的未知键容忍由 2026-11-16 带 steps 样本覆盖，两份合起来覆盖普通消息和新字段。
 
 两份样本均已覆盖：普通消息空 steps、带步骤和工具调用的消息。

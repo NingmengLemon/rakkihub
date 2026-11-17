@@ -200,7 +200,7 @@ val callComplete: Boolean = true
 - 旧会话 `steps` 为空，按单 step 处理；旧 `FAILED` 整条丢弃；旧消息被接管继续生成时补前缀 step。
 - 旧构建解码新会话得到空 steps，`callComplete` 回落到 true，保存时丢掉 steps 并把半截调用当完整调用；这是已知降级限制，写进 `docs/custom/README.md`，同一个提交里更新。
 - 旧构建测试：保留 B1 落地前的 debug APK（形如 `3.1.1-custom.3349+f48eea2`），`adb install -r -d` 降级安装，打开含 steps 的会话再保存，确认正文可读、steps 丢失但不崩。
-- 官方兼容导出：行结构与 JSON 字段保留，附件路径改写不变；`steps` 与 `callComplete` 作为未知字段，官方容忍度仍待 3.1.1 带 messages 的恢复样本确认，验收清单里标为待验证。
+- 官方兼容导出：行结构与 JSON 字段保留，附件路径改写不变；`steps` 与 `callComplete` 作为未知字段，官方 3.1.1 已用普通消息和带 steps 样本确认容忍，不做 JSON 投影，验收记录见 `backup/acceptance.md` 的「B1 官方兼容样本」。
 - Web/SSE：`MessageDto` 不含 steps/status，但 parts 直接序列化 `UIMessagePart`，`callComplete` 会多一个未知字段，前端按未知字段忽略；B1 不改 Web 合约。
 - FTS、浮动窗口、Markdown 导出、通知：B1 不改结构，失败正文仍按现状可见；步骤状态不展示。
 
