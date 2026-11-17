@@ -47,6 +47,7 @@ import me.rerere.workspace.WorkspaceProcess
 import me.rerere.workspace.WorkspaceProcessLauncher
 import me.rerere.workspace.WorkspaceProcessSpec
 import me.rerere.workspace.WorkspaceShellStatus
+import java.io.File
 import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.atomic.AtomicReference
 import kotlin.time.Duration.Companion.seconds
@@ -231,6 +232,8 @@ internal class McpSessionRegistry(
             if (cancelPendingReconnect) {
                 session.reconnectJob?.cancel()
                 session.reconnectJob = null
+                session.stableResetJob?.cancel()
+                session.stableResetJob = null
                 session.reconnectAttempt = 0
             }
 
@@ -286,7 +289,11 @@ internal class McpSessionRegistry(
                 session.client = sdkClient
                 session.process.set(stdioProcess)
                 stdioProcess?.let { watchStdioProcess(session, it, sdkClient, syncedConfig) }
-                scheduleStableReset(session, sdkClient, syncedConfig.id)
+                if (config is McpServerConfig.StdioServer) {
+                    scheduleStableReset(session, sdkClient, syncedConfig.id)
+                } else {
+                    session.reconnectAttempt = 0
+                }
                 statusStore.update(config.id, McpStatus.Connected)
                 Log.i(TAG, "Connected MCP server ${config.id} (${config.commonOptions.name})")
                 ConnectResult.Success
@@ -330,6 +337,7 @@ internal class McpSessionRegistry(
         check(workspace.shellStatus == WorkspaceShellStatus.READY.name) {
             "Workspace ${workspace.name} is not ready"
         }
+        Log.i(TAG, "Starting stdio MCP ${config.id} command=${File(config.command).name}")
         return processLauncher.launch(
             WorkspaceProcessSpec(
                 root = workspace.root,
@@ -371,7 +379,11 @@ internal class McpSessionRegistry(
         session.stableResetJob = appScope.launch {
             delay(STABLE_CONNECTION_MS)
             session.lifecycleMutex.withLock {
-                if (sessions[configId] === session && session.client === client) {
+                if (sessions[configId] === session &&
+                    session.client === client &&
+                    session.process.get() != null &&
+                    statusStore.status.value[configId] == McpStatus.Connected
+                ) {
                     session.reconnectAttempt = 0
                 }
             }
@@ -483,6 +495,8 @@ internal class McpSessionRegistry(
             session.lifecycleMutex.withLock {
                 if (sessions[configId] !== session) return@withLock
                 if (sourceClient != null && session.client !== sourceClient) return@withLock
+                session.stableResetJob?.cancel()
+                session.stableResetJob = null
                 if (!retryAfterFailure && statusStore.status.value[configId] != McpStatus.Connected) {
                     return@withLock
                 }
