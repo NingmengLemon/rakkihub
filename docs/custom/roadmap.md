@@ -379,7 +379,7 @@
 
 仍挂起：
 
-- 重试恢复与消息模型 B1：已完成 step 记录、Claude step 级请求投影、失败工具事实、审批/取消 step 结算、最后节点审批收口（C97）与默认关闭的自动重试（C75）；C76 的 attempt 摘要已持久化，设计见 [design/b1-step-commits.md](design/b1-step-commits.md)。B2 已开始：Web DTO 的 status/steps、conversation_search 的失败消息过滤（单次会话加载）、上下文边界投影对齐已落地；C107 补了 step 稳定 id 与 failureCode；官方导出按上游 `ignoreUnknownKeys` 容忍未知字段，3.1.1 样本待补；手动 step 重试已落地（C98），搜索加载优化见 [design/b2-step-messages.md](design/b2-step-messages.md)。
+- 重试恢复与消息模型 B1：已完成 step 记录、Claude step 级请求投影、失败工具事实、审批/取消 step 结算、最后节点审批收口（C97）与默认关闭的自动重试（C75）；C76 的 attempt 摘要已持久化，设计见 [design/b1-step-commits.md](design/b1-step-commits.md)。B2 已开始：Web DTO 的 status/steps、conversation_search 的失败消息过滤（单次会话加载）、上下文边界投影对齐已落地；C107 补了 step 稳定 id 与 failureCode；官方导出按上游 `ignoreUnknownKeys` 容忍未知字段，普通空 steps 与带 steps 样本均已验；手动 step 重试已落地（C98），搜索加载优化见 [design/b2-step-messages.md](design/b2-step-messages.md)。
 - C58 半途失败投影已由 B1 第一阶段落地（C97）：聊天请求投影保留失败前已执行的工具事实，失败 step 的正文与推理不进请求；标题、记忆与摘要投影仍整条丢弃失败消息。B2 只收尾搜索、Web 与错误卡片等消费方。
 - C86 思考强度（已落地）：`OFF` 保留为明确关闭，新增 `NOTSET` 表示不发参数，`TextGenerationParams` 默认改为 `NOTSET`，OCR 和 Qwen MT 翻译不再带 `none`，翻译的 int budget 用 `-2` 哨兵保留默认档；官方兼容导出把 `NOTSET` 归一化成 `OFF`，会话 config 同步替换。deepseek 等 provider 的具体映射仍按现有能力表维护，后续只有新 provider 接入时再补调研。
 - C87 OCR 文本归属（Phase 1 已落地）：Room 34 新增 `file_derivations`，`file_id` 指向 `managed_files.id`，`kind`、`text`、`producer`、`edited`、时间戳；OCR 优先读文件级派生，旧消息 metadata 作为回退并懒回填；删除文件级联清理，自家备份恢复保留手改行、清掉自动行，官方导出登记并裁掉整张表。producer 指纹失效已补（C108），附件管理里的 OCR 文本编辑入口已补（C109），备份恢复合并手改行已补（C110），设计见 [design/c87-file-derivations.md](design/c87-file-derivations.md)。

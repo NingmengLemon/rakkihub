@@ -1,6 +1,6 @@
 # B2：step 级提交与失败投影（完整版草稿）
 
-- 状态：部分落地。`MessageStep.id`、`failureCode` 已落地；Web DTO 的 status/steps、conversation_search 的失败消息过滤（scratch 与状态共用一次会话加载）、contextLimitBoundaryIndex 的投影对齐已完成；手动 step 重试与 C76 attempt 持久化已落地；官方导出兜底按样本待验，剩余消费方待后续。
+- 状态：部分落地。`MessageStep.id`、`failureCode` 已落地；Web DTO 的 status/steps、conversation_search 的失败消息过滤（scratch 与状态共用一次会话加载）、contextLimitBoundaryIndex 的投影对齐已完成；手动 step 重试与 C76 attempt 持久化已落地；官方普通空 steps 与带 steps 样本均已验，剩余消费方待后续。
 - 日期：2026-11-15
 - 前置：先完成 [`b1-step-commits.md`](b1-step-commits.md)；本文档保留手动重试、错误卡片、C76、搜索过滤、Web/导出兜底等 B2 内容
 - 对齐参考：DSH `dsh-v0.2.2-rc.1`（tag 指向 commit `66491b05e3f05ad35bcdd4f6cd7ed26041d9e3db`，2026-11-04；本地 clone `E:\MyWorkspace\deepseek-harness` 的 HEAD 是 `dsh-v0.2.1-rc.5`，本文档的 0.2.2 事实均用 `git show dsh-v0.2.2-rc.1:<path>` 读取）

@@ -198,11 +198,12 @@ JVM 侧：PreferenceStoreV6MigrationTest 覆盖 V6 的版本门禁、写回版�
 - 官方 3.1.1：C75 的官方兼容导出含 `settingsVersion=6` 与 false；开发机上的官方客户端原本处于禁用状态，重装其自带 APK 后恢复可启动。官方客户端导入该归档并重启后正常打开，没有因未知 `settingsVersion` 解码崩溃。样本里没有会话，因此这条只验 settings 未知键容忍，不重跑官方会话与附件恢复。
 - C61 退避：2026-11-16 开发机假 provider 验证 429 `Retry-After: 2` 重试一次并成功、500 HTML 重试一次、空 SSE 按 `EMPTY_RESPONSE` 重试、401/402/400 context 不重试；C76 卡片显示等待时间。
 
-## 待验证（B1）
+## B1 官方兼容样本
 
-B1 第一阶段已给 `UIMessage` 增加 `steps`，给 `UIMessagePart.Tool` 增加 `callComplete`。这两项只作为官方不认识的 JSON 字段随消息导出。上游 `ref` 的 `app/src/main/java/me/rerere/rikkahub/utils/Json.kt` 里 `JsonInstant` 已开启 `ignoreUnknownKeys`，消息节点也用 `JsonInstant.decodeFromString<List<UIMessage>>` 解码，因此不需要先做 JSON 投影兜底；官方 3.1.1 是否与该解码器一致仍需样本确认。若样本拒绝未知字段，再按 B2 设计在 `OfficialDatabaseAdapter` 投影 `messages` JSON。
+B1 第一阶段已给 `UIMessage` 增加 `steps`，给 `UIMessagePart.Tool` 增加 `callComplete`。这两项只作为官方不认识的 JSON 字段随消息导出。上游 `ref` 的 `app/src/main/java/me/rerere/rikkahub/utils/Json.kt` 里 `JsonInstant` 已开启 `ignoreUnknownKeys`，消息节点也用 `JsonInstant.decodeFromString<List<UIMessage>>` 解码，因此不需要先做 JSON 投影兜底；若样本拒绝未知字段，再按 B2 设计在 `OfficialDatabaseAdapter` 投影 `messages` JSON。
 
-2026-11-16 开发机验证（部分）：构造一条先 500 重试、再调用 `get_time_info`、最后返回 `TOOL DONE` 的 2 step 消息，官方兼容导出包含 `steps`、`callComplete`、`attempts`；官方 3.1.1 导入并重启后会话可读，显示工具调用与 `2 steps`，没有崩溃。官方客户端不显示 `attempts`，按未知字段忽略。普通消息（`steps` 为空数组）的样本仍未单独跑，完整样本清单仍按下述两条保留：
+2026-11-16 开发机验证：构造一条先 500 重试、再调用 `get_time_info`、最后返回 `TOOL DONE` 的 2 step 消息，官方兼容导出包含 `steps`、`callComplete`、`attempts`；官方 3.1.1 导入并重启后会话可读，显示工具调用与 `2 steps`，没有崩溃。官方客户端不显示 `attempts`，按未知字段忽略。
 
-- 普通消息（`steps` 为空数组、`callComplete` 为 true）的官方兼容导出与 3.1.1 恢复。
-- 带多 step 消息（至少包含一次工具调用）的官方兼容导出与 3.1.1 恢复，确认会话可读、工具调用不崩。
+2026-11-17 开发机验证普通消息：把同一份带 steps 的官方样本去掉消息里的 `steps`、`attempts` 和 Tool part 的 `callComplete`，生成普通空 steps 归档；官方 3.1.1 导入并重启后正常打开。读取官方库确认 15 个消息节点，助手消息 `steps` 为空，正文 `MOCK OK: test` 可读；没有因普通消息缺少新增字段崩溃。
+
+两份样本均已覆盖：普通消息空 steps、带步骤和工具调用的消息。
