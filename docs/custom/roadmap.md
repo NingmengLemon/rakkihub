@@ -339,6 +339,9 @@
 - U+FFFD 替换字符按 C100 重新登记为独立行为对齐项，低优先级、不排期：经中转使用 Claude 时偶发，用户侧对照显示同一中转下官方 Claude Code 正常，中转方称不是服务端问题；根因尚未定位，可能在 SSE 分块、UTF-8 边界、流式合并或中转改写。等 B2 剩余消费方和 C87 之后，用同一 prompt 对照官方 Claude Code、官方 API 与中转，抓原始字节确认第一处替换字符出现在哪一层，再决定改 decoder 还是只记兼容性说明。不要先做全局替换字符清洗。
 - 提示词注入、世界书与酒馆先搁置，必要时可整体删除；若重做，按“提示词注入与世界书的搁置决定”一节的方向，把系统触发的提示作为新轮次追加到消息列表末尾，而不是修改已有消息。
 - Gradle 模块目录收进子一级目录（未排期，目录名待定，候选 `packages/`）：把根目录平铺的 `app/`、`workspace/`、`terminal/`、`web/`、`ai/` 等收进一个统一的子目录，用 `settings.gradle.kts` 的 `projectDir` 映射保留 `:app`、`:workspace` 等 project path 和 `./gradlew :app:...` 任务名不变；同步 `.gitignore`、构建脚本、CI 产物路径和文档里的 `app/build/...` 路径。单独做一个 `refactor:` 提交，不和功能改动混在一起；Gradle 的 `include` 需要显式列出模块，不能像 uv 的 `members = ["packages/*"]` 那样自动发现。
+- 终端功能键样式对齐 Termux（未排期）：双排、不横向滚动、按键等宽；或者提供设置项，在现在的横向 Rikka 风格和 Termux 双排之间切换。先确认目标设备宽度下两排按键的可读性和键盘遮挡，再决定是替换还是可选项。
+- 自 fork 以来新增的用户可见文本做一轮文案打磨（未排期）：假定用户有基本 agent 类工具使用经验，但不熟悉 RikkaHub/RakkiHub；避免内部术语、缩写和直译腔，遵循基本的 UI 文案设计（动作明确、状态可预期、错误可行动）。
+- 导出备份的多工作区选择（未排期）：勾选“导出工作区文件”后，继续多选具体要导出的工作区，默认全选；要同时处理本地导出、WebDAV、S3 以及导入侧对缺失工作区的提示。
 
 上游查看与 issue 调研记录见 [`history/upstream.md`](history/upstream.md)，已完成的落地批次见 [`history/milestones.md`](history/milestones.md)。
 

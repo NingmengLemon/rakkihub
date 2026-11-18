@@ -2,6 +2,9 @@ package me.rerere.rikkahub.ui.pages.extensions.workspace
 
 import android.content.Context
 import android.util.Log
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.setValue
 import com.termux.terminal.TerminalSession
 import com.termux.terminal.TerminalTransport
 import kotlinx.coroutines.CancellationException
@@ -271,7 +274,10 @@ internal data class WorkspaceTerminalTab(
     val client: WorkspaceTerminalSessionClient,
     val title: String? = null,
     val finished: Boolean = false,
-)
+) {
+    /** 每个 tab 独立记住是否走 IME 宿主；离开页面后仍保留，关 tab 或进程结束才回到默认直连。 */
+    var imeEnabled by mutableStateOf(false)
+}
 
 internal enum class WorkspaceTerminalReadiness {
     Loading,

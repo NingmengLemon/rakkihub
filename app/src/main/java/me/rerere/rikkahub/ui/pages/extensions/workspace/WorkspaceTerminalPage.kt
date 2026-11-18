@@ -45,6 +45,8 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.platform.LocalFocusManager
+import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
@@ -56,8 +58,10 @@ import androidx.core.content.res.ResourcesCompat
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.termux.terminal.TerminalSession
 import com.termux.view.TerminalView
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.flowOf
 import me.rerere.rikkahub.R
+import me.rerere.rikkahub.data.datastore.SettingsStore
 import me.rerere.rikkahub.ui.components.nav.BackButton
 import me.rerere.rikkahub.ui.theme.ColorMode
 import me.rerere.rikkahub.ui.theme.RikkahubTheme
@@ -70,7 +74,18 @@ fun WorkspaceTerminalPage(id: String) {
     val vm: WorkspaceDetailVM = koinViewModel(parameters = { parametersOf(id) })
     val state by vm.state.collectAsStateWithLifecycle()
     val sessionManager: WorkspaceTerminalSessionManager = koinInject()
+    val settingsStore: SettingsStore = koinInject()
+    val settings by settingsStore.settingsFlow.collectAsStateWithLifecycle()
+    val showImeToggle = settings.displaySetting.terminalImeToggleVisible
     val workspace = state.workspace
+    val focusManager = LocalFocusManager.current
+    val keyboardController = LocalSoftwareKeyboardController.current
+    DisposableEffect(Unit) {
+        onDispose {
+            focusManager.clearFocus(force = true)
+            keyboardController?.hide()
+        }
+    }
     val root = workspace?.root
     val terminalStateFlow = remember(root, sessionManager) {
         root?.let(sessionManager::observeWorkspace) ?: flowOf(WorkspaceTerminalTabsState())
@@ -91,6 +106,7 @@ fun WorkspaceTerminalPage(id: String) {
                 root = root,
                 state = terminalState,
                 contentPadding = innerPadding,
+                showImeToggle = showImeToggle,
                 onCreateTab = { workspace?.let(sessionManager::createTab) },
                 onSelectTab = { tabId ->
                     root?.let { sessionManager.selectTab(it, tabId) }
@@ -142,6 +158,7 @@ private fun WorkspaceTerminalContent(
     root: String?,
     state: WorkspaceTerminalTabsState,
     contentPadding: PaddingValues,
+    showImeToggle: Boolean,
     onCreateTab: () -> Unit,
     onSelectTab: (Long) -> Unit,
     onCloseTab: (Long) -> Unit,
@@ -250,6 +267,7 @@ private fun WorkspaceTerminalContent(
             if (selectedTab != null) {
                 WorkspaceTerminalTabContent(
                     tab = selectedTab,
+                    showImeToggle = showImeToggle,
                     modifier = Modifier
                         .weight(1f)
                         .fillMaxWidth(),
@@ -284,6 +302,7 @@ private fun WorkspaceTerminalContent(
 @Composable
 private fun WorkspaceTerminalTabContent(
     tab: WorkspaceTerminalTab,
+    showImeToggle: Boolean,
     modifier: Modifier = Modifier,
 ) {
     val context = LocalContext.current
@@ -293,11 +312,16 @@ private fun WorkspaceTerminalTabContent(
     }
     var controlDown by remember(tab.id) { mutableStateOf(false) }
     var altDown by remember(tab.id) { mutableStateOf(false) }
+    val effectiveIme = tab.imeEnabled && showImeToggle
     val viewClient = remember(tab.id) {
         WorkspaceTerminalViewClient(context)
     }
     viewClient.controlDown = controlDown
     viewClient.altDown = altDown
+
+    LaunchedEffect(showImeToggle) {
+        if (!showImeToggle) tab.imeEnabled = false
+    }
 
     DisposableEffect(tab.id, viewClient) {
         onDispose {
@@ -307,6 +331,12 @@ private fun WorkspaceTerminalTabContent(
             viewClient.terminalView = null
             viewClient.imeInputView = null
         }
+    }
+
+    LaunchedEffect(effectiveIme) {
+        if (!effectiveIme) viewClient.imeInputView = null
+        delay(50)
+        viewClient.focusAndShowKeyboard()
     }
 
     Column(modifier = modifier) {
@@ -344,43 +374,46 @@ private fun WorkspaceTerminalTabContent(
                     terminalView.onScreenUpdated()
                 },
             )
-            AndroidView(
-                modifier = Modifier
-                    .align(Alignment.BottomStart)
-                    .size(1.dp),
-                factory = { viewContext ->
-                    TerminalImeEditText(viewContext).apply {
-                        alpha = 0f
-                        onCommitText = { text ->
-                            tab.session.writeText(
-                                terminalInputText(
-                                    text = text,
-                                    control = viewClient.controlDown,
-                                    alt = viewClient.altDown,
+            if (effectiveIme) {
+                AndroidView(
+                    modifier = Modifier
+                        .align(Alignment.BottomStart)
+                        .size(1.dp),
+                    factory = { viewContext ->
+                        TerminalImeEditText(viewContext).apply {
+                            alpha = 0f
+                            onCommitText = { text ->
+                                tab.session.writeText(
+                                    terminalInputText(
+                                        text = text,
+                                        control = viewClient.controlDown,
+                                        alt = viewClient.altDown,
+                                    )
                                 )
-                            )
-                        }
-                        onDelete = {
-                            tab.session.write(byteArrayOf(0x7f), 0, 1)
-                        }
-                        onKeyEvent = { keyCode, event ->
-                            val terminal = viewClient.terminalView
-                            when {
-                                terminal == null -> false
-                                event.action == KeyEvent.ACTION_UP -> terminal.onKeyUp(keyCode, event)
-                                else -> terminal.onKeyDown(keyCode, event)
+                            }
+                            onDelete = {
+                                tab.session.write(byteArrayOf(0x7f), 0, 1)
+                            }
+                            onKeyEvent = { keyCode, event ->
+                                val terminal = viewClient.terminalView
+                                when {
+                                    terminal == null -> false
+                                    viewClient.onKeyDown(keyCode, event, tab.session) -> true
+                                    event.action == KeyEvent.ACTION_UP -> terminal.onKeyUp(keyCode, event)
+                                    else -> terminal.onKeyDown(keyCode, event)
+                                }
+                            }
+                            viewClient.imeInputView = this
+                            post {
+                                viewClient.focusAndShowKeyboard()
                             }
                         }
-                        viewClient.imeInputView = this
-                        post {
-                            viewClient.focusAndShowKeyboard()
-                        }
-                    }
-                },
-                update = { inputView ->
-                    viewClient.imeInputView = inputView
-                },
-            )
+                    },
+                    update = { inputView ->
+                        viewClient.imeInputView = inputView
+                    },
+                )
+            }
             if (tab.finished) {
                 Text(
                     text = stringResource(R.string.workspace_terminal_exited),
@@ -395,8 +428,11 @@ private fun WorkspaceTerminalTabContent(
         TerminalExtraKeysBar(
             controlDown = controlDown,
             altDown = altDown,
+            imeEnabled = effectiveIme,
+            showImeToggle = showImeToggle,
             onControlToggle = { controlDown = !controlDown },
             onAltToggle = { altDown = !altDown },
+            onImeToggle = { tab.imeEnabled = !tab.imeEnabled },
             onSendText = { tab.session.writeText(it) },
         )
     }
@@ -406,8 +442,11 @@ private fun WorkspaceTerminalTabContent(
 private fun TerminalExtraKeysBar(
     controlDown: Boolean,
     altDown: Boolean,
+    imeEnabled: Boolean,
+    showImeToggle: Boolean,
     onControlToggle: () -> Unit,
     onAltToggle: () -> Unit,
+    onImeToggle: () -> Unit,
     onSendText: (String) -> Unit,
 ) {
     Row(
@@ -419,6 +458,9 @@ private fun TerminalExtraKeysBar(
         horizontalArrangement = Arrangement.spacedBy(6.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
+        if (showImeToggle) {
+            TerminalExtraKey("IME", selected = imeEnabled, onClick = onImeToggle)
+        }
         TerminalExtraKey("ESC") { onSendText("\u001B") }
         TerminalExtraKey("TAB") { onSendText("\t") }
         TerminalExtraKey("CTRL", selected = controlDown, onClick = onControlToggle)
@@ -432,6 +474,8 @@ private fun TerminalExtraKeysBar(
         TerminalExtraKey("→") { onSendText("\u001B[C") }
         TerminalExtraKey("HOME") { onSendText("\u001B[H") }
         TerminalExtraKey("END") { onSendText("\u001B[F") }
+        TerminalExtraKey("PGUP") { onSendText("\u001B[5~") }
+        TerminalExtraKey("PGDN") { onSendText("\u001B[6~") }
     }
 }
 
@@ -473,11 +517,26 @@ internal fun terminalInputText(text: String, control: Boolean, alt: Boolean): St
     return buildString {
         if (alt) append('\u001B')
         text.forEach { char ->
-            if (control && char.code in 0x40..0x7f && char.isLetter()) {
-                append((char.uppercaseChar().code and 0x1f).toChar())
+            val controlCode = if (control) char.controlCode() else null
+            if (controlCode != null) {
+                append(controlCode.toChar())
             } else {
                 append(char)
             }
         }
     }
+}
+
+private fun Char.controlCode(): Int? = when {
+    this in 'a'..'z' -> uppercaseChar().code and 0x1f
+    this in 'A'..'Z' -> code and 0x1f
+    this == '@' -> 0
+    this == '[' -> 27
+    this == '\\' -> 28
+    this == ']' -> 29
+    this == '^' -> 30
+    this == '_' -> 31
+    this == '/' -> 31
+    this == '?' -> 127
+    else -> null
 }

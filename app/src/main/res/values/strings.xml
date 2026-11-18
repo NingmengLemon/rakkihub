@@ -1603,4 +1603,6 @@
   <string name="setting_model_page_memory_model">Memory Consolidation Model</string>
   <string name="setting_model_page_memory_model_desc">Model used to organize conversations into long-term memory in the background; uses the fast model when not set</string>
   <string name="setting_model_page_memory_model_follow_fast">Same as fast model</string>
+  <string name="setting_display_page_terminal_ime_toggle_title">Terminal IME switch</string>
+  <string name="setting_display_page_terminal_ime_toggle_desc">Show the IME switch in the terminal extra-keys bar. Turn it off to always use direct input.</string>
 </resources>

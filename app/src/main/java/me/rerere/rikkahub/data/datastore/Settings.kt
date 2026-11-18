@@ -275,6 +275,8 @@ data class DisplaySetting(
     val chatCustomFontName: String = "",
     val enableVolumeKeyScroll: Boolean = false,
     val volumeKeyScrollRatio: Float = 1.0f,
+    // 终端功能键栏是否显示 IME/直连切换；关闭后固定走传统直连
+    val terminalImeToggleVisible: Boolean = true,
     val conversationSortOrder: ConversationSortOrder = ConversationSortOrder.UPDATE_TIME,
 )
 

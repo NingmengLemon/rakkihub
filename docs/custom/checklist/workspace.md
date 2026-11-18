@@ -1,6 +1,6 @@
 # 明细：工作区与 MCP
 
-本文件是 [checklist.md](../checklist.md) 的明细，收录 C89、C102 至 C106、C111、C120、C123 至 C124。
+本文件是 [checklist.md](../checklist.md) 的明细，收录 C89、C102 至 C106、C111、C120、C123 至 C125。
 
 <a id="c89"></a>
 
@@ -33,9 +33,9 @@
 
 ## C104 工作区终端支持 IME 文本输入
 
-- 落点：新增 `TerminalImeEditText`，用正常 `TYPE_CLASS_TEXT` 作为隐藏 IME 宿主；`commitText`、`finishComposingText` 把提交文本按 UTF-8 写给 `TerminalSession`，退格、Enter、Tab、控制键单独转发；`WorkspaceTerminalViewClient` 优先聚焦该宿主并 `restartInput`；`TerminalView` 保持可聚焦以支持长按选择/复制。
+- 落点：新增 `TerminalImeEditText`，用正常 `TYPE_CLASS_TEXT` 作为隐藏 IME 宿主；`commitText`、`finishComposingText` 把提交文本按 UTF-8 写给 `TerminalSession`，退格、Enter、Tab、控制键单独转发；`WorkspaceTerminalViewClient` 在 IME 模式下优先聚焦该宿主并 `restartInput`；`TerminalView` 保持可聚焦以支持长按选择/复制。C125 起默认走传统直连，只有打开 tab 的 IME 开关才创建并聚焦该宿主。
 - 理由：`terminal-view` 0.118.0 的 `TerminalView` 把 inputType 设成无文本类，Gboard/Fcitx 的拼音组合没有正常 `InputConnection` 承接，候选提交会丢失。
-- 合并注意：终端核心仍是上游 AAR，不要改 `terminal-view` 二进制；输入法宿主是 1dp 透明视图，设置 `importantForAccessibility=NO`。硬件键盘事件和 IME 的 `sendKeyEvent` 都要转发给终端，长按选择不能因为聚焦宿主而失效。升级 terminal-view 后要重测中文、日文、退格和 Enter。
+- 合并注意：终端核心仍是上游 AAR，不要改 `terminal-view` 二进制；输入法宿主是 1dp 透明视图，设置 `importantForAccessibility=NO`。硬件键盘事件和 IME 的 `sendKeyEvent` 都要转发给终端，长按选择不能因为聚焦宿主而失效。C125 把宿主改为可选，默认直连时不再创建；升级 terminal-view 后要重测中文、日文、退格和 Enter。
 - 测试：开发机装 Rootfs 后用 Fcitx5 提交“你好”、退格和执行；焦点恢复后重新点终端，拼音候选仍进入隐藏宿主，空格提交“你好”，组合中的退格没有误删终端字符；长按终端文本显示 Copy/More 选择工具栏。用户用 Gboard 中文/日文复核正常。
 
 <a id="c105"></a>
@@ -60,7 +60,7 @@
 
 ## C111 stdio MCP 服务器
 
-本项是一个功能，按 9 个阶段落地。设计见 [design/stdio-mcp.md](../design/stdio-mcp.md)；早期登记用了 C111 至 C119 九个顶层编号，依次对应 C111.1 至 C111.9；C112 至 C119 保留，不再用作顶层编号，下一个新项从 C125 起。
+本项是一个功能，按 9 个阶段落地。设计见 [design/stdio-mcp.md](../design/stdio-mcp.md)；早期登记用了 C111 至 C119 九个顶层编号，依次对应 C111.1 至 C111.9；C112 至 C119 保留，不再用作顶层编号，下一个新项从 C126 起。
 
 ### C111.1 配置与持久化
 
@@ -151,3 +151,12 @@
 - 理由：预览态本来是只读的，clean 时 Save 没有意义；但用户可能写完后切到预览看效果，此时 dirty 必须能直接保存。文件名前的星号和禁用态 Save 让未保存状态可见；切到 Recents 再回来输入法被收起，是因为原实现只恢复滚动、不恢复焦点。
 - 合并注意：dirty 仍以当前文本和磁盘加载文本比较；预览 dirty 的 Save 保存的是内存文本，不是预览内容；返回时的未保存确认不变；输入法只在源码态恢复，预览态不弹键盘；进程死亡或 Activity 重建后正文仍从磁盘重载，未保存内容和光标不保证保留，这是大文件不做 saveable 的既有取舍。
 - 测试：在 `3.1.1-custom.3441+3e57182` 上验收：`* readme-test.md`、源码 clean 时 Save 禁用、预览 clean 时 Save 隐藏、预览 dirty 时 Save 可保存、保存后星号消失；源码态打开输入法后按 Home 再回前台，输入法恢复。
+
+<a id="c125"></a>
+
+## C125 终端传统输入与 IME 切换
+
+- 落点：终端 tab 默认走传统直连，IME 开关按 tab 保存在 `WorkspaceTerminalTab`，切 tab 或离开页面再回来仍保持；`DisplaySetting.terminalImeToggleVisible` 控制功能键栏是否显示这个开关，默认 true，关闭后固定直连；隐藏的 `TerminalImeEditText` 只在 IME 模式创建；功能键栏新增 `PGUP`/`PGDN`；离开终端页时清焦点并收起输入法。`WorkspaceTerminalViewClient.onKeyDown` 只处理功能键栏的 sticky Ctrl/Alt：用事件自身的 unicode 字符保留大小写和布局，控制字符表覆盖字母和常见符号；硬件 Ctrl/Alt 不拦截，仍交给 `TerminalView.inputCodePoint`。
+- 理由：传统直连不经过隐藏 EditText，长按选择和带修饰键的按键手感更接近终端；但需要组合输入的软键盘仍要一个可随时切回的 IME 通道。sticky Ctrl/Alt 原先只对 IME 提交文本生效，直连时按 O 仍是普通 o；硬件 Ctrl/Alt 则由 TerminalView 正确处理，应用层不应重写。
+- 合并注意：设置只控制开关是否显示，关闭时强制直连；per-tab 状态不持久化，进程结束或 tab 关闭后回到默认直连；传统模式仍能通过 `TerminalView` 的 `BaseInputConnection` 接收普通 `commitText`，只有需要候选组合的输入法才必须打开 IME；应用层只接管 sticky 修饰，`e.isCtrlPressed`/`e.isAltPressed` 和右 Alt 留给 TerminalView；没有新增 DataStore key，字段嵌在 `displaySetting` 的 JSON 里，旧设置解码为默认 true。
+- 测试：`WorkspaceTerminalInputTest` 覆盖普通文本、Ctrl 字母、Ctrl 符号、Alt 大小写、key code 回退和 CJK；设备验收：默认直连下 `cat -v` 后按 CTRL+O 显示 `^O`，IME 开关可正常输入，设置关闭后功能键栏不再显示 IME，离开终端页键盘收起，长按终端文本出现 Copy/More 工具栏。版本钉版在后续提交补。

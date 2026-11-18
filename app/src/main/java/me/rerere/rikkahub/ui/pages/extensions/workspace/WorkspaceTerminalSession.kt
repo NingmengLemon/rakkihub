@@ -199,7 +199,21 @@ internal class WorkspaceTerminalViewClient(
 
     override fun copyModeChanged(copyMode: Boolean) = Unit
 
-    override fun onKeyDown(keyCode: Int, e: KeyEvent, session: TerminalSession): Boolean = false
+    override fun onKeyDown(keyCode: Int, e: KeyEvent, session: TerminalSession): Boolean {
+        if (e.action != KeyEvent.ACTION_DOWN) return false
+        // 只处理功能键栏的 sticky 修饰；硬件 Ctrl/Alt 仍交给 TerminalView 的 inputCodePoint，
+        // 保留它的控制字符表、键盘布局和右 Alt 行为。
+        if (!controlDown && !altDown) return false
+        val char = e.getUnicodeChar(e.metaState)
+            .takeIf { it != 0 && !Character.isISOControl(it) }
+            ?.toChar()
+            ?: terminalKeyChar(keyCode)
+            ?: return false
+        val text = terminalInputText(char.toString(), control = controlDown, alt = altDown)
+        val bytes = text.toByteArray()
+        session.write(bytes, 0, bytes.size)
+        return true
+    }
 
     override fun onKeyUp(keyCode: Int, e: KeyEvent): Boolean = false
 
@@ -248,6 +262,21 @@ internal class WorkspaceTerminalViewClient(
 
 // 一个 URL 最多还原跨越的软换行行数(向上/向下各算), 足够覆盖任意真实 URL
 private const val URL_MAX_WRAP_ROWS = 50
+
+/** 无 unicode 映射时按 US 布局回退；只用于 sticky 修饰键事件。 */
+internal fun terminalKeyChar(keyCode: Int): Char? = when (keyCode) {
+    in KeyEvent.KEYCODE_A..KeyEvent.KEYCODE_Z -> 'a' + (keyCode - KeyEvent.KEYCODE_A)
+    KeyEvent.KEYCODE_LEFT_BRACKET -> '['
+    KeyEvent.KEYCODE_RIGHT_BRACKET -> ']'
+    KeyEvent.KEYCODE_BACKSLASH -> '\\'
+    KeyEvent.KEYCODE_SEMICOLON -> ';'
+    KeyEvent.KEYCODE_APOSTROPHE -> '\''
+    KeyEvent.KEYCODE_COMMA -> ','
+    KeyEvent.KEYCODE_PERIOD -> '.'
+    KeyEvent.KEYCODE_SLASH -> '/'
+    KeyEvent.KEYCODE_GRAVE -> '`'
+    else -> null
+}
 
 private val URL_REGEX =
     Regex("""(https?|ftp)://[\w\-._~:/?#\[\]@!$&'()*+,;=%]+""", RegexOption.IGNORE_CASE)

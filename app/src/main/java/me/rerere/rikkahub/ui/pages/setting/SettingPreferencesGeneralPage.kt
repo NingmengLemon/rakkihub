@@ -216,6 +216,19 @@ fun SettingPreferencesGeneralPage(vm: SettingVM = koinViewModel()) {
                 }
             }
 
+            item {
+                CardGroup {
+                    switchItem(
+                        checked = displaySetting.terminalImeToggleVisible,
+                        onCheckedChange = {
+                            updateDisplaySetting(displaySetting.copy(terminalImeToggleVisible = it))
+                        },
+                        supportingContent = { Text(stringResource(R.string.setting_display_page_terminal_ime_toggle_desc)) },
+                        headlineContent = { Text(stringResource(R.string.setting_display_page_terminal_ime_toggle_title)) },
+                    )
+                }
+            }
+
         }
     }
 }

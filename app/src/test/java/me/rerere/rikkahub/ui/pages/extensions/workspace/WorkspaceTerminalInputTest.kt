@@ -1,5 +1,6 @@
 package me.rerere.rikkahub.ui.pages.extensions.workspace
 
+import android.view.KeyEvent
 import org.junit.Assert.assertEquals
 import org.junit.Test
 
@@ -13,6 +14,27 @@ class WorkspaceTerminalInputTest {
     fun `control letters become control bytes`() {
         assertEquals("\u0003", terminalInputText("c", control = true, alt = false))
         assertEquals("\u001a", terminalInputText("Z", control = true, alt = false))
+    }
+
+    @Test
+    fun `control symbols use the terminal table`() {
+        assertEquals("\u001B", terminalInputText("[", control = true, alt = false))
+        assertEquals("\u001C", terminalInputText("\\", control = true, alt = false))
+        assertEquals("\u001D", terminalInputText("]", control = true, alt = false))
+        assertEquals("\u001F", terminalInputText("/", control = true, alt = false))
+    }
+
+    @Test
+    fun `alt keeps the original character case`() {
+        assertEquals("\u001Bb", terminalInputText("b", control = false, alt = true))
+        assertEquals("\u001BB", terminalInputText("B", control = false, alt = true))
+    }
+
+    @Test
+    fun `key code fallback is lowercase`() {
+        assertEquals('a', terminalKeyChar(KeyEvent.KEYCODE_A))
+        assertEquals('b', terminalKeyChar(KeyEvent.KEYCODE_B))
+        assertEquals(null, terminalKeyChar(KeyEvent.KEYCODE_ENTER))
     }
 
     @Test

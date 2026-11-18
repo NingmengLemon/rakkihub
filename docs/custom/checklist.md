@@ -126,8 +126,9 @@
 | C122 | [B2 标题与摘要的 step 级投影](checklist/chat.md#c122) | 改造 |
 | C123 | [MCP 手动停止态跨进程](checklist/workspace.md#c123) | 改造 |
 | C124 | [工作区 Markdown 编辑器的未保存标记与输入法恢复](checklist/workspace.md#c124) | 改造 |
+| C125 | [终端传统输入与 IME 切换](checklist/workspace.md#c125) | 改造 |
 
-C112 至 C119 是 C111 历史阶段的保留段，不再用作顶层编号；下一个新项从 C125 起。
+C112 至 C119 是 C111 历史阶段的保留段，不再用作顶层编号；下一个新项从 C126 起。
 
 ## 明细
 
@@ -139,4 +140,4 @@ C112 至 C119 是 C111 历史阶段的保留段，不再用作顶层编号；下
 | [data.md](checklist/data.md) | 数据、备份与附件 | C10 至 C11、C17 至 C34、C36、C40 至 C42、C79 至 C80、C87 至 C88、C108 至 C110 |
 | [chat.md](checklist/chat.md) | 聊天、上下文与模型 | C35、C43 至 C44、C46 至 C47、C49 至 C53、C57 至 C63、C65 至 C78、C81 至 C86、C97 至 C100、C107、C121、C122 |
 | [platform.md](checklist/platform.md) | 平台、构建与品牌 | C7、C12、C37 至 C39、C45、C48、C55 至 C56、C90 至 C94、C101 |
-| [workspace.md](checklist/workspace.md) | 工作区与 MCP | C89、C102 至 C106、C111、C120、C123 至 C124 |
+| [workspace.md](checklist/workspace.md) | 工作区与 MCP | C89、C102 至 C106、C111、C120、C123 至 C125 |

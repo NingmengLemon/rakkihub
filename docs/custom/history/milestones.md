@@ -5,6 +5,7 @@
 ## 2026-11-18 工作区编辑器与终端输入
 
 - C124：Markdown 编辑器文件名 dirty 时显示 `*`，源码 clean 的 Save 禁用、预览 clean 隐藏、预览 dirty 可保存；输入法在切后台再回来时恢复。
+- C125：终端默认传统直连，IME 开关按 tab 保存；sticky Ctrl/Alt 在直连路径也生效，硬件 Ctrl/Alt 仍交给 TerminalView；功能键栏补 PGUP/PGDN，是否显示 IME 开关进设置。
 
 ## 2026-11-18 MCP 停止态持久化
 

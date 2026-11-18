@@ -1603,4 +1603,6 @@
   <string name="setting_model_page_memory_model">記憶整理模型</string>
   <string name="setting_model_page_memory_model_desc">用於在背景將對話整理為長期記憶的模型；未設定時會使用快速模型</string>
   <string name="setting_model_page_memory_model_follow_fast">跟隨快速模型</string>
+  <string name="setting_display_page_terminal_ime_toggle_title">終端機 IME 開關</string>
+  <string name="setting_display_page_terminal_ime_toggle_desc">在終端機功能鍵列顯示 IME 切換。關閉後一律使用直連輸入。</string>
 </resources>
