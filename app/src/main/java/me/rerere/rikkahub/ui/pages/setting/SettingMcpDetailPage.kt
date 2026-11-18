@@ -407,7 +407,12 @@ private fun McpBasicSettingsTab(
         onDismiss = { showDeleteDialog = false },
     ) {
         if (draft is McpServerConfig.StdioServer) {
-            Text("删除 ${draft.commonOptions.name}？专用工作区和 rootfs 不会被删除。")
+            Text(
+                stringResource(
+                    R.string.setting_mcp_page_stdio_delete_message,
+                    draft.commonOptions.name,
+                )
+            )
         } else {
             Text(stringResource(R.string.common_delete_confirm_message, draft.commonOptions.name))
         }
@@ -441,7 +446,11 @@ private fun StdioMcpConfigure(
     var timeoutText by remember(config.id) { mutableStateOf(config.startupTimeoutMs.toString()) }
     var envVisible by remember(config.id) { mutableStateOf(false) }
     val selectedName = eligible.find { it.id == config.workspaceId }?.name
-        ?: config.workspaceId.ifBlank { "选择专用工作区" }
+        ?: if (config.workspaceId.isBlank()) {
+            stringResource(R.string.setting_mcp_page_stdio_workspace_select)
+        } else {
+            stringResource(R.string.setting_mcp_page_stdio_workspace_unavailable)
+        }
 
     Column(
         modifier = modifier
@@ -481,24 +490,26 @@ private fun StdioMcpConfigure(
         }
 
         FormItem(
-            label = { Text("连接状态") },
-            description = { Text("停止只结束当前进程，不删除配置；重启会重新读取已保存配置。") },
+            label = { Text(stringResource(R.string.setting_mcp_page_stdio_status)) },
+            description = { Text(stringResource(R.string.setting_mcp_page_stdio_status_desc)) },
         ) {
             Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
                 Text(statusText(status))
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    TextButton(onClick = onRestart) { Text("重启") }
+                    TextButton(onClick = onRestart) {
+                        Text(stringResource(R.string.setting_mcp_page_stdio_restart))
+                    }
                     TextButton(
                         onClick = onStop,
                         enabled = status != McpStatus.Idle,
-                    ) { Text("停止") }
+                    ) { Text(stringResource(R.string.setting_mcp_page_stdio_stop)) }
                 }
             }
         }
 
         FormItem(
-            label = { Text("专用工作区") },
-            description = { Text("只列出本地、rootfs 已安装且 READY 的工作区；每个 stdio Server 用一个专用工作区。") },
+            label = { Text(stringResource(R.string.setting_mcp_page_stdio_workspace)) },
+            description = { Text(stringResource(R.string.setting_mcp_page_stdio_workspace_desc)) },
         ) {
             Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
                 Box {
@@ -511,7 +522,7 @@ private fun StdioMcpConfigure(
                     ) {
                         if (eligible.isEmpty()) {
                             DropdownMenuItem(
-                                text = { Text("没有可用工作区，去工作区页安装 rootfs") },
+                                text = { Text(stringResource(R.string.setting_mcp_page_stdio_workspace_none)) },
                                 onClick = {
                                     workspaceMenu = false
                                     navController.navigate(Screen.Workspaces)
@@ -531,7 +542,7 @@ private fun StdioMcpConfigure(
                 }
                 if (workspaceConflict) {
                     Text(
-                        text = "这个工作区已经绑定另一个 stdio Server，请换一个专用工作区",
+                        text = stringResource(R.string.setting_mcp_page_stdio_workspace_conflict),
                         color = MaterialTheme.colorScheme.error,
                         style = MaterialTheme.typography.bodySmall,
                     )
@@ -540,21 +551,21 @@ private fun StdioMcpConfigure(
         }
 
         FormItem(
-            label = { Text("命令") },
-            description = { Text("可执行文件名或 rootfs 内绝对路径，不经过 shell 解析。") },
+            label = { Text(stringResource(R.string.setting_mcp_page_stdio_command)) },
+            description = { Text(stringResource(R.string.setting_mcp_page_stdio_command_desc)) },
         ) {
             OutlinedTextField(
                 value = config.command,
                 onValueChange = { command -> update(config.copy(command = command)) },
                 modifier = Modifier.fillMaxWidth(),
                 singleLine = true,
-                placeholder = { Text("node") },
+                placeholder = { Text(stringResource(R.string.setting_mcp_page_stdio_command_placeholder)) },
             )
         }
 
         FormItem(
-            label = { Text("参数") },
-            description = { Text("每行一个参数，逐项传给进程，不做 shell 拼接。") },
+            label = { Text(stringResource(R.string.setting_mcp_page_stdio_args)) },
+            description = { Text(stringResource(R.string.setting_mcp_page_stdio_args_desc)) },
         ) {
             OutlinedTextField(
                 value = argsText,
@@ -568,13 +579,13 @@ private fun StdioMcpConfigure(
                 },
                 modifier = Modifier.fillMaxWidth(),
                 minLines = 2,
-                placeholder = { Text("server.js") },
+                placeholder = { Text(stringResource(R.string.setting_mcp_page_stdio_args_placeholder)) },
             )
         }
 
         FormItem(
-            label = { Text("环境变量") },
-            description = { Text("每行 KEY=VALUE；值可能含密钥，不会写进日志。") },
+            label = { Text(stringResource(R.string.setting_mcp_page_stdio_env)) },
+            description = { Text(stringResource(R.string.setting_mcp_page_stdio_env_desc)) },
         ) {
             OutlinedTextField(
                 value = envText,
@@ -604,8 +615,8 @@ private fun StdioMcpConfigure(
         }
 
         FormItem(
-            label = { Text("工作目录") },
-            description = { Text("rootfs 内绝对路径，默认 /workspace。") },
+            label = { Text(stringResource(R.string.setting_mcp_page_stdio_cwd)) },
+            description = { Text(stringResource(R.string.setting_mcp_page_stdio_cwd_desc)) },
         ) {
             OutlinedTextField(
                 value = config.cwd,
@@ -616,8 +627,8 @@ private fun StdioMcpConfigure(
         }
 
         FormItem(
-            label = { Text("启动超时（毫秒）") },
-            description = { Text("只约束 MCP initialize；工具同步使用 SDK 默认超时。") },
+            label = { Text(stringResource(R.string.setting_mcp_page_stdio_startup_timeout)) },
+            description = { Text(stringResource(R.string.setting_mcp_page_stdio_startup_timeout_desc)) },
         ) {
             OutlinedTextField(
                 value = timeoutText,
@@ -632,7 +643,7 @@ private fun StdioMcpConfigure(
                 isError = timeoutText.toLongOrNull()?.let { it < 1_000 } ?: true,
                 supportingText = {
                     if (timeoutText.toLongOrNull()?.let { it < 1_000 } ?: true) {
-                        Text("请输入不小于 1000 的毫秒数")
+                        Text(stringResource(R.string.setting_mcp_page_stdio_startup_timeout_error))
                     }
                 },
             )
@@ -640,14 +651,19 @@ private fun StdioMcpConfigure(
     }
 }
 
+@Composable
 private fun statusText(status: McpStatus): String = when (status) {
-    McpStatus.Idle -> "未启动"
-    McpStatus.Connecting -> "连接中"
-    McpStatus.Connected -> "已连接"
-    is McpStatus.Reconnecting -> "重连中 (${status.attempt}/${status.maxAttempts})"
-    is McpStatus.Error -> "错误：${status.message}"
-    McpStatus.NeedsAuthorization -> "需要授权"
-    McpStatus.Authorizing -> "授权中"
+    McpStatus.Idle -> stringResource(R.string.setting_mcp_page_stdio_status_idle)
+    McpStatus.Connecting -> stringResource(R.string.setting_mcp_page_stdio_status_connecting)
+    McpStatus.Connected -> stringResource(R.string.setting_mcp_page_stdio_status_connected)
+    is McpStatus.Reconnecting -> stringResource(
+        R.string.setting_mcp_page_stdio_status_reconnecting,
+        status.attempt,
+        status.maxAttempts,
+    )
+    is McpStatus.Error -> stringResource(R.string.setting_mcp_page_stdio_status_error, status.message)
+    McpStatus.NeedsAuthorization -> stringResource(R.string.setting_mcp_page_stdio_status_needs_authorization)
+    McpStatus.Authorizing -> stringResource(R.string.setting_mcp_page_stdio_status_authorizing)
 }
 
 @Composable
@@ -1084,7 +1100,7 @@ private fun McpToolCard(
                     horizontalArrangement = Arrangement.spacedBy(4.dp),
                 ) {
                     Text(
-                        text = "启用",
+                        text = stringResource(R.string.setting_mcp_page_enable),
                         style = MaterialTheme.typography.labelSmall,
                     )
                     Switch(

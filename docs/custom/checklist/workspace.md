@@ -87,14 +87,14 @@
 
 - 落点：`SettingMcpPage` 列表合并 HTTP 与 stdio，Add 菜单分 HTTP/stdio，删除按类型写回对应列表；`SettingMcpDetailPage` 从 `allMcpServers()` 查找，stdio 走独立的 `StdioMcpConfigure`（启用/名称、专用工作区、命令、参数、env、cwd、启动超时），保存/删除/工具开关按类型写回 `mcpServers` 或 `stdioMcpServers`；`AssistantDetailVM.mcpServerConfigs` 也改用 `allMcpServers()`，助手 MCP 页才能选择和显示 stdio Server；工作区列表只显示 `capabilities().rootfs`、`READY` 且已有 rootfs 的本地工作区；保存按钮要求名称、工作区、命令、非相对 cwd 和不小于 1000ms 的启动超时；`AssistantDetailVM` 和聊天附件面板的 MCP 入口也改用 `allMcpServers()`。
 - 理由：配置结构已经落地，但没有 UI 就无法创建或编辑 stdio Server；复用现有 MCP 详情页可以把工具开关和状态显示一起带过来。
-- 合并注意：新增文案目前用中文硬编码，未走四份 locale，后续统一走 i18n；env 输入用密码视觉变换，多行参数/环境变量用本地文本状态，避免过滤空行后无法输入第二行；workspace 绑定唯一性由 C111.5 在保存入口补，C111.6 又在归一化层兜底；命令 NUL/换行和 rootfs 二次校验仍由启动阶段补。
-- 测试：现有 C111 的 JVM 测试覆盖配置归一化和 runtime 合并；本阶段没有新增 Compose/JVM UI 测试，靠开发机手动验收添加、编辑、删除、助手 MCP 选择和聊天附件面板入口。本地 workspace rootfs 用 perl 写了一个最小 stdio MCP Server，验证 initialize、tools/list、工具写回和 Connected 状态。callTool 的真实 UI 路径用本地 OpenAI 兼容 mock 服务驱动 `mcp__Echo__echo`：模型发出工具调用，UI 显示 `Called tool`，Echo 返回 `ECHO: calltool-device`，工具结果回传后输出最终回复；在 `3.1.1-custom.3418+5235dce` 上复验。
+- 合并注意：新增文案已走四份 locale；env 输入用密码视觉变换，多行参数/环境变量用本地文本状态，避免过滤空行后无法输入第二行；workspace 绑定唯一性由 C111.5 在保存入口补，C111.6 又在归一化层兜底；命令 NUL/换行和 rootfs 二次校验仍由启动阶段补。
+- 测试：现有 C111 的 JVM 测试覆盖配置归一化和 runtime 合并；本阶段没有新增 Compose/JVM UI 测试，靠开发机手动验收添加、编辑、删除、助手 MCP 选择和聊天附件面板入口。本地 workspace rootfs 用 perl 写了一个最小 stdio MCP Server，验证 initialize、tools/list、工具写回和 Connected 状态；表单文案已走四份 locale，设备上切 zh-CN 复核标签。callTool 的真实 UI 路径用本地 OpenAI 兼容 mock 服务驱动 `mcp__Echo__echo`：模型发出工具调用，UI 显示 `Called tool`，Echo 返回 `ECHO: calltool-device`，工具结果回传后输出最终回复；在 `3.1.1-custom.3418+5235dce` 上复验。
 
 ### C111.5 UI 收尾
 
 - 落点：`SettingMcpDetailPage` 的 stdio 基础页增加连接状态、重启/停止按钮、工作区冲突提示和 env 显示切换；保存按钮在 workspace 已被其它 stdio Server 占用时禁用；删除确认明确工作区不删除。停止/重启按钮经 `McpManager.stopClient`/`restartClient` 落到现有 session 生命周期；手动停止的保留语义见 C111.8。`AssistantMcpPage` 顶栏增加设置入口，已有 Server 时也能进入全局 MCP 配置页。
 - 理由：C111.4 已经能配置和连接，但详情页看不到状态、无法手动停止/重启，两个 Server 也能静默绑定同一个工作区；已有 Server 后助手 MCP 页没有入口回全局配置，也会把状态/停止功能藏在不可达位置。
-- 合并注意：停止只结束当前 session，配置和工作区保留；重启先移除旧 session 再重新 addClient，避免旧 client 仍在时提前返回；C111.8 起手动停止会阻止后续 reconcile 自动拉起，直到重启或配置被禁用；未保存的草稿不会生效；没有可用工作区时仍只显示提示，不跳转扩展页；CardGroup 形态和四份 locale 仍未处理，后者记为 i18n debt。
+- 合并注意：停止只结束当前 session，配置和工作区保留；重启先移除旧 session 再重新 addClient，避免旧 client 仍在时提前返回；C111.8 起手动停止会阻止后续 reconcile 自动拉起，直到重启或配置被禁用；未保存的草稿不会生效；没有可用工作区时仍只显示提示，不跳转扩展页；CardGroup 形态仍未处理。
 - 测试：`:app:compileGithubDebugKotlin`、`:app:testGithubDebugUnitTest`；开发机手动验收停止/重启、管理入口和 `Connected` 状态；工作区冲突提示按代码路径核对。callTool 的设备验收见 C111.4。
 
 ### C111.6 workspace 唯一性与列表提示
