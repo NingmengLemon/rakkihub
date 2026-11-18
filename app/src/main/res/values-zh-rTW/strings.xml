@@ -1605,4 +1605,12 @@
   <string name="setting_model_page_memory_model_follow_fast">跟隨快速模型</string>
   <string name="setting_display_page_terminal_ime_toggle_title">終端機 IME 開關</string>
   <string name="setting_display_page_terminal_ime_toggle_desc">在終端機功能鍵列顯示 IME 切換。關閉後一律使用直連輸入。</string>
+  <string name="setting_mcp_page_stdio_logs">日誌</string>
+  <string name="setting_mcp_page_stdio_logs_desc">最近一次啟動的 stderr</string>
+  <string name="setting_mcp_page_stdio_logs_empty">尚無 stderr 輸出</string>
+  <string name="setting_mcp_page_stdio_logs_show">展開日誌</string>
+  <string name="setting_mcp_page_stdio_logs_hide">收合日誌</string>
+  <string name="setting_mcp_page_stdio_logs_copy">複製</string>
+  <string name="setting_mcp_page_stdio_logs_clear">清空</string>
+  <string name="setting_mcp_page_stdio_logs_copied">日誌已複製</string>
 </resources>

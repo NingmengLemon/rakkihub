@@ -1,5 +1,8 @@
 package me.rerere.rikkahub.ui.pages.setting
 
+import android.content.ClipData
+import android.content.ClipboardManager
+import android.content.Context
 import androidx.annotation.StringRes
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.animateContentSize
@@ -30,6 +33,7 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.pager.HorizontalPager
 import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.text.selection.SelectionContainer
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
@@ -52,6 +56,7 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -66,6 +71,7 @@ import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import me.rerere.ai.core.InputSchema
 import me.rerere.hugeicons.HugeIcons
@@ -96,6 +102,7 @@ import me.rerere.rikkahub.ui.components.ui.switchItem
 import me.rerere.rikkahub.ui.context.LocalNavController
 import me.rerere.rikkahub.ui.context.LocalToaster
 import me.rerere.rikkahub.ui.theme.CustomColors
+import me.rerere.rikkahub.ui.theme.JetbrainsMono
 import me.rerere.ui.components.FormItem
 import me.rerere.ui.components.RikkaConfirmDialog
 import me.rerere.ui.components.Switch
@@ -443,6 +450,17 @@ private fun StdioMcpConfigure(
 ) {
     val repository = koinInject<WorkspaceRepository>()
     val workspaceManager = koinInject<WorkspaceManager>()
+    val mcpManager = koinInject<McpManager>()
+    val context = LocalContext.current
+    val toaster = LocalToaster.current
+    val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
+    val stdioLog by mcpManager.getStdioLog(config).collectAsStateWithLifecycle("")
+    var logsExpanded by rememberSaveable(config.id) { mutableStateOf(false) }
+    LaunchedEffect(status, stdioLog) {
+        if (status is McpStatus.Error && stdioLog.isNotBlank()) {
+            logsExpanded = true
+        }
+    }
     val navController = LocalNavController.current
     val workspaces by repository.listFlow().collectAsStateWithLifecycle(initialValue = emptyList())
     val eligible = workspaces.filter {
@@ -512,6 +530,61 @@ private fun StdioMcpConfigure(
                             onClick = onStop,
                             enabled = status != McpStatus.Idle,
                         ) { Text(stringResource(R.string.setting_mcp_page_stdio_stop)) }
+                    }
+                }
+            }
+
+            formItem(
+                headlineContent = { Text(stringResource(R.string.setting_mcp_page_stdio_logs)) },
+                supportingContent = { Text(stringResource(R.string.setting_mcp_page_stdio_logs_desc)) },
+                trailingContent = {
+                    TextButton(onClick = { logsExpanded = !logsExpanded }) {
+                        Text(
+                            stringResource(
+                                if (logsExpanded) {
+                                    R.string.setting_mcp_page_stdio_logs_hide
+                                } else {
+                                    R.string.setting_mcp_page_stdio_logs_show
+                                }
+                            )
+                        )
+                    }
+                },
+            ) {
+                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    if (stdioLog.isBlank()) {
+                        Text(
+                            text = stringResource(R.string.setting_mcp_page_stdio_logs_empty),
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                    } else if (logsExpanded) {
+                        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                            TextButton(
+                                onClick = {
+                                    clipboard.setPrimaryClip(
+                                        ClipData.newPlainText("MCP stderr", stdioLog)
+                                    )
+                                    toaster.show(
+                                        context.getString(R.string.setting_mcp_page_stdio_logs_copied),
+                                        type = ToastType.Success,
+                                    )
+                                },
+                            ) {
+                                Text(stringResource(R.string.setting_mcp_page_stdio_logs_copy))
+                            }
+                            TextButton(onClick = { mcpManager.clearStdioLog(config) }) {
+                                Text(stringResource(R.string.setting_mcp_page_stdio_logs_clear))
+                            }
+                        }
+                        SelectionContainer {
+                            Text(
+                                text = stdioLog,
+                                fontFamily = JetbrainsMono,
+                                fontSize = 11.sp,
+                                lineHeight = 15.sp,
+                            )
+                        }
                     }
                 }
             }

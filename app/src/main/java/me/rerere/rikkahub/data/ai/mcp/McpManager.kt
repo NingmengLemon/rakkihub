@@ -112,6 +112,12 @@ class McpManager(
 
     fun getStatus(config: McpServerConfig): Flow<McpStatus> = sessionRegistry.getStatus(config.id)
 
+    fun getStdioLog(config: McpServerConfig): StateFlow<String> = sessionRegistry.getStdioLog(config.id)
+
+    fun clearStdioLog(config: McpServerConfig) {
+        sessionRegistry.clearStdioLog(config.id)
+    }
+
     fun getAllAvailableTools(assistant: Assistant): List<Triple<Uuid, String, McpTool>> {
         val settings = settingsStore.settingsFlow.value
         return availableMcpTools(

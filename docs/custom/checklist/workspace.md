@@ -1,6 +1,6 @@
 # 明细：工作区与 MCP
 
-本文件是 [checklist.md](../checklist.md) 的明细，收录 C89、C102 至 C106、C111、C120、C123 至 C125。
+本文件是 [checklist.md](../checklist.md) 的明细，收录 C89、C102 至 C106、C111、C120、C123 至 C126。
 
 <a id="c89"></a>
 
@@ -60,7 +60,7 @@
 
 ## C111 stdio MCP 服务器
 
-本项是一个功能，按 9 个阶段落地。设计见 [design/stdio-mcp.md](../design/stdio-mcp.md)；早期登记用了 C111 至 C119 九个顶层编号，依次对应 C111.1 至 C111.9；C112 至 C119 保留，不再用作顶层编号，下一个新项从 C126 起。
+本项是一个功能，按 9 个阶段落地。设计见 [design/stdio-mcp.md](../design/stdio-mcp.md)；早期登记用了 C111 至 C119 九个顶层编号，依次对应 C111.1 至 C111.9；C112 至 C119 保留，不再用作顶层编号，下一个新项从 C127 起。
 
 ### C111.1 配置与持久化
 
@@ -160,3 +160,12 @@
 - 理由：传统直连不经过隐藏 EditText，长按选择和带修饰键的按键手感更接近终端；但需要组合输入的软键盘仍要一个可随时切回的 IME 通道。sticky Ctrl/Alt 原先只对 IME 提交文本生效，直连时按 O 仍是普通 o；硬件 Ctrl/Alt 则由 TerminalView 正确处理，应用层不应重写。
 - 合并注意：设置只控制开关是否显示，关闭时强制直连；per-tab 状态不持久化，进程结束或 tab 关闭后回到默认直连；传统模式仍能通过 `TerminalView` 的 `BaseInputConnection` 接收普通 `commitText`，只有需要候选组合的输入法才必须打开 IME；应用层只接管 sticky 修饰，`e.isCtrlPressed`/`e.isAltPressed` 和右 Alt 留给 TerminalView；没有新增 DataStore key，字段嵌在 `displaySetting` 的 JSON 里，旧设置解码为默认 true。
 - 测试：`WorkspaceTerminalInputTest` 覆盖普通文本、Ctrl 字母、Ctrl 符号、Alt 大小写、key code 回退和 CJK；在 `3.1.1-custom.3444+20ca80a` 上验收：默认直连下 `cat` 后按 CTRL+O 显示 `^O`、CTRL+[ 显示 `^[`，IME 开关可正常输入，设置关闭后功能键栏不再显示 IME，离开终端页键盘收起，长按终端文本出现 Copy/More 工具栏。
+
+<a id="c126"></a>
+
+## C126 stdio MCP stderr 日志
+
+- 落点：`StdioLogBuffer` 保留每个 stdio Server 最近 16K 字符的 stderr 尾部，`TeeInputStream` 在 SDK 消费 stderr 的同时旁路写入；`McpSessionRegistry` 按 Server id 持有缓冲区，`McpManager.getStdioLog`/`clearStdioLog` 暴露给设置页；`StdioMcpConfigure` 新增可展开的 Logs 项，错误状态下自动展开，支持复制和清空，连接重新开始时清空上一次输出；配置删除时同时移除缓冲区。
+- 理由：stderr 原来只交给 MCP SDK transport，设置页只显示 `McpStatus.Error.message`，像 `Internal server error` 这种摘要无法定位服务端真实报错；保留尾部日志能让用户直接看到 Python/Node 的 traceback 或脚本错误。
+- 合并注意：只旁路 stderr，不记录 stdout 的 JSON-RPC 正文，避免协议内容和潜在敏感数据进入 UI；缓冲区只保留尾部，不持久化，app 重启或重新连接会清空；Tee 只有在 SDK 读取 stderr 时才捕获，若 transport 完全不读则日志为空；日志可能包含路径或 token，复制由用户主动触发，不写 Logcat。
+- 测试：`McpStdioLogTest` 覆盖尾部截断、UTF-8、清空、单字节和数组读取；设备上临时移走 `echo-mcp.pl` 后重启 Echo，状态变为 `Error: Connection closed`，日志自动展开并显示 `Can't open perl script ... No such file or directory`；恢复脚本并重启后状态回到 `Connected`，日志清空。版本钉版在后续提交补。

@@ -119,6 +119,7 @@ internal class McpSessionRegistry(
     private val workspaceDao: WorkspaceDAO,
 ) {
     private val sessions = ConcurrentHashMap<Uuid, McpSession>()
+    private val stdioLogs = ConcurrentHashMap<Uuid, StdioLogBuffer>()
 
     // 用户手动停止的 Server，后续 settings 变化经 reconcile 也不自动拉起；服务器重启或禁用后清除，C123 起从设置恢复
     private val manuallyStopped = ConcurrentHashMap.newKeySet<Uuid>()
@@ -127,12 +128,22 @@ internal class McpSessionRegistry(
 
     fun getStatus(configId: Uuid): Flow<McpStatus> = statusStore.get(configId)
 
+    fun getStdioLog(configId: Uuid): StateFlow<String> = stdioLogBuffer(configId).text
+
+    fun clearStdioLog(configId: Uuid) {
+        stdioLogs[configId]?.clear()
+    }
+
+    private fun stdioLogBuffer(configId: Uuid): StdioLogBuffer =
+        stdioLogs.getOrPut(configId) { StdioLogBuffer() }
+
     fun isManuallyStopped(configId: Uuid): Boolean = configId in manuallyStopped
 
     fun reconcile(configs: List<McpServerConfig>) {
         val enabledConfigs = configs
             .filter { it.commonOptions.enable && it.commonOptions.name.isNotBlank() }
         val enabledIds = enabledConfigs.mapTo(HashSet()) { it.id }
+        stdioLogs.keys.removeIf { id -> configs.none { it.id == id } }
         manuallyStopped.retainAll(enabledIds)
         manuallyStopped.addAll(settingsStore.settingsFlow.value.stoppedMcpServerIds.intersect(enabledIds))
         val activeConfigs = enabledConfigs
@@ -286,12 +297,13 @@ internal class McpSessionRegistry(
 
             try {
                 val transport = if (config is McpServerConfig.StdioServer) {
+                    stdioLogBuffer(config.id).clear()
                     val started = startStdioProcess(config)
                     stdioProcess = started
                     StdioClientTransport(
                         input = started.stdout.asSource().buffered(),
                         output = started.stdin.asSink().buffered(),
-                        error = started.stderr.asSource().buffered(),
+                        error = TeeInputStream(started.stderr, stdioLogBuffer(config.id)).asSource().buffered(),
                     )
                 } else {
                     createTransport(config)

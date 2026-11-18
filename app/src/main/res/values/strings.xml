@@ -1605,4 +1605,12 @@
   <string name="setting_model_page_memory_model_follow_fast">Same as fast model</string>
   <string name="setting_display_page_terminal_ime_toggle_title">Terminal IME switch</string>
   <string name="setting_display_page_terminal_ime_toggle_desc">Show the IME switch in the terminal extra-keys bar. Turn it off to always use direct input.</string>
+  <string name="setting_mcp_page_stdio_logs">Logs</string>
+  <string name="setting_mcp_page_stdio_logs_desc">stderr from the latest stdio attempt</string>
+  <string name="setting_mcp_page_stdio_logs_empty">No stderr output yet</string>
+  <string name="setting_mcp_page_stdio_logs_show">Show logs</string>
+  <string name="setting_mcp_page_stdio_logs_hide">Hide logs</string>
+  <string name="setting_mcp_page_stdio_logs_copy">Copy</string>
+  <string name="setting_mcp_page_stdio_logs_clear">Clear</string>
+  <string name="setting_mcp_page_stdio_logs_copied">Logs copied</string>
 </resources>

@@ -1607,4 +1607,12 @@ mDNS 地址：使用 .local 主机名，同一网络中的其他设备可通过�
   <string name="setting_model_page_memory_model_follow_fast">跟随快速模型</string>
   <string name="setting_display_page_terminal_ime_toggle_title">终端 IME 开关</string>
   <string name="setting_display_page_terminal_ime_toggle_desc">在终端功能键栏显示 IME 切换。关闭后始终使用直连输入。</string>
+  <string name="setting_mcp_page_stdio_logs">日志</string>
+  <string name="setting_mcp_page_stdio_logs_desc">最近一次启动的 stderr</string>
+  <string name="setting_mcp_page_stdio_logs_empty">暂无 stderr 输出</string>
+  <string name="setting_mcp_page_stdio_logs_show">展开日志</string>
+  <string name="setting_mcp_page_stdio_logs_hide">收起日志</string>
+  <string name="setting_mcp_page_stdio_logs_copy">复制</string>
+  <string name="setting_mcp_page_stdio_logs_clear">清空</string>
+  <string name="setting_mcp_page_stdio_logs_copied">日志已复制</string>
 </resources>

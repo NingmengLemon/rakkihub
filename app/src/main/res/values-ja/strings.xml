@@ -1607,4 +1607,12 @@ mDNSアドレス: .localホスト名を使用し、IPを知らなくても同じ
   <string name="setting_model_page_memory_model_follow_fast">高速モデルと同じ</string>
   <string name="setting_display_page_terminal_ime_toggle_title">ターミナル IME 切り替え</string>
   <string name="setting_display_page_terminal_ime_toggle_desc">ターミナルの追加キーバーに IME 切り替えを表示します。オフにすると常に直接入力になります。</string>
+  <string name="setting_mcp_page_stdio_logs">ログ</string>
+  <string name="setting_mcp_page_stdio_logs_desc">直近の起動時の stderr</string>
+  <string name="setting_mcp_page_stdio_logs_empty">stderr 出力はまだありません</string>
+  <string name="setting_mcp_page_stdio_logs_show">ログを表示</string>
+  <string name="setting_mcp_page_stdio_logs_hide">ログを隠す</string>
+  <string name="setting_mcp_page_stdio_logs_copy">コピー</string>
+  <string name="setting_mcp_page_stdio_logs_clear">クリア</string>
+  <string name="setting_mcp_page_stdio_logs_copied">ログをコピーしました</string>
 </resources>
