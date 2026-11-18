@@ -387,5 +387,5 @@
 
 - 落点：`ChatMessage` 把整条消息的 WebView 预览提成 `onWebViewPreview`；`MessagePartsBlock` 在已完成的文本 part 含 `<svg` 时，正文下方显示 `TextButton`（复用 `render_with_webview` 文案），点击打开同一个 Markdown 预览；动作面板复用同一回调。
 - 理由：Android 正文不渲染 SVG，BetterText 直接丢弃；此前只有动作面板里能进 WebView 预览，用户看不到提示，SVG 像凭空消失。
-- 合并注意：检测只是大小写不敏感的 `<svg` 文本匹配，代码块里出现 `<svg` 也会显示入口；预览是整条消息的 Markdown 转 HTML，不是内联渲染；生成中的文本不显示入口；没有新增文案，复用 `render_with_webview`；不改 Markdown 渲染器。
-- 测试：`:app:compileGithubDebugKotlin`；mock 返回含 `<svg>` 的文本时正文出现 `Render with WebView`，点击后 WebView 渲染圆形和前后文字。
+- 合并注意：检测只是大小写不敏感的 `<svg` 文本匹配，代码块里出现 `<svg` 也会显示入口；fenced svg/html 代码块本身已有块级预览入口，这里打开的是整条消息预览；生成中的文本不显示入口；没有新增文案，复用 `render_with_webview`；不改 Markdown 渲染器。
+- 测试：在 `3.1.1-custom.3427+0921069` 上验收：mock 返回含 `<svg>` 的文本时正文出现 `Render with WebView`，点击后 WebView 渲染圆形和前后文字；`:app:compileGithubDebugKotlin` 通过。
