@@ -302,17 +302,20 @@ private fun MarkdownContent(
     onPreview: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
-    val segments = remember(content, streaming) {
-        if (streaming) listOf(SvgTextSegment.Text(content)) else splitSvgText(content)
+    val rendered = remember(content, assistant, scope) {
+        content.replaceRegexes(
+            assistant = assistant,
+            scope = scope,
+            visual = true,
+        )
+    }
+    val segments = remember(rendered, streaming) {
+        if (streaming) listOf(SvgTextSegment.Text(rendered)) else splitSvgText(rendered)
     }
     if (segments.size == 1 && segments.single() is SvgTextSegment.Text) {
         SelectableContent {
             MarkdownBlock(
-                content = content.replaceRegexes(
-                    assistant = assistant,
-                    scope = scope,
-                    visual = true,
-                ),
+                content = rendered,
                 modifier = modifier,
                 streaming = streaming,
                 onClickCitation = onClickCitation,
@@ -325,11 +328,7 @@ private fun MarkdownContent(
             when (segment) {
                 is SvgTextSegment.Text -> SelectableContent {
                     MarkdownBlock(
-                        content = segment.text.replaceRegexes(
-                            assistant = assistant,
-                            scope = scope,
-                            visual = true,
-                        ),
+                        content = segment.text,
                         streaming = false,
                         onClickCitation = onClickCitation,
                     )
@@ -511,7 +510,7 @@ private fun MessagePartsBlock(
                             }
                         }
 
-                        // Markdown 由 BetterText 渲染，要用它自己的选择容器；生成中也可以选择
+                        // 选择容器在 MarkdownContent 里按文本段创建；SVG 卡片放在外面才能接收点击
                         textContent()
                     }
 

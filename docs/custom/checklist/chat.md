@@ -385,7 +385,7 @@
 
 ## C121 聊天正文的 SVG 内联预览
 
-- 落点：`splitSvgText` 把已完成的文本 part 拆成 Markdown 段和块级 SVG 段，`InlineSvgBlock` 用 Coil 的 `AsyncImage`（全局 `SvgDecoder`）在气泡内直接渲染，默认最高 240dp，点卡片展开到 480dp；文本段各自保留 `SelectableContent`，SVG 卡片放在选择容器外，避免点击被吃掉。不安全的 SVG、超大 SVG 或解码失败时，才在该位置回退到 `Render with WebView` 整条消息预览。
+- 落点：`splitSvgText` 只拆用空行隔开、独占一行的块级 SVG；`InlineSvgBlock` 用 Coil 的 `AsyncImage`（全局 `SvgDecoder`）在气泡内直接渲染，默认最高 240dp，点卡片展开到 480dp；文本段各自保留 `SelectableContent`，SVG 卡片放在选择容器外，避免点击被吃掉。不安全的 SVG、超大 SVG 或解码失败时，才在该位置回退到 `Render with WebView` 整条消息预览。
 - 理由：Android 正文不渲染 SVG，BetterText 直接丢弃；之前只给气泡底部加 WebView 入口，位置和交互都不自然。内联渲染让 SVG 停在原文位置，展开一级即可看细节。
-- 合并注意：只处理已完成的文本 part，生成中仍走原 Markdown；fenced code 里的 `<svg` 不拆；内联安全限制是 64K 字符，拒绝 `<script>`、事件属性、`<foreignObject>`、`<image>`、`<use>`、`<style>`、`href`/`xlink:href` 和外部 CSS `url()`；允许本地 `url(#id)` 渐变；不新增文案，回退复用 `render_with_webview`；不改 Markdown 渲染器，也不在气泡里常驻 WebView。
-- 测试：`SvgTextTest` 覆盖拆分、fenced code 跳过、未闭合 SVG、多 SVG、脚本/事件/外链/foreignObject/style/超大 SVG 拒绝和本地渐变放行；`:app:compileGithubDebugKotlin` 通过；在 `3.1.1-custom.3429+1462baa` 上验收：mock 返回含 `<svg>` 的文本时气泡内出现圆形，点卡片后高度展开、箭头翻转。
+- 合并注意：只处理已完成的文本 part，生成中仍走原 Markdown；只接受独占一行且前后为空行的 SVG，inline code、blockquote、缩进代码块和 fenced/nested code 里的 `<svg>` 不拆；内联安全限制是 64K 字符，拒绝 `<script>`、事件属性、`<foreignObject>`、`<image>`、`<use>`、`<style>`、`href`/`xlink:href` 和外部 CSS `url()`；允许 `url(#id)`、`url('#id')`、`url( #id )` 这类本地渐变；不新增文案，回退复用 `render_with_webview`；不改 Markdown 渲染器，也不在气泡里常驻 WebView。
+- 测试：`SvgTextTest` 19 项覆盖独占块拆分、无空行/强调/链接/列表/表格不拆、inline code、fenced/language/nested/blockquote/indented code、CRLF、未闭合、多 SVG、安全限制和 64K 边界；`:app:testGithubDebugUnitTest --tests "me.rerere.rikkahub.ui.components.message.SvgTextTest"` 通过；设备复验待新构建。
