@@ -1,6 +1,6 @@
 # 明细：聊天、上下文与模型
 
-本文件是 [checklist.md](../checklist.md) 的明细，收录 C35、C43 至 C44、C46 至 C47、C49 至 C53、C57 至 C63、C65 至 C78、C81 至 C86、C97 至 C100、C107、C121。
+本文件是 [checklist.md](../checklist.md) 的明细，收录 C35、C43 至 C44、C46 至 C47、C49 至 C53、C57 至 C63、C65 至 C78、C81 至 C86、C97 至 C100、C107、C121、C122。
 
 <a id="c35"></a>
 
@@ -389,3 +389,12 @@
 - 理由：Android 正文不渲染 SVG，BetterText 直接丢弃；之前只给气泡底部加 WebView 入口，位置和交互都不自然。内联渲染让 SVG 停在原文位置，展开一级即可看细节。
 - 合并注意：只处理已完成的文本 part，生成中仍走原 Markdown；只接受独占一行且前后为空行的 SVG，inline code、blockquote、缩进代码块和 fenced/nested code 里的 `<svg>` 不拆；内联安全限制是 64K 字符，拒绝 `<script>`、事件属性、`<foreignObject>`、`<image>`、`<use>`、`<style>`、`href`/`xlink:href` 和外部 CSS `url()`；允许 `url(#id)`、`url('#id')`、`url( #id )` 这类本地渐变；不新增文案，回退复用 `render_with_webview`；不改 Markdown 渲染器，也不在气泡里常驻 WebView。
 - 测试：`SvgTextTest` 19 项覆盖独占块拆分、无空行/强调/链接/列表/表格不拆、inline code、fenced/language/nested/blockquote/indented code、CRLF、未闭合、多 SVG、安全限制和 64K 边界；`:app:testGithubDebugUnitTest --tests "me.rerere.rikkahub.ui.components.message.SvgTextTest"` 通过；设备上在 `3.1.1-custom.3431+34e9ca8` 验收：mock 返回含 `<svg>` 的文本时气泡内出现圆形，点卡片后高度展开、箭头翻转。
+
+<a id="c122"></a>
+
+## C122 B2 标题与摘要的 step 级投影
+
+- 落点：`ai/ui/Message.kt` 新增 `projectForSummary()`，失败消息按 step 重建 parts：`SUCCEEDED` 全保留，`TOOLS` 保留正文和已执行完成的工具，`FAILED`/`CANCELLED` 只保留已执行完成的工具，`RUNNING` 丢弃；投影后状态改为 `COMPLETE` 并清空 steps。标题的 `Conversation.recentModelMessages` 和压缩摘要的 `ChatRequestFactory.buildStep(forSummary = true)` 使用它；`CompressionPlan` 的 token 估算同步改用同一投影。记忆的 `dialogueMessages` 仍走 `filterModelVisible`，保持整条隔离。
+- 理由：一条失败回复里可能已有成功的 step，整条丢弃会把成功 step 的正文和工具事实一起丢掉；但失败 step 的正文可能没写完或说错，不能直接当事实。标题和摘要是一次性或请求级的，先按 step 取成功部分；记忆是长期保存的，继续整条隔离。
+- 合并注意：只处理 `status = FAILED` 且 steps 非空的消息；没有 steps 的旧失败消息仍整条丢弃，避免把兼容例外带进新投影。投影只读，不改库；普通聊天请求仍用 `projectForRequest`，两者不能混用。`TOOLS`/`FAILED`/`CANCELLED` 里没有执行完成的 Tool part 不投影；投影为空时整条丢弃。
+- 测试：`MessageSummaryProjectionTest` 覆盖成功 step 正文与工具保留、失败 step 正文丢弃、未执行工具丢弃、多个成功 step 顺序、TOOLS step、无 steps 旧消息和非失败消息不变；`ConversationRecentModelMessagesTest` 覆盖失败回复带成功 step 时进入标题上下文。`:ai:testDebugUnitTest --tests "me.rerere.ai.ui.MessageSummaryProjectionTest"` 与 `:app:testGithubDebugUnitTest --tests "me.rerere.rikkahub.data.ai.ConversationRecentModelMessagesTest"` 通过。

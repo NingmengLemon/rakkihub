@@ -22,6 +22,7 @@ import me.rerere.ai.ui.UIMessage
 import me.rerere.ai.ui.limitContext
 import me.rerere.ai.ui.mergeAdjacentUserMessages
 import me.rerere.ai.ui.projectForRequest
+import me.rerere.ai.ui.projectForSummary
 import me.rerere.ai.ui.withoutCompressionScratch
 import me.rerere.rikkahub.R
 import me.rerere.rikkahub.data.ai.prompts.buildMemoryPrompt
@@ -206,7 +207,7 @@ class ChatRequestFactory(
         baseMessage: UIMessage,
         onUpdate: suspend (UIMessage) -> Unit,
     ): CompressionStreamResult {
-        val (requestMessages, params) = buildStep(turn, messages)
+        val (requestMessages, params) = buildStep(turn, messages, forSummary = true)
         val initial = baseMessage.copy(modelId = params.model.id)
         var current = initial
         var finishReason: String? = null
@@ -251,9 +252,10 @@ class ChatRequestFactory(
         turn: ChatTurnContext,
         messages: List<UIMessage>,
         processingStatus: MutableStateFlow<String?> = MutableStateFlow(null),
+        forSummary: Boolean = false,
     ): StepRequest {
         val assistant = turn.assistant
-        val visibleMessages = messages.projectForRequest()
+        val visibleMessages = (if (forSummary) messages.projectForSummary() else messages.projectForRequest())
             .filter { it.parts.isNotEmpty() || it.isContextCheckpoint || it.isHistoryTruncationMarker }
             .withoutCompressionScratch()
         val requestMessages = buildList {

@@ -1,6 +1,6 @@
 # B2：step 级提交与失败投影（完整版草稿）
 
-- 状态：部分落地。`MessageStep.id`、`failureCode` 已落地；Web DTO 的 status/steps、conversation_search 的失败消息过滤（scratch 与状态共用一次会话加载）、contextLimitBoundaryIndex 的投影对齐已完成；手动 step 重试与 C76 attempt 持久化已落地；官方普通消息（无 steps 字段）与带 steps 样本均已验，剩余消费方待后续。
+- 状态：部分落地。`MessageStep.id`、`failureCode` 已落地；Web DTO 的 status/steps、conversation_search 的失败消息过滤（scratch 与状态共用一次会话加载）、contextLimitBoundaryIndex 的投影对齐已完成；手动 step 重试与 C76 attempt 持久化已落地；标题与摘要已按 step 投影（C122），记忆保持整条隔离；官方普通消息（无 steps 字段）与带 steps 样本均已验。
 - 日期：2026-11-15
 - 前置：先完成 [`b1-step-commits.md`](b1-step-commits.md)；本文档保留手动重试、错误卡片、C76、搜索过滤、Web/导出兜底等 B2 内容
 - 对齐参考：DSH `dsh-v0.2.2-rc.1`（tag 指向 commit `66491b05e3f05ad35bcdd4f6cd7ed26041d9e3db`，2026-11-04；本地 clone `E:\MyWorkspace\deepseek-harness` 的 HEAD 是 `dsh-v0.2.1-rc.5`，本文档的 0.2.2 事实均用 `git show dsh-v0.2.2-rc.1:<path>` 读取）
@@ -132,7 +132,7 @@ val callComplete: Boolean = true
 
 | 字段 | 旧含义 | 新含义 | 迁移 |
 | --- | --- | --- | --- |
-| `status` | 整轮结果；`FAILED` 整条不进模型 | 整轮结果不变；请求投影里 `FAILED` 的 Tool parts 可见，正文与推理丢弃；摘要投影整条丢弃 | 读时投影，不改数据 |
+| `status` | 整轮结果；`FAILED` 整条不进模型 | 整轮结果不变；请求投影里 `FAILED` 的 Tool parts 可见，正文与推理丢弃；标题与摘要按 step 投影；记忆整条丢弃 | 读时投影，不改数据 |
 | `steps` | 无 | 本轮的 step 提交记录 | 旧 JSON 默认空，按单 step 处理 |
 | `callComplete` | 无 | Tool 调用是否收到 `ToolCallEnd` | 旧 JSON 默认 true |
 | `usage` / `generationTimeMs` / `stepCount` | 整轮累计 | 不变 | 无 |
@@ -208,11 +208,11 @@ RUNNING 会出现在当前请求里：AgentLoop 把正在生成的 assistant 消
 
 | step 状态 | 保留内容 |
 | --- | --- |
-| SUCCEEDED | 正文、推理、已完成的 ServerTool，以及已执行的 Tool parts（保持 C58 的现状） |
-| FAILED | 完全丢弃，包括 Tool parts 与 ServerTool |
-| CANCELLED | 已交付正文、推理、已完成的 ServerTool，以及已执行的 Tool parts |
-| TOOLS | 正文、推理、已完成的 ServerTool，以及已执行的 Tool parts |
-| RUNNING | 按 CANCELLED 处理 |
+| SUCCEEDED | 全部 parts（保持 C58 的现状） |
+| FAILED | 已执行完成的 Tool parts，正文与推理丢弃 |
+| CANCELLED | 已执行完成的 Tool parts，正文与推理丢弃 |
+| TOOLS | 正文、推理和已执行完成的 Tool parts |
+| RUNNING | 丢弃 |
 
 规则：
 
@@ -222,7 +222,7 @@ RUNNING 会出现在当前请求里：AgentLoop 把正在生成的 assistant 消
 - `isContextCheckpoint` 与空文本截断标记不受丢空消息影响，始终保留。
 - 投影顺序之后仍接 `withoutCompressionScratch()`（C68），再 `limitContext`，再输入变换，最后 `mergeAdjacentUserMessages`。
 - 失败步骤的 Tool parts 缺结果时先 `settleToolParts` 再投影，保证配对。
-- 多 step 消息的 FAILED 口径：请求投影按每步状态拼接，前面 SUCCEEDED step 的正文与工具事实保留，失败 step 只留 Tool parts；摘要投影与 `conversation_search` 对整条 `status = FAILED` 的消息丢弃，不再逐 step 判断。
+- 多 step 消息的 FAILED 口径：请求投影按每步状态拼接，前面 SUCCEEDED step 的正文与工具事实保留，失败 step 只留 Tool parts；标题与摘要按 `projectForSummary` 保留成功 step 的内容和失败 step 的工具事实，记忆与 `conversation_search` 仍整条丢弃。
 - `conversation_search` 的工具边界过滤：结果可能跨多个会话与助手，必须先按结果里的 `conversationId` 分组再查状态，不能只按当前会话建映射。`ConversationRepository.filterSearch` 对每个 `conversationId` 只加载一次会话，同一次读取产出 scratch 集合与 `messageId -> status` 映射（`SearchConversationContext`，按会话缓存到本次调用结束），再交给 `filterSearchResults`。工具搜索走 `searchMessagesForModel`/`searchMessagesOfAssistantsForModel`（`dropFailed = true`），snippet 所属消息 `status = FAILED`、node 已删、分支已切走或会话缺失时整条丢弃；UI 与 Web 搜索走 `searchMessages`/`searchMessagesOfAssistants`（`dropFailed = false`），只隐藏 scratch，仍能看到失败正文。工具搜索先取最多 200 条候选，再过滤、最后按调用方 limit 截断；UI 与 Web 搜索仍按原来的 50 条上限。多 step 消息只要最后一步失败就整条不返回。
 
 各调用方的投影选择：
@@ -230,10 +230,11 @@ RUNNING 会出现在当前请求里：AgentLoop 把正在生成的 assistant 消
 | 调用方 | 投影 | 理由 |
 | --- | --- | --- |
 | `ChatRequestFactory.buildStep` | `projectForRequest` | 失败 step 的工具事实要进请求 |
+| `ChatRequestFactory.streamCompressionSummary` | `projectForSummary` | 摘要保留成功 step 的正文与工具事实 |
 | `ContextPressure` 水位估算 | `projectForRequest` | 失败 step 的工具结果也占 token |
-| `CompressionPlan` token 估算 | `projectForRequest` | 与实际压缩请求同一投影与同一窗口 |
-| `ConversationMetaGenerator` 标题 | `projectForSummary` | 失败回复不参与标题 |
-| `ConversationTools` 的 `dialogueMessages` | `projectForSummary` | 失败回复不提供给 `read_conversations` |
+| `CompressionPlan` token 估算 | `projectForSummary` | 与实际压缩请求同一投影与同一窗口 |
+| `ConversationMetaGenerator` 标题 | `projectForSummary` | 失败回复按 step 取成功部分 |
+| `ConversationTools` 的 `dialogueMessages` | `filterModelVisible` | 记忆继续整条隔离失败回复 |
 | `ConversationTools` 的 `conversation_search` | 工具边界按 status 过滤 | 失败正文不进入模型上下文，UI 搜索不受影响 |
 | Web DTO | 不投影，新增 `status` 与 `steps` 字段 | 给人看的内容保留 |
 | FTS、Markdown 导出、浮动窗口 | 不投影 | FTS 没有新增字段；导出与预览仍按消息处理 |
@@ -246,7 +247,7 @@ RUNNING 会出现在当前请求里：AgentLoop 把正在生成的 assistant 消
 - `contextLimitBoundaryIndex` 的判据：limit 为 0、原始 `currentMessages` 里存在压缩提示词、或没有发生截断时返回 null；压缩提示词的检查必须在 `withoutCompressionScratch` 之前做，否则提示词已经被删掉，判据永远不会成立。发生截断的判据是窗口起点严格晚于投影列表的尾部起点（检查点之后的第一条），等价于 `contextLimitStart(limit) > tailStart`；如果前面有被投影丢弃的消息，不能用节点下标和 `contextWindowStart()` 比较；先在消息列表空间判定截断，再按 id 映射回节点空间。顺序是先请求投影与丢空，再 `withoutCompressionScratch`，再执行“最后一条是 assistant 时先去掉它”，再 `contextLimitStart`，再按消息 id 映射回节点下标，映射不到返回 null。
 - `keepRecent`、检查点、`planHistoryTruncation` 仍按 `messageNodes` 计数，不改；一个 turn 仍然只有一条 assistant 消息，压缩不会从 turn 中间切开。
 - `CompressionPlan` 的估算窗口改为与 `buildStep` 相同：先投影并丢弃空消息，再 `withoutCompressionScratch`，再 `limitContext`。
-- 压缩请求由 `buildStep` 构建，与估算共用 `projectForRequest`；摘要内容可能包含失败 step 的工具结果，但不包含失败正文。
+- 压缩请求由 `buildStep(forSummary = true)` 构建，与估算共用 `projectForSummary`；摘要内容可以包含成功 step 的正文和失败 step 的工具结果，不包含失败正文。
 
 ## 8. 重试
 
@@ -256,7 +257,7 @@ RUNNING 会出现在当前请求里：AgentLoop 把正在生成的 assistant 消
 - attempt 记录最多 20 条；C76 历史卡片从 `MessageStep.attempts` 读 `attempt`、`maxRetries`、`code`、`delayMs`、`durationMs`，实时倒计时继续用会话内存 `retryAttempts` 的 `recordedAtMillis`。
 - 每次重试开始时，preview 只重建当前 step 的 part 范围，之前的 step parts 不参与重置；消息 id 与 step id 在整个重试期间保持不变。
 - 重试成功：本 step 提交成功，之前的 step 不动；失败 attempt 只留摘要。
-- 重试耗尽：本 step FAILED，消息 FAILED；下一轮请求保留之前 SUCCEEDED step 的内容与工具事实，失败 step 只保留 Tool parts，正文与推理丢弃；摘要与 `conversation_search` 按整条消息丢弃。
+- 重试耗尽：本 step FAILED，消息 FAILED；下一轮请求保留之前 SUCCEEDED step 的内容与工具事实，失败 step 只保留 Tool parts，正文与推理丢弃；标题与摘要按 step 投影，`conversation_search` 按整条消息丢弃。
 - 手动 step 重试不通过错误卡片：C77 已永久取消，错误卡片只做信息提示。入口落在最后一条可重试 assistant 的消息快捷按钮与更多菜单；`ChatError` 不增加 retry 字段。
 - 手动重试要求目标节点仍是最后一个节点、目标消息仍是该节点当前候选；服务端重新推导当前重试目标，入口只带 messageId，不信任 UI 传来的 step 下标。最后还有可截断的失败 step 且该 step 没执行过工具时截断到该 step；没有失败 step、所有 step 都已完成且所有工具都已执行时保留现有步骤，从消息末尾继续。可截断 step 已执行过工具时不露出入口，避免截断后丢掉已发生的工具事实。
 - 重新生成整轮仍然新建候选消息；手动 step 重试不新建候选，这是 step 生命周期内的原位更新，并对消息状态做一次显式复位。

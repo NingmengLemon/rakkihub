@@ -354,7 +354,7 @@
 当前状态与剩余：
 
 - 重试恢复与消息模型 B1：已完成 step 记录、Claude step 级请求投影、失败工具事实、审批/取消 step 结算、最后节点审批收口（C97）与默认关闭的自动重试（C75）；C76 的 attempt 摘要已持久化，设计见 [design/b1-step-commits.md](design/b1-step-commits.md)。B2 已开始：Web DTO 的 status/steps、conversation_search 的失败消息过滤（单次会话加载）、上下文边界投影对齐已落地；C107 补了 step 稳定 id 与 failureCode；官方导出按上游 `ignoreUnknownKeys` 容忍未知字段，普通消息（无 steps 字段）与带 steps 样本均已验；手动 step 重试已落地（C98），搜索加载优化见 [design/b2-step-messages.md](design/b2-step-messages.md)。
-- C58 半途失败投影已由 B1 第一阶段落地（C97）：聊天请求投影保留失败前已执行的工具事实，失败 step 的正文与推理不进请求；标题、记忆与摘要投影仍整条丢弃失败消息。B2 只收尾搜索、Web 与错误卡片等消费方。
+- C58 半途失败投影已由 B1 第一阶段落地（C97）：聊天请求投影保留失败前已执行的工具事实，失败 step 的正文与推理不进请求；标题与摘要已按 step 投影（C122），记忆仍整条丢弃失败消息。B2 只收尾搜索、Web 与错误卡片等消费方。
 - C86 思考强度（已落地）：`OFF` 保留为明确关闭，新增 `NOTSET` 表示不发参数，`TextGenerationParams` 默认改为 `NOTSET`，OCR 和 Qwen MT 翻译不再带 `none`，翻译的 int budget 用 `-2` 哨兵保留默认档；官方兼容导出把 `NOTSET` 归一化成 `OFF`，会话 config 同步替换。deepseek 等 provider 的具体映射仍按现有能力表维护，后续只有新 provider 接入时再补调研。
 - C87 OCR 文本归属（Phase 1 已落地）：Room 34 新增 `file_derivations`，`file_id` 指向 `managed_files.id`，`kind`、`text`、`producer`、`edited`、时间戳；OCR 优先读文件级派生，旧消息 metadata 作为回退并懒回填；删除文件级联清理，自家备份恢复保留手改行、清掉自动行，官方导出登记并裁掉整张表。producer 指纹失效已补（C108），附件管理里的 OCR 文本编辑入口已补（C109），备份恢复合并手改行已补（C110），设计见 [design/c87-file-derivations.md](design/c87-file-derivations.md)。
 
@@ -371,13 +371,13 @@ RikkaHub 现状：
 
 - 重试单位是 step，`withRetry` 失败后回到 `stepStart`，前面的 step 和工具结果保留；单步回复看起来就是整条重来。DSH 也是这个语义，不是 RikkaHub 独有。
 - C61 把失败归一化为 `HttpException`/`LlmFailure`：流式和非流式的 2xx 之外的响应都带 HTTP status、错误码和 `Retry-After`；默认只重试 `RATE_LIMIT`、`SERVER`、`TIMEOUT`、`TRANSPORT`、`EMPTY_RESPONSE`，鉴权、配额、非法请求和 context overflow 不重试。空回复现在按 `EMPTY_RESPONSE` 归入同一策略。C75 把重试次数放回网络设置，默认关闭；只有用户开启后 `Settings.retryPolicy()` 才返回策略，基础退避与 `Retry-After` 的实现都在。`retryOn` 保留为自定义逃生口。
-- C58 已给失败和用户停止的回复加 `FAILED`/`INTERRUPTED` 状态；请求组装、标题生成、记忆整理和 `conversation_read` 都过滤 `FAILED`，失败半截不会再作为普通回复进入下一轮。B1 第一阶段的请求投影已按 step 保留失败前已执行的工具事实，标题与摘要仍整条隔离失败消息。
+- C58 已给失败和用户停止的回复加 `FAILED`/`INTERRUPTED` 状态；请求组装、标题生成、记忆整理和 `conversation_read` 都过滤 `FAILED`，失败半截不会再作为普通回复进入下一轮。B1 第一阶段的请求投影已按 step 保留失败前已执行的工具事实，标题与摘要已按 step 投影（C122），记忆仍整条隔离失败消息。
 - 停止或下一次发送时，未执行工具补恢复结果，按 `startedAt` 区分 `not_started`/`outcome_unknown`；审批恢复路径中的 Approved/Denied/Answered 工具仍交给 AgentLoop 继续执行。
 - UI 有失败/中断标记；C76 的 attempt 行已随 C75 默认关闭的重试恢复，默认不出现，历史 step 的摘要会持久化；C77 的错误卡片重试永久取消，错误卡片只提示错误信息；C80 给 `usage_record` 加 outcome，失败成本保留、缓存命中率排除失败。
 
 当前状态：
 
-- 失败 attempt 与成功消息分开（剩余）：C58 已实现 `UIMessage.status` 标记、`FAILED` 消息从请求/标题/记忆/`conversation_read` 过滤、相邻 user 合并和 UI 失败/中断标签。剩余：失败消息的 step 级请求投影已由 C97 落地，标题、记忆与摘要仍整条隔离；完整审批/取消 step 状态机已落地，自动重试已由 C75 以默认关闭恢复。工具恢复结果已由 C65 处理。
+- 失败 attempt 与成功消息分开（剩余）：C58 已实现 `UIMessage.status` 标记、`FAILED` 消息从请求/标题/记忆/`conversation_read` 过滤、相邻 user 合并和 UI 失败/中断标签。剩余：失败消息的 step 级请求投影已由 C97 落地，标题与摘要已按 step 投影（C122），记忆仍整条隔离；完整审批/取消 step 状态机已落地，自动重试已由 C75 以默认关闭恢复。工具恢复结果已由 C65 处理。
 - 稳定错误码与可配置策略（已落地）：C61 已把 provider 非 2xx 和空回复统一成带 `code`、`status`、`retryAfterMs` 的失败类型，覆盖 `AUTH`、`QUOTA`、`RATE_LIMIT`、`SERVER`、`TIMEOUT`、`EMPTY_RESPONSE`、`CONTEXT_WINDOW_EXCEEDED`、`INVALID_REQUEST`、`UNKNOWN`；裸传输错误仍按 `IOException` 重试，`TRANSPORT` 留给调用方包装。策略是 normal mode：`maxRetries`、`retryableCodes`、`initialDelay`、`maxDelay`、`jitter`；默认只重试瞬时错误，读取 `Retry-After` 并设上限；C75 把 `maxRetries` 放回网络设置并默认关闭；`Settings.retryPolicy()` 只在用户开启后返回策略。保留 step 级重试的实现，不做 prefill 续写。验收：429、5xx、空回复可重试；400、401、403、额度、上下文超限不重试；用户停止可取消等待；重试不重复工具副作用；重试请求与前缀缓存兼容。
 - 重试状态 UI（已落地）：C75 已恢复为默认关闭的网络设置入口，C76 的 attempt 摘要已随 step 持久化；C77 的错误卡片 Retry 永久取消，错误卡片只做信息提示；见「失败恢复与上下文的返工」。
 - 用量区分成功与失败 attempt（已落地）：C80 已给 `usage_record` 加 `outcome`（SUCCESS/FAILED/CANCELLED/UNKNOWN，旧数据 UNKNOWN），失败成本保留、统计页缓存命中率排除 FAILED/CANCELLED；消息卡片继续只显示成功 attempt 的 usage。attempt/retryId 没有单独落列，按 outcome 收口。验收：Room 32 到 33 迁移、旧数据默认 UNKNOWN、真实 app 库迁移、data.sync 53 条和官方导出裁剪都通过。32 到 33 没有降级迁移，回退旧构建前要保留 v32 库副本或继续用新构建。

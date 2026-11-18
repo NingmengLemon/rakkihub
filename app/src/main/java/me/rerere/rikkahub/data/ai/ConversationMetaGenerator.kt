@@ -5,7 +5,7 @@ import me.rerere.ai.provider.Model
 import me.rerere.ai.provider.ProviderManager
 import me.rerere.ai.provider.ProviderSetting
 import me.rerere.ai.ui.UIMessage
-import me.rerere.ai.ui.filterModelVisible
+import me.rerere.ai.ui.projectForSummary
 import me.rerere.ai.ui.withoutCompressionScratch
 import me.rerere.rikkahub.R
 import me.rerere.rikkahub.data.datastore.Settings
@@ -69,7 +69,7 @@ class ConversationMetaGenerator(
     }
 }
 
-/** 标题提示词只看模型可见的最近消息，失败回复和截断标记不参与 */
+/** 标题提示词只看模型可见的最近消息，失败回复按 step 投影，截断标记不参与 */
 internal fun Conversation.recentModelMessages(count: Int): List<UIMessage> =
-    currentMessages.filterModelVisible().withoutCompressionScratch()
+    currentMessages.projectForSummary().withoutCompressionScratch()
         .filterNot { it.isHistoryTruncationMarker }.takeLast(count)

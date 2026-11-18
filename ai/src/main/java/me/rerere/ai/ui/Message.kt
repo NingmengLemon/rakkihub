@@ -225,6 +225,48 @@ fun List<UIMessage>.projectForRequest(): List<UIMessage> = mapNotNull { message 
     }
 }
 
+/**
+ * 标题与摘要投影：失败回复不再整条丢弃，而是保留成功 step 的正文和工具事实；
+ * 失败 step 只保留已经执行完成的工具，避免把半截正文当事实。没有 step 的旧消息整条丢弃。
+ */
+fun List<UIMessage>.projectForSummary(): List<UIMessage> = mapNotNull { message ->
+    if (message.status != MessageStatus.FAILED) {
+        message
+    } else {
+        message.projectFailedForSummary()
+    }
+}
+
+private fun UIMessage.projectFailedForSummary(): UIMessage? {
+    if (steps.isEmpty()) return null
+    val projected = buildList {
+        for (step in steps) {
+            val start = step.startPartIndex.coerceIn(0, parts.size)
+            val end = step.endPartIndex.coerceIn(start, parts.size)
+            val stepParts = parts.subList(start, end)
+            when (step.status) {
+                StepStatus.SUCCEEDED -> addAll(stepParts)
+                StepStatus.TOOLS -> addAll(stepParts.filterNot { part ->
+                    part is UIMessagePart.Tool && (!part.isExecuted || !part.callComplete)
+                })
+
+                StepStatus.FAILED, StepStatus.CANCELLED -> addAll(stepParts.filter { part ->
+                    part is UIMessagePart.Tool && part.isExecuted && part.callComplete
+                })
+
+                StepStatus.RUNNING -> Unit
+            }
+        }
+    }
+    if (projected.isEmpty()) return null
+    return copy(
+        parts = projected,
+        status = MessageStatus.COMPLETE,
+        steps = emptyList(),
+        isGenerating = false,
+    )
+}
+
 /** 去掉压缩临时提示词及其紧随的 assistant 回复；失败/取消的重试卡只给用户看，不进请求。 */
 fun List<UIMessage>.withoutCompressionScratch(): List<UIMessage> {
     if (none { it.isCompressionPrompt }) return this
