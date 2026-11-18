@@ -168,4 +168,4 @@
 - 落点：`StdioLogBuffer` 保留每个 stdio Server 最近 16K 字符的 stderr 尾部，`TeeInputStream` 在 SDK 消费 stderr 的同时旁路写入；`McpSessionRegistry` 按 Server id 持有缓冲区，`McpManager.getStdioLog`/`clearStdioLog` 暴露给设置页；`StdioMcpConfigure` 新增可展开的 Logs 项，错误状态下自动展开，支持复制和清空，连接重新开始时清空上一次输出；配置删除时同时移除缓冲区。
 - 理由：stderr 原来只交给 MCP SDK transport，设置页只显示 `McpStatus.Error.message`，像 `Internal server error` 这种摘要无法定位服务端真实报错；保留尾部日志能让用户直接看到 Python/Node 的 traceback 或脚本错误。
 - 合并注意：只旁路 stderr，不记录 stdout 的 JSON-RPC 正文，避免协议内容和潜在敏感数据进入 UI；缓冲区只保留尾部，不持久化，app 重启或重新连接会清空；Tee 只有在 SDK 读取 stderr 时才捕获，若 transport 完全不读则日志为空；日志可能包含路径或 token，复制由用户主动触发，不写 Logcat。
-- 测试：`McpStdioLogTest` 覆盖尾部截断、UTF-8、清空、单字节和数组读取；设备上临时移走 `echo-mcp.pl` 后重启 Echo，状态变为 `Error: Connection closed`，日志自动展开并显示 `Can't open perl script ... No such file or directory`；恢复脚本并重启后状态回到 `Connected`，日志清空。版本钉版在后续提交补。
+- 测试：`McpStdioLogTest` 覆盖尾部截断、UTF-8、清空、单字节和数组读取；在 `3.1.1-custom.3448+4187050` 上验收：临时移走 `echo-mcp.pl` 后重启 Echo，状态变为 `Error: Connection closed`，日志自动展开并显示 `Can't open perl script ... No such file or directory`；恢复脚本并重启后状态回到 `Connected`，日志清空。
