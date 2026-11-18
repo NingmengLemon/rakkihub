@@ -1,6 +1,6 @@
 # 明细：工作区与 MCP
 
-本文件是 [checklist.md](../checklist.md) 的明细，收录 C89、C102 至 C106、C111、C120、C123。
+本文件是 [checklist.md](../checklist.md) 的明细，收录 C89、C102 至 C106、C111、C120、C123 至 C124。
 
 <a id="c89"></a>
 
@@ -17,7 +17,7 @@
 
 - 落点：`WorkspaceFileEditorPage` 使用 `rememberScrollState()` 并把它传给 `TextField`；`ON_PAUSE` 保存 `ScrollState.value`、`clearFocus(force = true)` 并隐藏输入法；`ON_RESUME` 和加载完成后的 effect 恢复位置；`savedScroll` 用 `rememberSaveable`。
 - 理由：从 Recents 切回时，焦点恢复会把页面滚回光标并自动弹出输入法，用户切出前的浏览位置丢失。
-- 合并注意：恢复只在页面存活或重建时生效，不做草稿持久化；编辑器仍不能跨进程保存未提交文本，见 C106。不要再把 `ON_PAUSE` 的清焦点去掉，否则输入法会在返回时重新聚焦。
+- 合并注意：恢复只在页面存活或重建时生效，不做草稿持久化；编辑器仍不能跨进程保存未提交文本，见 C106。不要无条件去掉 `ON_PAUSE` 的清焦点：C124 起只在切出时正在源码态编辑、且回来时仍是源码态的情况下恢复焦点和输入法，预览态不恢复。
 - 测试：开发机 200 行文件，无键盘和键盘打开两种切出场景，返回后滚动位置一致且不自动弹键盘。
 
 <a id="c103"></a>
@@ -60,7 +60,7 @@
 
 ## C111 stdio MCP 服务器
 
-本项是一个功能，按 9 个阶段落地。设计见 [design/stdio-mcp.md](../design/stdio-mcp.md)；早期登记用了 C111 至 C119 九个顶层编号，依次对应 C111.1 至 C111.9；C112 至 C119 保留，不再用作顶层编号，下一个新项从 C124 起。
+本项是一个功能，按 9 个阶段落地。设计见 [design/stdio-mcp.md](../design/stdio-mcp.md)；早期登记用了 C111 至 C119 九个顶层编号，依次对应 C111.1 至 C111.9；C112 至 C119 保留，不再用作顶层编号，下一个新项从 C125 起。
 
 ### C111.1 配置与持久化
 
@@ -142,3 +142,12 @@
 - 理由：手动停止原本只在内存，app 重启后会自动拉起，用户明确停掉的 Server 会自己回来；持久化让停止语义符合预期，同时保留配置和工作区。
 - 合并注意：字段有默认值，旧设置和旧备份解码为空集合；旧构建忽略这个 key，但不会删除它。只持久化启用的有效 ID，禁用/删除即视为恢复默认；点服务器重启会清掉停止标记；官方导出不携带本地停止态。自家备份会带上该字段，恢复后按当前配置归一化。停止仍只影响 MCP session，不删除配置或工作区。
 - 测试：`SettingsStoppedMcpTest` 覆盖默认空、序列化往返、归一化只留启用有效 ID、stdio、重复 workspace、空名称和官方导出清空；`McpToolAvailabilityTest` 覆盖持久化标记与运行时标记的合并；`SettingsFieldsTest` 覆盖新字段的 DataStore 映射；在 `3.1.1-custom.3436+be9bdb3` 上验收：停止 Echo 后 force-stop app，重开仍显示 `Not started`，mock 收到 `tools=1, mcp=[]`；点重启后 `Connected`，mock 收到 `tools=2, mcp=['mcp__Echo__echo']` 并完成调用。
+
+<a id="c124"></a>
+
+## C124 工作区 Markdown 编辑器的未保存标记与输入法恢复
+
+- 落点：`WorkspaceFileEditorPage` 标题在 dirty 时显示 `* filename`，字号降到 `titleMedium`；源码态 Save 常驻但只有 dirty 可用，预览态 clean 隐藏 Save、dirty 时显示并可保存；`ON_PAUSE` 记录源码态是否正在编辑，`ON_RESUME` 恢复焦点和输入法；滚动位置继续保存。
+- 理由：预览态本来是只读的，clean 时 Save 没有意义；但用户可能写完后切到预览看效果，此时 dirty 必须能直接保存。文件名前的星号和禁用态 Save 让未保存状态可见；切到 Recents 再回来输入法被收起，是因为原实现只恢复滚动、不恢复焦点。
+- 合并注意：dirty 仍以当前文本和磁盘加载文本比较；预览 dirty 的 Save 保存的是内存文本，不是预览内容；返回时的未保存确认不变；输入法只在源码态恢复，预览态不弹键盘；进程死亡或 Activity 重建后正文仍从磁盘重载，未保存内容和光标不保证保留，这是大文件不做 saveable 的既有取舍。
+- 测试：在 `3.1.1-custom.3441+3e57182` 上验收：`* readme-test.md`、源码 clean 时 Save 禁用、预览 clean 时 Save 隐藏、预览 dirty 时 Save 可保存、保存后星号消失；源码态打开输入法后按 Home 再回前台，输入法恢复。

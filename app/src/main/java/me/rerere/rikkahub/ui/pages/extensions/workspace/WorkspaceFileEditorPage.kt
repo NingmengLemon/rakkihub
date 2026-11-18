@@ -29,10 +29,14 @@ import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.text.style.TextOverflow
@@ -94,17 +98,30 @@ fun WorkspaceFileEditorPage(
     val focusManager = LocalFocusManager.current
     val keyboardController = LocalSoftwareKeyboardController.current
     val lifecycleOwner = LocalLifecycleOwner.current
+    val focusRequester = remember { FocusRequester() }
+    var editorFocused by remember { mutableStateOf(false) }
+    var restoreImeOnResume by remember { mutableStateOf(false) }
+    val currentEditorFocused by rememberUpdatedState(editorFocused)
+    val currentShowPreview by rememberUpdatedState(showPreview)
 
-    // 切到 Recents 时主动收起焦点和输入法；回来时不再自动聚焦，也不会把页面拉回光标处
+    // 切到 Recents 时主动收起焦点和输入法；回来时若之前正在源码编辑，恢复焦点和输入法
     DisposableEffect(lifecycleOwner, focusManager) {
         val observer = LifecycleEventObserver { _, event ->
             when (event) {
                 Lifecycle.Event.ON_PAUSE -> {
                     savedScroll = scrollState.value
+                    restoreImeOnResume = !currentShowPreview && currentEditorFocused
                     focusManager.clearFocus(force = true)
                     keyboardController?.hide()
                 }
-                Lifecycle.Event.ON_RESUME -> scope.launch { scrollState.scrollTo(savedScroll) }
+                Lifecycle.Event.ON_RESUME -> scope.launch {
+                    scrollState.scrollTo(savedScroll)
+                    if (restoreImeOnResume && !currentShowPreview) {
+                        restoreImeOnResume = false
+                        focusRequester.requestFocus()
+                        keyboardController?.show()
+                    }
+                }
                 else -> Unit
             }
         }
@@ -176,9 +193,10 @@ fun WorkspaceFileEditorPage(
             TopAppBar(
                 title = {
                     Text(
-                        text = fileName,
+                        text = if (dirty) "* $fileName" else fileName,
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis,
+                        style = MaterialTheme.typography.titleMedium,
                     )
                 },
                 navigationIcon = { BackButton(onClick = ::requestExit) },
@@ -188,10 +206,10 @@ fun WorkspaceFileEditorPage(
                             Text(if (showPreview) "源码" else "预览")
                         }
                     }
-                    if (editable && !loading && loadError == null) {
+                    if (editable && !loading && loadError == null && (!showPreview || dirty)) {
                         TextButton(
                             onClick = { save() },
-                            enabled = !saving,
+                            enabled = dirty && !saving,
                         ) {
                             Text("Save")
                         }
@@ -262,7 +280,9 @@ fun WorkspaceFileEditorPage(
                 modifier = Modifier
                     .fillMaxSize()
                     .padding(innerPadding)
-                    .imePadding(),
+                    .imePadding()
+                    .focusRequester(focusRequester)
+                    .onFocusChanged { editorFocused = it.isFocused },
                 readOnly = !editable,
                 lineLimits = TextFieldLineLimits.MultiLine(),
                 scrollState = scrollState,
