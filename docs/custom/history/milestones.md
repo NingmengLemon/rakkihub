@@ -2,6 +2,10 @@
 
 本文件归档已完成的定制、修复与独立化批次，按时间或主题分组。当前状态以 checklist 索引与明细为准，未来方向见 [roadmap.md](../roadmap.md)。
 
+## 2026-11-18 MCP 工具失败重试元数据
+
+- C120：工具卡片增加「可重试」「可重入」，`McpManager` 对标记工具最多尝试 2 次；未发出的失败只要求 `retryable`，已发出的异常、超时和 `isError` 还要求 `reentrant`。
+
 ## 2026-11-18 stdio MCP callTool 验收
 
 - 设备上用本地 OpenAI 兼容 mock 服务驱动 `mcp__Echo__echo`：模型发出工具调用，UI 显示 `Called tool`，Echo 返回 `ECHO: calltool-device`，工具结果回传后输出最终回复；在 `3.1.1-custom.3418+5235dce` 上验过。

@@ -56,7 +56,11 @@ data class McpTool(
     val name: String = "",
     val description: String? = null,
     val inputSchema: InputSchema? = null,
-    val needsApproval: Boolean = false
+    val needsApproval: Boolean = false,
+    // 失败后允许自动重试；默认关闭
+    val retryable: Boolean = false,
+    // 第一次调用可能已经在服务端执行过时仍允许重试；默认关闭
+    val reentrant: Boolean = false,
 )
 
 /**

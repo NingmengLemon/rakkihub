@@ -1,6 +1,7 @@
 package me.rerere.rikkahub.data.ai.mcp
 
 import android.content.Context
+import android.util.Log
 import androidx.core.net.toUri
 import io.ktor.client.HttpClient
 import io.ktor.client.engine.okhttp.OkHttp
@@ -11,6 +12,7 @@ import io.modelcontextprotocol.kotlin.sdk.client.Client
 import io.modelcontextprotocol.kotlin.sdk.types.ImageContent
 import io.modelcontextprotocol.kotlin.sdk.types.TextContent
 import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.distinctUntilChanged
@@ -120,8 +122,23 @@ class McpManager(
     }
 
     suspend fun callTool(serverId: Uuid, toolName: String, args: JsonObject): List<UIMessagePart> {
+        val tool = settingsStore.settingsFlow.value.allMcpServers()
+            .firstOrNull { it.id == serverId }
+            ?.commonOptions
+            ?.tools
+            ?.firstOrNull { it.name == toolName }
         val result = try {
-            sessionRegistry.callTool(serverId, toolName, args)
+            withMcpToolRetry(
+                tool = tool,
+                onRetry = { nextAttempt ->
+                    Log.i(
+                        TAG,
+                        "Retrying MCP tool ${tool?.name ?: "unknown"} (attempt $nextAttempt/$MCP_TOOL_MAX_ATTEMPTS)",
+                    )
+                },
+                call = { sessionRegistry.callTool(serverId, toolName, args) },
+                isErrorResult = { it.isError == true },
+            )
         } catch (e: CancellationException) {
             throw e
         } catch (e: McpClientUnavailableException) {
@@ -197,3 +214,58 @@ internal fun availableMcpTools(
             .filter { tool -> tool.enable }
             .map { tool -> Triple(server.id, server.commonOptions.name, tool) }
     }
+
+internal enum class McpToolFailure {
+    /** 请求确定没有发到 Server，重试不会产生副作用。 */
+    NotSent,
+
+    /** 请求可能已经执行，只有 marked reentrant 才允许重试。 */
+    Sent,
+}
+
+internal fun shouldRetryMcpTool(tool: McpTool?, failure: McpToolFailure): Boolean =
+    tool?.retryable == true && (failure == McpToolFailure.NotSent || tool.reentrant)
+
+internal const val MCP_TOOL_MAX_ATTEMPTS = 2
+internal const val MCP_TOOL_RETRY_DELAY_MS = 500L
+
+/**
+ * 在单次 MCP 工具调用内做有限重试。
+ *
+ * - 未发出的失败只要求 `retryable`；
+ * - 已发出的异常、超时或 `isError` 结果还要求 `reentrant`，避免非幂等工具被执行两次；
+ * - 取消不重试，重试耗尽后保留最后一次失败的原有处理方式。
+ */
+internal suspend fun <T> withMcpToolRetry(
+    tool: McpTool?,
+    maxAttempts: Int = MCP_TOOL_MAX_ATTEMPTS,
+    retryDelayMillis: Long = MCP_TOOL_RETRY_DELAY_MS,
+    onRetry: (Int) -> Unit = {},
+    call: suspend () -> T,
+    isErrorResult: (T) -> Boolean,
+): T {
+    require(maxAttempts >= 1)
+    var attempt = 1
+    while (true) {
+        try {
+            val result = call()
+            if (!isErrorResult(result) ||
+                attempt >= maxAttempts ||
+                !shouldRetryMcpTool(tool, McpToolFailure.Sent)
+            ) {
+                return result
+            }
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: McpClientUnavailableException) {
+            if (attempt >= maxAttempts || !shouldRetryMcpTool(tool, McpToolFailure.NotSent)) throw e
+        } catch (e: Exception) {
+            if (attempt >= maxAttempts || !shouldRetryMcpTool(tool, McpToolFailure.Sent)) throw e
+        }
+        attempt++
+        onRetry(attempt)
+        if (retryDelayMillis > 0) delay(retryDelayMillis)
+    }
+}
+
+private const val TAG = "McpManager"

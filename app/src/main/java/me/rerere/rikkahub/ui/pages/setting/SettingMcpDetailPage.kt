@@ -201,7 +201,12 @@ fun SettingMcpDetailPage(id: Uuid, vm: SettingVM = koinViewModel()) {
                                 commonOptions = server.commonOptions.copy(
                                     tools = server.commonOptions.tools.map {
                                         if (it.name == tool.name) {
-                                            it.copy(enable = tool.enable, needsApproval = tool.needsApproval)
+                                            it.copy(
+                                                enable = tool.enable,
+                                                needsApproval = tool.needsApproval,
+                                                retryable = tool.retryable,
+                                                reentrant = tool.reentrant,
+                                            )
                                         } else {
                                             it
                                         }
@@ -221,7 +226,12 @@ fun SettingMcpDetailPage(id: Uuid, vm: SettingVM = koinViewModel()) {
                                 commonOptions = server.commonOptions.copy(
                                     tools = server.commonOptions.tools.map {
                                         if (it.name == tool.name) {
-                                            it.copy(enable = tool.enable, needsApproval = tool.needsApproval)
+                                            it.copy(
+                                                enable = tool.enable,
+                                                needsApproval = tool.needsApproval,
+                                                retryable = tool.retryable,
+                                                reentrant = tool.reentrant,
+                                            )
                                         } else {
                                             it
                                         }
@@ -1050,6 +1060,8 @@ private fun McpToolsConfigure(
                 tool = tool,
                 onEnableChange = { onToolChange(tool.copy(enable = it)) },
                 onNeedsApprovalChange = { onToolChange(tool.copy(needsApproval = it)) },
+                onRetryableChange = { onToolChange(tool.copy(retryable = it)) },
+                onReentrantChange = { onToolChange(tool.copy(reentrant = it)) },
             )
         }
     }
@@ -1060,6 +1072,8 @@ private fun McpToolCard(
     tool: McpTool,
     onEnableChange: (Boolean) -> Unit,
     onNeedsApprovalChange: (Boolean) -> Unit,
+    onRetryableChange: (Boolean) -> Unit,
+    onReentrantChange: (Boolean) -> Unit,
 ) {
     var expanded by remember { mutableStateOf(false) }
     Card(
@@ -1128,6 +1142,30 @@ private fun McpToolCard(
                         modifier = Modifier.size(16.dp)
                     )
                 }
+            }
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Text(
+                    text = stringResource(R.string.setting_mcp_page_tool_retryable),
+                    style = MaterialTheme.typography.labelSmall,
+                )
+                Switch(
+                    checked = tool.retryable,
+                    onCheckedChange = onRetryableChange,
+                    size = SwitchSize.Small,
+                )
+                Text(
+                    text = stringResource(R.string.setting_mcp_page_tool_reentrant),
+                    style = MaterialTheme.typography.labelSmall,
+                )
+                Switch(
+                    checked = tool.reentrant,
+                    onCheckedChange = onReentrantChange,
+                    size = SwitchSize.Small,
+                )
             }
             // 展开后显示描述和参数
             if (expanded) {

@@ -779,6 +779,8 @@
   <string name="setting_mcp_page_streamable_http_url_desc">URL address for Streamable HTTP server</string>
   <string name="setting_mcp_page_streamable_http_url_placeholder">https://example.com/mcp</string>
   <string name="setting_mcp_page_title">MCP</string>
+  <string name="setting_mcp_page_tool_retryable">Retryable</string>
+  <string name="setting_mcp_page_tool_reentrant">Reentrant</string>
   <string name="setting_mcp_page_tools">Tools</string>
   <string name="setting_mcp_page_tools_unavailable_message">Cannot view tool list when adding MCP Server, please check back after adding</string>
   <string name="setting_mcp_page_transport_type">Transport Type</string>

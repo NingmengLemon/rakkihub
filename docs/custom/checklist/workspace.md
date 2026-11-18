@@ -1,6 +1,6 @@
 # 明细：工作区与 MCP
 
-本文件是 [checklist.md](../checklist.md) 的明细，收录 C89、C102 至 C106、C111。
+本文件是 [checklist.md](../checklist.md) 的明细，收录 C89、C102 至 C106、C111、C120。
 
 <a id="c89"></a>
 
@@ -60,7 +60,7 @@
 
 ## C111 stdio MCP 服务器
 
-本项是一个功能，按 9 个阶段落地。早期登记用了 C111 至 C119 九个顶层编号，依次对应 C111.1 至 C111.9；C112 至 C119 保留，不再用作顶层编号，下一个新项从 C120 起。
+本项是一个功能，按 9 个阶段落地。设计见 [design/stdio-mcp.md](../design/stdio-mcp.md)；早期登记用了 C111 至 C119 九个顶层编号，依次对应 C111.1 至 C111.9；C112 至 C119 保留，不再用作顶层编号，下一个新项从 C121 起。
 
 ### C111.1 配置与持久化
 
@@ -124,3 +124,12 @@
 - 理由：C111.4 的空状态下拉只关闭菜单，用户需要自己找到扩展页；这是配置流程的断点。
 - 合并注意：仍然只列本地、READY 且有 rootfs 的工作区；到工作区页后用户需自行创建/安装，再回来选中。
 - 测试：编译；设备上可在无 eligible 工作区时点击该项验证导航。
+
+<a id="c120"></a>
+
+## C120 MCP 工具失败重试元数据
+
+- 落点：`McpTool` 增加带默认值的 `retryable` / `reentrant`；`McpManager.callTool` 用 `withMcpToolRetry` 做最多 2 次尝试（初次加 1 次重试，间隔 500ms），`shouldRetryMcpTool` 区分「未发出」与「已发出」失败；工具卡片增加「可重试」「可重入」两个开关，保存时复制 `enable`、`needsApproval`、`retryable`、`reentrant`，`description`/`inputSchema` 仍取最新存储值。设计见 [design/mcp-tool-retry.md](../design/mcp-tool-retry.md)。
+- 理由：MCP 工具有瞬时失败，但自动重试对非幂等工具有副作用；逐工具标注让用户只对确认安全的工具开启，默认保持现状。
+- 合并注意：`retryable` 默认 false；只开 `retryable` 时只重试 `McpClientUnavailableException` 这类确定未发出的失败，其他异常、超时和 `isError` 结果还要求 `reentrant`；取消不重试；最多 2 次尝试；不改变 LLM 请求的重试策略；`mergeTools` 按名字保留已有配置，保存工具开关时不能只复制 `enable`/`needsApproval`。
+- 测试：`McpToolRetryTest` 覆盖未标记、未发出、已发出、reentrant、error result、未发出/已发出的次数上限、取消不重试、判定函数和字段序列化；`McpToolAvailabilityTest` 不受影响；工具卡片的两个开关由 `onToolChange` 复制并持久化。
