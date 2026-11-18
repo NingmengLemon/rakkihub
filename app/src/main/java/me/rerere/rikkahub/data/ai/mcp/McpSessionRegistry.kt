@@ -127,6 +127,8 @@ internal class McpSessionRegistry(
 
     fun getStatus(configId: Uuid): Flow<McpStatus> = statusStore.get(configId)
 
+    fun isManuallyStopped(configId: Uuid): Boolean = configId in manuallyStopped
+
     fun reconcile(configs: List<McpServerConfig>) {
         val enabledConfigs = configs
             .filter { it.commonOptions.enable && it.commonOptions.name.isNotBlank() }

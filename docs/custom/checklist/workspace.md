@@ -113,10 +113,10 @@
 
 ### C111.8 手动停止持久化
 
-- 落点：`McpSessionRegistry` 维护运行时 `manuallyStopped` 集合；`stopClient` 先标记再移除 session，`reconcile` 对已标记的配置不再自动拉起；`restartClient` 清除标记后 remove+add；配置被禁用/删除时集合自动清理。
-- 理由：C111.5 的停止只是移除当前 session，之后任何 `allMcpServers()` 写入（工具开关、另一个 Server 的 syncTools 回写）都会经 reconcile 重新启动，用户会看到“停止后自己又连上”。
-- 合并注意：`manuallyStopped` 只在内存里，app 重启后会恢复为启用状态；停止期间配置编辑仍保留，点重启才恢复；配置被禁用、删除或暂时无效（如名称为空）时标记清除，重新有效后会再启动；没有新增持久化字段。
-- 测试：编译和现有 MCP 测试；开发机手动验收可补“停止后切工具开关或写设置不自动重连”。
+- 落点：`McpSessionRegistry` 维护运行时 `manuallyStopped` 集合；`stopClient` 先标记再移除 session，`reconcile` 对已标记的配置不再自动拉起；`restartClient` 清除标记后 remove+add；配置被禁用/删除时集合自动清理。`McpManager.getAllAvailableTools` 经 `availableMcpTools` 过滤已标记停止的 Server，停止期间不再把工具提供给模型。
+- 理由：C111.5 的停止只是移除当前 session，之后任何 `allMcpServers()` 写入（工具开关、另一个 Server 的 syncTools 回写）都会经 reconcile 重新启动，用户会看到“停止后自己又连上”；停止后仍把工具挂给模型，模型只会调用到一个运行时不可用的工具。
+- 合并注意：`manuallyStopped` 只在内存里，app 重启后会恢复为启用状态；停止期间配置编辑仍保留，点重启才恢复；配置被禁用、删除或暂时无效（如名称为空）时标记清除，重新有效后会再启动；没有新增持久化字段。工具过滤只剔除手动停止的 Server，不按临时断线状态剔除，避免重连期间工具列表抖动。
+- 测试：`McpToolAvailabilityTest` 覆盖已绑定 Server、手动停止、未绑定、Server 禁用、工具禁用和全部停止时为空；设备上停止 Echo 后 mock 端只收到 1 个非 MCP 工具，重启后恢复为 2 个并完成 `mcp__Echo__echo` 调用。
 
 ### C111.9 无工作区导航
 
