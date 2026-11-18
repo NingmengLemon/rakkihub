@@ -1,6 +1,7 @@
 package me.rerere.rikkahub.data.ai.mcp
 
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertTrue
 import org.junit.Test
 import java.io.ByteArrayInputStream
 
@@ -21,6 +22,38 @@ class McpStdioLogTest {
         assertEquals("错误\n", buffer.text.value)
 
         buffer.clear()
+        assertEquals("", buffer.text.value)
+    }
+
+    @Test
+    fun `split utf8 sequence keeps one character`() {
+        val bytes = "错".toByteArray()
+        val buffer = StdioLogBuffer()
+
+        buffer.append(bytes, 0, 2)
+        assertEquals("", buffer.text.value)
+
+        buffer.append(bytes, 2, 1)
+        assertEquals("错", buffer.text.value)
+    }
+
+    @Test
+    fun `split emoji keeps one surrogate pair`() {
+        val bytes = "😀".toByteArray()
+        val buffer = StdioLogBuffer()
+        for (index in bytes.indices) {
+            buffer.append(bytes, index, 1)
+        }
+
+        assertEquals("😀", buffer.text.value)
+    }
+
+    @Test
+    fun `trim does not leave a lone surrogate`() {
+        val buffer = StdioLogBuffer(maxChars = 1)
+        val bytes = "😀".toByteArray()
+        buffer.append(bytes, 0, bytes.size)
+
         assertEquals("", buffer.text.value)
     }
 
@@ -52,5 +85,21 @@ class McpStdioLogTest {
         assertEquals(5, count)
         assertEquals("hello", target.decodeToString(1, 6))
         assertEquals("hello", buffer.text.value)
+    }
+
+    @Test
+    fun `tee forwards available and close`() {
+        var closed = false
+        val source = object : ByteArrayInputStream("x".toByteArray()) {
+            override fun available(): Int = 7
+            override fun close() {
+                closed = true
+            }
+        }
+        val input = TeeInputStream(source, StdioLogBuffer())
+
+        assertEquals(7, input.available())
+        input.close()
+        assertTrue(closed)
     }
 }

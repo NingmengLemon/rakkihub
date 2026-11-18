@@ -456,9 +456,11 @@ private fun StdioMcpConfigure(
     val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
     val stdioLog by mcpManager.getStdioLog(config).collectAsStateWithLifecycle("")
     var logsExpanded by rememberSaveable(config.id) { mutableStateOf(false) }
-    LaunchedEffect(status) {
-        if (status is McpStatus.Error) {
+    var autoExpandedLog by rememberSaveable(config.id) { mutableStateOf(false) }
+    LaunchedEffect(status, stdioLog) {
+        if (!autoExpandedLog && status is McpStatus.Error && stdioLog.isNotBlank()) {
             logsExpanded = true
+            autoExpandedLog = true
         }
     }
     val navController = LocalNavController.current
@@ -537,18 +539,22 @@ private fun StdioMcpConfigure(
             formItem(
                 headlineContent = { Text(stringResource(R.string.setting_mcp_page_stdio_logs)) },
                 supportingContent = { Text(stringResource(R.string.setting_mcp_page_stdio_logs_desc)) },
-                trailingContent = {
-                    TextButton(onClick = { logsExpanded = !logsExpanded }) {
-                        Text(
-                            stringResource(
-                                if (logsExpanded) {
-                                    R.string.setting_mcp_page_stdio_logs_hide
-                                } else {
-                                    R.string.setting_mcp_page_stdio_logs_show
-                                }
+                trailingContent = if (stdioLog.isNotBlank()) {
+                    {
+                        TextButton(onClick = { logsExpanded = !logsExpanded }) {
+                            Text(
+                                stringResource(
+                                    if (logsExpanded) {
+                                        R.string.setting_mcp_page_stdio_logs_hide
+                                    } else {
+                                        R.string.setting_mcp_page_stdio_logs_show
+                                    }
+                                )
                             )
-                        )
+                        }
                     }
+                } else {
+                    null
                 },
             ) {
                 Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -563,7 +569,10 @@ private fun StdioMcpConfigure(
                             TextButton(
                                 onClick = {
                                     clipboard.setPrimaryClip(
-                                        ClipData.newPlainText("MCP stderr", stdioLog)
+                                        ClipData.newPlainText(
+                                            context.getString(R.string.setting_mcp_page_stdio_logs),
+                                            stdioLog,
+                                        )
                                     )
                                     toaster.show(
                                         context.getString(R.string.setting_mcp_page_stdio_logs_copied),

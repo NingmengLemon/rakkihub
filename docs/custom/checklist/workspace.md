@@ -80,7 +80,7 @@
 
 - 落点：`McpServerConfig` 新增运行时子类 `StdioServer`（不写回 `mcpServers` 持久化列表）；`StdioMcpServer.toRuntimeConfig()`；`Settings.allMcpServers()` 合并 HTTP 与 stdio；`McpManager` 用合并列表 reconcile、过滤工具；`McpSessionRegistry` 对 stdio 启动 `WorkspaceProcessLauncher`，用 `StdioClientTransport` 接 stdin/stdout/stderr，`withTimeout(startupTimeoutMs)` 包住 connect（工具同步仍走 SDK 默认超时），独立协程观察进程退出并触发重连，关闭时先关 client 再 `close(5s)`；成功连接后 60 秒稳定期才清零重连预算，避免握手后崩溃无限重启；HTTP 仍保持连接成功即清零；`syncTools` 把发现结果写回 `stdioMcpServers`；`McpConnectionKey` 把 workspace/command/args/env/cwd 纳入重连判断；DI 注入 `WorkspaceManagerProcessLauncher` 和 `WorkspaceDAO`。
 - 理由：stdio 和 HTTP 共用现有 session 状态机、重连预算和工具同步；不能让运行时子类进入旧构建的 `mcpServers` JSON，也不能把 stdio 工具写回 HTTP 列表。
-- 合并注意：stdio 配置从 C111.4 起有添加/编辑入口；`AssistantDetailVM` 和聊天附件面板的 MCP 入口都使用 `allMcpServers()`。OAuth 对 stdio 不生效；启动 tempDir 清理和 `McpManager` 初始化的顺序仍留到启动阶段。进程退出只把 exit code 写进状态，stderr 由 transport/SDK debug 输出，registry 暂无摘要或日志入口，后续再补。
+- 合并注意：stdio 配置从 C111.4 起有添加/编辑入口；`AssistantDetailVM` 和聊天附件面板的 MCP 入口都使用 `allMcpServers()`。OAuth 对 stdio 不生效；启动 tempDir 清理和 `McpManager` 初始化的顺序仍留到启动阶段。进程退出把 exit code 写进状态；C126 起 registry 用 Tee 旁路保留 stderr 尾部，设置页可查看，仍不做结构化摘要。
 - 测试：`McpConnectionKeyTest` 覆盖 stdio command/args/env/cwd/workspace 变化触发重连、工具元数据不触发；`SettingsStdioMcpTest` 覆盖 `allMcpServers()` 合并和 runtime 字段。真实 rootfs echo Server 的 initialize/listTools/callTool 已在设备上验收，见 C111.4。
 
 ### C111.4 配置 UI
@@ -168,4 +168,4 @@
 - 落点：`StdioLogBuffer` 保留每个 stdio Server 最近 16K 字符的 stderr 尾部，`TeeInputStream` 在 SDK 消费 stderr 的同时旁路写入；`McpSessionRegistry` 按 Server id 持有缓冲区，`McpManager.getStdioLog`/`clearStdioLog` 暴露给设置页；`StdioMcpConfigure` 新增可展开的 Logs 项，错误状态下自动展开，支持复制和清空，连接重新开始时清空上一次输出；配置删除时同时移除缓冲区。
 - 理由：stderr 原来只交给 MCP SDK transport，设置页只显示 `McpStatus.Error.message`，像 `Internal server error` 这种摘要无法定位服务端真实报错；保留尾部日志能让用户直接看到 Python/Node 的 traceback 或脚本错误。
 - 合并注意：只旁路 stderr，不记录 stdout 的 JSON-RPC 正文，避免协议内容和潜在敏感数据进入 UI；缓冲区只保留尾部，不持久化，app 重启或重新连接会清空；Tee 只有在 SDK 读取 stderr 时才捕获，若 transport 完全不读则日志为空；日志可能包含路径或 token，复制由用户主动触发，不写 Logcat。
-- 测试：`McpStdioLogTest` 覆盖尾部截断、UTF-8、清空、单字节和数组读取；在 `3.1.1-custom.3450+156a291` 上验收：临时移走 `echo-mcp.pl` 后重启 Echo，状态变为 `Error: Connection closed`，日志自动展开并显示 `Can't open perl script ... No such file or directory`；恢复脚本并重启后状态回到 `Connected`，日志清空。
+- 测试：`McpStdioLogTest` 覆盖尾部截断、UTF-8 的完整与分块序列、emoji 截断、清空、单字节和数组读取、close/available 转发；在 `3.1.1-custom.3450+156a291` 上验收：临时移走 `echo-mcp.pl` 后重启 Echo，状态变为 `Error: Connection closed`，日志自动展开并显示 `Can't open perl script ... No such file or directory`；恢复脚本并重启后状态回到 `Connected`，日志清空。

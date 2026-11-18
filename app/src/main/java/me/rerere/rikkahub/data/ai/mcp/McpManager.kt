@@ -14,6 +14,7 @@ import io.modelcontextprotocol.kotlin.sdk.types.TextContent
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.map
@@ -112,10 +113,17 @@ class McpManager(
 
     fun getStatus(config: McpServerConfig): Flow<McpStatus> = sessionRegistry.getStatus(config.id)
 
-    fun getStdioLog(config: McpServerConfig): StateFlow<String> = sessionRegistry.getStdioLog(config.id)
+    fun getStdioLog(config: McpServerConfig): StateFlow<String> =
+        if (config is McpServerConfig.StdioServer) {
+            sessionRegistry.getStdioLog(config.id)
+        } else {
+            MutableStateFlow("")
+        }
 
     fun clearStdioLog(config: McpServerConfig) {
-        sessionRegistry.clearStdioLog(config.id)
+        if (config is McpServerConfig.StdioServer) {
+            sessionRegistry.clearStdioLog(config.id)
+        }
     }
 
     fun getAllAvailableTools(assistant: Assistant): List<Triple<Uuid, String, McpTool>> {

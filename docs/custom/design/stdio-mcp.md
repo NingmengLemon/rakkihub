@@ -123,7 +123,7 @@ interface WorkspaceProcessLauncher {
 - 用非登录 `-c`，不用 `-lc`，避免 `/etc/profile` 或 rc 文件往 stdout 输出提示，污染 JSON-RPC。
 - 命令通过 `rikkahub <envfile> <pidfile> <cmd> <args...>` 传给非登录 shell，参数逐项传递，不拼接 shell 字符串；cwd 按 rootfs 绝对路径直接使用。wrapper 是 `set -a; . "$1" || exit 1; set +a; echo "$$ $PPID" > "$2"; shift 2; exec "$@"`，env 读取失败直接退出，pid 文件在 exec 前写好。
 - env 通过 rootfs 内的临时 env 文件注入，而不是 `ProcessBuilder.environment()`：`ROOTFS_ENV` 使用 `/usr/bin/env -i`，会清空继承环境，直接设 ProcessBuilder 环境变量到不了子进程。launcher 把 `KEY=VALUE` 做 shell 转义写到宿主的 `linuxDir(root)/tmp/rikkahub/mcp/<server-id>-<launch-token>.env`，子进程看到的是同名 rootfs `/tmp` 路径（模式 600），每次 launch 用新的 UUID 后缀，旧进程的 cleanup 不会删掉新进程的文件。不要放进 `/workspace`：那是 `filesDir(root)` 的 bind mount，会进自家备份、WebDAV 上传和文件浏览器。rootfs `/tmp` 不进这些导出，但同一工作区的 `workspace_read_file`/`workspace_write_file`/`workspace_shell` 仍能访问它和 `/proc/<pid>/environ`，这是设计声明的非沙箱边界，UI 要提示。`/tmp` 复用现有 `cleanupAllTempDirs` 的清理，rootfs 重装也会整目录消失，和 pid 文件同族。进程结束或下一次启动时清理 env 文件；这样 env 值不进入 `/proc/<pid>/cmdline`。`--kill-on-exit`、`PROOT_LOADER`、`PROOT_TMP_DIR`、`TMPDIR` 仍由 launcher 维护。
-- `stdin/stdout/stderr` 全部保持 pipe，不做 PTY；stderr 交给 MCP transport 独占，不再另开一个 64 KiB reader，避免两个读者抢同一根 pipe。
+- `stdin/stdout/stderr` 全部保持 pipe，不做 PTY；stderr 交给 MCP transport 消费，C126 用 `TeeInputStream` 旁路一份尾部到 `StdioLogBuffer`，不另开 reader 抢同一根 pipe。
 - 进程组终止复用现有的 `terminateProot`/pid 文件逻辑；启动失败、rootfs 不可用、SSH 工作区直接返回明确错误。
 - `RikkaHubApp` 启动时的 tempDir 清理必须在 `McpManager` 初始化之前完成，不能两个各自 `appScope.launch` 竞跑：把清理做成可等待的 startup step，或让 `McpManager` 等清理完成的信号。清理跳过 launcher 当前内存 pid 登记表中仍存活的进程的 `PROOT_TMP_DIR`/`TMPDIR`；上一次 app 运行留在磁盘上的 pid 文件已无效，`--kill-on-exit` 已保证旧 tracee 消失，不需要按旧 pid 文件保留目录。
 
@@ -135,7 +135,7 @@ SDK `0.15.0-rikka.4` 的实际 API 是：
 val transport = StdioClientTransport(
     input = process.stdout.asSource().buffered(),
     output = process.stdin.asSink().buffered(),
-    error = process.stderr.asSource().buffered(),
+    error = TeeInputStream(process.stderr, logBuffer).asSource().buffered(),
 )
 val client = Client(
     clientInfo = Implementation(name = server.commonOptions.name, version = "1.0"),
@@ -151,7 +151,7 @@ client.connect(transport)
 - 连接、重连、状态和工具同步复用现有 `connectSession` / `syncTools` / `MAX_RECONNECT_ATTEMPTS`（5 次）和 `calculateBackoffDelay`，不另造一套 3 次策略。
 - `reconcile` 像 HTTP 一样对启用且名称非空的 stdio Server 主动 `addClient`；`syncTools` 在连接时拉 `listTools`，UI 的 `getClient` 和工具可用性沿现有路径工作。不做“懒启动”，否则工具从未发现，UI 会一直显示不可用。
 - 增加 `StdioSession` 需要的进程句柄、`lastUsedAt` 和退出监控；`McpSession` 现有的 mutex、reconnectJob、statusStore 继续复用，不复制状态机。
-- 进程退出由独立协程 `process.waitFor()` 观察，记录 exit code 后更新 `McpStatus`；stderr 由 transport 独占并走 SDK 的 debug 输出，registry 不另做摘要。`onClose`/`onError` 本身不带退出码，不能代替 wait。
+- 进程退出由独立协程 `process.waitFor()` 观察，记录 exit code 后更新 `McpStatus`；stderr 由 transport 消费，C126 的 Tee 保留尾部供设置页查看，registry 不做结构化摘要。`onClose`/`onError` 本身不带退出码，不能代替 wait。
 - `McpConnectionKey` 增加 `workspaceId`、`command`、`args`、`env`、`cwd`；否则编辑这些字段不会触发重连，旧子进程会继续跑。
 - 需要补的 exhaustive `when` 包括 `McpConfig.serverUrl`、`McpSessionRegistry.createTransport`、`connectionKey`、`SettingMcpDetailPage` 的传输展示和 `SettingMcpPage` 的服务器列表；`installTransportCallbacks` 是传输无关的闭合回调，不在这个列表里。
 - 关闭顺序：close transport → close stdin → 等待 5 秒 → `terminateProot` 宽限终止 → SIGKILL。`--kill-on-exit` 只作为兜底，不作为正常关闭路径。
@@ -164,6 +164,7 @@ MCP 设置页新增传输类型“stdio”，字段：
 - 工作区：列出满足本地 rootfs 和 READY 的工作区；不满足时显示去工作区页安装的入口。
 - 命令、参数（每行一个）、env（key=value）、cwd、启动超时。
 - 状态：未启动、启动中、已连接、错误；显示“停止/重启”动作。
+- 日志：展示最近一次 stderr 尾部，错误时自动展开，可复制、清空；不持久化。
 - 工作区绑定冲突时阻止保存。
 - 删除 Server 提示“不会删除工作区”；删除工作区提示“会先停止绑定到它的 MCP Server”。
 - 四份 locale 文案按现有 MCP 设置页前缀增加。
@@ -175,14 +176,14 @@ MCP 设置页新增传输类型“stdio”，字段：
 - 仅作为工具的 MCP Server 不进入聊天请求上下文；服务端 `notifications` 先只记日志，不做 UI 推送。
 - 官方兼容导出过滤 `stdioMcpServers` 和引用它们的 assistant id，避免官方客户端解码未知配置；自家备份保留完整配置。
 - 旧构建不认识新的 DataStore key，会忽略 `stdioMcpServers`，能正常解码设置；该配置本身在旧构建保存设置时不会被删除，但旧构建的 `SettingsNormalization` 只把 HTTP id 视为有效，会从 assistant 的 `mcpServers` 里清掉 stdio 引用。旧构建也无法运行这些 Server，这是已知降级限制，已写进 README。
-- 日志只记 Server id、命令 basename 和退出码；stderr 由 SDK debug 输出，registry 暂不汇总；不记录 env 值、完整命令行或协议正文。`StdioMcpServer.toString()` 已对 env 做 key 级脱敏。
+- 日志只记 Server id、命令 basename 和退出码；stderr 由 C126 的 Tee 保留尾部并在设置页展示，registry 不做结构化解析；不记录 env 值、完整命令行或协议正文。`StdioMcpServer.toString()` 已对 env 做 key 级脱敏。
 
 ## 失败处理
 
 | 场景 | 行为 |
 | --- | --- |
 | 工作区不是 rootfs 工作区 / 没有 rootfs | 保存或启动失败，提示先安装 rootfs |
-| 命令不存在 / 没有执行权限 | 启动失败，状态 Error，stderr 由 SDK debug 输出 |
+| 命令不存在 / 没有执行权限 | 启动失败，状态 Error，stderr 尾部进入详情页日志 |
 | 启动超时 | 终止进程并等待退出监控收尾，提示运行命令检查 |
 | 进程运行中崩溃 | 置 Error，最多按现有 5 次预算和退避重启 |
 | 连接失败 / 进程退出 | 状态摘要之外，详情页展示最近一次 stderr 尾部（C126），可展开、复制、清空 |
@@ -217,6 +218,6 @@ JVM：
 
 ## 后续可选
 
-- stdio Server 的 `stderr` 是否提供完整日志查看入口，还是只显示错误摘要。
+- stdio Server 的 `stderr` 日志查看入口已由 C126 落地；后续只考虑是否做结构化解析，不重复做原始日志面板。
 - 是否支持 SSH 工作区上的 stdio 进程。
 - Android cached-process 长期存活时是否要主动空闲回收；当前按配置常驻，禁用或工作区收尾时停止。
