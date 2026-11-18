@@ -742,6 +742,10 @@
   <string name="setting_mcp_page_server_url">Server URL</string>
   <string name="setting_mcp_page_sse_url_desc">URL address for SSE transport server</string>
   <string name="setting_mcp_page_sse_url_placeholder">https://example.com/sse</string>
+  <string name="setting_mcp_page_stdio_section_server">Server</string>
+  <string name="setting_mcp_page_stdio_section_process">Process</string>
+  <string name="setting_mcp_page_stdio_section_runtime">Runtime</string>
+
   <string name="setting_mcp_page_stdio_status">Connection status</string>
   <string name="setting_mcp_page_stdio_status_desc">Stopping only ends the current process; the configuration is kept. Restart reads the saved configuration again.</string>
   <string name="setting_mcp_page_stdio_restart">Restart</string>

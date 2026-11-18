@@ -715,6 +715,10 @@
   <string name="setting_mcp_page_server_url">伺服器地址</string>
   <string name="setting_mcp_page_sse_url_desc">SSE傳輸伺服器的URL地址</string>
   <string name="setting_mcp_page_sse_url_placeholder">https://example.com/sse</string>
+  <string name="setting_mcp_page_stdio_section_server">伺服器</string>
+  <string name="setting_mcp_page_stdio_section_process">行程</string>
+  <string name="setting_mcp_page_stdio_section_runtime">執行</string>
+
   <string name="setting_mcp_page_stdio_status">連線狀態</string>
   <string name="setting_mcp_page_stdio_status_desc">停止只結束目前的行程，不刪除設定；重新啟動會重新讀取已儲存的設定。</string>
   <string name="setting_mcp_page_stdio_restart">重新啟動</string>

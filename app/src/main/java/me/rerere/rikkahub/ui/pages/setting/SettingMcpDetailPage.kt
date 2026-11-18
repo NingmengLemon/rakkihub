@@ -87,9 +87,11 @@ import me.rerere.rikkahub.data.ai.mcp.McpTool
 import me.rerere.rikkahub.data.datastore.allMcpServers
 import me.rerere.rikkahub.data.repository.WorkspaceRepository
 import me.rerere.rikkahub.ui.components.nav.BackButton
+import me.rerere.rikkahub.ui.components.ui.CardGroup
 import me.rerere.rikkahub.ui.components.ui.PagerTab
 import me.rerere.rikkahub.ui.components.ui.PagerTabs
 import me.rerere.rikkahub.ui.components.ui.Tag
+import me.rerere.rikkahub.ui.components.ui.switchItem
 import me.rerere.rikkahub.ui.components.ui.TagType
 import me.rerere.rikkahub.ui.context.LocalNavController
 import me.rerere.rikkahub.ui.context.LocalToaster
@@ -457,196 +459,202 @@ private fun StdioMcpConfigure(
             .fillMaxSize()
             .verticalScroll(rememberScrollState())
             .padding(start = 16.dp, top = 16.dp, end = 16.dp, bottom = 128.dp),
-        verticalArrangement = Arrangement.spacedBy(12.dp),
+        verticalArrangement = Arrangement.spacedBy(16.dp),
     ) {
-        FormItem(
-            label = { Text(stringResource(R.string.setting_mcp_page_enable)) },
-            description = { Text(stringResource(R.string.setting_mcp_page_enable_desc)) },
+        CardGroup(
+            title = { Text(stringResource(R.string.setting_mcp_page_stdio_section_server)) },
         ) {
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Switch(
-                    checked = config.commonOptions.enable,
-                    onCheckedChange = { enabled ->
-                        update(config.copy(commonOptions = config.commonOptions.copy(enable = enabled)))
+            switchItem(
+                checked = config.commonOptions.enable,
+                onCheckedChange = { enabled ->
+                    update(config.copy(commonOptions = config.commonOptions.copy(enable = enabled)))
+                },
+                headlineContent = { Text(stringResource(R.string.setting_mcp_page_enable)) },
+                supportingContent = { Text(stringResource(R.string.setting_mcp_page_enable_desc)) },
+            )
+
+            formItem(
+                headlineContent = { Text(stringResource(R.string.setting_mcp_page_name)) },
+                supportingContent = { Text(stringResource(R.string.setting_mcp_page_name_desc)) },
+            ) {
+                OutlinedTextField(
+                    value = config.commonOptions.name,
+                    onValueChange = { name ->
+                        update(config.copy(commonOptions = config.commonOptions.copy(name = name)))
+                    },
+                    modifier = Modifier.fillMaxWidth(),
+                    singleLine = true,
+                    placeholder = { Text(stringResource(R.string.setting_mcp_page_name_placeholder)) },
+                )
+            }
+
+            formItem(
+                headlineContent = { Text(stringResource(R.string.setting_mcp_page_stdio_status)) },
+                supportingContent = { Text(stringResource(R.string.setting_mcp_page_stdio_status_desc)) },
+            ) {
+                Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                    Text(statusText(status))
+                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        TextButton(onClick = onRestart) {
+                            Text(stringResource(R.string.setting_mcp_page_stdio_restart))
+                        }
+                        TextButton(
+                            onClick = onStop,
+                            enabled = status != McpStatus.Idle,
+                        ) { Text(stringResource(R.string.setting_mcp_page_stdio_stop)) }
+                    }
+                }
+            }
+
+            formItem(
+                headlineContent = { Text(stringResource(R.string.setting_mcp_page_stdio_workspace)) },
+                supportingContent = { Text(stringResource(R.string.setting_mcp_page_stdio_workspace_desc)) },
+            ) {
+                Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                    Box {
+                        TextButton(onClick = { workspaceMenu = true }) {
+                            Text(selectedName)
+                        }
+                        DropdownMenu(
+                            expanded = workspaceMenu,
+                            onDismissRequest = { workspaceMenu = false },
+                        ) {
+                            if (eligible.isEmpty()) {
+                                DropdownMenuItem(
+                                    text = { Text(stringResource(R.string.setting_mcp_page_stdio_workspace_none)) },
+                                    onClick = {
+                                        workspaceMenu = false
+                                        navController.navigate(Screen.Workspaces)
+                                    },
+                                )
+                            }
+                            eligible.forEach { workspace ->
+                                DropdownMenuItem(
+                                    text = { Text(workspace.name) },
+                                    onClick = {
+                                        workspaceMenu = false
+                                        update(config.copy(workspaceId = workspace.id))
+                                    },
+                                )
+                            }
+                        }
+                    }
+                    if (workspaceConflict) {
+                        Text(
+                            text = stringResource(R.string.setting_mcp_page_stdio_workspace_conflict),
+                            color = MaterialTheme.colorScheme.error,
+                            style = MaterialTheme.typography.bodySmall,
+                        )
+                    }
+                }
+            }
+        }
+
+        CardGroup(
+            title = { Text(stringResource(R.string.setting_mcp_page_stdio_section_process)) },
+        ) {
+            formItem(
+                headlineContent = { Text(stringResource(R.string.setting_mcp_page_stdio_command)) },
+                supportingContent = { Text(stringResource(R.string.setting_mcp_page_stdio_command_desc)) },
+            ) {
+                OutlinedTextField(
+                    value = config.command,
+                    onValueChange = { command -> update(config.copy(command = command)) },
+                    modifier = Modifier.fillMaxWidth(),
+                    singleLine = true,
+                    placeholder = { Text(stringResource(R.string.setting_mcp_page_stdio_command_placeholder)) },
+                )
+            }
+
+            formItem(
+                headlineContent = { Text(stringResource(R.string.setting_mcp_page_stdio_args)) },
+                supportingContent = { Text(stringResource(R.string.setting_mcp_page_stdio_args_desc)) },
+            ) {
+                OutlinedTextField(
+                    value = argsText,
+                    onValueChange = { text ->
+                        argsText = text
+                        update(
+                            config.copy(
+                                args = text.lines().map { it.trim() }.filter { it.isNotEmpty() },
+                            )
+                        )
+                    },
+                    modifier = Modifier.fillMaxWidth(),
+                    minLines = 2,
+                    placeholder = { Text(stringResource(R.string.setting_mcp_page_stdio_args_placeholder)) },
+                )
+            }
+
+            formItem(
+                headlineContent = { Text(stringResource(R.string.setting_mcp_page_stdio_env)) },
+                supportingContent = { Text(stringResource(R.string.setting_mcp_page_stdio_env_desc)) },
+            ) {
+                OutlinedTextField(
+                    value = envText,
+                    onValueChange = { text ->
+                        envText = text
+                        update(
+                            config.copy(
+                                env = text.lines().mapNotNull { line ->
+                                    val index = line.indexOf('=')
+                                    if (index <= 0) null else line.substring(0, index).trim() to line.substring(index + 1)
+                                },
+                            )
+                        )
+                    },
+                    modifier = Modifier.fillMaxWidth(),
+                    minLines = 2,
+                    visualTransformation = if (envVisible) VisualTransformation.None else PasswordVisualTransformation(),
+                    trailingIcon = {
+                        IconButton(onClick = { envVisible = !envVisible }) {
+                            Icon(
+                                if (envVisible) HugeIcons.ViewOff else HugeIcons.View,
+                                contentDescription = null,
+                            )
+                        }
                     },
                 )
             }
         }
 
-        FormItem(
-            label = { Text(stringResource(R.string.setting_mcp_page_name)) },
-            description = { Text(stringResource(R.string.setting_mcp_page_name_desc)) },
+        CardGroup(
+            title = { Text(stringResource(R.string.setting_mcp_page_stdio_section_runtime)) },
         ) {
-            OutlinedTextField(
-                value = config.commonOptions.name,
-                onValueChange = { name ->
-                    update(config.copy(commonOptions = config.commonOptions.copy(name = name)))
-                },
-                label = { Text(stringResource(R.string.setting_mcp_page_name)) },
-                modifier = Modifier.fillMaxWidth(),
-                singleLine = true,
-                placeholder = { Text(stringResource(R.string.setting_mcp_page_name_placeholder)) },
-            )
-        }
-
-        FormItem(
-            label = { Text(stringResource(R.string.setting_mcp_page_stdio_status)) },
-            description = { Text(stringResource(R.string.setting_mcp_page_stdio_status_desc)) },
-        ) {
-            Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                Text(statusText(status))
-                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    TextButton(onClick = onRestart) {
-                        Text(stringResource(R.string.setting_mcp_page_stdio_restart))
-                    }
-                    TextButton(
-                        onClick = onStop,
-                        enabled = status != McpStatus.Idle,
-                    ) { Text(stringResource(R.string.setting_mcp_page_stdio_stop)) }
-                }
+            formItem(
+                headlineContent = { Text(stringResource(R.string.setting_mcp_page_stdio_cwd)) },
+                supportingContent = { Text(stringResource(R.string.setting_mcp_page_stdio_cwd_desc)) },
+            ) {
+                OutlinedTextField(
+                    value = config.cwd,
+                    onValueChange = { cwd -> update(config.copy(cwd = cwd)) },
+                    modifier = Modifier.fillMaxWidth(),
+                    singleLine = true,
+                )
             }
-        }
 
-        FormItem(
-            label = { Text(stringResource(R.string.setting_mcp_page_stdio_workspace)) },
-            description = { Text(stringResource(R.string.setting_mcp_page_stdio_workspace_desc)) },
-        ) {
-            Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                Box {
-                    TextButton(onClick = { workspaceMenu = true }) {
-                        Text(selectedName)
-                    }
-                    DropdownMenu(
-                        expanded = workspaceMenu,
-                        onDismissRequest = { workspaceMenu = false },
-                    ) {
-                        if (eligible.isEmpty()) {
-                            DropdownMenuItem(
-                                text = { Text(stringResource(R.string.setting_mcp_page_stdio_workspace_none)) },
-                                onClick = {
-                                    workspaceMenu = false
-                                    navController.navigate(Screen.Workspaces)
-                                },
-                            )
+            formItem(
+                headlineContent = { Text(stringResource(R.string.setting_mcp_page_stdio_startup_timeout)) },
+                supportingContent = { Text(stringResource(R.string.setting_mcp_page_stdio_startup_timeout_desc)) },
+            ) {
+                OutlinedTextField(
+                    value = timeoutText,
+                    onValueChange = { value ->
+                        timeoutText = value
+                        value.toLongOrNull()?.takeIf { it > 0 }?.let { timeout ->
+                            update(config.copy(startupTimeoutMs = timeout))
                         }
-                        eligible.forEach { workspace ->
-                            DropdownMenuItem(
-                                text = { Text(workspace.name) },
-                                onClick = {
-                                    workspaceMenu = false
-                                    update(config.copy(workspaceId = workspace.id))
-                                },
-                            )
+                    },
+                    modifier = Modifier.fillMaxWidth(),
+                    singleLine = true,
+                    isError = timeoutText.toLongOrNull()?.let { it < 1_000 } ?: true,
+                    supportingText = {
+                        if (timeoutText.toLongOrNull()?.let { it < 1_000 } ?: true) {
+                            Text(stringResource(R.string.setting_mcp_page_stdio_startup_timeout_error))
                         }
-                    }
-                }
-                if (workspaceConflict) {
-                    Text(
-                        text = stringResource(R.string.setting_mcp_page_stdio_workspace_conflict),
-                        color = MaterialTheme.colorScheme.error,
-                        style = MaterialTheme.typography.bodySmall,
-                    )
-                }
+                    },
+                )
             }
-        }
-
-        FormItem(
-            label = { Text(stringResource(R.string.setting_mcp_page_stdio_command)) },
-            description = { Text(stringResource(R.string.setting_mcp_page_stdio_command_desc)) },
-        ) {
-            OutlinedTextField(
-                value = config.command,
-                onValueChange = { command -> update(config.copy(command = command)) },
-                modifier = Modifier.fillMaxWidth(),
-                singleLine = true,
-                placeholder = { Text(stringResource(R.string.setting_mcp_page_stdio_command_placeholder)) },
-            )
-        }
-
-        FormItem(
-            label = { Text(stringResource(R.string.setting_mcp_page_stdio_args)) },
-            description = { Text(stringResource(R.string.setting_mcp_page_stdio_args_desc)) },
-        ) {
-            OutlinedTextField(
-                value = argsText,
-                onValueChange = { text ->
-                    argsText = text
-                    update(
-                        config.copy(
-                            args = text.lines().map { it.trim() }.filter { it.isNotEmpty() },
-                        )
-                    )
-                },
-                modifier = Modifier.fillMaxWidth(),
-                minLines = 2,
-                placeholder = { Text(stringResource(R.string.setting_mcp_page_stdio_args_placeholder)) },
-            )
-        }
-
-        FormItem(
-            label = { Text(stringResource(R.string.setting_mcp_page_stdio_env)) },
-            description = { Text(stringResource(R.string.setting_mcp_page_stdio_env_desc)) },
-        ) {
-            OutlinedTextField(
-                value = envText,
-                onValueChange = { text ->
-                    envText = text
-                    update(
-                        config.copy(
-                            env = text.lines().mapNotNull { line ->
-                                val index = line.indexOf('=')
-                                if (index <= 0) null else line.substring(0, index).trim() to line.substring(index + 1)
-                            },
-                        )
-                    )
-                },
-                modifier = Modifier.fillMaxWidth(),
-                minLines = 2,
-                visualTransformation = if (envVisible) VisualTransformation.None else PasswordVisualTransformation(),
-                trailingIcon = {
-                    IconButton(onClick = { envVisible = !envVisible }) {
-                        Icon(
-                            if (envVisible) HugeIcons.ViewOff else HugeIcons.View,
-                            contentDescription = null,
-                        )
-                    }
-                },
-            )
-        }
-
-        FormItem(
-            label = { Text(stringResource(R.string.setting_mcp_page_stdio_cwd)) },
-            description = { Text(stringResource(R.string.setting_mcp_page_stdio_cwd_desc)) },
-        ) {
-            OutlinedTextField(
-                value = config.cwd,
-                onValueChange = { cwd -> update(config.copy(cwd = cwd)) },
-                modifier = Modifier.fillMaxWidth(),
-                singleLine = true,
-            )
-        }
-
-        FormItem(
-            label = { Text(stringResource(R.string.setting_mcp_page_stdio_startup_timeout)) },
-            description = { Text(stringResource(R.string.setting_mcp_page_stdio_startup_timeout_desc)) },
-        ) {
-            OutlinedTextField(
-                value = timeoutText,
-                onValueChange = { value ->
-                    timeoutText = value
-                    value.toLongOrNull()?.takeIf { it > 0 }?.let { timeout ->
-                        update(config.copy(startupTimeoutMs = timeout))
-                    }
-                },
-                modifier = Modifier.fillMaxWidth(),
-                singleLine = true,
-                isError = timeoutText.toLongOrNull()?.let { it < 1_000 } ?: true,
-                supportingText = {
-                    if (timeoutText.toLongOrNull()?.let { it < 1_000 } ?: true) {
-                        Text(stringResource(R.string.setting_mcp_page_stdio_startup_timeout_error))
-                    }
-                },
-            )
         }
     }
 }

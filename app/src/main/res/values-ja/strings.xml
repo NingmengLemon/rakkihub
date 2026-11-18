@@ -715,6 +715,10 @@
   <string name="setting_mcp_page_server_url">サーバーURL</string>
   <string name="setting_mcp_page_sse_url_desc">SSE転送サーバーのURLアドレス</string>
   <string name="setting_mcp_page_sse_url_placeholder">https://example.com/sse</string>
+  <string name="setting_mcp_page_stdio_section_server">サーバー</string>
+  <string name="setting_mcp_page_stdio_section_process">プロセス</string>
+  <string name="setting_mcp_page_stdio_section_runtime">実行環境</string>
+
   <string name="setting_mcp_page_stdio_status">接続状態</string>
   <string name="setting_mcp_page_stdio_status_desc">停止すると現在のプロセスのみ終了し、設定は削除されません。再起動すると保存済みの設定を読み直します。</string>
   <string name="setting_mcp_page_stdio_restart">再起動</string>
