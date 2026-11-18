@@ -26,6 +26,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ProvideTextStyle
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.material3.contentColorFor
 import androidx.compose.material3.ripple
 import androidx.compose.runtime.Composable
@@ -149,6 +150,21 @@ fun ChatMessage(
     val navController = LocalNavController.current
     val context = LocalContext.current
     val colorScheme = MaterialTheme.colorScheme
+    val onWebViewPreview: () -> Unit = {
+        val textContent = message.parts
+            .filterIsInstance<UIMessagePart.Text>()
+            .joinToString("\n\n") { it.text }
+            .trim()
+        if (textContent.isNotBlank()) {
+            val htmlContent = buildMarkdownPreviewHtml(
+                context = context,
+                markdown = textContent,
+                colorScheme = colorScheme
+            )
+            val contentId = WebViewContentCache.store(context.cacheDir, htmlContent)
+            navController.navigate(Screen.WebView(contentId = contentId))
+        }
+    }
     Column(
         modifier = modifier.fillMaxWidth(),
         horizontalAlignment = if (message.role == MessageRole.USER) Alignment.End else Alignment.Start,
@@ -190,6 +206,7 @@ fun ChatMessage(
                 onToolApproval = onToolApproval,
                 onToolAnswer = onToolAnswer,
                 onUserMessageClick = if (message.role == MessageRole.USER) onEdit else null,
+                onWebViewPreview = onWebViewPreview,
             )
 
             message.translation?.let { translation ->
@@ -256,21 +273,7 @@ fun ChatMessage(
             },
             isFavorite = isFavorite,
             onToggleFavorite = onToggleFavorite,
-            onWebViewPreview = {
-                val textContent = message.parts
-                    .filterIsInstance<UIMessagePart.Text>()
-                    .joinToString("\n\n") { it.text }
-                    .trim()
-                if (textContent.isNotBlank()) {
-                    val htmlContent = buildMarkdownPreviewHtml(
-                        context = context,
-                        markdown = textContent,
-                        colorScheme = colorScheme
-                    )
-                    val contentId = WebViewContentCache.store(context.cacheDir, htmlContent)
-                    navController.navigate(Screen.WebView(contentId = contentId))
-                }
-            },
+            onWebViewPreview = onWebViewPreview,
             onDismissRequest = {
                 showActionsSheet = false
             }
@@ -302,6 +305,7 @@ private fun MessagePartsBlock(
     onToolApproval: ((toolCallId: String, approved: Boolean, reason: String) -> Unit)? = null,
     onToolAnswer: ((toolCallId: String, answer: String) -> Unit)? = null,
     onUserMessageClick: (() -> Unit)? = null,
+    onWebViewPreview: () -> Unit,
 ) {
     val context = LocalContext.current
     // 消息输出HapticFeedback
@@ -462,6 +466,11 @@ private fun MessagePartsBlock(
                         // Markdown 由 BetterText 渲染，要用它自己的选择容器；生成中也可以选择
                         SelectableContent {
                             textContent()
+                        }
+                        if (!streamingText && part.text.contains("<svg", ignoreCase = true)) {
+                            TextButton(onClick = onWebViewPreview) {
+                                Text(stringResource(R.string.render_with_webview))
+                            }
                         }
                     }
 

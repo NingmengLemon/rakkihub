@@ -2,6 +2,10 @@
 
 本文件归档已完成的定制、修复与独立化批次，按时间或主题分组。当前状态以 checklist 索引与明细为准，未来方向见 [roadmap.md](../roadmap.md)。
 
+## 2026-11-18 聊天 SVG 预览入口
+
+- C121：Android 正文检测到 `<svg` 时显示 `Render with WebView` 入口，点击打开整条消息的 WebView 预览；Android 正文仍不内联渲染 SVG。
+
 ## 2026-11-18 MCP 工具失败重试元数据
 
 - C120：工具卡片增加「可重试」「可重入」，`McpManager` 对标记工具最多尝试 2 次；未发出的失败只要求 `retryable`，已发出的异常、超时和 `isError` 还要求 `reentrant`。

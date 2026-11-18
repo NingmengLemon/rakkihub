@@ -1,6 +1,6 @@
 # 明细：聊天、上下文与模型
 
-本文件是 [checklist.md](../checklist.md) 的明细，收录 C35、C43 至 C44、C46 至 C47、C49 至 C53、C57 至 C63、C65 至 C78、C81 至 C86、C97 至 C100、C107。
+本文件是 [checklist.md](../checklist.md) 的明细，收录 C35、C43 至 C44、C46 至 C47、C49 至 C53、C57 至 C63、C65 至 C78、C81 至 C86、C97 至 C100、C107、C121。
 
 <a id="c35"></a>
 
@@ -380,3 +380,12 @@
 - 理由：step 后续要作为错误卡片、Web DTO 和日志的稳定单位，不能再靠 part 下标或消息 id 猜；失败码也让消费方不必重新解析异常类型。
 - 合并注意：字段都有默认值，旧 JSON 解码时 `id` 会新生成，`failureCode` 为 null，不会破坏旧消息；新字段只能追加在构造参数末尾，不能插到现有的前四个必填字段之前，否则位置参数调用点会错位。重试决策仍只看 `LlmFailureCode`，不要把 `failureCode` 当作重试开关。旧构建保存新会话时会丢掉这两个字段，属于 B2 降级限制。
 - 测试：`UIMessageSerializationTest` 覆盖 id/failureCode 往返；`AgentLoopTest` 覆盖失败 step 的 `UNKNOWN` 错误码；`ai` 与 app 的 JVM 测试通过。
+
+<a id="c121"></a>
+
+## C121 聊天正文的 SVG 预览入口
+
+- 落点：`ChatMessage` 把整条消息的 WebView 预览提成 `onWebViewPreview`；`MessagePartsBlock` 在已完成的文本 part 含 `<svg` 时，正文下方显示 `TextButton`（复用 `render_with_webview` 文案），点击打开同一个 Markdown 预览；动作面板复用同一回调。
+- 理由：Android 正文不渲染 SVG，BetterText 直接丢弃；此前只有动作面板里能进 WebView 预览，用户看不到提示，SVG 像凭空消失。
+- 合并注意：检测只是大小写不敏感的 `<svg` 文本匹配，代码块里出现 `<svg` 也会显示入口；预览是整条消息的 Markdown 转 HTML，不是内联渲染；生成中的文本不显示入口；没有新增文案，复用 `render_with_webview`；不改 Markdown 渲染器。
+- 测试：`:app:compileGithubDebugKotlin`；mock 返回含 `<svg>` 的文本时正文出现 `Render with WebView`，点击后 WebView 渲染圆形和前后文字。
