@@ -150,7 +150,7 @@
 - 落点：`WorkspaceFileEditorPage` 标题在 dirty 时显示 `* filename`，字号降到 `titleMedium`；源码态 Save 常驻但只有 dirty 可用，预览态 clean 隐藏 Save、dirty 时显示并可保存；`ON_PAUSE` 记录源码态是否正在编辑，`ON_RESUME` 恢复焦点和输入法；滚动位置继续保存。
 - 理由：预览态本来是只读的，clean 时 Save 没有意义；但用户可能写完后切到预览看效果，此时 dirty 必须能直接保存。文件名前的星号和禁用态 Save 让未保存状态可见；切到 Recents 再回来输入法被收起，是因为原实现只恢复滚动、不恢复焦点。
 - 合并注意：dirty 仍以当前文本和磁盘加载文本比较；预览 dirty 的 Save 保存的是内存文本，不是预览内容；返回时的未保存确认不变；输入法只在源码态恢复，预览态不弹键盘；进程死亡或 Activity 重建后正文仍从磁盘重载，未保存内容和光标不保证保留，这是大文件不做 saveable 的既有取舍。
-- 测试：在 `3.1.1-custom.3441+3e57182` 上验收：`* readme-test.md`、源码 clean 时 Save 禁用、预览 clean 时 Save 隐藏、预览 dirty 时 Save 可保存、保存后星号消失；源码态打开输入法后按 Home 再回前台，输入法恢复。
+- 测试：在 `3.1.1-custom.3442+938c710` 上验收：`* readme-test.md`、源码 clean 时 Save 禁用、预览 clean 时 Save 隐藏、预览 dirty 时 Save 可保存、保存后星号消失；源码态打开输入法后按 Home 再回前台，输入法恢复。
 
 <a id="c125"></a>
 
@@ -159,4 +159,4 @@
 - 落点：终端 tab 默认走传统直连，IME 开关按 tab 保存在 `WorkspaceTerminalTab`，切 tab 或离开页面再回来仍保持；`DisplaySetting.terminalImeToggleVisible` 控制功能键栏是否显示这个开关，默认 true，关闭后固定直连；隐藏的 `TerminalImeEditText` 只在 IME 模式创建；功能键栏新增 `PGUP`/`PGDN`；离开终端页时清焦点并收起输入法。`WorkspaceTerminalViewClient.onKeyDown` 只处理功能键栏的 sticky Ctrl/Alt：用事件自身的 unicode 字符保留大小写和布局，控制字符表覆盖字母和常见符号；硬件 Ctrl/Alt 不拦截，仍交给 `TerminalView.inputCodePoint`。
 - 理由：传统直连不经过隐藏 EditText，长按选择和带修饰键的按键手感更接近终端；但需要组合输入的软键盘仍要一个可随时切回的 IME 通道。sticky Ctrl/Alt 原先只对 IME 提交文本生效，直连时按 O 仍是普通 o；硬件 Ctrl/Alt 则由 TerminalView 正确处理，应用层不应重写。
 - 合并注意：设置只控制开关是否显示，关闭时强制直连；per-tab 状态不持久化，进程结束或 tab 关闭后回到默认直连；传统模式仍能通过 `TerminalView` 的 `BaseInputConnection` 接收普通 `commitText`，只有需要候选组合的输入法才必须打开 IME；应用层只接管 sticky 修饰，`e.isCtrlPressed`/`e.isAltPressed` 和右 Alt 留给 TerminalView；没有新增 DataStore key，字段嵌在 `displaySetting` 的 JSON 里，旧设置解码为默认 true。
-- 测试：`WorkspaceTerminalInputTest` 覆盖普通文本、Ctrl 字母、Ctrl 符号、Alt 大小写、key code 回退和 CJK；设备验收：默认直连下 `cat -v` 后按 CTRL+O 显示 `^O`，IME 开关可正常输入，设置关闭后功能键栏不再显示 IME，离开终端页键盘收起，长按终端文本出现 Copy/More 工具栏。版本钉版在后续提交补。
+- 测试：`WorkspaceTerminalInputTest` 覆盖普通文本、Ctrl 字母、Ctrl 符号、Alt 大小写、key code 回退和 CJK；在 `3.1.1-custom.3442+938c710` 上验收：默认直连下 `cat` 后按 CTRL+O 显示 `^O`、CTRL+[ 显示 `^[`，IME 开关可正常输入，设置关闭后功能键栏不再显示 IME，离开终端页键盘收起，长按终端文本出现 Copy/More 工具栏。
