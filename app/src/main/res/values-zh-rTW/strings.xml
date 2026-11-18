@@ -716,11 +716,10 @@
   <string name="setting_mcp_page_sse_url_desc">SSE傳輸伺服器的URL地址</string>
   <string name="setting_mcp_page_sse_url_placeholder">https://example.com/sse</string>
   <string name="setting_mcp_page_stdio_section_server">伺服器</string>
-  <string name="setting_mcp_page_stdio_section_process">行程</string>
+  <string name="setting_mcp_page_stdio_section_process">程序</string>
   <string name="setting_mcp_page_stdio_section_runtime">執行</string>
-
   <string name="setting_mcp_page_stdio_status">連線狀態</string>
-  <string name="setting_mcp_page_stdio_status_desc">停止只結束目前的行程，不刪除設定；重新啟動會重新讀取已儲存的設定。</string>
+  <string name="setting_mcp_page_stdio_status_desc">停止只結束目前的程序，不刪除設定；重新啟動會重新讀取已儲存的設定。</string>
   <string name="setting_mcp_page_stdio_restart">重新啟動</string>
   <string name="setting_mcp_page_stdio_stop">停止</string>
   <string name="setting_mcp_page_stdio_workspace">專用工作區</string>
@@ -733,7 +732,7 @@
   <string name="setting_mcp_page_stdio_command_desc">可執行檔名稱或 rootfs 內的絕對路徑，不經 shell 解析。</string>
   <string name="setting_mcp_page_stdio_command_placeholder">node</string>
   <string name="setting_mcp_page_stdio_args">參數</string>
-  <string name="setting_mcp_page_stdio_args_desc">每行一個參數，逐項傳給行程，不做 shell 拼接。</string>
+  <string name="setting_mcp_page_stdio_args_desc">每行一個參數，逐項傳給程序，不做 shell 拼接。</string>
   <string name="setting_mcp_page_stdio_args_placeholder">server.js</string>
   <string name="setting_mcp_page_stdio_env">環境變數</string>
   <string name="setting_mcp_page_stdio_env_desc">每行 KEY=VALUE；值可能包含密鑰，不會寫入日誌。</string>
@@ -750,7 +749,6 @@
   <string name="setting_mcp_page_stdio_status_error">錯誤：%1$s</string>
   <string name="setting_mcp_page_stdio_status_needs_authorization">需要授權</string>
   <string name="setting_mcp_page_stdio_status_authorizing">授權中</string>
-
   <string name="setting_mcp_page_streamable_http_url_desc">串流HTTP伺服器的URL地址</string>
   <string name="setting_mcp_page_streamable_http_url_placeholder">https://example.com/mcp</string>
   <string name="setting_mcp_page_title">MCP</string>

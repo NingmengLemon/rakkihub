@@ -735,10 +735,9 @@
   <string name="setting_mcp_page_server_url">服务器地址</string>
   <string name="setting_mcp_page_sse_url_desc">SSE传输服务器的URL地址</string>
   <string name="setting_mcp_page_sse_url_placeholder">https://example.com/sse</string>
-  <string name="setting_mcp_page_stdio_section_server">服务</string>
+  <string name="setting_mcp_page_stdio_section_server">服务器</string>
   <string name="setting_mcp_page_stdio_section_process">进程</string>
-  <string name="setting_mcp_page_stdio_section_runtime">运行</string>
-
+  <string name="setting_mcp_page_stdio_section_runtime">运行时</string>
   <string name="setting_mcp_page_stdio_status">连接状态</string>
   <string name="setting_mcp_page_stdio_status_desc">停止只结束当前进程，不删除配置；重启会重新读取已保存配置。</string>
   <string name="setting_mcp_page_stdio_restart">重启</string>
@@ -770,7 +769,6 @@
   <string name="setting_mcp_page_stdio_status_error">错误：%1$s</string>
   <string name="setting_mcp_page_stdio_status_needs_authorization">需要授权</string>
   <string name="setting_mcp_page_stdio_status_authorizing">授权中</string>
-
   <string name="setting_mcp_page_streamable_http_url_desc">流式HTTP服务器的URL地址</string>
   <string name="setting_mcp_page_streamable_http_url_placeholder">https://example.com/mcp</string>
   <string name="setting_mcp_page_title">MCP</string>

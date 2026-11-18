@@ -421,7 +421,7 @@ private fun McpServerItem(
         onDismiss = { showDeleteDialog = false },
     ) {
         if (item is McpServerConfig.StdioServer) {
-            Text("删除 ${item.commonOptions.name}？专用工作区和 rootfs 不会被删除。")
+            Text(stringResource(R.string.setting_mcp_page_stdio_delete_message, item.commonOptions.name))
         } else {
             Text(stringResource(R.string.common_delete_confirm_message, item.commonOptions.name))
         }
