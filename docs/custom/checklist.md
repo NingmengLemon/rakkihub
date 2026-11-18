@@ -122,7 +122,7 @@
 | C110 | [C87 备份恢复保留手改 OCR](checklist/data.md#c110) | 改造 |
 | C111 | [stdio MCP 服务器（专用工作区 rootfs 子进程）](checklist/workspace.md#c111) | 新增 |
 | C120 | [MCP 工具失败重试元数据](checklist/workspace.md#c120) | 新增 |
-| C121 | [聊天正文的 SVG 预览入口](checklist/chat.md#c121) | 新增 |
+| C121 | [聊天正文的 SVG 内联预览](checklist/chat.md#c121) | 新增 |
 
 C112 至 C119 是 C111 历史阶段的保留段，不再用作顶层编号；下一个新项从 C122 起。
 

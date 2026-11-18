@@ -2,9 +2,9 @@
 
 本文件归档已完成的定制、修复与独立化批次，按时间或主题分组。当前状态以 checklist 索引与明细为准，未来方向见 [roadmap.md](../roadmap.md)。
 
-## 2026-11-18 聊天 SVG 预览入口
+## 2026-11-18 聊天 SVG 内联预览
 
-- C121：Android 正文检测到 `<svg` 时显示 `Render with WebView` 入口，点击打开整条消息的 WebView 预览；Android 正文仍不内联渲染 SVG。
+- C121：Android 正文检测到块级 `<svg>` 时在气泡内用 Coil `SvgDecoder` 渲染，默认折叠、点击展开一级；不安全的 SVG 或解码失败才回退到整条消息的 WebView 预览，Android 正文仍不做通用 HTML 渲染。
 
 ## 2026-11-18 MCP 工具失败重试元数据
 

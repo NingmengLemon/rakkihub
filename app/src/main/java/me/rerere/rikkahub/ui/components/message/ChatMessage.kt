@@ -26,7 +26,6 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ProvideTextStyle
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.material3.contentColorFor
 import androidx.compose.material3.ripple
 import androidx.compose.runtime.Composable
@@ -293,6 +292,58 @@ fun ChatMessage(
 // 思考链折叠时默认保留的尾部步骤数
 private const val COLLAPSED_VISIBLE_STEPS = 2
 
+@Composable
+private fun MarkdownContent(
+    content: String,
+    assistant: Assistant?,
+    scope: AssistantAffectScope,
+    streaming: Boolean,
+    onClickCitation: (String) -> Unit,
+    onPreview: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    val segments = remember(content, streaming) {
+        if (streaming) listOf(SvgTextSegment.Text(content)) else splitSvgText(content)
+    }
+    if (segments.size == 1 && segments.single() is SvgTextSegment.Text) {
+        SelectableContent {
+            MarkdownBlock(
+                content = content.replaceRegexes(
+                    assistant = assistant,
+                    scope = scope,
+                    visual = true,
+                ),
+                modifier = modifier,
+                streaming = streaming,
+                onClickCitation = onClickCitation,
+            )
+        }
+        return
+    }
+    Column(modifier = modifier) {
+        segments.forEach { segment ->
+            when (segment) {
+                is SvgTextSegment.Text -> SelectableContent {
+                    MarkdownBlock(
+                        content = segment.text.replaceRegexes(
+                            assistant = assistant,
+                            scope = scope,
+                            visual = true,
+                        ),
+                        streaming = false,
+                        onClickCitation = onClickCitation,
+                    )
+                }
+
+                is SvgTextSegment.Svg -> InlineSvgBlock(
+                    svg = segment.svg,
+                    onPreview = onPreview,
+                )
+            }
+        }
+    }
+}
+
 @OptIn(FlowPreview::class)
 @Composable
 private fun MessagePartsBlock(
@@ -421,13 +472,13 @@ private fun MessagePartsBlock(
                                         .padding(start = 24.dp)
                                         .animateContentSize(),
                                 ) {
-                                    MarkdownBlock(
-                                        content = part.text.replaceRegexes(
-                                            assistant = assistant,
-                                            scope = AssistantAffectScope.USER,
-                                            visual = true,
-                                        ),
-                                        onClickCitation = handleClickCitation
+                                    MarkdownContent(
+                                        content = part.text,
+                                        assistant = assistant,
+                                        scope = AssistantAffectScope.USER,
+                                        streaming = false,
+                                        onClickCitation = handleClickCitation,
+                                        onPreview = onWebViewPreview,
                                     )
                                 }
                             } else {
@@ -437,41 +488,31 @@ private fun MessagePartsBlock(
                                         color = MaterialTheme.colorScheme.surfaceContainerHigh.copy(alpha = settings.displaySetting.bubbleOpacity),
                                         modifier = Modifier.animateContentSize(),
                                     ) {
-                                        MarkdownBlock(
-                                            content = part.text.replaceRegexes(
-                                                assistant = assistant,
-                                                scope = AssistantAffectScope.ASSISTANT,
-                                                visual = true,
-                                            ),
+                                        MarkdownContent(
+                                            content = part.text,
+                                            assistant = assistant,
+                                            scope = AssistantAffectScope.ASSISTANT,
                                             streaming = streamingText,
                                             onClickCitation = handleClickCitation,
+                                            onPreview = onWebViewPreview,
                                         )
                                     }
                                 } else {
-                                    MarkdownBlock(
-                                        content = part.text.replaceRegexes(
-                                            assistant = assistant,
-                                            scope = AssistantAffectScope.ASSISTANT,
-                                            visual = true,
-                                        ),
+                                    MarkdownContent(
+                                        content = part.text,
+                                        assistant = assistant,
+                                        scope = AssistantAffectScope.ASSISTANT,
                                         streaming = streamingText,
                                         onClickCitation = handleClickCitation,
-                                        modifier = Modifier
-                                            .animateContentSize()
+                                        onPreview = onWebViewPreview,
+                                        modifier = Modifier.animateContentSize(),
                                     )
                                 }
                             }
                         }
 
                         // Markdown 由 BetterText 渲染，要用它自己的选择容器；生成中也可以选择
-                        SelectableContent {
-                            textContent()
-                        }
-                        if (!streamingText && part.text.contains("<svg", ignoreCase = true)) {
-                            TextButton(onClick = onWebViewPreview) {
-                                Text(stringResource(R.string.render_with_webview))
-                            }
-                        }
+                        textContent()
                     }
 
                     is UIMessagePart.Video -> {
