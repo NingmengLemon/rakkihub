@@ -196,17 +196,18 @@ class McpManager(
     }
 }
 
-/**
- * 当前可提供给模型的 MCP 工具：Server 已启用、已绑定到当前助手、未被手动停止，
- * 且工具自身已启用。停止的 Server 不应继续出现在工具列表里，否则模型会调用一个
- * 不可用的工具，只能得到运行时错误。
- */
+/** 持久化标记和运行时标记任一存在都算停止。 */
 internal fun isMcpServerStopped(
     id: Uuid,
     persistedStoppedIds: Set<Uuid>,
     registryStopped: (Uuid) -> Boolean,
 ): Boolean = id in persistedStoppedIds || registryStopped(id)
 
+/**
+ * 当前可提供给模型的 MCP 工具：Server 已启用、已绑定到当前助手、未被手动停止，
+ * 且工具自身已启用。停止的 Server 不应继续出现在工具列表里，否则模型会调用一个
+ * 不可用的工具，只能得到运行时错误。
+ */
 internal fun availableMcpTools(
     servers: List<McpServerConfig>,
     assistant: Assistant,
