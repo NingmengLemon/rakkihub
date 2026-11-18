@@ -456,8 +456,8 @@ private fun StdioMcpConfigure(
     val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
     val stdioLog by mcpManager.getStdioLog(config).collectAsStateWithLifecycle("")
     var logsExpanded by rememberSaveable(config.id) { mutableStateOf(false) }
-    LaunchedEffect(status, stdioLog) {
-        if (status is McpStatus.Error && stdioLog.isNotBlank()) {
+    LaunchedEffect(status) {
+        if (status is McpStatus.Error) {
             logsExpanded = true
         }
     }
