@@ -2,7 +2,7 @@
 
 ## 状态
 
-设计稿已复审 PASS。实现状态与阶段见 [`checklist/workspace.md`](../checklist/workspace.md) 的 C111；开发机已验证 initialize、tools/list 和 Connected，callTool 的真实 UI 路径待补。
+设计稿已复审 PASS。实现状态与阶段见 [`checklist/workspace.md`](../checklist/workspace.md) 的 C111；开发机已验证 initialize、tools/list、Connected 与 callTool 的完整 UI 路径。
 
 ## 目标
 

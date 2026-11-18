@@ -345,7 +345,7 @@
 ### 后续事项
 
 - MCP 工具失败无感重试：在 MCP 面板由用户逐工具标注是否可重试、是否可重入；运行时只对标记过的工具自动重试，未标记的工具保持现状。非幂等工具默认不重试。
-- stdio 形式的 MCP：需要借助专用的工作区与 rootfs 实现，由工作区 rootfs 后端负责子进程的启动、输入输出和环境隔离；不要直接在 app 进程内裸起子进程。设计见 [design/stdio-mcp.md](design/stdio-mcp.md)，实现按 C111 的九个阶段落地；开发机已验证 initialize/tools/list，callTool UI 路径待补。
+- stdio 形式的 MCP：需要借助专用的工作区与 rootfs 实现，由工作区 rootfs 后端负责子进程的启动、输入输出和环境隔离；不要直接在 app 进程内裸起子进程。设计见 [design/stdio-mcp.md](design/stdio-mcp.md)，实现按 C111 的九个阶段落地；开发机已验证 initialize/tools/list 与 callTool 的完整 UI 路径。
 
 ### 提示词注入与世界书的搁置决定
 
