@@ -123,7 +123,7 @@ private val SAMPLE = Settings(
     themeId = "custom",
     customThemes = listOf(CustomTheme(id = "theme", name = "Theme")),
     developerMode = true,
-    displaySetting = DisplaySetting(userNickname = "me"),
+    displaySetting = DisplaySetting(userNickname = "me", terminalImeToggleVisible = false),
     networkSetting = NetworkSetting(userAgent = "agent"),
     agentSetting = AgentSetting(
         toolTimeoutSeconds = 0,
