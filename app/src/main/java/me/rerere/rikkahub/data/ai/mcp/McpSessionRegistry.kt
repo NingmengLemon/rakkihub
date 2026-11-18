@@ -132,7 +132,9 @@ internal class McpSessionRegistry(
     fun reconcile(configs: List<McpServerConfig>) {
         val enabledConfigs = configs
             .filter { it.commonOptions.enable && it.commonOptions.name.isNotBlank() }
-        manuallyStopped.retainAll(enabledConfigs.mapTo(HashSet()) { it.id })
+        val enabledIds = enabledConfigs.mapTo(HashSet()) { it.id }
+        manuallyStopped.retainAll(enabledIds)
+        manuallyStopped.addAll(settingsStore.settingsFlow.value.stoppedMcpServerIds.intersect(enabledIds))
         val activeConfigs = enabledConfigs
             .filter { it.id !in manuallyStopped }
             .associateBy { it.id }
@@ -221,11 +223,13 @@ internal class McpSessionRegistry(
 
     suspend fun stopClient(config: McpServerConfig) {
         manuallyStopped += config.id
+        settingsStore.update { it.copy(stoppedMcpServerIds = it.stoppedMcpServerIds + config.id) }
         removeClient(config)
     }
 
     suspend fun restartClient(config: McpServerConfig) {
         manuallyStopped -= config.id
+        settingsStore.update { it.copy(stoppedMcpServerIds = it.stoppedMcpServerIds - config.id) }
         removeClient(config)
         addClient(config)
     }

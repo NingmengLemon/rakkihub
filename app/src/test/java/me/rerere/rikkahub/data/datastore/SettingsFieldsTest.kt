@@ -167,6 +167,7 @@ private val SAMPLE = Settings(
             command = "node",
         )
     ),
+    stoppedMcpServerIds = setOf(id(8)),
     webDavConfig = WebDavConfig(url = "https://dav.example.com"),
     s3Config = S3Config(bucket = "backup"),
     uploadS3Config = S3Config(bucket = "upload"),
@@ -231,6 +232,7 @@ private val STORED_KEYS = setOf(
     "search_selected",
     "mcp_servers",
     "stdio_mcp_servers",
+    "stopped_mcp_server_ids",
     "webdav_config",
     "s3_config",
     "upload_s3_config",

@@ -1,5 +1,7 @@
 package me.rerere.rikkahub.data.datastore
 
+import me.rerere.rikkahub.data.ai.mcp.toRuntimeConfig
+
 /** 读盘后和每次修改后都要过一遍，保证内存里的设置始终是规整的。 */
 internal fun Settings.normalized(): Settings =
     withBuiltInDefaults().withoutInvalidReferences().withValuesInRange()
@@ -52,6 +54,9 @@ internal fun Settings.withoutInvalidReferences(): Settings {
         .distinctBy { it.id }
         .distinctBy { server -> server.workspaceId.ifBlank { server.id.toString() } }
     val validMcpServerIds = settings.mcpServers.map { it.id }.toSet() + stdioMcpServers.map { it.id }
+    val enabledMcpServerIds = (settings.mcpServers + stdioMcpServers.map { it.toRuntimeConfig() })
+        .filter { it.commonOptions.enable && it.commonOptions.name.isNotBlank() }
+        .mapTo(HashSet()) { it.id }
     val validModeInjectionIds = settings.modeInjections.map { it.id }.toSet()
     val validLorebookIds = settings.lorebooks.map { it.id }.toSet()
     val validQuickMessageIds = settings.quickMessages.map { it.id }.toSet()
@@ -91,6 +96,7 @@ internal fun Settings.withoutInvalidReferences(): Settings {
         lorebooks = settings.lorebooks.distinctBy { it.id },
         quickMessages = settings.quickMessages.distinctBy { it.id },
         stdioMcpServers = stdioMcpServers,
+        stoppedMcpServerIds = settings.stoppedMcpServerIds.filterTo(mutableSetOf()) { it in enabledMcpServerIds },
     )
 }
 

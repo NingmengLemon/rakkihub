@@ -719,7 +719,7 @@
   <string name="setting_mcp_page_stdio_section_process">程序</string>
   <string name="setting_mcp_page_stdio_section_runtime">執行</string>
   <string name="setting_mcp_page_stdio_status">連線狀態</string>
-  <string name="setting_mcp_page_stdio_status_desc">停止只結束目前的程序，不刪除設定；重新啟動會重新讀取已儲存的設定。</string>
+  <string name="setting_mcp_page_stdio_status_desc">停止會保持到手動重新啟動或停用，app 重新啟動後仍然停止；設定和工作區保留。</string>
   <string name="setting_mcp_page_stdio_restart">重新啟動</string>
   <string name="setting_mcp_page_stdio_stop">停止</string>
   <string name="setting_mcp_page_stdio_workspace">專用工作區</string>

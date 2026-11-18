@@ -14,6 +14,7 @@ internal fun Settings.forOfficialExport(): Settings {
         memoryModelReasoningLevel = memoryModelReasoningLevel.forOfficialExport(),
         // 官方客户端无法运行 stdio MCP，同时清掉 assistant 对这些 id 的引用
         stdioMcpServers = emptyList(),
+        stoppedMcpServerIds = emptySet(),
         assistants = assistants.map { assistant ->
             assistant.copy(
                 reasoningLevel = assistant.reasoningLevel.forOfficialExport(),
