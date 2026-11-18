@@ -312,7 +312,7 @@ private fun WorkspaceTerminalTabContent(
     }
     var controlDown by remember(tab.id) { mutableStateOf(false) }
     var altDown by remember(tab.id) { mutableStateOf(false) }
-    val effectiveIme = tab.imeEnabled && showImeToggle
+    val effectiveIme = tab.imeEnabled.value && showImeToggle
     val viewClient = remember(tab.id) {
         WorkspaceTerminalViewClient(context)
     }
@@ -320,7 +320,7 @@ private fun WorkspaceTerminalTabContent(
     viewClient.altDown = altDown
 
     LaunchedEffect(showImeToggle) {
-        if (!showImeToggle) tab.imeEnabled = false
+        if (!showImeToggle) tab.imeEnabled.value = false
     }
 
     DisposableEffect(tab.id, viewClient) {
@@ -432,7 +432,7 @@ private fun WorkspaceTerminalTabContent(
             showImeToggle = showImeToggle,
             onControlToggle = { controlDown = !controlDown },
             onAltToggle = { altDown = !altDown },
-            onImeToggle = { tab.imeEnabled = !tab.imeEnabled },
+            onImeToggle = { tab.imeEnabled.value = !tab.imeEnabled.value },
             onSendText = { tab.session.writeText(it) },
         )
     }
