@@ -125,7 +125,7 @@
 - 落点：`Settings` 增加带默认值的 `stoppedMcpServerIds`，DataStore key 为 `stopped_mcp_server_ids`；`SettingsNormalization` 只保留当前存在且启用的 MCP Server ID，禁用、删除或名称为空时清掉；`McpSessionRegistry.reconcile` 启动时把持久化 ID 合入 `manuallyStopped`，`stopClient`/`restartClient` 同步写入；官方导出口清空该字段；stdio 状态说明改为“重启 app 后仍停止”。
 - 理由：手动停止原本只在内存，app 重启后会自动拉起，用户明确停掉的 Server 会自己回来；持久化让停止语义符合预期，同时保留配置和工作区。
 - 合并注意：字段有默认值，旧设置和旧备份解码为空集合；旧构建不认这个 key，保存时丢掉，属于已知降级。只持久化启用的有效 ID，禁用/删除即视为恢复默认；重启会清掉停止标记；官方导出不携带本地停止态。停止仍只影响 MCP session，不删除配置或工作区。
-- 测试：`SettingsStoppedMcpTest` 覆盖默认空、序列化往返、归一化只留启用有效 ID 和官方导出清空；`SettingsFieldsTest` 覆盖新字段的 DataStore 映射；设备上停止 Echo 后 force-stop app，重开后仍不提供 MCP 工具，点重启恢复。
+- 测试：`SettingsStoppedMcpTest` 覆盖默认空、序列化往返、归一化只留启用有效 ID 和官方导出清空；`SettingsFieldsTest` 覆盖新字段的 DataStore 映射；在 `3.1.1-custom.3436+be9bdb3` 上验收：停止 Echo 后 force-stop app，重开仍显示 `Not started`，mock 收到 `tools=1, mcp=[]`；点重启后 `Connected`，mock 收到 `tools=2, mcp=['mcp__Echo__echo']` 并完成调用。
 
 ### C111.9 无工作区导航
 
