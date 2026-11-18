@@ -88,7 +88,7 @@ data class Settings(
     val mcpServers: List<McpServerConfig> = emptyList(),
     // 本地 stdio MCP；和 mcpServers 分开存，旧构建忽略新 key
     val stdioMcpServers: List<StdioMcpServer> = emptyList(),
-    // 用户手动停止的 MCP Server；跨进程保留，重启或禁用时清除
+    // 用户手动停止的 MCP Server；跨进程保留，服务器重启或禁用时清除
     val stoppedMcpServerIds: Set<Uuid> = emptySet(),
     val webDavConfig: WebDavConfig = WebDavConfig(),
     val s3Config: S3Config = S3Config(),

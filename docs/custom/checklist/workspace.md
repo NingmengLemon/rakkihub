@@ -1,6 +1,6 @@
 # 明细：工作区与 MCP
 
-本文件是 [checklist.md](../checklist.md) 的明细，收录 C89、C102 至 C106、C111、C120。
+本文件是 [checklist.md](../checklist.md) 的明细，收录 C89、C102 至 C106、C111、C120、C123。
 
 <a id="c89"></a>
 
@@ -92,9 +92,9 @@
 
 ### C111.5 UI 收尾
 
-- 落点：`SettingMcpDetailPage` 的 stdio 基础页增加连接状态、重启/停止按钮、工作区冲突提示和 env 显示切换；保存按钮在 workspace 已被其它 stdio Server 占用时禁用；删除确认明确工作区不删除。基础页改成 CardGroup 分组（服务器、进程、运行时），开关行整行可点。停止/重启按钮经 `McpManager.stopClient`/`restartClient` 落到现有 session 生命周期；手动停止的保留语义见 C111.8。`AssistantMcpPage` 顶栏增加设置入口，已有 Server 时也能进入全局 MCP 配置页。
+- 落点：`SettingMcpDetailPage` 的 stdio 基础页增加连接状态、重启/停止按钮、工作区冲突提示和 env 显示切换；保存按钮在 workspace 已被其它 stdio Server 占用时禁用；删除确认明确工作区不删除。基础页改成 CardGroup 分组（服务器、进程、运行时），开关行整行可点。停止/重启按钮经 `McpManager.stopClient`/`restartClient` 落到现有 session 生命周期；手动停止的保留语义见 C111.8 与 C123。`AssistantMcpPage` 顶栏增加设置入口，已有 Server 时也能进入全局 MCP 配置页。
 - 理由：C111.4 已经能配置和连接，但详情页看不到状态、无法手动停止/重启，两个 Server 也能静默绑定同一个工作区；已有 Server 后助手 MCP 页没有入口回全局配置，也会把状态/停止功能藏在不可达位置。
-- 合并注意：停止只结束当前 session，配置和工作区保留；重启先移除旧 session 再重新 addClient，避免旧 client 仍在时提前返回；C111.8 起手动停止会阻止后续 reconcile 自动拉起，直到重启或配置被禁用；未保存的草稿不会生效；没有可用工作区时下拉项直接跳工作区页（C111.9）；工作区 id 不在 eligible 列表中时显示本地化的不可用提示，不再显示原始 id。
+- 合并注意：停止只结束当前 session，配置和工作区保留；重启先移除旧 session 再重新 addClient，避免旧 client 仍在时提前返回；C111.8 起手动停止会阻止后续 reconcile 自动拉起，直到点服务器重启或配置被禁用；C123 起停止 ID 持久化，app 重启后仍保持；未保存的草稿不会生效；没有可用工作区时下拉项直接跳工作区页（C111.9）；工作区 id 不在 eligible 列表中时显示本地化的不可用提示，不再显示原始 id。
 - 测试：`:app:compileGithubDebugKotlin`、`:app:testGithubDebugUnitTest`；开发机手动验收停止/重启、管理入口和 `Connected` 状态；工作区冲突提示按代码路径核对；CardGroup 分组为服务器、进程、运行时三段。callTool 的设备验收见 C111.4。
 
 ### C111.6 workspace 唯一性与列表提示
@@ -111,21 +111,12 @@
 - 合并注意：归一化仍然静默保留第一条；被丢弃项的 assistant 选择不会迁移到保留项，只会在同一轮被清掉，这是有意的。
 - 测试：`SettingsStdioMcpTest` 覆盖同 workspace 去重、不同 workspace 保留、空 workspace 不同 id 保留、丢弃项引用同轮移除。
 
-### C111.8 手动停止持久化
+### C111.8 手动停止的运行时保留
 
 - 落点：`McpSessionRegistry` 维护运行时 `manuallyStopped` 集合；`stopClient` 先标记再移除 session，`reconcile` 对已标记的配置不再自动拉起；`restartClient` 清除标记后 remove+add；配置被禁用/删除时集合自动清理。`McpManager.getAllAvailableTools` 经 `availableMcpTools` 过滤已标记停止的 Server，停止期间不再把工具提供给模型。C123 起标记同时写入 `Settings.stoppedMcpServerIds`，`reconcile` 启动时从设置恢复。
 - 理由：C111.5 的停止只是移除当前 session，之后任何 `allMcpServers()` 写入（工具开关、另一个 Server 的 syncTools 回写）都会经 reconcile 重新启动，用户会看到“停止后自己又连上”；停止后仍把工具挂给模型，模型只会调用到一个运行时不可用的工具。
-- 合并注意：C111.8 的 `manuallyStopped` 只在内存里，app 重启后会恢复为启用状态；C123 起停止 ID 持久化到 `Settings.stoppedMcpServerIds`，重启后仍保持，点重启或禁用/删除配置才清除；停止期间配置编辑仍保留；配置被禁用、删除或暂时无效（如名称为空）时归一化会清掉标记，重新有效后会再启动。工具过滤只剔除手动停止的 Server，不按临时断线状态剔除，避免重连期间工具列表抖动。
-- 测试：`McpToolAvailabilityTest` 覆盖已绑定 Server、手动停止、未绑定、Server 禁用、工具禁用和全部停止时为空；设备上停止 Echo 后 mock 端只收到 1 个非 MCP 工具，重启后恢复为 2 个并完成 `mcp__Echo__echo` 调用。
-
-<a id="c123"></a>
-
-## C123 MCP 手动停止态跨进程
-
-- 落点：`Settings` 增加带默认值的 `stoppedMcpServerIds`，DataStore key 为 `stopped_mcp_server_ids`；`SettingsNormalization` 只保留当前存在且启用的 MCP Server ID，禁用、删除或名称为空时清掉；`McpSessionRegistry.reconcile` 启动时把持久化 ID 合入 `manuallyStopped`，`stopClient`/`restartClient` 同步写入；官方导出口清空该字段；stdio 状态说明改为“重启 app 后仍停止”。
-- 理由：手动停止原本只在内存，app 重启后会自动拉起，用户明确停掉的 Server 会自己回来；持久化让停止语义符合预期，同时保留配置和工作区。
-- 合并注意：字段有默认值，旧设置和旧备份解码为空集合；旧构建不认这个 key，保存时丢掉，属于已知降级。只持久化启用的有效 ID，禁用/删除即视为恢复默认；重启会清掉停止标记；官方导出不携带本地停止态。停止仍只影响 MCP session，不删除配置或工作区。
-- 测试：`SettingsStoppedMcpTest` 覆盖默认空、序列化往返、归一化只留启用有效 ID 和官方导出清空；`SettingsFieldsTest` 覆盖新字段的 DataStore 映射；在 `3.1.1-custom.3436+be9bdb3` 上验收：停止 Echo 后 force-stop app，重开仍显示 `Not started`，mock 收到 `tools=1, mcp=[]`；点重启后 `Connected`，mock 收到 `tools=2, mcp=['mcp__Echo__echo']` 并完成调用。
+- 合并注意：`manuallyStopped` 在 C111.8 时只在内存里，app 重启后恢复启用；C123 起停止 ID 持久化到 `Settings.stoppedMcpServerIds`，app 重启后仍保持，点服务器重启或禁用/删除配置才清除；停止期间配置编辑仍保留；配置被禁用、删除或暂时无效（如名称为空）时归一化会清掉标记，重新有效后会再启动。工具过滤只剔除手动停止的 Server，不按临时断线状态剔除，避免重连期间工具列表抖动。
+- 测试：`McpToolAvailabilityTest` 覆盖已绑定 Server、手动停止、未绑定、Server 禁用、工具禁用和全部停止时为空；设备上停止 Echo 后 mock 端只收到 1 个非 MCP 工具，点服务器重启后恢复为 2 个并完成 `mcp__Echo__echo` 调用。
 
 ### C111.9 无工作区导航
 
@@ -142,3 +133,12 @@
 - 理由：MCP 工具有瞬时失败，但自动重试对非幂等工具有副作用；逐工具标注让用户只对确认安全的工具开启，默认保持现状。
 - 合并注意：`retryable` 默认 false；只开 `retryable` 时只重试 `McpClientUnavailableException` 这类确定未发出的失败，其他异常、超时和 `isError` 结果还要求 `reentrant`；取消不重试；最多 2 次尝试；不改变 LLM 请求的重试策略；`mergeTools` 按名字保留已有配置，保存工具开关时不能只复制 `enable`/`needsApproval`。
 - 测试：`McpToolRetryTest` 覆盖未标记、未发出、已发出、reentrant、error result、未发出/已发出的次数上限、取消不重试、判定函数和字段序列化；`McpToolAvailabilityTest` 不受影响；工具卡片的两个开关由 `onToolChange` 复制并持久化。
+
+<a id="c123"></a>
+
+## C123 MCP 手动停止态跨进程
+
+- 落点：`Settings` 增加带默认值的 `stoppedMcpServerIds`，DataStore key 为 `stopped_mcp_server_ids`；`SettingsNormalization` 只保留当前存在且启用的 MCP Server ID，禁用、删除或名称为空时清掉；`McpSessionRegistry.reconcile` 启动时把持久化 ID 合入 `manuallyStopped`，`stopClient`/`restartClient` 同步写入；官方导出口清空该字段；stdio 状态说明改为“重启 app 后仍停止”。
+- 理由：手动停止原本只在内存，app 重启后会自动拉起，用户明确停掉的 Server 会自己回来；持久化让停止语义符合预期，同时保留配置和工作区。
+- 合并注意：字段有默认值，旧设置和旧备份解码为空集合；旧构建忽略这个 key，但不会删除它。只持久化启用的有效 ID，禁用/删除即视为恢复默认；点服务器重启会清掉停止标记；官方导出不携带本地停止态。自家备份会带上该字段，恢复后按当前配置归一化。停止仍只影响 MCP session，不删除配置或工作区。
+- 测试：`SettingsStoppedMcpTest` 覆盖默认空、序列化往返、归一化只留启用有效 ID、stdio、重复 workspace、空名称和官方导出清空；`McpToolAvailabilityTest` 覆盖持久化标记与运行时标记的合并；`SettingsFieldsTest` 覆盖新字段的 DataStore 映射；在 `3.1.1-custom.3436+be9bdb3` 上验收：停止 Echo 后 force-stop app，重开仍显示 `Not started`，mock 收到 `tools=1, mcp=[]`；点重启后 `Connected`，mock 收到 `tools=2, mcp=['mcp__Echo__echo']` 并完成调用。

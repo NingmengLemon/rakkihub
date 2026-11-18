@@ -2,6 +2,8 @@ package me.rerere.rikkahub.data.ai.mcp
 
 import me.rerere.rikkahub.data.model.Assistant
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
+import org.junit.Assert.assertTrue
 import org.junit.Test
 import kotlin.uuid.Uuid
 
@@ -18,6 +20,13 @@ class McpToolAvailabilityTest {
         id = id,
         commonOptions = McpCommonOptions(enable = enabled, name = name, tools = tools),
     )
+
+    @Test
+    fun `stop helper includes persisted and registry markers`() {
+        assertTrue(isMcpServerStopped(serverId, setOf(serverId), { false }))
+        assertTrue(isMcpServerStopped(serverId, emptySet(), { it == serverId }))
+        assertFalse(isMcpServerStopped(serverId, setOf(otherId), { false }))
+    }
 
     @Test
     fun `returns enabled tools from bound servers`() {

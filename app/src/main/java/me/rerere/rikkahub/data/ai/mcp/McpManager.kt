@@ -117,7 +117,9 @@ class McpManager(
         return availableMcpTools(
             servers = settings.allMcpServers(),
             assistant = assistant,
-            isStopped = sessionRegistry::isManuallyStopped,
+            isStopped = { id ->
+                isMcpServerStopped(id, settings.stoppedMcpServerIds, sessionRegistry::isManuallyStopped)
+            },
         )
     }
 
@@ -199,6 +201,12 @@ class McpManager(
  * 且工具自身已启用。停止的 Server 不应继续出现在工具列表里，否则模型会调用一个
  * 不可用的工具，只能得到运行时错误。
  */
+internal fun isMcpServerStopped(
+    id: Uuid,
+    persistedStoppedIds: Set<Uuid>,
+    registryStopped: (Uuid) -> Boolean,
+): Boolean = id in persistedStoppedIds || registryStopped(id)
+
 internal fun availableMcpTools(
     servers: List<McpServerConfig>,
     assistant: Assistant,

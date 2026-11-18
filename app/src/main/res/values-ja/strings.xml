@@ -719,7 +719,7 @@
   <string name="setting_mcp_page_stdio_section_process">プロセス</string>
   <string name="setting_mcp_page_stdio_section_runtime">実行環境</string>
   <string name="setting_mcp_page_stdio_status">接続状態</string>
-  <string name="setting_mcp_page_stdio_status_desc">停止は手動で再起動するか無効化するまで保持され、アプリを再起動しても停止したままです。設定は保持されます。</string>
+  <string name="setting_mcp_page_stdio_status_desc">停止は手動で再起動するか無効化するまで保持され、アプリを再起動しても停止したままです。設定とワークスペースは保持されます。</string>
   <string name="setting_mcp_page_stdio_restart">再起動</string>
   <string name="setting_mcp_page_stdio_stop">停止</string>
   <string name="setting_mcp_page_stdio_workspace">専用ワークスペース</string>

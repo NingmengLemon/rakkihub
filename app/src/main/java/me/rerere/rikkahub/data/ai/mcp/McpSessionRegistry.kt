@@ -120,7 +120,7 @@ internal class McpSessionRegistry(
 ) {
     private val sessions = ConcurrentHashMap<Uuid, McpSession>()
 
-    // 用户手动停止的 Server，后续 settings 变化经 reconcile 也不自动拉起；重启或禁用后清除
+    // 用户手动停止的 Server，后续 settings 变化经 reconcile 也不自动拉起；服务器重启或禁用后清除，C123 起从设置恢复
     private val manuallyStopped = ConcurrentHashMap.newKeySet<Uuid>()
 
     fun getClient(configId: Uuid): Client? = sessions[configId]?.client
