@@ -66,6 +66,27 @@ class ConversationRecentModelMessagesTest {
     }
 
     @Test
+    fun `failed replies with empty step projection stay out of title context`() {
+        val user = UIMessage.user("question")
+        val failed = UIMessage.assistant("failed step").copy(
+            status = MessageStatus.FAILED,
+            steps = listOf(
+                MessageStep(
+                    status = StepStatus.FAILED,
+                    startPartIndex = 0,
+                    endPartIndex = 1,
+                    startedAt = Clock.System.now(),
+                ),
+            ),
+        )
+        val conversation = Conversation.ofId(Uuid.random()).copy(
+            messageNodes = listOf(user.toMessageNode(), failed.toMessageNode())
+        )
+
+        assertEquals(listOf(user.id), conversation.recentModelMessages(10).map { it.id })
+    }
+
+    @Test
     fun `compression scratch stays out of title context`() {
         val user = UIMessage.user("question")
         val prompt = UIMessage.user("compress").copy(isCompressionPrompt = true)

@@ -6,6 +6,7 @@ import me.rerere.ai.ui.UIMessage
 import me.rerere.ai.ui.UIMessagePart
 import me.rerere.ai.ui.limitContext
 import me.rerere.ai.ui.projectForSummary
+import me.rerere.ai.ui.withoutCompressionScratch
 import kotlin.uuid.Uuid
 
 /**
@@ -105,6 +106,8 @@ internal fun Conversation.planCompression(
     if (maxInputTokens != Int.MAX_VALUE) {
         val estimated = messagesToSend
             .projectForSummary()
+            .filter { it.parts.isNotEmpty() || it.isContextCheckpoint || it.isHistoryTruncationMarker }
+            .withoutCompressionScratch()
             .limitContext(contextMessageLimit)
             .estimatedTokens()
         if (estimated > maxInputTokens) return CompressionPlanResult.RangeTooLarge

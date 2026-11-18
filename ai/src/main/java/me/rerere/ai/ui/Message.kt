@@ -245,13 +245,12 @@ private fun UIMessage.projectFailedForSummary(): UIMessage? {
             val end = step.endPartIndex.coerceIn(start, parts.size)
             val stepParts = parts.subList(start, end)
             when (step.status) {
-                StepStatus.SUCCEEDED -> addAll(stepParts)
-                StepStatus.TOOLS -> addAll(stepParts.filterNot { part ->
-                    part is UIMessagePart.Tool && (!part.isExecuted || !part.callComplete)
+                StepStatus.SUCCEEDED, StepStatus.TOOLS -> addAll(stepParts.filter { part ->
+                    part.isSummaryBody() || part.isCompleteSummaryTool()
                 })
 
                 StepStatus.FAILED, StepStatus.CANCELLED -> addAll(stepParts.filter { part ->
-                    part is UIMessagePart.Tool && part.isExecuted && part.callComplete
+                    part.isCompleteSummaryTool()
                 })
 
                 StepStatus.RUNNING -> Unit
@@ -261,11 +260,19 @@ private fun UIMessage.projectFailedForSummary(): UIMessage? {
     if (projected.isEmpty()) return null
     return copy(
         parts = projected,
+        annotations = emptyList(),
         status = MessageStatus.COMPLETE,
         steps = emptyList(),
         isGenerating = false,
     )
 }
+
+private fun UIMessagePart.isSummaryBody(): Boolean =
+    this is UIMessagePart.Text || this is UIMessagePart.Reasoning
+
+private fun UIMessagePart.isCompleteSummaryTool(): Boolean =
+    (this is UIMessagePart.Tool && isExecuted && callComplete) ||
+        (this is UIMessagePart.ServerTool && isFinished)
 
 /** 去掉压缩临时提示词及其紧随的 assistant 回复；失败/取消的重试卡只给用户看，不进请求。 */
 fun List<UIMessage>.withoutCompressionScratch(): List<UIMessage> {

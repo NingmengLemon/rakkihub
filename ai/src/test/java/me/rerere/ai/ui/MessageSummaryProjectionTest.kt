@@ -1,5 +1,6 @@
 package me.rerere.ai.ui
 
+import kotlinx.serialization.json.JsonPrimitive
 import me.rerere.ai.core.MessageRole
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
@@ -58,6 +59,38 @@ class MessageSummaryProjectionTest {
     }
 
     @Test
+    fun `cancelled step drops text but keeps completed tools`() {
+        val message = failed(
+            parts = listOf(UIMessagePart.Text("partial"), tool("done")),
+            steps = listOf(step(StepStatus.CANCELLED, 0, 2)),
+        )
+
+        val projected = listOf(message).projectForSummary().single()
+
+        assertEquals(listOf(tool("done")), projected.parts)
+    }
+
+    @Test
+    fun `running-only projection is dropped`() {
+        val message = failed(
+            parts = listOf(UIMessagePart.Text("streaming")),
+            steps = listOf(step(StepStatus.RUNNING, 0, 1)),
+        )
+
+        assertTrue(listOf(message).projectForSummary().isEmpty())
+    }
+
+    @Test
+    fun `failed step with only text is dropped`() {
+        val message = failed(
+            parts = listOf(UIMessagePart.Text("nothing useful")),
+            steps = listOf(step(StepStatus.FAILED, 0, 1)),
+        )
+
+        assertTrue(listOf(message).projectForSummary().isEmpty())
+    }
+
+    @Test
     fun `successful steps keep their parts in order`() {
         val message = failed(
             parts = listOf(
@@ -87,7 +120,7 @@ class MessageSummaryProjectionTest {
     }
 
     @Test
-    fun `tools step keeps text and complete tools but drops incomplete calls`() {
+    fun `tools step keeps text and complete tools but drops incomplete calls and media`() {
         val incomplete = UIMessagePart.Tool(
             toolCallId = "half",
             toolName = "write",
@@ -95,10 +128,15 @@ class MessageSummaryProjectionTest {
             output = emptyList(),
         )
         val message = failed(
-            parts = listOf(UIMessagePart.Text("calling tools"), incomplete, tool("done")),
+            parts = listOf(
+                UIMessagePart.Text("calling tools"),
+                UIMessagePart.Image("file:///tmp/a.png"),
+                incomplete,
+                tool("done"),
+            ),
             steps = listOf(
-                step(StepStatus.TOOLS, 0, 3),
-                step(StepStatus.FAILED, 3, 3),
+                step(StepStatus.TOOLS, 0, 4),
+                step(StepStatus.FAILED, 4, 4),
             ),
         )
 
@@ -108,6 +146,78 @@ class MessageSummaryProjectionTest {
             listOf(UIMessagePart.Text("calling tools"), tool("done")),
             projected.parts,
         )
+    }
+
+    @Test
+    fun `completed server tools are kept and in-progress ones are dropped`() {
+        val completed = serverTool("completed", ServerToolStatus.COMPLETED)
+        val inProgress = serverTool("running", ServerToolStatus.IN_PROGRESS)
+        val message = failed(
+            parts = listOf(UIMessagePart.Text("text"), completed, inProgress),
+            steps = listOf(step(StepStatus.SUCCEEDED, 0, 3)),
+        )
+
+        val projected = listOf(message).projectForSummary().single()
+
+        assertEquals(listOf(UIMessagePart.Text("text"), completed), projected.parts)
+    }
+
+    @Test
+    fun `failed step keeps completed server tools`() {
+        val completed = serverTool("completed", ServerToolStatus.COMPLETED)
+        val message = failed(
+            parts = listOf(UIMessagePart.Text("failed text"), completed),
+            steps = listOf(step(StepStatus.FAILED, 0, 2)),
+        )
+
+        val projected = listOf(message).projectForSummary().single()
+
+        assertEquals(listOf(completed), projected.parts)
+    }
+
+    @Test
+    fun `tool with output but incomplete call is dropped`() {
+        val part = UIMessagePart.Tool(
+            toolCallId = "half",
+            toolName = "write",
+            input = "{}",
+            output = listOf(UIMessagePart.Text("partial")),
+            callComplete = false,
+        )
+        val message = failed(
+            parts = listOf(part),
+            steps = listOf(step(StepStatus.FAILED, 0, 1)),
+        )
+
+        assertTrue(listOf(message).projectForSummary().isEmpty())
+    }
+
+    @Test
+    fun `parts outside step ranges are ignored`() {
+        val message = failed(
+            parts = listOf(
+                UIMessagePart.Text("inside"),
+                UIMessagePart.Text("outside"),
+            ),
+            steps = listOf(step(StepStatus.SUCCEEDED, 0, 1)),
+        )
+
+        val projected = listOf(message).projectForSummary().single()
+
+        assertEquals(listOf(UIMessagePart.Text("inside")), projected.parts)
+    }
+
+    @Test
+    fun `annotations are dropped from summary projection`() {
+        val message = failed(
+            parts = listOf(UIMessagePart.Text("inside")),
+            steps = listOf(step(StepStatus.SUCCEEDED, 0, 1)),
+            annotations = listOf(UIMessageAnnotation.UrlCitation(title = "x", url = "https://example.com")),
+        )
+
+        val projected = listOf(message).projectForSummary().single()
+
+        assertTrue(projected.annotations.isEmpty())
     }
 
     @Test
@@ -122,9 +232,14 @@ class MessageSummaryProjectionTest {
         assertEquals(listOf(message), listOf(message).projectForSummary())
     }
 
-    private fun failed(parts: List<UIMessagePart>, steps: List<MessageStep>) = UIMessage(
+    private fun failed(
+        parts: List<UIMessagePart>,
+        steps: List<MessageStep>,
+        annotations: List<UIMessageAnnotation> = emptyList(),
+    ) = UIMessage(
         role = MessageRole.ASSISTANT,
         parts = parts,
+        annotations = annotations,
         status = MessageStatus.FAILED,
         steps = steps,
     )
@@ -134,6 +249,13 @@ class MessageSummaryProjectionTest {
         toolName = "write",
         input = "{}",
         output = listOf(UIMessagePart.Text("ok")),
+    )
+
+    private fun serverTool(id: String, status: ServerToolStatus) = UIMessagePart.ServerTool(
+        toolCallId = id,
+        toolName = "web_search",
+        output = JsonPrimitive("result"),
+        status = status,
     )
 
     private fun step(status: StepStatus, start: Int, end: Int) = MessageStep(

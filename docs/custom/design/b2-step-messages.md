@@ -208,10 +208,10 @@ RUNNING 会出现在当前请求里：AgentLoop 把正在生成的 assistant 消
 
 | step 状态 | 保留内容 |
 | --- | --- |
-| SUCCEEDED | 全部 parts（保持 C58 的现状） |
-| FAILED | 已执行完成的 Tool parts，正文与推理丢弃 |
-| CANCELLED | 已执行完成的 Tool parts，正文与推理丢弃 |
-| TOOLS | 正文、推理和已执行完成的 Tool parts |
+| SUCCEEDED | 正文、推理、已执行完成的 Tool parts、已完成的 ServerTool；媒体与 annotations 丢弃 |
+| FAILED | 已执行完成的 Tool parts、已完成的 ServerTool；正文、推理、媒体与 annotations 丢弃 |
+| CANCELLED | 已执行完成的 Tool parts、已完成的 ServerTool；正文、推理、媒体与 annotations 丢弃 |
+| TOOLS | 正文、推理、已执行完成的 Tool parts、已完成的 ServerTool；未完成 Tool、IN_PROGRESS ServerTool、媒体与 annotations 丢弃 |
 | RUNNING | 丢弃 |
 
 规则：
@@ -242,11 +242,11 @@ RUNNING 会出现在当前请求里：AgentLoop 把正在生成的 assistant 消
 ## 7. 上下文与压缩
 
 - `contextMessageLimit` 按消息条数计数（user 与 assistant 都算），不按 turn 计数；一个 assistant 消息承载一轮的多个 step，消息条数与今天一致。
-- `buildStep` 的顺序固定为：`projectForRequest`、丢弃 `parts.isEmpty()` 的消息（检查点与截断标记除外）、`withoutCompressionScratch`、`limitContext`、输入变换、`mergeAdjacentUserMessages`。
+- `buildStep` 的顺序：普通请求用 `projectForRequest`，摘要分支用 `projectForSummary`；之后统一丢空、`withoutCompressionScratch`、`limitContext`、插入 system 消息、输入变换、`mergeAdjacentUserMessages`。空消息判断不包含 system 消息。
 - 失败消息在投影后仍保留时，会占用 `contextMessageLimit` 的名额；纯文本失败的 step 投影为空后整条消息丢弃，不占名额。
 - `contextLimitBoundaryIndex` 的判据：limit 为 0、原始 `currentMessages` 里存在压缩提示词、或没有发生截断时返回 null；压缩提示词的检查必须在 `withoutCompressionScratch` 之前做，否则提示词已经被删掉，判据永远不会成立。发生截断的判据是窗口起点严格晚于投影列表的尾部起点（检查点之后的第一条），等价于 `contextLimitStart(limit) > tailStart`；如果前面有被投影丢弃的消息，不能用节点下标和 `contextWindowStart()` 比较；先在消息列表空间判定截断，再按 id 映射回节点空间。顺序是先请求投影与丢空，再 `withoutCompressionScratch`，再执行“最后一条是 assistant 时先去掉它”，再 `contextLimitStart`，再按消息 id 映射回节点下标，映射不到返回 null。
 - `keepRecent`、检查点、`planHistoryTruncation` 仍按 `messageNodes` 计数，不改；一个 turn 仍然只有一条 assistant 消息，压缩不会从 turn 中间切开。
-- `CompressionPlan` 的估算窗口改为与 `buildStep` 相同：先投影并丢弃空消息，再 `withoutCompressionScratch`，再 `limitContext`。
+- `CompressionPlan` 的估算窗口与摘要请求一致：先 `projectForSummary`、丢空、`withoutCompressionScratch`、`limitContext`。
 - 压缩请求由 `buildStep(forSummary = true)` 构建，与估算共用 `projectForSummary`；摘要内容可以包含成功 step 的正文和失败 step 的工具结果，不包含失败正文。
 
 ## 8. 重试
