@@ -149,6 +149,36 @@ class MessageSummaryProjectionTest {
     }
 
     @Test
+    fun `tool output media is stripped but text output is kept`() {
+        val mixed = UIMessagePart.Tool(
+            toolCallId = "mixed",
+            toolName = "read_image",
+            input = "{}",
+            output = listOf(
+                UIMessagePart.Image("file:///tmp/result.png"),
+                UIMessagePart.Text("a red circle"),
+            ),
+        )
+        val imageOnly = UIMessagePart.Tool(
+            toolCallId = "image-only",
+            toolName = "read_image",
+            input = "{}",
+            output = listOf(UIMessagePart.Image("file:///tmp/only.png")),
+        )
+        val message = failed(
+            parts = listOf(mixed, imageOnly),
+            steps = listOf(step(StepStatus.FAILED, 0, 2)),
+        )
+
+        val projected = listOf(message).projectForSummary().single()
+
+        assertEquals(
+            listOf(mixed.copy(output = listOf(UIMessagePart.Text("a red circle")))),
+            projected.parts,
+        )
+    }
+
+    @Test
     fun `completed server tools are kept and in-progress ones are dropped`() {
         val completed = serverTool("completed", ServerToolStatus.COMPLETED)
         val inProgress = serverTool("running", ServerToolStatus.IN_PROGRESS)

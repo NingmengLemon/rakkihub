@@ -247,7 +247,7 @@ class ChatRequestFactory(
         )
     }
 
-    /** 一步请求实际发出的消息和参数；正常对话和压缩共用，二者的请求前缀必须一致才能命中提示词缓存 */
+    /** 一步请求实际发出的消息和参数；普通请求与压缩摘要共用，无失败消息时前缀一致才能命中提示词缓存 */
     private suspend fun buildStep(
         turn: ChatTurnContext,
         messages: List<UIMessage>,

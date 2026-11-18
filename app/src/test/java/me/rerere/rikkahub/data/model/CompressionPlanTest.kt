@@ -1,6 +1,9 @@
 package me.rerere.rikkahub.data.model
 
 import me.rerere.ai.core.MessageRole
+import me.rerere.ai.ui.MessageStatus
+import me.rerere.ai.ui.MessageStep
+import me.rerere.ai.ui.StepStatus
 import me.rerere.ai.ui.ToolApprovalState
 import me.rerere.ai.ui.UIMessage
 import me.rerere.ai.ui.UIMessagePart
@@ -9,6 +12,7 @@ import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
+import kotlin.time.Clock
 import kotlin.uuid.Uuid
 
 class CompressionPlanTest {
@@ -186,6 +190,36 @@ class CompressionPlanTest {
             windowStart = 0,
             keepRecent = 1,
             maxInputTokens = 100,
+        )
+
+        assertTrue(plan is CompressionPlanResult.Ready)
+    }
+
+    @Test
+    fun `summary budget ignores a failed message whose projection is empty`() {
+        val failed = UIMessage.assistant("x".repeat(2_000)).copy(
+            status = MessageStatus.FAILED,
+            steps = listOf(
+                MessageStep(
+                    status = StepStatus.FAILED,
+                    startPartIndex = 0,
+                    endPartIndex = 1,
+                    startedAt = Clock.System.now(),
+                ),
+            ),
+        )
+        val conversation = conversation(
+            listOf(
+                MessageNode.of(UIMessage.user("a")),
+                MessageNode.of(failed),
+                MessageNode.of(UIMessage.user("b")),
+            )
+        )
+
+        val plan = conversation.planCompression(
+            windowStart = 0,
+            keepRecent = 1,
+            maxInputTokens = 10,
         )
 
         assertTrue(plan is CompressionPlanResult.Ready)

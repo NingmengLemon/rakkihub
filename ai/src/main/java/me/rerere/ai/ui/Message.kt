@@ -245,12 +245,12 @@ private fun UIMessage.projectFailedForSummary(): UIMessage? {
             val end = step.endPartIndex.coerceIn(start, parts.size)
             val stepParts = parts.subList(start, end)
             when (step.status) {
-                StepStatus.SUCCEEDED, StepStatus.TOOLS -> addAll(stepParts.filter { part ->
-                    part.isSummaryBody() || part.isCompleteSummaryTool()
+                StepStatus.SUCCEEDED, StepStatus.TOOLS -> addAll(stepParts.mapNotNull { part ->
+                    if (part.isSummaryBody()) part else part.summaryToolOrNull()
                 })
 
-                StepStatus.FAILED, StepStatus.CANCELLED -> addAll(stepParts.filter { part ->
-                    part.isCompleteSummaryTool()
+                StepStatus.FAILED, StepStatus.CANCELLED -> addAll(stepParts.mapNotNull { part ->
+                    part.summaryToolOrNull()
                 })
 
                 StepStatus.RUNNING -> Unit
@@ -270,9 +270,25 @@ private fun UIMessage.projectFailedForSummary(): UIMessage? {
 private fun UIMessagePart.isSummaryBody(): Boolean =
     this is UIMessagePart.Text || this is UIMessagePart.Reasoning
 
-private fun UIMessagePart.isCompleteSummaryTool(): Boolean =
-    (this is UIMessagePart.Tool && isExecuted && callComplete) ||
-        (this is UIMessagePart.ServerTool && isFinished)
+private fun UIMessagePart.summaryToolOrNull(): UIMessagePart? = when (this) {
+    is UIMessagePart.Tool -> {
+        if (!isExecuted || !callComplete) {
+            null
+        } else {
+            val output = output.filterNot { it.isMediaPart() }
+            if (output.isEmpty()) null else copy(output = output)
+        }
+    }
+
+    is UIMessagePart.ServerTool -> takeIf { isFinished }
+    else -> null
+}
+
+private fun UIMessagePart.isMediaPart(): Boolean =
+    this is UIMessagePart.Image ||
+        this is UIMessagePart.Video ||
+        this is UIMessagePart.Audio ||
+        this is UIMessagePart.Document
 
 /** 去掉压缩临时提示词及其紧随的 assistant 回复；失败/取消的重试卡只给用户看，不进请求。 */
 fun List<UIMessage>.withoutCompressionScratch(): List<UIMessage> {

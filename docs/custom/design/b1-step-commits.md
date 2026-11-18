@@ -147,7 +147,7 @@ val callComplete: Boolean = true
 - 半截 ToolCall：`finishStep` 删除后如果消息为空，按 `EMPTY_RESPONSE` 失败结算（step FAILED、消息 FAILED、错误卡片），不生成空 COMPLETE 消息；如果还有其它内容，正常继续。
 - 取消或加载恢复的目标消息如果 `parts` 为空（首 token 前取消、prepareStep 成功后还没收到内容），删除该节点而不是留下空回复；错误卡片仍然显示。
 - annotations 是消息级字段：请求投影在消息 `status = FAILED` 时整体丢弃，否则保留；媒体 part（包括 Tool.output 里的图片）在 FAILED/CANCELLED/TOOLS step 丢弃，SUCCEEDED 保留。摘要投影始终丢弃 annotations 与媒体。
-- `ServerTool` 的 `IN_PROGRESS` 在请求与摘要投影中丢弃，已 COMPLETED/FAILED 的按投影表保留。
+- `ServerTool` 的 `IN_PROGRESS` 在摘要投影中丢弃，已 COMPLETED/FAILED 的按投影表保留；请求投影的目标同样是丢弃，但当前 `projectForRequest` 对非 FAILED 消息原样返回，这个收口尚未做。
 - 每条消息仍由现有保存循环落库；step 的收尾更新在同一个节点行内完成，不新增行。
 
 ## 6. 投影
@@ -184,7 +184,7 @@ val callComplete: Boolean = true
 
 - 投影后 `parts.isEmpty()` 的消息丢弃；检查点与 `parts=[Text("")]` 的截断标记保留。
 - 投影后的消息把 `steps` 清空，请求与摘要都不需要原始范围；原始消息不受影响。
-- `buildStep` 的顺序：`projectForRequest`、丢空、`withoutCompressionScratch`、`limitContext`、插入 system 消息、输入变换、`mergeAdjacentUserMessages`。空消息判断不包含 system 消息。
+- `buildStep` 的顺序：普通请求用 `projectForRequest`，摘要分支用 `projectForSummary`；之后统一丢空、`withoutCompressionScratch`、`limitContext`、插入 system 消息、输入变换、`mergeAdjacentUserMessages`。空消息判断不包含 system 消息。
 - `CompressionPlan` 的估算窗口同样先投影、丢空、`withoutCompressionScratch`、`limitContext`，与请求一致。
 - 调用方：`ChatRequestFactory.buildStep` 普通请求、`ContextPressure` 用请求投影；摘要分支、标题的 `recentModelMessages`、`CompressionPlan` 用摘要投影；记忆的 `dialogueMessages`、`conversation_read` 仍整条过滤失败回复。B1 不改 `contextLimitBoundaryIndex`、`conversation_search` 与 Web DTO，它们保持现状。
 - 只有半截 ToolCall、被 `finishStep` 删除后消息为空时，按空消息处理，不把空 assistant 当有效回复。

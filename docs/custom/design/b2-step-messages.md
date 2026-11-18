@@ -184,7 +184,7 @@ val callComplete: Boolean = true
 - `callComplete = false` 的 Tool 在 `finishStep` 时就地删除；AgentLoop 主循环的待工具判断、审批判断和 `executeTools` 都以 `isExecuted && callComplete` 为准，避免半截调用被标记 Pending 或造成无挂起点忙循环。
 - 审批冲突契约：`handleToolApproval` 返回 `ApprovalResult`（Accepted / Conflict / Stale）；ChatVM、浮动窗口与 Web 路由按 Conflict 显示提示或 409，不抛到全局错误。
 - 首 token 前取消：AgentLoop 在 step 开始、发起请求前发一次 step-start 的 `MessageUpdated`，确保消息与 step 记录先存在，取消时结算有真实目标。
-- 取消时未派发的完整调用补 `not_started`；已派发但没拿到结果的补 `outcome_unknown`；`ServerTool` 里仍是 `IN_PROGRESS` 的调用在请求与摘要投影中丢弃，已经 COMPLETED 或 FAILED 的按第 6 节保留。
+- 取消时未派发的完整调用补 `not_started`；已派发但没拿到结果的补 `outcome_unknown`；`ServerTool` 里仍是 `IN_PROGRESS` 的调用在摘要投影中丢弃，已经 COMPLETED 或 FAILED 的按第 6 节保留；请求投影的目标同样是丢弃，但当前 `projectForRequest` 对非 FAILED 消息原样返回，这个收口尚未做。
 - 进程死亡时只关闭 RUNNING 或 TOOLS 的 step；审批暂停的 TOOLS（消息 COMPLETE、仍有 Pending 工具）保持原样；最后一步已经 SUCCEEDED 的保持成功，消息仍标 INTERRUPTED，表示这一轮没有正常走完。
 - 每条消息仍由现有保存循环落库；step 的收尾更新在同一个节点行内完成，不新增行。
 
@@ -213,6 +213,8 @@ RUNNING 会出现在当前请求里：AgentLoop 把正在生成的 assistant 消
 | CANCELLED | 已执行完成的 Tool parts、已完成的 ServerTool；正文、推理、媒体与 annotations 丢弃 |
 | TOOLS | 正文、推理、已执行完成的 Tool parts、已完成的 ServerTool；未完成 Tool、IN_PROGRESS ServerTool、媒体与 annotations 丢弃 |
 | RUNNING | 丢弃 |
+
+`Tool.output` 里的媒体同样剔除；只剩媒体的工具整个丢弃。
 
 规则：
 
