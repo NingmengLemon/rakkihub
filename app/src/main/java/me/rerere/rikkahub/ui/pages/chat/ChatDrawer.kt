@@ -321,6 +321,9 @@ fun ChatDrawerContent(
                 onMoveToFolder = {
                     conversationToMoveFolder = it
                     showMoveToFolderSheet = true
+                },
+                onStripThoughtSignatures = { conversation, protocols ->
+                    vm.stripThoughtSignatures(conversation.id, protocols)
                 }
             )
 

@@ -1,6 +1,6 @@
 # 明细：聊天、上下文与模型
 
-本文件是 [checklist.md](../checklist.md) 的明细，收录 C35、C43 至 C44、C46 至 C47、C49 至 C53、C57 至 C63、C65 至 C78、C81 至 C86、C97 至 C100、C107、C121、C122、C130、C131。
+本文件是 [checklist.md](../checklist.md) 的明细，收录 C35、C43 至 C44、C46 至 C47、C49 至 C53、C57 至 C63、C65 至 C78、C81 至 C86、C97 至 C100、C107、C121、C122、C130、C131、C133。
 
 <a id="c35"></a>
 
@@ -416,3 +416,12 @@
 - 理由：两条保存循环原来只 `Log.w`，用户完全看不到。生成到一半存储失败或节点过大跳过保存时，界面一切正常，最后可能整段回复没落盘。错误卡片（C71）表达的是生成失败，语义不同，所以单独做一条轻量警告。
 - 合并注意：警告不落盘，进程重启后重新判断；不只是定期保存成功会清除，生成结束的 `finishGeneration()`、压缩成功/失败的完整落库、发送前的 `session.flush()` 也都会清，否则一次瞬时失败会让卡片在整轮结束甚至下一轮里一直挂着；用户手动关闭同样清除，不自动超时；不要混进 `ChatError` 通道，两者语义和生命周期不同；生成与压缩两条循环都要接，否则压缩摘要的保存失败仍然静默；节点超过 16MB 时 `MessageSaveLoop` 本来就会跳过并回调 `onTooLarge`，这里只负责展示，不再重试；`persistMessageNode` 因节点漂移或含 base64 图片返回 null 时走的是 C50 的静默跳过，不触发本警告，那部分界面仍显示正常是有意为之。
 - 测试：`SaveWarningStoreTest` 4 条覆盖按会话记录、原因覆盖、只清指定会话、未知会话清除无副作用；`:app:compileGithubDebugKotlin` 通过。写失败与超限都没有在真机上主动注入触发，警告卡的实际展示未做设备验证。
+
+<a id="c133"></a>
+
+## C133 按协议清除历史思考签名
+
+- 落点：`ThoughtSignatureProtocol` 只收录可以安全清除的两种 Google 协议，并各自列出 metadata key 与嵌套 key（generateContent 的 `thoughtSignature`；Interactions 的 `interactions_signature` 与原始块里的 `signature`）；`UIMessagePart.stripThoughtSignatures(protocols)` 返回新 part，删除顶层 metadata key，并对 `server_tool_call`/`server_tool_result` 里的原始 JSON 递归清理；`UIMessage`/`Conversation` 同样返回新对象；`ChatService.stripThoughtSignatures(conversationId, protocols)` 生成中拒绝并整会话落库，`ChatVM` 捕获 `ApiException` 后提示先停止生成；会话列表长按菜单新增「清除思考签名」，弹窗按协议勾选（默认 Google generateContent），四份 locale 加标题、说明、确认和两个协议标签。
+- 理由：Gemini 的思考签名会过期，openrouter 上的 Gemini 隔几天再用同一会话会直接报 400 corrupted thought signature。只提供 Google 两种协议，是因为 Claude、OpenAI Responses、OpenRouter 的签名块在重放时必须原样带回，单删签名字段会造出非法块，换一种 400；那几个协议要等 provider 侧重放能跳过无签名块后再开放。
+- 合并注意：必须返回新 part，不能原地改 `metadata`；原地改会让新旧 `Conversation` 相等，`StateFlow` 的相等性判断会跳过更新，`flush` 不会写库，重启后签名又回来；`server_tool_*` 里保存的是 provider 原始块，签名可能嵌在里面，只删顶层 key 对服务端工具会话无效；只删 metadata，推理正文与节点结构不动，因此不可恢复，必须弹窗确认；生成中或等待审批时 `ensureNotGenerating` 抛 `ConflictException`，`ChatVM` 捕获后提示，不能裸 `launch`；协议 key 与嵌套 key 必须和 `MessageMetadata.kt`、GoogleProvider/InteractionsAPI 的原始块结构保持一致，上游改字段时同步。
+- 测试：`ThoughtSignatureStripTest` 5 条覆盖只删所选协议、原 part 不被修改、server tool 嵌套签名清理、空选择返回同一实例、消息整体变成不同的值；`ThoughtSignaturePersistenceTest` 1 条用 `ConversationSession` + `FakeConversationStore` 确认剥离后快照确实不同、`flush` 真的写库、落库后的 part 已无签名且原快照未被改；`:ai:testDebugUnitTest --tests "me.rerere.ai.ui.ThoughtSignatureStripTest"`、`:app:testGithubDebugUnitTest --tests "me.rerere.rikkahub.service.ThoughtSignaturePersistenceTest"` 与 `:app:compileGithubDebugKotlin` 通过。设备上从会话列表长按菜单打开弹窗，确认两个协议选项、默认只勾 Google（generateContent）、文案与 Cancel/Clear 按钮正常；为避免改动真实历史，没有实际执行清除。

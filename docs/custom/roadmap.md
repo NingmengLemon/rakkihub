@@ -343,6 +343,7 @@
 - 导出备份的多工作区选择（未排期）：勾选“导出工作区文件”后，继续多选具体要导出的工作区，默认全选；要同时处理本地导出、WebDAV、S3 以及导入侧对缺失工作区的提示。
 - Dependabot PR 分批处理（未排期）：当前不自动合并；等手头功能队列告一段落后按生态逐批看，优先安全和 patch，major 与 Kotlin/Compose/AGP/KSP 的联动单独验证；每批跑目标测试和一次 smoke，避免一次性合入。
 - 上游更新挑选与移植（未排期）：`ref` 保持只读，按批次查看上游提交，优先 bugfix、安全修复和会影响现有行为的改动；每批一个主题，手工移植并带设备验收，不做整分支 merge。
+- 其余协议的签名清除（未排期）：Claude、OpenAI Responses、OpenRouter 的重放要求签名块原样带回，单删签名会留下非法块，需要 provider 侧重放时按缺签名跳过该块后再开放。
 - 散落的 Python 脚本补 PEP 723 单文件脚本元数据（未排期）：给需要独立运行的脚本加 `# /// script` 依赖声明，减少对仓库虚拟环境和隐式全局包的依赖；先盘点实际脚本，再统一格式。
 - model provider 的 mock server 入库（未排期）：如果当前还没有可复用的 mock server，整理一个覆盖 OpenAI Chat/Responses、Claude 和 Gemini 流式响应的最小实现，供 provider 测试和本地联调使用；不要提交真实 key 或抓包数据。
 

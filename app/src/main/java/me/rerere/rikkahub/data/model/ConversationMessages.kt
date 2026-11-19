@@ -7,11 +7,13 @@ import me.rerere.ai.provider.Model
 import me.rerere.ai.ui.MessageStatus
 import me.rerere.ai.ui.ModelSnapshot
 import me.rerere.ai.ui.StepStatus
+import me.rerere.ai.ui.ThoughtSignatureProtocol
 import me.rerere.ai.ui.ToolApprovalState
 import me.rerere.ai.ui.UIMessage
 import me.rerere.ai.ui.UIMessagePart
 import me.rerere.ai.ui.finishPendingTools
 import me.rerere.ai.ui.finishReasoning
+import me.rerere.ai.ui.stripThoughtSignatures
 import kotlin.time.Clock
 import kotlin.uuid.Uuid
 
@@ -431,3 +433,17 @@ internal fun recoverStoppedTool(tool: UIMessagePart.Tool): UIMessagePart.Tool =
 
         else -> recoverInterruptedTool(tool)
     }
+
+/**
+ * 去掉整段会话里所选协议的思考签名。
+ *
+ * 签名过期后服务端可能报 corrupted signature，用户可以选择清掉历史签名，
+ * 让后续请求退化成不带签名重放。只改 metadata，正文与节点结构不动。
+ */
+fun Conversation.stripThoughtSignatures(
+    protocols: Set<ThoughtSignatureProtocol>,
+): Conversation = copy(
+    messageNodes = messageNodes.map { node ->
+        node.copy(messages = node.messages.map { it.stripThoughtSignatures(protocols) })
+    }
+)

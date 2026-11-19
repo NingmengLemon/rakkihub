@@ -31,6 +31,7 @@ import me.rerere.ai.core.ReasoningLevel
 import me.rerere.ai.provider.BuiltInTools
 import me.rerere.ai.provider.ModelAbility
 import me.rerere.ai.ui.MessageStatus
+import me.rerere.ai.ui.ThoughtSignatureProtocol
 import me.rerere.ai.ui.ToolApprovalState
 import me.rerere.ai.ui.UIMessage
 import me.rerere.ai.ui.UIMessagePart
@@ -81,6 +82,7 @@ import me.rerere.rikkahub.data.model.removeCompressionPairs
 import me.rerere.rikkahub.data.model.replaceUserRegexes
 import me.rerere.rikkahub.data.model.settleStoppedApproval
 import me.rerere.rikkahub.data.model.settleUnavailableTools
+import me.rerere.rikkahub.data.model.stripThoughtSignatures
 import me.rerere.rikkahub.data.model.toMessageNode
 import me.rerere.rikkahub.data.model.withAssistantUpdate
 import me.rerere.rikkahub.data.model.withNodeFavorite
@@ -1681,6 +1683,16 @@ class ChatService(
     }
 
     // ---- 消息操作 ----
+
+    /** 去掉整段会话中指定协议的思考签名；生成中拒绝，避免和正在增长的回复交错。 */
+    suspend fun stripThoughtSignatures(
+        conversationId: Uuid,
+        protocols: Set<ThoughtSignatureProtocol>,
+    ) {
+        if (protocols.isEmpty()) return
+        withLoadedSession<Unit>(conversationId) { it.ensureNotGenerating() }
+        mutate(conversationId) { it.stripThoughtSignatures(protocols) }
+    }
 
     /** 结构性编辑在生成中或等待工具审批时拒绝，避免和正在增长的回复节点交错 */
     private fun ConversationSession.ensureNotGenerating() {

@@ -3,6 +3,7 @@ package me.rerere.ai.ui
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.JsonArray
+import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.contentOrNull
@@ -183,3 +184,101 @@ internal fun UIMessagePart.attachGoogleThoughtSignature(signature: String) {
     val addition = GoogleThoughtMetadata(thoughtSignature = signature).toMetadata()
     metadata = metadata?.let { JsonObject(it + addition) } ?: addition
 }
+
+/**
+ * 可以清除的思考签名协议。
+ *
+ * 只收 Google 两种：它们的签名挂在 part 的 metadata 或 server tool 的原始块上，删掉后请求
+ * 退化成不带签名重放，服务端可接受。Claude/OpenAI Responses/OpenRouter 的签名块在重放时
+ * 必须原样带回，单删签名会造出非法块，等 provider 侧重放能跳过无签名块时再开放。
+ */
+enum class ThoughtSignatureProtocol(
+    val metadataKeys: List<String>,
+    val nestedKeys: List<String>,
+) {
+    GOOGLE_GENERATE_CONTENT(
+        metadataKeys = listOf("thoughtSignature"),
+        nestedKeys = listOf("thoughtSignature"),
+    ),
+    GOOGLE_INTERACTIONS(
+        metadataKeys = listOf("interactions_signature"),
+        nestedKeys = listOf("signature", "interactions_signature"),
+    ),
+    ;
+
+    companion object {
+        val all: Set<ThoughtSignatureProtocol> = entries.toSet()
+    }
+}
+
+private fun JsonElement.withoutSignatureKeys(keys: Set<String>): JsonElement = when (this) {
+    is JsonObject -> JsonObject(
+        entries.mapNotNull { (key, value) ->
+            if (key in keys) null else key to value.withoutSignatureKeys(keys)
+        }.toMap()
+    )
+
+    is JsonArray -> JsonArray(map { it.withoutSignatureKeys(keys) })
+    else -> this
+}
+
+private fun JsonObject?.withoutTopLevelKeys(keys: Set<String>): JsonObject? {
+    if (this == null || keys.isEmpty()) return this
+    val stripped = JsonObject(
+        entries.mapNotNull { (key, value) ->
+            if (key in keys) null else key to value.withoutSignatureKeys(keys)
+        }.toMap()
+    )
+    return stripped.ifEmpty { null }
+}
+
+/**
+ * 返回去掉指定协议签名的副本，原 part 保持不变。
+ *
+ * metadata 是 var，但这里不能原地改：原地改会让新旧 Conversation 相等，StateFlow 的
+ * 相等性判断会跳过更新，最终不会落库。server tool 的原始调用/结果里也可能嵌套签名，
+ * 按协议一并清掉。
+ */
+fun UIMessagePart.stripThoughtSignatures(
+    protocols: Set<ThoughtSignatureProtocol>,
+): UIMessagePart {
+    if (protocols.isEmpty()) return this
+    val metadataKeys = protocols.flatMap { it.metadataKeys }.toSet()
+    val nestedKeys = protocols.flatMap { it.nestedKeys }.toSet()
+    return when (this) {
+        is UIMessagePart.Text -> copy(metadata = metadata.withoutTopLevelKeys(metadataKeys))
+        is UIMessagePart.Image -> copy(metadata = metadata.withoutTopLevelKeys(metadataKeys))
+        is UIMessagePart.Video -> copy(metadata = metadata.withoutTopLevelKeys(metadataKeys))
+        is UIMessagePart.Audio -> copy(metadata = metadata.withoutTopLevelKeys(metadataKeys))
+        is UIMessagePart.Document -> copy(metadata = metadata.withoutTopLevelKeys(metadataKeys))
+        is UIMessagePart.Reasoning -> copy(metadata = metadata.withoutTopLevelKeys(metadataKeys))
+        is UIMessagePart.ToolCall -> copy(metadata = metadata.withoutTopLevelKeys(metadataKeys))
+        is UIMessagePart.ToolResult -> copy(metadata = metadata.withoutTopLevelKeys(metadataKeys))
+        is UIMessagePart.Tool -> copy(metadata = metadata.withoutTopLevelKeys(metadataKeys))
+        is UIMessagePart.ServerTool -> {
+            val stripped = metadata
+                ?.withoutTopLevelKeys(metadataKeys)
+                ?.let { obj ->
+                    JsonObject(
+                        obj.mapValues { (key, value) ->
+                            if (key == "server_tool_call" || key == "server_tool_result") {
+                                value.withoutSignatureKeys(nestedKeys)
+                            } else {
+                                value
+                            }
+                        }
+                    )
+                }
+                ?.ifEmpty { null }
+            copy(metadata = stripped)
+        }
+
+        is UIMessagePart.Search -> this
+    }
+}
+
+/** 去掉一条消息里所有 part 上指定协议的思考签名。 */
+fun UIMessage.stripThoughtSignatures(
+    protocols: Set<ThoughtSignatureProtocol>,
+): UIMessage =
+    copy(parts = parts.map { it.stripThoughtSignatures(protocols) })

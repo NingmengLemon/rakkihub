@@ -15,6 +15,8 @@ import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -25,12 +27,15 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.Checkbox
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.material3.surfaceColorAtElevation
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -39,6 +44,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
+import me.rerere.ai.ui.ThoughtSignatureProtocol
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
@@ -90,7 +96,8 @@ fun ColumnScope.ConversationList(
     onRegenerateTitle: (Conversation) -> Unit = {},
     onPin: (Conversation) -> Unit = {},
     onMoveToAssistant: (Conversation) -> Unit = {},
-    onMoveToFolder: (Conversation) -> Unit = {}
+    onMoveToFolder: (Conversation) -> Unit = {},
+    onStripThoughtSignatures: (Conversation, Set<ThoughtSignatureProtocol>) -> Unit = { _, _ -> }
 ) {
     var hasScrolledToCurrent by remember(current.id) { mutableStateOf(false) }
     // 列表顶部若放了 header，会话项在 LazyColumn 中的位置要往后挪一位
@@ -178,6 +185,7 @@ fun ColumnScope.ConversationList(
                         onPin = onPin,
                         onMoveToAssistant = onMoveToAssistant,
                         onMoveToFolder = onMoveToFolder,
+                        onStripThoughtSignatures = onStripThoughtSignatures,
                         modifier = Modifier.animateItem()
                     )
                 }
@@ -250,6 +258,7 @@ private fun ConversationItem(
     onPin: (Conversation) -> Unit = {},
     onMoveToAssistant: (Conversation) -> Unit = {},
     onMoveToFolder: (Conversation) -> Unit = {},
+    onStripThoughtSignatures: (Conversation, Set<ThoughtSignatureProtocol>) -> Unit = { _, _ -> },
     onClick: (Conversation) -> Unit
 ) {
     val interactionSource = remember { MutableInteractionSource() }
@@ -261,6 +270,12 @@ private fun ConversationItem(
     }
     var showDropdownMenu by remember {
         mutableStateOf(false)
+    }
+    var showStripDialog by remember {
+        mutableStateOf(false)
+    }
+    var stripProtocols by remember {
+        mutableStateOf(setOf(ThoughtSignatureProtocol.GOOGLE_GENERATE_CONTENT))
     }
     Box(
         modifier = modifier
@@ -382,6 +397,19 @@ private fun ConversationItem(
 
                 DropdownMenuItem(
                     text = {
+                        Text(stringResource(R.string.chat_page_strip_thought_signature))
+                    },
+                    onClick = {
+                        showStripDialog = true
+                        showDropdownMenu = false
+                    },
+                    leadingIcon = {
+                        Icon(HugeIcons.Refresh01, null)
+                    }
+                )
+
+                DropdownMenuItem(
+                    text = {
                         Text(stringResource(id = R.string.chat_page_delete))
                     },
                     onClick = {
@@ -395,4 +423,69 @@ private fun ConversationItem(
             }
         }
     }
+
+    if (showStripDialog) {
+        AlertDialog(
+            onDismissRequest = { showStripDialog = false },
+            title = { Text(stringResource(R.string.chat_page_strip_thought_signature)) },
+            text = {
+                Column {
+                    Text(stringResource(R.string.chat_page_strip_thought_signature_desc))
+                    ThoughtSignatureProtocol.entries.forEach { protocol ->
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clickable {
+                                    stripProtocols = if (protocol in stripProtocols) {
+                                        stripProtocols - protocol
+                                    } else {
+                                        stripProtocols + protocol
+                                    }
+                                },
+                        ) {
+                            Checkbox(
+                                checked = protocol in stripProtocols,
+                                onCheckedChange = { checked ->
+                                    stripProtocols = if (checked) {
+                                        stripProtocols + protocol
+                                    } else {
+                                        stripProtocols - protocol
+                                    }
+                                },
+                            )
+                            Text(protocolLabel(protocol))
+                        }
+                    }
+                }
+            },
+            confirmButton = {
+                TextButton(
+                    enabled = stripProtocols.isNotEmpty(),
+                    onClick = {
+                        onStripThoughtSignatures(conversation, stripProtocols)
+                        showStripDialog = false
+                    },
+                ) {
+                    Text(stringResource(R.string.chat_page_strip_thought_signature_confirm))
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { showStripDialog = false }) {
+                    Text(stringResource(R.string.common_cancel))
+                }
+            },
+        )
+    }
 }
+
+@Composable
+private fun protocolLabel(protocol: ThoughtSignatureProtocol): String = stringResource(
+    when (protocol) {
+        ThoughtSignatureProtocol.GOOGLE_GENERATE_CONTENT ->
+            R.string.chat_page_strip_thought_signature_google_generate_content
+
+        ThoughtSignatureProtocol.GOOGLE_INTERACTIONS ->
+            R.string.chat_page_strip_thought_signature_google_interactions
+    }
+)

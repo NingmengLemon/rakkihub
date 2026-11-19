@@ -25,6 +25,7 @@ import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
 import me.rerere.ai.provider.Model
+import me.rerere.ai.ui.ThoughtSignatureProtocol
 import me.rerere.ai.ui.UIMessage
 import me.rerere.ai.ui.UIMessagePart
 import me.rerere.ai.ui.isEmptyInputMessage
@@ -245,6 +246,20 @@ class ChatVM(
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), null)
 
     fun dismissSaveWarning() = chatService.dismissSaveWarning(_conversationId)
+
+    /** 清掉指定会话历史消息里所选协议的思考签名。 */
+    fun stripThoughtSignatures(
+        conversationId: Uuid,
+        protocols: Set<ThoughtSignatureProtocol>,
+    ) {
+        viewModelScope.launch {
+            try {
+                chatService.stripThoughtSignatures(conversationId, protocols)
+            } catch (e: ApiException) {
+                showStopGeneratingFirstError()
+            }
+        }
+    }
 
     val messageQueue = chatService.getMessageQueueFlow(_conversationId)
 

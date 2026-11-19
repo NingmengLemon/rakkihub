@@ -2,6 +2,10 @@
 
 本文件归档已完成的定制、修复与独立化批次，按时间或主题分组。当前状态以 checklist 索引与明细为准，未来方向见 [roadmap.md](../roadmap.md)。
 
+## 2026-11-20 清除历史思考签名
+
+- C133：会话列表可以按协议清除历史消息里的 Google 思考签名（generateContent 与 Interactions），默认只清 generateContent；Claude/OpenAI/OpenRouter 因重放需要原样签名，暂不提供。
+
 ## 2026-11-20 workspace SVG 相对资源
 
 - C132：SVG 文件预览把 WebView 的 base 指向文件所在目录，并只对 SVG 打开文件访问、JS 仍关闭，同目录的 `<image href>` 预期可以加载（未做真机验证）；远程工作区回退原行为。
