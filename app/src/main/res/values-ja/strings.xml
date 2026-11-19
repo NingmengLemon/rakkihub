@@ -1615,4 +1615,6 @@ mDNSアドレス: .localホスト名を使用し、IPを知らなくても同じ
   <string name="setting_mcp_page_stdio_logs_copy">コピー</string>
   <string name="setting_mcp_page_stdio_logs_clear">クリア</string>
   <string name="setting_mcp_page_stdio_logs_copied">ログをコピーしました</string>
+  <string name="chat_page_save_warning_write_failed">メッセージの保存に失敗しました。この返信は不完全な可能性があります</string>
+  <string name="chat_page_save_warning_too_large">返信が大きすぎるため、自動保存をスキップしました</string>
 </resources>

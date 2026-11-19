@@ -161,6 +161,15 @@ enum class ChatErrorSolution {
     CheckFastModelSettings,
 }
 
+/** 生成期间定期保存没能落盘的原因，用于在聊天页给出可见提示。 */
+enum class MessageSaveWarning {
+    /** 写入数据库失败，这条回复可能不完整。 */
+    WRITE_FAILED,
+
+    /** 回复节点超过单次保存上限，自动保存被跳过。 */
+    TOO_LARGE,
+}
+
 class ChatService(
     private val context: Application,
     private val appScope: AppScope,
@@ -237,6 +246,20 @@ class ChatService(
     private val _errors = MutableStateFlow<List<ChatError>>(emptyList())
     val errors: StateFlow<List<ChatError>> = _errors.asStateFlow()
     private val errorsPersistenceMutex = Mutex()
+
+    // 定期保存的可见警告按会话记录；保存成功或用户关闭后清除
+    private val saveWarningStore = SaveWarningStore()
+    val saveWarnings: StateFlow<Map<Uuid, MessageSaveWarning>> = saveWarningStore.warnings
+
+    private fun reportSaveWarning(conversationId: Uuid, warning: MessageSaveWarning) {
+        saveWarningStore.report(conversationId, warning)
+    }
+
+    private fun clearSaveWarning(conversationId: Uuid) {
+        saveWarningStore.clear(conversationId)
+    }
+
+    fun dismissSaveWarning(conversationId: Uuid) = clearSaveWarning(conversationId)
 
     init {
         appScope.launch { restorePersistedErrors() }
@@ -550,6 +573,8 @@ class ChatService(
                 }
                 session.flush()
                 messagePersisted = true
+                // 发送前已经成功落库，上一轮遗留的定期保存告警不再适用
+                clearSaveWarning(session.id)
                 session.submittingMessage = null
 
                 // 开始补全
@@ -821,14 +846,19 @@ class ChatService(
                         },
                         save = {
                             session.persistMessageNode(replyNodeId, turnIncarnation)?.also { storedChars ->
+                                clearSaveWarning(conversationId)
                                 Log.d(TAG, "periodic message save stored $storedChars chars")
                                 if (!touchedUpdateAt) {
                                     touchedUpdateAt = session.touchUpdateAt(turnIncarnation)
                                 }
                             }
                         },
-                        onError = { Log.w(TAG, "periodic message save failed", it) },
+                        onError = {
+                            reportSaveWarning(conversationId, MessageSaveWarning.WRITE_FAILED)
+                            Log.w(TAG, "periodic message save failed", it)
+                        },
                         onTooLarge = { chars ->
+                            reportSaveWarning(conversationId, MessageSaveWarning.TOO_LARGE)
                             Log.w(TAG, "periodic message save skipped: node too large ($chars chars)")
                         },
                     ).run()
@@ -886,6 +916,8 @@ class ChatService(
                         }
                         // 可能被取消了，或者意外结束，兜底保存
                         val finished = session.finishGeneration()
+                        // 完整落库成功，之前的定期保存告警不再成立
+                        clearSaveWarning(conversationId)
                         // 生成结束：取消 Live Update 通知，后台时发送完成通知
                         appEventBus.emit(
                             AppEvent.ChatGenerationEnded(
@@ -1167,9 +1199,17 @@ class ChatService(
                                 session.state.value.messageNodes.firstOrNull { it.id == replyNodeId }
                             )
                         },
-                        save = { session.persistMessageNode(replyNodeId, turnIncarnation) },
-                        onError = { Log.w(TAG, "compression save failed", it) },
+                        save = {
+                            session.persistMessageNode(replyNodeId, turnIncarnation)?.also {
+                                clearSaveWarning(session.id)
+                            }
+                        },
+                        onError = {
+                            reportSaveWarning(session.id, MessageSaveWarning.WRITE_FAILED)
+                            Log.w(TAG, "compression save failed", it)
+                        },
                         onTooLarge = {
+                            reportSaveWarning(session.id, MessageSaveWarning.TOO_LARGE)
                             Log.w(TAG, "compression save skipped: node too large ($it chars)")
                         },
                     ).run()
@@ -1216,12 +1256,16 @@ class ChatService(
                             } ?: throw IllegalStateException(
                                 context.getString(R.string.chat_page_compress_conversation_changed)
                             )
+                            // 压缩结果和检查点已完整落库，清掉定期保存的告警
+                            clearSaveWarning(session.id)
                         } else {
                             // 失败/取消：标成可重试的失败对，结束 reasoning 后连同提示词一起落库；
                             // 加载时只清理 COMPLETE 的崩溃对，不能把这张重试卡清掉
                             session.markReplyStatus(MessageStatus.FAILED)
                             session.replyMessageId.value = null
                             session.finishGeneration()
+                            // 失败对同样完整落库，告警只针对"没存下去"
+                            clearSaveWarning(session.id)
                         }
                     }
                 }

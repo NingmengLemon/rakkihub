@@ -73,6 +73,7 @@ import me.rerere.rikkahub.data.model.contextPressure
 import me.rerere.rikkahub.data.model.isAwaitingToolApproval
 import me.rerere.rikkahub.data.repository.WorkspaceRepository
 import me.rerere.rikkahub.service.ChatError
+import me.rerere.rikkahub.service.MessageSaveWarning
 import me.rerere.rikkahub.service.RecordedRetryAttempt
 import me.rerere.rikkahub.ui.components.ai.ChatAttachmentPickerActions
 import me.rerere.rikkahub.ui.components.ai.ChatInput
@@ -117,6 +118,7 @@ fun ChatPage(id: Uuid, text: String?, files: List<Uri>, nodeId: Uuid? = null) {
     val currentChatModel by vm.currentChatModel.collectAsStateWithLifecycle()
     val assistant by vm.assistant.collectAsStateWithLifecycle()
     val errors by vm.errors.collectAsStateWithLifecycle()
+    val saveWarning by vm.saveWarning.collectAsStateWithLifecycle()
     val retryAttempts by vm.retryAttempts.collectAsStateWithLifecycle()
     val retrying by vm.retrying.collectAsStateWithLifecycle()
 
@@ -233,8 +235,10 @@ fun ChatPage(id: Uuid, text: String?, files: List<Uri>, nodeId: Uuid? = null) {
                     errors = errors,
                     retryAttempts = retryAttempts,
                     retryInProgress = retrying,
+                    saveWarning = saveWarning,
                     onDismissError = { vm.dismissError(it) },
                     onClearAllErrors = { vm.clearErrors() },
+                    onDismissSaveWarning = { vm.dismissSaveWarning() },
                 )
             }
         }
@@ -268,8 +272,10 @@ fun ChatPage(id: Uuid, text: String?, files: List<Uri>, nodeId: Uuid? = null) {
                     errors = errors,
                     retryAttempts = retryAttempts,
                     retryInProgress = retrying,
+                    saveWarning = saveWarning,
                     onDismissError = { vm.dismissError(it) },
                     onClearAllErrors = { vm.clearErrors() },
+                    onDismissSaveWarning = { vm.dismissSaveWarning() },
                 )
             }
             BackHandler(drawerState.isOpen) {
@@ -296,8 +302,10 @@ private fun ChatPageContent(
     errors: List<ChatError>,
     retryAttempts: List<RecordedRetryAttempt> = emptyList(),
     retryInProgress: Boolean = false,
+    saveWarning: MessageSaveWarning? = null,
     onDismissError: (Uuid) -> Unit,
     onClearAllErrors: () -> Unit,
+    onDismissSaveWarning: () -> Unit = {},
 ) {
     val scope = rememberCoroutineScope()
     val toaster = LocalToaster.current
@@ -479,8 +487,10 @@ private fun ChatPageContent(
                 errors = errors,
                 retryAttempts = retryAttempts,
                 retryInProgress = retryInProgress,
+                saveWarning = saveWarning,
                 onDismissError = onDismissError,
                 onClearAllErrors = onClearAllErrors,
+                onDismissSaveWarning = onDismissSaveWarning,
                 onRegenerate = {
                     vm.regenerateAtMessage(it)
                 },

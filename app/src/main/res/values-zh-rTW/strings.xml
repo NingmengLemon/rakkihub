@@ -1613,4 +1613,6 @@
   <string name="setting_mcp_page_stdio_logs_copy">複製</string>
   <string name="setting_mcp_page_stdio_logs_clear">清空</string>
   <string name="setting_mcp_page_stdio_logs_copied">日誌已複製</string>
+  <string name="chat_page_save_warning_write_failed">訊息儲存失敗，這則回覆可能不完整</string>
+  <string name="chat_page_save_warning_too_large">回覆內容過大，已略過自動儲存</string>
 </resources>

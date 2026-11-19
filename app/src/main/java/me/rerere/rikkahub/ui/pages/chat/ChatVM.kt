@@ -44,6 +44,7 @@ import me.rerere.rikkahub.data.repository.FavoriteRepository
 import me.rerere.rikkahub.data.model.isAwaitingToolApproval
 import me.rerere.rikkahub.service.ChatError
 import me.rerere.rikkahub.service.ChatService
+import me.rerere.rikkahub.service.MessageSaveWarning
 import me.rerere.rikkahub.service.RecordedRetryAttempt
 import me.rerere.rikkahub.ui.hooks.writeLastConversationId
 import me.rerere.rikkahub.ui.hooks.ChatInputState
@@ -237,6 +238,13 @@ class ChatVM(
     fun dismissError(id: Uuid) = chatService.dismissError(id)
 
     fun clearErrors() = chatService.clearErrors(_conversationId)
+
+    // 定期保存警告只关心当前会话；成功保存会在服务里清掉
+    val saveWarning: StateFlow<MessageSaveWarning?> = chatService.saveWarnings
+        .map { it[_conversationId] }
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), null)
+
+    fun dismissSaveWarning() = chatService.dismissSaveWarning(_conversationId)
 
     val messageQueue = chatService.getMessageQueueFlow(_conversationId)
 

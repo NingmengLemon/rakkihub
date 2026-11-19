@@ -41,6 +41,7 @@ import androidx.compose.foundation.lazy.LazyListItemInfo
 import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.ContainedLoadingIndicator
 import androidx.compose.material3.FilledIconButton
 import androidx.compose.material3.HorizontalFloatingToolbar
@@ -109,6 +110,7 @@ import me.rerere.rikkahub.data.model.isAwaitingToolApproval
 import me.rerere.rikkahub.data.model.pendingToolCalls
 import me.rerere.rikkahub.data.model.retryTarget
 import me.rerere.rikkahub.service.ChatError
+import me.rerere.rikkahub.service.MessageSaveWarning
 import me.rerere.rikkahub.service.RecordedRetryAttempt
 import me.rerere.rikkahub.ui.components.ai.RetryAttemptsCard
 import me.rerere.rikkahub.ui.components.message.ChatMessage
@@ -139,8 +141,10 @@ fun ChatList(
     errors: List<ChatError> = emptyList(),
     retryAttempts: List<RecordedRetryAttempt> = emptyList(),
     retryInProgress: Boolean = false,
+    saveWarning: MessageSaveWarning? = null,
     onDismissError: (Uuid) -> Unit = {},
     onClearAllErrors: () -> Unit = {},
+    onDismissSaveWarning: () -> Unit = {},
     onRegenerate: (UIMessage) -> Unit = {},
     onRetryStep: (UIMessage) -> Unit = {},
     onEdit: (UIMessage) -> Unit = {},
@@ -186,8 +190,10 @@ fun ChatList(
                 errors = errors,
                 retryAttempts = retryAttempts,
                 retryInProgress = retryInProgress,
+                saveWarning = saveWarning,
                 onDismissError = onDismissError,
                 onClearAllErrors = onClearAllErrors,
+                onDismissSaveWarning = onDismissSaveWarning,
                 onRegenerate = onRegenerate,
                 onRetryStep = onRetryStep,
                 onEdit = onEdit,
@@ -240,8 +246,10 @@ private fun ChatListNormal(
     errors: List<ChatError>,
     retryAttempts: List<RecordedRetryAttempt> = emptyList(),
     retryInProgress: Boolean = false,
+    saveWarning: MessageSaveWarning? = null,
     onDismissError: (Uuid) -> Unit,
     onClearAllErrors: () -> Unit,
+    onDismissSaveWarning: () -> Unit,
     onRegenerate: (UIMessage) -> Unit,
     onRetryStep: (UIMessage) -> Unit,
     onEdit: (UIMessage) -> Unit,
@@ -539,6 +547,13 @@ private fun ChatListNormal(
                         attempts = retryAttempts,
                         historicalAttempts = historicalAttempts,
                         isRetrying = retryInProgress,
+                        modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
+                    )
+                }
+                saveWarning?.let { warning ->
+                    MessageSaveWarningCard(
+                        warning = warning,
+                        onDismiss = onDismissSaveWarning,
                         modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
                     )
                 }
@@ -975,5 +990,42 @@ private fun DashedLine(modifier: Modifier = Modifier) {
             strokeWidth = 1.dp.toPx(),
             pathEffect = pathEffect,
         )
+    }
+}
+
+/** 生成期间定期保存失败的提示；成功保存会由服务层清掉，这里只负责展示与手动关闭。 */
+@Composable
+private fun MessageSaveWarningCard(
+    warning: MessageSaveWarning,
+    onDismiss: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    val text = when (warning) {
+        MessageSaveWarning.WRITE_FAILED -> stringResource(R.string.chat_page_save_warning_write_failed)
+        MessageSaveWarning.TOO_LARGE -> stringResource(R.string.chat_page_save_warning_too_large)
+    }
+    Surface(
+        modifier = modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(16.dp),
+        color = MaterialTheme.colorScheme.errorContainer,
+        contentColor = MaterialTheme.colorScheme.onErrorContainer,
+    ) {
+        Row(
+            modifier = Modifier.padding(start = 16.dp, top = 6.dp, end = 4.dp, bottom = 6.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Text(
+                text = text,
+                style = MaterialTheme.typography.bodySmall,
+                modifier = Modifier.weight(1f),
+            )
+            IconButton(onClick = onDismiss) {
+                Icon(
+                    imageVector = HugeIcons.Cancel01,
+                    contentDescription = stringResource(R.string.chat_page_dismiss_error),
+                    modifier = Modifier.size(18.dp),
+                )
+            }
+        }
     }
 }

@@ -1,6 +1,6 @@
 # 明细：聊天、上下文与模型
 
-本文件是 [checklist.md](../checklist.md) 的明细，收录 C35、C43 至 C44、C46 至 C47、C49 至 C53、C57 至 C63、C65 至 C78、C81 至 C86、C97 至 C100、C107、C121、C122、C130。
+本文件是 [checklist.md](../checklist.md) 的明细，收录 C35、C43 至 C44、C46 至 C47、C49 至 C53、C57 至 C63、C65 至 C78、C81 至 C86、C97 至 C100、C107、C121、C122、C130、C131。
 
 <a id="c35"></a>
 
@@ -277,7 +277,7 @@
 
 - 落点：`core/ai/agent/AgentLoop.kt` 的工具执行 catch 从 `e.printStackTrace()` 改成 `Log.e(TAG, "Tool ${tool.toolName} failed", e)`，工具返回给模型的文本仍是 `Tool execution failed: <message>`；堆栈不会进入模型结果，但异常消息原样透传，没有消息时回退类名，可能包含路径；`TAG = "AgentLoop"`。
 - 理由：C65 已经把工具错误收成给模型的可读摘要，但堆栈还在用 `printStackTrace` 打到 stderr，和 app 的日志体系分开；统一到 `Log.e` 后 logcat 能按 tag/等级过滤，模型仍只看到摘要。
-- 合并注意：只改 `core/ai/agent/AgentLoop.kt` 的失败日志，不改工具输出、恢复结果、超时或 UI；`returnDefaultValues` 下 JVM 单测里的 `Log.e` 是空实现，现有测试用带 message 的工具异常断言摘要不含堆栈和异常类名，未覆盖 null-message 回退。output 的 NonCancellable 写入没有在这次做：在 `withContext(NonCancellable)` 里调用 `FlowCollector.emit` 会触发 FlowCollector 跨协程发射限制，15 条 AgentLoopTest 失败，需要改成 `channelFlow` 或单独的 NonCancellable 回调，留后续；移植上游 `AgentLoop.kt` 时保留 `Log.e` 取代 `printStackTrace`；`core/ai/provider` 里剩余的 `printStackTrace` 不属本项范围；不改 Room、Settings、备份。
+- 合并注意：只改 `core/ai/agent/AgentLoop.kt` 的失败日志，不改工具输出、恢复结果、超时或 UI；`returnDefaultValues` 下 JVM 单测里的 `Log.e` 是空实现，现有测试用带 message 的工具异常断言摘要不含堆栈和异常类名，未覆盖 null-message 回退。output 的取消安全写入后来按设计关闭：`executeTools` 逐个执行、每个工具跑完立即 `updateTool`，已完成结果不会因后续取消丢失；在 `withContext(NonCancellable)` 里直接 `emit` 仍会触发 FlowCollector 跨协程发射限制，不再走这条；移植上游 `AgentLoop.kt` 时保留 `Log.e` 取代 `printStackTrace`；`core/ai/provider` 里剩余的 `printStackTrace` 不属本项范围；不改 Room、Settings、备份。
 - 测试：`:ai:testDebugUnitTest` 324 条通过，`AgentLoopTest` 29 条含工具失败摘要和“停止时保留已跑工具结果”；`:app:testGithubDebugUnitTest` 786 条，7 条既有 Windows 失败未变；assemble、spotless、markdownlint 通过。设备上没有单独构造工具失败日志；C65 的工具超时/恢复手动验收已覆盖行为，本轮只改日志通道。
 
 <a id="c81"></a>
@@ -407,3 +407,12 @@
 - 理由：渲染层原来只看 `finishedAt == null`。Claude 协议里一条响应可以出现多个 thinking 块；中转漏发前一个块的 `content_block_stop` 时，这个 part 不会立刻收到 `ReasoningEnd`（解码器的 `finish()` 要等到 `message_stop` 才给残留块补 End），`finishedAt` 在整段流式期间都为空，于是两个块同时显示"思考了 xx 秒"的滑动高光，而实际只有最后一个还在接收内容。`finishReasoning()` 也只在每步流结束时统一补 `finishedAt`，所以这个错误状态会持续整个生成过程。
 - 合并注意：这是显示层兜底，不改协议解析；一个响应里 thinking 块是顺序产生的，因此"只有最后一个可能仍在产出"成立。更早的未收尾 part 仍留在消息里，它的 `finishedAt` 由每步流结束时的 `finishReasoning()` 补上；不要顺手过滤 `reasoning` 为空的 Reasoning part，`redacted_thinking` 就是空正文加 metadata，C85 要靠它回放。`content_block_stop` 之后迟到的 delta 不是本项的成因：块已从 `blocks` 移除，解码器会直接报 `Unknown content block index` 并让这条流失败。
 - 测试：`:app:compileGithubDebugKotlin` 通过；设备上用同一个 Anthropic 中转复现双 thinking 块时，只有最后一块继续显示滑动高光并计时，前一块立即变成静态的"思考了 xx 秒"，正文与折叠行为不变。
+
+<a id="c131"></a>
+
+## C131 定期保存失败的用户提示
+
+- 落点：新增 `SaveWarningStore` 按会话保存 `MessageSaveWarning`（`WRITE_FAILED`、`TOO_LARGE`），`ChatService` 暴露 `saveWarnings` 与 `dismissSaveWarning`，并把生成与压缩两条 `MessageSaveLoop` 的 `onError`/`onTooLarge` 接到它，定期保存成功、生成结束的 `finishGeneration()`、压缩完整落库和发送前 `session.flush()` 时清除；`ChatVM` 用 `saveWarning` 只投影当前会话；`ChatPage` 透传，`ChatList` 底部浮层新增 `MessageSaveWarningCard`，关闭按钮带无障碍标签；四份 locale 加 `chat_page_save_warning_write_failed` 与 `chat_page_save_warning_too_large`。
+- 理由：两条保存循环原来只 `Log.w`，用户完全看不到。生成到一半存储失败或节点过大跳过保存时，界面一切正常，最后可能整段回复没落盘。错误卡片（C71）表达的是生成失败，语义不同，所以单独做一条轻量警告。
+- 合并注意：警告不落盘，进程重启后重新判断；不只是定期保存成功会清除，生成结束的 `finishGeneration()`、压缩成功/失败的完整落库、发送前的 `session.flush()` 也都会清，否则一次瞬时失败会让卡片在整轮结束甚至下一轮里一直挂着；用户手动关闭同样清除，不自动超时；不要混进 `ChatError` 通道，两者语义和生命周期不同；生成与压缩两条循环都要接，否则压缩摘要的保存失败仍然静默；节点超过 16MB 时 `MessageSaveLoop` 本来就会跳过并回调 `onTooLarge`，这里只负责展示，不再重试；`persistMessageNode` 因节点漂移或含 base64 图片返回 null 时走的是 C50 的静默跳过，不触发本警告，那部分界面仍显示正常是有意为之。
+- 测试：`SaveWarningStoreTest` 4 条覆盖按会话记录、原因覆盖、只清指定会话、未知会话清除无副作用；`:app:compileGithubDebugKotlin` 通过。写失败与超限都没有在真机上主动注入触发，警告卡的实际展示未做设备验证。
