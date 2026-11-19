@@ -1,6 +1,6 @@
 # 明细：工作区与 MCP
 
-本文件是 [checklist.md](../checklist.md) 的明细，收录 C89、C102 至 C106、C111、C120、C123 至 C126。
+本文件是 [checklist.md](../checklist.md) 的明细，收录 C89、C102 至 C106、C111、C120、C123 至 C126、C132。
 
 <a id="c89"></a>
 
@@ -60,7 +60,7 @@
 
 ## C111 stdio MCP 服务器
 
-本项是一个功能，按 9 个阶段落地。设计见 [design/stdio-mcp.md](../design/stdio-mcp.md)；早期登记用了 C111 至 C119 九个顶层编号，依次对应 C111.1 至 C111.9；C112 至 C119 保留，不再用作顶层编号，下一个新项从 C132 起。
+本项是一个功能，按 9 个阶段落地。设计见 [design/stdio-mcp.md](../design/stdio-mcp.md)；早期登记用了 C111 至 C119 九个顶层编号，依次对应 C111.1 至 C111.9；C112 至 C119 保留，不再用作顶层编号，下一个新项从 C133 起。
 
 ### C111.1 配置与持久化
 
@@ -169,3 +169,12 @@
 - 理由：stderr 原来只交给 MCP SDK transport，设置页只显示 `McpStatus.Error.message`，像 `Internal server error` 这种摘要无法定位服务端真实报错；保留尾部日志能让用户直接看到 Python/Node 的 traceback 或脚本错误。
 - 合并注意：只旁路 stderr，不记录 stdout 的 JSON-RPC 正文，避免协议内容和潜在敏感数据进入 UI；缓冲区只保留尾部，不持久化，app 重启或重新连接会清空；Tee 只有在 SDK 读取 stderr 时才捕获，若 transport 完全不读则日志为空；日志可能包含路径或 token，复制由用户主动触发，不写 Logcat。
 - 测试：`McpStdioLogTest` 覆盖尾部截断、UTF-8 的完整与分块序列、emoji 截断、清空、单字节和数组读取、close/available 转发；在 `3.1.1-custom.3452+f4ae323` 上验收：临时移走 `echo-mcp.pl` 后重启 Echo，状态变为 `Error: Connection closed`，日志自动展开并显示 `Can't open perl script ... No such file or directory`；恢复脚本并重启后状态回到 `Connected`，日志清空。
+
+<a id="c132"></a>
+
+## C132 workspace SVG 预览的相对资源引用
+
+- 落点：`WorkspaceRepository.resolveAreaDirectory` 用 `WorkspaceLayout.absolutePath` 把存储区内的相对路径补成环境内绝对路径（FILES 区拼 `workspaceDir`，LINUX 区补前导 `/`），取父目录后经 `localAbsoluteFile` 解析成本地目录；`WorkspaceFileEditorPage` 在 SVG 预览时把该目录的 `file://` URI 作为 WebView 的 `baseUrl`，并只在拿到本地目录时打开 `allowFileAccess`；`WebView` 外层加 `key(previewBaseUrl)`，目录解析完成后重建，让 settings 真正生效；远程工作区或拿不到目录时回退原来的假 base。
+- 理由：预览原来固定用 `https://workspace-preview.invalid/` 做 base 并关闭文件访问，SVG 里同目录的 `<image href="pic.png">` 解析不到，只能显示空白。存储区的相对路径必须按所在区换算，LINUX 区传进来的是 `root/demo.svg` 这类相对路径，直接当绝对路径用会解析失败。
+- 合并注意：`allowFileAccess` 是 WebView 全局开关，拿不到目录时保持 false；打开后模型写的 SVG 可以引用任意应用可读的 `file://` 路径，JS 仍关闭，因此只能渲染、无法读回内容外发，仍可能被用作探测或远程信标的触发点，这是本项接受的取舍；HTML 预览涉及脚本，不给文件访问，仍用假 base；`WebView` 的 settings 只在创建时应用，所以必须靠 `key` 重建，不能只改 state；Markdown 预览走 Compose 的 `MaterialMarkdown`，相对 `![]()` 仍未解析。
+- 测试：路径换算复用 `WorkspaceLayout.absolutePath`，已有 `LocalWorkspaceBackendTest` 覆盖两个存储区（含 LINUX 的相对路径补 `/`）；`:app:compileGithubDebugKotlin` 通过。没有在真机上传 SVG 与同目录图片做实际渲染验证，WebView 的 file base 与 settings 重建行为只按文档与代码推断。

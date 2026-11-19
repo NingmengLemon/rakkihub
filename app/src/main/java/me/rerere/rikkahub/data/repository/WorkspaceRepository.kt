@@ -299,6 +299,26 @@ class WorkspaceRepository(
             ?.takeIf { it.isFile }
     }
 
+    /**
+     * 按存储区路径解析预览文件所在目录，供 WebView 解析相对资源。
+     * 路径先经 WorkspaceLayout.absolutePath 补成环境内绝对路径；远程工作区没有本地落点，返回 null。
+     */
+    suspend fun resolveAreaDirectory(
+        id: String,
+        area: WorkspaceStorageArea,
+        path: String,
+    ): File? = withContext(Dispatchers.IO) {
+        val workspace = dao.getById(id) ?: return@withContext null
+        runCatching {
+            val backend = backendOf(workspace)
+            val absolute = backend.layout.absolutePath(area, path)
+            val directory = absolute.substringBeforeLast('/', "").ifEmpty { "/" }
+            backend.localAbsoluteFile(directory)
+        }
+            .getOrNull()
+            ?.takeIf { it.isDirectory }
+    }
+
     /** 执行命令实际使用的 shell 路径 */
     suspend fun shell(id: String): String = readFromBackend(id) { it.shell() }
 

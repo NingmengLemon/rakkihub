@@ -25,8 +25,10 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.rememberUpdatedState
@@ -79,8 +81,19 @@ fun WorkspaceFileEditorPage(
     val fileName = path.substringAfterLast('/').ifBlank { path }
     val extension = fileName.substringAfterLast('.', "").lowercase()
     val supportsMarkdownPreview = extension in setOf("md", "markdown")
-    val supportsPreview = supportsMarkdownPreview || extension in setOf("html", "htm", "svg")
+    val isSvg = extension == "svg"
+    val supportsPreview = supportsMarkdownPreview || isSvg || extension in setOf("html", "htm")
     var showPreview by rememberSaveable(id, area, path) { mutableStateOf(supportsPreview) }
+
+    // SVG 预览里可能引用同目录的图片, 把 WebView 的 base 指向文件所在目录才能解析相对路径;
+    // 远程工作区没有本地目录, 保持假 base。仅在预览时解析, 源码模式不需要。
+    val previewBaseUrl by produceState<String?>(null, id, area, path, isSvg, showPreview) {
+        value = if (isSvg && showPreview) {
+            repository.resolveAreaDirectory(id, area, path)?.let { it.toURI().toString() }
+        } else {
+            null
+        }
+    }
 
     // 不能用 rememberTextFieldState: 它会把全文存进 saved state Bundle, 大文件切后台时触发 TransactionTooLargeException (#1953).
     // 内容本就由下方 LaunchedEffect 从磁盘加载, 无需 saveable.
@@ -270,7 +283,8 @@ fun WorkspaceFileEditorPage(
 
                 else -> WorkspaceWebPreview(
                     content = currentText,
-                    isSvg = extension == "svg",
+                    isSvg = isSvg,
+                    previewBaseUrl = previewBaseUrl,
                     modifier = Modifier.fillMaxSize().padding(innerPadding),
                 )
             }
@@ -337,6 +351,7 @@ fun WorkspaceFileEditorPage(
 private fun WorkspaceWebPreview(
     content: String,
     isSvg: Boolean,
+    previewBaseUrl: String?,
     modifier: Modifier = Modifier,
 ) {
     // SVG 预览按静态图片看待：工作区文件是模型可写的，不能当可执行文档加载
@@ -352,12 +367,15 @@ private fun WorkspaceWebPreview(
         return
     }
 
+    // SVG 用所在目录做 base 才能解析相对 <image href>；只有拿到本地目录时才开文件访问，
+    // 远程工作区回退到假 base。JS 仍然关闭，SVG 只当静态图片看。
+    val canLoadLocalResources = isSvg && previewBaseUrl != null
     val state = rememberWebViewState(
         data = content,
-        baseUrl = "https://workspace-preview.invalid/",
+        baseUrl = previewBaseUrl ?: "https://workspace-preview.invalid/",
         mimeType = if (isSvg) "image/svg+xml" else "text/html",
         settings = {
-            allowFileAccess = false
+            allowFileAccess = canLoadLocalResources
             allowContentAccess = false
             builtInZoomControls = true
             displayZoomControls = false
@@ -369,7 +387,10 @@ private fun WorkspaceWebPreview(
         // 放到 SideEffect 里就晚了一步，首帧仍可能执行 SVG 里的脚本
         if (isSvg) webViewState.javaScriptEnabled = false
     }
-    WebView(state = state, modifier = modifier)
+    // WebView 的 settings 只在创建时应用，目录解析完成后必须重建，否则 allowFileAccess 仍是最初的 false
+    key(previewBaseUrl) {
+        WebView(state = state, modifier = modifier)
+    }
 }
 
 /** SVG 预览上限，超过后只给提示，不把整份文件交给 WebView。 */
