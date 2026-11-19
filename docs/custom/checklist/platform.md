@@ -1,6 +1,6 @@
 # 明细：平台、构建与品牌
 
-本文件是 [checklist.md](../checklist.md) 的明细，收录 C7、C12、C37 至 C39、C45、C48、C55 至 C56、C90 至 C94、C101、C127 至 C128。
+本文件是 [checklist.md](../checklist.md) 的明细，收录 C7、C12、C37 至 C39、C45、C48、C55 至 C56、C90 至 C94、C101、C127 至 C129。
 
 <a id="c7"></a>
 
@@ -148,3 +148,12 @@
 - 理由：Android 7.0（API 24）起，`targetSdk` 24 及以上的应用默认只信任系统证书，自建 CA 签发的 Provider、MCP、搜索等 HTTPS 端点连不上；本分支大量使用自建中转与自托管服务，需要这条通道。同时这也是在设备上用 mitmproxy 抓包的前提。
 - 合并注意：信任范围覆盖全部应用流量，任何装进用户证书库的 CA 都能解密，这是有意取舍；上游改这个文件时按本项对齐，不要退回只信系统证书；`targetSdk` 是 37，配置存在后 `android:usesCleartextTraffic` 不再被读取，所以 `base-config` 要显式写出 `cleartextTrafficPermitted`：API 28 及以上省略它会断开原有明文端点（Web 服务、自建 S3、rootfs 下载、OAuth 与 MCP 回环），API 26 和 27 的平台默认仍允许明文，写出只是把意图写明；用户证书锚与设备版本无关，从 `minSdk` 26 起覆盖整个支持范围。
 - 测试：`:app:assembleGithubRelease` 与 `spotlessCheck` 通过；APK 内 `AndroidManifest.xml` 的 `android:networkSecurityConfig` 指向 `xml/network_security_config`，`aapt2 dump xmltree` 展开后是 `cleartextTrafficPermitted=true` 加 `system`/`user` 两个 `<certificates>`；安装到设备成功。经 mitmproxy 抓包与 U+FFFD 复现由使用侧验证，不在本项范围。
+
+<a id="c129"></a>
+
+## C129 每日构建上传 Actions Artifacts
+
+- 落点：`.github/workflows/daily-build.yml` 在 `Gradle Build` 之后、发布 nightly prerelease 之前新增 `actions/upload-artifact@v7`，上传 `app/build/outputs/apk/github/release/*.apk` 与 `app/build/outputs/mapping/githubRelease/mapping.txt`，artifact 名为 `nightly-<完整 commit SHA>`，`overwrite: true`、`if-no-files-found: error`、`continue-on-error: true`，保留 14 天；`docs/custom/roadmap.md` 的 nightly 说明同步。
+- 理由：nightly 用的是固定 tag，每晚覆盖同一个 Release，只能看到最新一版；按提交追溯某次每日构建的产物和 mapping 就没了。上传到 Actions Artifacts 后每次运行各留一份，名字带 SHA，可直接对上 commit。
+- 合并注意：`continue-on-error: true` 让上传失败不连带跳过 Release，附加产物不能卡住主产物；`overwrite: true` 用于重跑同一次运行，v4 起 artifact 不可变、同名会直接失败，而重跑沿用同一个 SHA 与同一个 run、名字必然重复；步骤放在发布之前，所以 Release 失败也不影响这一轮的产物；artifact 保留 14 天，超过就随运行记录清理，长期留档仍以 Release 为准；`mapping.txt` 未压缩时有 167 MB 左右，加 3 个 APK 每次约 210 MB，公开仓库不占配额但上传耗时和保存期都要留意；`actions/upload-artifact` 的大版本要和 `checks.yml` 里的一起升，两处不同步时先看各自文档的 breaking change；`path` 给了两个模式时，artifact 根取公共父目录，zip 里会带 `apk/github/release/` 与 `mapping/githubRelease/` 前缀，不是平铺。
+- 测试：本次只改 workflow 与文档，本地无法执行 Actions；推送后触发一次 `workflow_dispatch` 确认 artifact 出现在运行页面、内容为 3 个 APK（arm64-v8a、x86_64、universal）加 `mapping.txt`，且 nightly Release 仍照常更新。

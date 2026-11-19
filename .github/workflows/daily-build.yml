@@ -93,6 +93,22 @@ jobs:
           chmod +x gradlew
           ./gradlew assembleGithubRelease
 
+      # 同时挂一份到 Actions Artifacts，便于按 commit 追溯：
+      # nightly Release 是固定 tag、每晚被覆盖，只看得到最新一版。
+      # continue-on-error：这是附加产物，失败不应连带跳过下面的 Release 发布。
+      # overwrite：同名 artifact 已存在时覆盖，否则重跑同一次运行会因重名失败。
+      - name: Upload build artifacts
+        uses: actions/upload-artifact@v7
+        continue-on-error: true
+        with:
+          name: nightly-${{ github.sha }}
+          overwrite: true
+          if-no-files-found: error
+          retention-days: 14
+          path: |
+            app/build/outputs/apk/github/release/*.apk
+            app/build/outputs/mapping/githubRelease/mapping.txt
+
       # 把 APK 直接发布为 Prerelease，用户点链接即可下载单个 apk，无需登录、无需解压
       - name: Publish nightly prerelease
         uses: softprops/action-gh-release@v3

@@ -118,7 +118,7 @@
 
 两个 secrets 缺一不可：`KEY_BASE64`（keystore）与 `SIGNING_CONFIG`（写进 `local.properties`）。`GOOGLE_SERVICES_JSON` 不需要，本分支已按 C13 移除 Firebase 与 `google-services` 插件。
 
-本仓库沿用上游的 nightly prerelease：固定 tag `nightly`，每天覆盖同一个 Release，附带分 ABI 的 APK 与 `mapping.txt`。不做正式版本发布。
+本仓库沿用上游的 nightly prerelease：固定 tag `nightly`，每天覆盖同一个 Release，附带分 ABI 与 universal 的 APK 和 `mapping.txt`。不做正式版本发布。同一个 job 另把这些文件传一份到 Actions Artifacts，名字带完整 commit SHA、保留 14 天：Release 只留最新一版，按提交追溯去看 Artifacts。
 
 `checks.yml` 在 push 到 `main`、PR 与手动触发时跑 `spotlessCheck` 与 app、ai、workspace 的 JVM 测试。push 时先把 ratchet 基点指到本次推送之前的提交，检查的是刚推上去的改动；PR 用基线的 `origin/main`；手动触发没有可靠基点，跳过格式检查，测试照跑。测试是全绿判据，Windows 本机那 7 条文件占用失败预期在 Linux 上不再出现，首次跑批确认；红了先看是不是平台差异，再改闸门，不要把失败用例静默进 ignore。
 

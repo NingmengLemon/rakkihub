@@ -2,6 +2,10 @@
 
 本文件归档已完成的定制、修复与独立化批次，按时间或主题分组。当前状态以 checklist 索引与明细为准，未来方向见 [roadmap.md](../roadmap.md)。
 
+## 2026-11-19 每日构建上传 Artifacts
+
+- C129：每日构建在发布 nightly 之前把 APK 与 `mapping.txt` 传一份到 Actions Artifacts，名字带完整 SHA、保留 14 天，固定 tag 被覆盖后仍能按提交追溯。
+
 ## 2026-11-19 信任用户 CA
 
 - C128：新增 network security config，`system` 与 `user` 证书都信任，保留明文许可；自建 CA 签发的 Provider、MCP、搜索端点可连，设备抓包也可用。
