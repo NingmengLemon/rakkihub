@@ -13,7 +13,7 @@
 | [`locale.md`](locale.md) | 四份 locale 的增删文案与品牌改写 |
 | [`prompts.md`](prompts.md) | 各功能默认提示词的现状、重写计划与压缩提示词草稿 |
 | [`backup/`](backup/README.md) | 官方备份的导入与导出：恢复链路、导入器、验收 |
-| [`design/`](design/b1-step-commits.md) | 设计稿：B1/B2 的 step 级提交与失败投影、C87 文件级 OCR 派生数据、stdio MCP、MCP 工具失败重试 |
+| [`design/`](design/b1-step-commits.md) | 设计稿：B1/B2 的 step 级提交与失败投影、C87 文件级 OCR 派生数据、stdio MCP、MCP 工具失败重试、Gradle 模块目录布局 |
 | [`roadmap.md`](roadmap.md) | 定位、阶段划分、条目索引与依赖、独立更新、分发与合规 |
 | [`history/`](history/) | 已完成的落地记录、上游查看点与 issue 调研 |
 | [`audit/`](audit/) | DSH 对照审计 |
