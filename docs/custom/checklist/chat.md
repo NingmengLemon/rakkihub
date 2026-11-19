@@ -1,6 +1,6 @@
 # 明细：聊天、上下文与模型
 
-本文件是 [checklist.md](../checklist.md) 的明细，收录 C35、C43 至 C44、C46 至 C47、C49 至 C53、C57 至 C63、C65 至 C78、C81 至 C86、C97 至 C100、C107、C121、C122。
+本文件是 [checklist.md](../checklist.md) 的明细，收录 C35、C43 至 C44、C46 至 C47、C49 至 C53、C57 至 C63、C65 至 C78、C81 至 C86、C97 至 C100、C107、C121、C122、C130。
 
 <a id="c35"></a>
 
@@ -398,3 +398,12 @@
 - 理由：一条失败回复里可能已有成功的 step，整条丢弃会把成功 step 的正文和工具事实一起丢掉；但失败 step 的正文可能没写完或说错，不能直接当事实。标题和摘要是一次性或请求级的，先按 step 取成功部分；记忆是长期保存的，继续整条隔离。
 - 合并注意：只处理 `status = FAILED` 且 steps 非空的消息；没有 steps 的旧失败消息仍整条丢弃，避免把兼容例外带进新投影。投影只读，不改库；普通聊天请求仍用 `projectForRequest`，两者不能混用。`TOOLS` 保留正文、推理和已执行完成的工具，`FAILED`/`CANCELLED` 只保留工具事实；`ServerTool` 只保留 `COMPLETED`/`FAILED`，`IN_PROGRESS` 丢弃；媒体和 annotations 不进摘要投影，`Tool.output` 里的媒体也会被剔除，只剩媒体的工具整条丢弃；投影为空时整条丢弃。
 - 测试：`MessageSummaryProjectionTest` 15 项覆盖成功 step、失败/取消/运行中 step、纯文本失败、工具执行完成与 `callComplete` 边界、`Tool.output` 媒体剔除、ServerTool 状态、媒体与 annotations、越界 part 和非失败消息不变；`ConversationRecentModelMessagesTest` 4 项覆盖失败回复带成功 step 时进入标题上下文、投影为空时仍排除以及 scratch 过滤。`:ai:testDebugUnitTest --tests "me.rerere.ai.ui.MessageSummaryProjectionTest"` 与 `:app:testGithubDebugUnitTest --tests "me.rerere.rikkahub.data.ai.ConversationRecentModelMessagesTest"` 通过。
+
+<a id="c130"></a>
+
+## C130 相邻推理块重复显示为生成中
+
+- 落点：`ChatMessageReasoningStep` 新增 `canBeLoading` 参数，`rememberReasoningState` 的 `loading` 由 `reasoning.finishedAt == null && canBeLoading` 计算；`MessagePartsBlock` 用 `parts.lastOrNull { it is UIMessagePart.Reasoning }` 取出整条消息里最后一个推理 part，只有它的身份与当前 step 相同时才允许 `loading`。这与文本块 `loading && block.index == parts.lastIndex` 是同一个思路，但推理块后面常跟文本块，所以不能直接复用 `parts.lastIndex`。
+- 理由：渲染层原来只看 `finishedAt == null`。Claude 协议里一条响应可以出现多个 thinking 块；中转漏发前一个块的 `content_block_stop` 时，这个 part 不会立刻收到 `ReasoningEnd`（解码器的 `finish()` 要等到 `message_stop` 才给残留块补 End），`finishedAt` 在整段流式期间都为空，于是两个块同时显示"思考了 xx 秒"的滑动高光，而实际只有最后一个还在接收内容。`finishReasoning()` 也只在每步流结束时统一补 `finishedAt`，所以这个错误状态会持续整个生成过程。
+- 合并注意：这是显示层兜底，不改协议解析；一个响应里 thinking 块是顺序产生的，因此"只有最后一个可能仍在产出"成立。更早的未收尾 part 仍留在消息里，它的 `finishedAt` 由每步流结束时的 `finishReasoning()` 补上；不要顺手过滤 `reasoning` 为空的 Reasoning part，`redacted_thinking` 就是空正文加 metadata，C85 要靠它回放。`content_block_stop` 之后迟到的 delta 不是本项的成因：块已从 `blocks` 移除，解码器会直接报 `Unknown content block index` 并让这条流失败。
+- 测试：`:app:compileGithubDebugKotlin` 通过；设备上用同一个 Anthropic 中转复现双 thinking 块时，只有最后一块继续显示滑动高光并计时，前一块立即变成静态的"思考了 xx 秒"，正文与折叠行为不变。

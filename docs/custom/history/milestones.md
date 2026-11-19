@@ -2,6 +2,10 @@
 
 本文件归档已完成的定制、修复与独立化批次，按时间或主题分组。当前状态以 checklist 索引与明细为准，未来方向见 [roadmap.md](../roadmap.md)。
 
+## 2026-11-19 相邻推理块显示收尾
+
+- C130：只有整条消息里最后一个推理 part 还可能显示为生成中；中转漏发 `content_block_stop` 时，前面的 thinking 块不再持续显示滑动高光。
+
 ## 2026-11-19 每日构建上传 Artifacts
 
 - C129：每日构建在发布 nightly 之前把 APK 与 `mapping.txt` 传一份到 Actions Artifacts，名字带完整 SHA、保留 14 天，固定 tag 被覆盖后仍能按提交追溯。

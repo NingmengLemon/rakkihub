@@ -80,9 +80,14 @@ private class ReasoningState(
 }
 
 @Composable
-private fun rememberReasoningState(reasoning: UIMessagePart.Reasoning): Pair<ReasoningState, Boolean> {
+private fun rememberReasoningState(
+    reasoning: UIMessagePart.Reasoning,
+    canBeLoading: Boolean,
+): Pair<ReasoningState, Boolean> {
     val settings = LocalSettings.current
-    val loading = reasoning.finishedAt == null
+    // 只有消息里最后一个推理 part 才可能还在接收内容；更早的 part 即使 finishedAt 为空
+    // （中转漏发 content_block_stop 等）也不该继续显示成"正在思考"。
+    val loading = reasoning.finishedAt == null && canBeLoading
     val scrollState = rememberScrollState()
 
     val state = remember(reasoning.createdAt) {
@@ -195,10 +200,11 @@ fun ChainOfThoughtScope.ChatMessageReasoningStep(
     reasoning: UIMessagePart.Reasoning,
     model: Model?,
     assistant: Assistant?,
+    canBeLoading: Boolean = true,
     fadeHeight: Float = 64f,
     collapsedAdaptiveWidth: Boolean = false,
 ) {
-    val (state, loading) = rememberReasoningState(reasoning)
+    val (state, loading) = rememberReasoningState(reasoning, canBeLoading)
     val thinkingTitle = reasoning.reasoning.extractThinkingTitle()
     val showThinkingTitle = loading && thinkingTitle != null
     val chatFontFamily = LocalTextStyle.current.fontFamily

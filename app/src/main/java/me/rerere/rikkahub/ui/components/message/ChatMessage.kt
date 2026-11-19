@@ -395,6 +395,10 @@ private fun MessagePartsBlock(
 
     // Render parts in original order (group thinking/tool as chain-of-thought)
     val groupedParts = remember(parts) { parts.groupMessageParts() }
+    // 只有整条消息里最后一个推理 part 还可能继续产出；更早的未收尾 part 不再显示为生成中
+    val lastReasoningPart = remember(parts) {
+        parts.lastOrNull { it is UIMessagePart.Reasoning } as? UIMessagePart.Reasoning
+    }
     groupedParts.fastForEach { block ->
         when (block) {
             is MessagePartBlock.ThinkingBlock -> {
@@ -423,6 +427,7 @@ private fun MessagePartsBlock(
                                         reasoning = step.reasoning,
                                         model = model,
                                         assistant = assistant,
+                                        canBeLoading = loading && step.reasoning === lastReasoningPart,
                                         collapsedAdaptiveWidth = isReasoningOnlyBlock,
                                     )
                                 }
