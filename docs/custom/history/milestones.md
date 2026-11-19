@@ -2,6 +2,10 @@
 
 本文件归档已完成的定制、修复与独立化批次，按时间或主题分组。当前状态以 checklist 索引与明细为准，未来方向见 [roadmap.md](../roadmap.md)。
 
+## 2026-11-19 信任用户 CA
+
+- C128：新增 network security config，`system` 与 `user` 证书都信任，保留明文许可；自建 CA 签发的 Provider、MCP、搜索端点可连，设备抓包也可用。
+
 ## 2026-11-19 Gradle 模块目录分组
 
 - C127：库模块收进 `core/`、`integrations/`、`platform/`，`app` 与所有 project path 保持原样；`material3` submodule、`web-ui/copy.ts`、spotless、文档、i18n 和 `tools/trace` 路径同步。39 个 Kotlin 文件只有 ktlint 语义等价变化。

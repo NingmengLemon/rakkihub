@@ -1,6 +1,6 @@
 # 明细：平台、构建与品牌
 
-本文件是 [checklist.md](../checklist.md) 的明细，收录 C7、C12、C37 至 C39、C45、C48、C55 至 C56、C90 至 C94、C101。
+本文件是 [checklist.md](../checklist.md) 的明细，收录 C7、C12、C37 至 C39、C45、C48、C55 至 C56、C90 至 C94、C101、C127 至 C128。
 
 <a id="c7"></a>
 
@@ -139,3 +139,12 @@
 - 理由：根目录平铺 13 个模块，职责边界和依赖方向不直观；保留 project path 和包名能让 `./gradlew :app:...`、CI、签名、baseline profile 和下游脚本都不必改，只调整目录和 `projectDir`。
 - 合并注意：这不是功能改动，但 rename 会让这些文件进入 spotless ratchet，39 个 Kotlin 文件因此有 ktlint 的 import 顺序、空行、换行、括号展开和冗余分号变化，语义不变；上游同步时路径引用要按新目录核对，尤其 `tools/trace`、`tools/i18n`、`web-ui/copy.ts` 和 `.gitmodules`；`app` 移到 `apps/app` 的 Phase 3 暂不做，签名 secret 和每日构建产物路径仍按根目录 `app/`；不要把 `web-ui`、`tools`、`docs`、`build-logic` 一起收进模块目录。
 - 测试：`./gradlew projects` 的 14 个 project path 与迁移前一致且位置正确；`:app:assembleGithubDebug`、`:app:testGithubDebugUnitTest`（898 条）、`:ai:testDebugUnitTest`（385 条）通过；`:workspace:testDebugUnitTest` 的定向 2 条通过，完整 56 条仍有 25 条既有 Windows 基线失败；`:web:buildWebUi` 把 33 个文件写到 `platform/web/src/main/resources/static`，不再生成旧的 `web/`；`spotlessCheck`、markdownlint（28 文件）和文档链接检查通过；`git submodule status` 干净。
+
+<a id="c128"></a>
+
+## C128 信任用户安装的 CA 证书
+
+- 落点：新增 `app/src/main/res/xml/network_security_config.xml`，`base-config` 同时信任 `system` 与 `user` 证书并保留 `cleartextTrafficPermitted="true"`；`app/src/main/AndroidManifest.xml` 的 `<application>` 增加 `android:networkSecurityConfig="@xml/network_security_config"`。与上游 `90fe936e` 一致。
+- 理由：Android 7.0（API 24）起，`targetSdk` 24 及以上的应用默认只信任系统证书，自建 CA 签发的 Provider、MCP、搜索等 HTTPS 端点连不上；本分支大量使用自建中转与自托管服务，需要这条通道。同时这也是在设备上用 mitmproxy 抓包的前提。
+- 合并注意：信任范围覆盖全部应用流量，任何装进用户证书库的 CA 都能解密，这是有意取舍；上游改这个文件时按本项对齐，不要退回只信系统证书；`targetSdk` 是 37，配置存在后 `android:usesCleartextTraffic` 不再被读取，所以 `base-config` 要显式写出 `cleartextTrafficPermitted`：API 28 及以上省略它会断开原有明文端点（Web 服务、自建 S3、rootfs 下载、OAuth 与 MCP 回环），API 26 和 27 的平台默认仍允许明文，写出只是把意图写明；用户证书锚与设备版本无关，从 `minSdk` 26 起覆盖整个支持范围。
+- 测试：`:app:assembleGithubRelease` 与 `spotlessCheck` 通过；APK 内 `AndroidManifest.xml` 的 `android:networkSecurityConfig` 指向 `xml/network_security_config`，`aapt2 dump xmltree` 展开后是 `cleartextTrafficPermitted=true` 加 `system`/`user` 两个 `<certificates>`；安装到设备成功。经 mitmproxy 抓包与 U+FFFD 复现由使用侧验证，不在本项范围。
