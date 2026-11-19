@@ -2,6 +2,10 @@
 
 本文件归档已完成的定制、修复与独立化批次，按时间或主题分组。当前状态以 checklist 索引与明细为准，未来方向见 [roadmap.md](../roadmap.md)。
 
+## 2026-11-19 Gradle 模块目录分组
+
+- C127：库模块收进 `core/`、`integrations/`、`platform/`，`app` 与所有 project path 保持原样；`material3` submodule、`web-ui/copy.ts`、spotless、文档、i18n 和 `tools/trace` 路径同步。39 个 Kotlin 文件只有 ktlint 语义等价变化。
+
 ## 2026-11-19 stdio MCP 日志
 
 - C126：tee stderr 到每个 Server 的 16K 字符尾部缓冲，设置页可展开、复制、清空；错误时自动展开，重连时清空。

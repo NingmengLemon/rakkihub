@@ -8,18 +8,30 @@ modules:
   - name: "app"
     res_path: "app/src/main/res"
   - name: "search"
-    res_path: "search/src/main/res"
+    res_path: "integrations/search/src/main/res"
   - name: "oauth"
-    res_path: "oauth/src/main/res"
+    res_path: "integrations/oauth/src/main/res"
   - name: "ui"
-    res_path: "ui/src/main/res"
+    res_path: "core/ui/src/main/res"
 
 # 扫描这些文件中的 R.string.xxx / @string/xxx 引用，用于检测未使用的条目
 source_patterns:
-  - "*/src/main/**/*.kt"
-  - "*/src/main/**/*.java"
-  - "*/src/main/AndroidManifest.xml"
-  - "*/src/main/res/xml/*.xml"
+  - "app/src/main/**/*.kt"
+  - "app/src/main/**/*.java"
+  - "core/*/src/main/**/*.kt"
+  - "core/*/src/main/**/*.java"
+  - "integrations/*/src/main/**/*.kt"
+  - "integrations/*/src/main/**/*.java"
+  - "platform/*/src/main/**/*.kt"
+  - "platform/*/src/main/**/*.java"
+  - "app/src/main/AndroidManifest.xml"
+  - "core/*/src/main/AndroidManifest.xml"
+  - "integrations/*/src/main/AndroidManifest.xml"
+  - "platform/*/src/main/AndroidManifest.xml"
+  - "app/src/main/res/xml/*.xml"
+  - "core/*/src/main/res/xml/*.xml"
+  - "integrations/*/src/main/res/xml/*.xml"
+  - "platform/*/src/main/res/xml/*.xml"
 
 # 支持的语言列表
 languages:

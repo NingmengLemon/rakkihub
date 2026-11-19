@@ -6,7 +6,7 @@
 
 ## C89 workspace 前台命令超时后的孤儿进程清理
 
-- 落点：新增 `workspace/src/main/java/me/rerere/workspace/ProotTermination.kt`（`terminateProot`）；`workspace/src/main/java/me/rerere/workspace/ProotShellRunner.kt` 在前台命令启动前把 shell 与 PRoot 的进程号写进 Rootfs 的 `/tmp/rikkahub/exec/<uuid>.pid`，超时或取消时按 pid 文件结束整组进程；`workspace/src/main/java/me/rerere/workspace/WorkspaceShellRunner.kt` 的 `readResult` 增加 `terminate` 回调，默认仍是 `destroyForcibly`；新增 `workspace/src/test/java/me/rerere/workspace/ProotShellRunnerCommandTest.kt`
+- 落点：新增 `platform/workspace/src/main/java/me/rerere/workspace/ProotTermination.kt`（`terminateProot`）；`platform/workspace/src/main/java/me/rerere/workspace/ProotShellRunner.kt` 在前台命令启动前把 shell 与 PRoot 的进程号写进 Rootfs 的 `/tmp/rikkahub/exec/<uuid>.pid`，超时或取消时按 pid 文件结束整组进程；`platform/workspace/src/main/java/me/rerere/workspace/WorkspaceShellRunner.kt` 的 `readResult` 增加 `terminate` 回调，默认仍是 `destroyForcibly`；新增 `platform/workspace/src/test/java/me/rerere/workspace/ProotShellRunnerCommandTest.kt`
 - 理由：上游 #2225。前台命令超时或线程被中断时 `destroyForcibly()` 直接 SIGKILL PRoot，它跟踪的进程会脱离跟踪继续运行，命令本身和 `&` 启动的子进程都会残留。改成在 PRoot 还活着时扫 `/proc` 的 `TracerPid`，多轮 SIGKILL 它跟踪的所有进程，最后一个退出后 PRoot 自己退出；不能靠 PRoot 收到 SIGQUIT 清理，它从应用进程继承了屏蔽 SIGQUIT 的信号掩码
 - 合并注意：只覆盖前台命令；上游的后台命令（`4ebfde22` 的 `workspace_shell` 后台运行、`workspace_shell_output`、`workspace_shell_kill`）没有移植，也没有对应的后台命令面板。`HostShellRunner` 仍用 `destroyForcibly`。pid 文件放在 Rootfs 的 `/tmp/rikkahub/exec` 下，结束时删除；刚启动时 shell 可能还没写入，`terminateProot` 最多等 1 秒再退回 `destroyForcibly`。workspace 模块有 25 条 Unix-only 测试在 Windows 上必然失败（`ExampleUnitTest` 4、`RootfsInstallerTest` 1、`SshWorkspaceBackendTest` 20；`/bin/sh` 不存在、路径要求绝对 Unix 路径），与本次改动无关
 - 测试：新增 `ProotShellRunnerCommandTest` 2 条（启动脚本先写 `$$ $PPID`、命令文本作为位置参数传入）；workspace 模块测试在 Windows 上 25 条既有失败（新增 2 条通过）；app JVM 803 条、ai 345 条不受影响；assemble、spotless、markdownlint 通过。真机上「超时后进程确实不再残留」没有验证，判据是 pid 文件与 `/proc` 扫描逻辑和上游同款实现
@@ -60,7 +60,7 @@
 
 ## C111 stdio MCP 服务器
 
-本项是一个功能，按 9 个阶段落地。设计见 [design/stdio-mcp.md](../design/stdio-mcp.md)；早期登记用了 C111 至 C119 九个顶层编号，依次对应 C111.1 至 C111.9；C112 至 C119 保留，不再用作顶层编号，下一个新项从 C127 起。
+本项是一个功能，按 9 个阶段落地。设计见 [design/stdio-mcp.md](../design/stdio-mcp.md)；早期登记用了 C111 至 C119 九个顶层编号，依次对应 C111.1 至 C111.9；C112 至 C119 保留，不再用作顶层编号，下一个新项从 C128 起。
 
 ### C111.1 配置与持久化
 

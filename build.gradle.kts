@@ -31,7 +31,7 @@ spotless {
         target("**/*.kt")
         // 子项目的 build 目录 Spotless 会自动排除；targetExclude 是先列出再相减，写 **/build/** 会把所有 build 目录遍历一遍。
         // build-logic 是 included build，不在自动排除之列
-        targetExclude("build-logic/build/**", "material3/material-color-utilities/**")
+        targetExclude("build-logic/build/**", "core/material3/material-color-utilities/**")
         ktlint(ktlintVersion).editorConfigOverride(ktlintConfig)
         // 只用 ktlint 做格式化，命名、文件名、行宽这类没法自动修的问题不拦
         suppressLintsFor { step = "ktlint" }

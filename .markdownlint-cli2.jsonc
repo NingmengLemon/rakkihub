@@ -10,7 +10,7 @@
     "docs/**/*.md",
     "AGENTS.md",
     "README.md",
-    "terminal/README.md"
+    "platform/terminal/README.md"
   ],
   "ignores": [
     "**/node_modules/**",

@@ -6,7 +6,7 @@
 
 - JDK 必须是 HotSpot。默认 `JAVA_HOME` 指向 OpenJ9 的 JDK 21，KSP 会抛 `NoClassDefFoundError: jdk.jfr.Event`。改用 `E:\WorkBench\Java\jdk-23.0.2`
 - `local.properties` 提供 release 签名（被 gitignore）
-- `material3/material-color-utilities` 是 submodule，未初始化时 `:material3:compileDebugKotlin` 报 `Unresolved reference 'dynamiccolor'`
+- `core/material3/material-color-utilities` 是 submodule，未初始化时 `:material3:compileDebugKotlin` 报 `Unresolved reference 'dynamiccolor'`
 - 文档检查用 `markdownlint-cli2`（v0.23.0 / markdownlint v0.41.0），本机全局安装，不在仓库依赖里
 
 ## 构建
@@ -60,7 +60,7 @@ CI 的 checks workflow 在 push 时先把 `origin/main` 指到本次推送之前
 markdownlint-cli2
 ```
 
-`globs` 覆盖 `docs/**/*.md`、`AGENTS.md`、`README.md`、`terminal/README.md`，忽略 `.agents/`、构建目录和 `node_modules`。关掉的规则是 `MD013`（长行）、`MD033`（README 的内联 HTML）、`MD041`（README 首行是 HTML）、`MD060`（参考文档的 CJK 表格按字符宽度对齐，默认风格过不了，暂不强制表格竖线风格）；其余结构规则保持开启。新增或修改文档后跑一次，应该 0 error。
+`globs` 覆盖 `docs/**/*.md`、`AGENTS.md`、`README.md`、`platform/terminal/README.md`，忽略 `.agents/`、构建目录和 `node_modules`。关掉的规则是 `MD013`（长行）、`MD033`（README 的内联 HTML）、`MD041`（README 首行是 HTML）、`MD060`（参考文档的 CJK 表格按字符宽度对齐，默认风格过不了，暂不强制表格竖线风格）；其余结构规则保持开启。新增或修改文档后跑一次，应该 0 error。
 
 ## 设备上的 androidTest
 

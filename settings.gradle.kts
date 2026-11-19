@@ -33,16 +33,25 @@ dependencyResolutionManagement {
 
 rootProject.name = "rikkahub"
 include(":app")
-include(":ai")
-include(":search")
-include(":speech")
-include(":common")
-include(":document")
-include(":web")
-include(":material3")
-include(":ui")
-include(":workspace")
-include(":terminal")
 include(":app:baselineprofile")
-include(":mediagen")
-include(":oauth")
+
+// 目录按职责分组，project path 保持不变，避免 CI 和 ./gradlew :ai:... 等命令失效。
+val relocatedModules = mapOf(
+    ":ai" to "core/ai",
+    ":common" to "core/common",
+    ":document" to "core/document",
+    ":material3" to "core/material3",
+    ":ui" to "core/ui",
+    ":mediagen" to "integrations/mediagen",
+    ":oauth" to "integrations/oauth",
+    ":search" to "integrations/search",
+    ":speech" to "integrations/speech",
+    ":terminal" to "platform/terminal",
+    ":web" to "platform/web",
+    ":workspace" to "platform/workspace",
+)
+
+relocatedModules.forEach { (path, dir) ->
+    include(path)
+    project(path).projectDir = file(dir)
+}

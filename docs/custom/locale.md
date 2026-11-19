@@ -19,7 +19,7 @@
 判据不靠数行数，而是排除掉有意保留的几条 key 之后必须为空：
 
 ```powershell
-rg -n 'RikkaHub' app/src/main/res oauth/src/main/res -g '**/values*/strings.xml' |
+rg -n 'RikkaHub' app/src/main/res integrations/oauth/src/main/res -g '**/values*/strings.xml' |
   Select-String -NotMatch 'name="(backup_page_group_official|backup_page_import_from_official|backup_page_import_official_desc|backup_page_export_official|backup_page_export_official_desc|backup_page_export_schema_diverged)"'
 ```
 

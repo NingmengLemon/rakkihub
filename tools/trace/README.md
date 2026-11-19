@@ -67,7 +67,7 @@ CLI 先写入临时文件，请求和 SSE 解析全部成功后再原子替换�
 ```yaml
 version: 1
 defaults:
-  outputRoot: ../../ai/src/test/resources/stream-traces/generated
+  outputRoot: ../../core/ai/src/test/resources/stream-traces/generated
   timeoutMs: 120000
   headers: {}
 
@@ -84,7 +84,7 @@ traces:
     # endpoint 可省略，也可以是相对 baseUrl 的路径或完整 URL。
     endpoint: /responses
     # output 可省略；默认写入 outputRoot/provider/name/events.jsonl。
-    output: ../../ai/src/test/resources/stream-traces/openai-responses/responses-tool/events.jsonl
+    output: ../../core/ai/src/test/resources/stream-traces/openai-responses/responses-tool/events.jsonl
     headers: {}
     timeoutMs: 120000
     body:

@@ -4,7 +4,7 @@ This file provides guidance to AI agents when working with code in this reposito
 
 ## Project Overview
 
-web-ui 是 RikkaHub 项目的嵌入式 Web 前端，基于 React Router 7 的单页应用（SPA）。构建产物通过 `copy.ts` 脚本复制到 `../web/src/main/resources/static` 目录，由 Kotlin 后端的 Ktor 服务器提供静态文件服务。
+web-ui 是 RikkaHub 项目的嵌入式 Web 前端，基于 React Router 7 的单页应用（SPA）。构建产物通过 `copy.ts` 脚本复制到 `../platform/web/src/main/resources/static` 目录，由 Kotlin 后端的 Ktor 服务器提供静态文件服务。
 
 ## Technology Stack
 
@@ -129,10 +129,10 @@ app/
 
 | TypeScript 类型 | Kotlin 类型 | 后端位置 |
 |----------------|------------|---------|
-| `MessageRole` | `MessageRole` | `ai/src/main/java/me/rerere/ai/core/MessageRole.kt` |
-| `TokenUsage` | `Usage` | `ai/src/main/java/me/rerere/ai/core/Usage.kt` |
-| `UIMessagePart` | `UIMessagePart` | `ai/src/main/java/me/rerere/ai/ui/Message.kt` |
-| `UIMessage` | `UIMessage` | `ai/src/main/java/me/rerere/ai/ui/Message.kt` |
+| `MessageRole` | `MessageRole` | `core/ai/src/main/java/me/rerere/ai/core/MessageRole.kt` |
+| `TokenUsage` | `Usage` | `core/ai/src/main/java/me/rerere/ai/core/Usage.kt` |
+| `UIMessagePart` | `UIMessagePart` | `core/ai/src/main/java/me/rerere/ai/ui/Message.kt` |
+| `UIMessage` | `UIMessage` | `core/ai/src/main/java/me/rerere/ai/ui/Message.kt` |
 | `MessageNode` | `MessageNode` | `app/src/main/java/me/rerere/rikkahub/data/model/Conversation.kt` |
 | `Conversation` | `Conversation` | `app/src/main/java/me/rerere/rikkahub/data/model/Conversation.kt` |
 | `ConversationDto` | `ConversationDto` | `app/src/main/java/me/rerere/rikkahub/web/dto/WebDto.kt` |
@@ -344,7 +344,7 @@ react-router build
 
 ```bash
 pnpm run copy.ts
-# 将 build/client/ 复制到 ../web/src/main/resources/static/
+# 将 build/client/ 复制到 ../platform/web/src/main/resources/static/
 # Kotlin 后端的 Ktor 服务器从该目录提供静态文件服务
 ```
 
@@ -435,7 +435,7 @@ ChatMessage (容器)
 
 **添加新 Part 类型**:
 1. 在 `app/types/parts.ts` 添加类型定义
-2. 在 Kotlin 后端同步添加 (`ai/.../ui/Message.kt`)
+2. 在 Kotlin 后端同步添加 (`core/ai/.../ui/Message.kt`)
 3. 在 `app/components/message/parts/` 创建组件
 4. 在 `app/components/message/message-part.tsx` 添加分发逻辑
 5. 在 `app/types/helpers.ts` 添加类型守卫
@@ -573,7 +573,7 @@ web-ui/build/client/
 ├── assets/*.js
 └── assets/*.css
     ↓ (copy.ts)
-../web/src/main/resources/static/
+../platform/web/src/main/resources/static/
     ↓ (Ktor 静态文件路由)
 用户访问 http://localhost:8080/
 ```

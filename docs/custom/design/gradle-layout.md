@@ -1,6 +1,6 @@
 # Gradle 模块目录布局
 
-状态：规划稿，方向已确认，尚未实施。本文只描述目录与构建接线，不改包名、namespace、project path 或运行行为。
+状态：已实施，位于分支 `refactor/gradle-layout`，已 squash 为单个提交。本文描述目录与构建接线，不改包名、namespace、project path 或运行行为。
 
 ## 目标
 
@@ -17,7 +17,7 @@
 - 不合并、删除或重命名任何模块
 - 不改任何 Kotlin/Java 包名、Android namespace、Room schema 或资源
 
-## 现状
+## 迁移前
 
 根目录：
 
@@ -45,7 +45,7 @@ mediagen -> common
 - `material3/material-color-utilities` 是 git submodule
 - `app` 是唯一 application 模块，签名、每日构建和 baseline profile 都按 `app/` 路径写死
 
-## 推荐布局
+## 最终布局
 
 ```text
 app/                         # 应用入口，不动
@@ -97,6 +97,7 @@ val relocatedModules = mapOf(
     ":ai" to "core/ai",
     ":common" to "core/common",
     ":document" to "core/document",
+    ":material3" to "core/material3",
     ":ui" to "core/ui",
     ":mediagen" to "integrations/mediagen",
     ":oauth" to "integrations/oauth",
@@ -117,12 +118,12 @@ relocatedModules.forEach { (path, dir) ->
 
 - 先 `include`，再设置 `projectDir`
 - `:app` 和 `:app:baselineprofile` 保持原来的物理布局
-- `material3` 在 Phase 1 不进入 `relocatedModules`
+- Phase 1 不加入 `:material3`；Phase 2 再把 `":material3" to "core/material3"` 加进 `relocatedModules`
 - `:ai`、`:workspace` 等 project path 不变，所有 `project(":ai")` 不需要改
 - CI 里的 `:app:testGithubDebugUnitTest`、`:workspace:testDebugUnitTest` 不需要改
 - `./gradlew projects` 仍显示原来的 project path
 
-## Phase 1：移动非 submodule 模块
+## Phase 1：移动非 submodule 模块（已执行）
 
 创建父目录后逐个移动：
 
@@ -148,31 +149,32 @@ workspace -> platform/workspace
 - `AGENTS.md` 的模块结构
 - `docs/custom/roadmap.md` 的模块表
 - `docs/custom/checklist/*` 中的旧源码路径
-- `docs/custom/locale.md` 等引用 `oauth/src`、`speech/src` 的说明
+- `docs/custom/locale.md` 等引用 `integrations/oauth/src`、`integrations/speech/src` 的说明
 - 各模块 README 里的相对链接
 
-Phase 1 明确不改：
+Phase 1 本身不涉及：
 
-- `build.gradle.kts` 的 spotless exclude：`material3` 还没动
-- `web/build.gradle.kts` 的 `rootProject/web-ui`
+- `build.gradle.kts` 的 spotless exclude：Phase 1 时保持 `material3/material-color-utilities/**`，Phase 2 已改为 `core/material3/material-color-utilities/**`
+- `web/build.gradle.kts` 的 `rootProject/web-ui`（迁移前路径）
 - `.github/workflows/*`：project path 和 app 物理路径都没变
 - `app/build.gradle.kts` 的 `:app:baselineprofile` 和 `schemas` 路径
 
-## Phase 2：material3 与 submodule
+## Phase 2：material3 与 submodule（已执行）
 
 `material3` 带有 `material3/material-color-utilities` submodule，不能直接当普通目录移动。步骤：
 
 1. `git submodule deinit -f material3/material-color-utilities`
 2. `git mv material3 core/material3`
-3. 更新 `.gitmodules` 的 `path` 为 `core/material3/material-color-utilities`
-4. `git submodule sync --recursive`
-5. `git submodule update --init --recursive`
-6. 更新根 `build.gradle.kts` 的 `targetExclude("material3/material-color-utilities/**")`
-7. 重新跑构建和 `git submodule status`
+3. 在 `settings.gradle.kts` 的 `relocatedModules` 加入 `":material3" to "core/material3"`
+4. 更新 `.gitmodules` 的 `path` 为 `core/material3/material-color-utilities`
+5. `git submodule sync --recursive`
+6. `git submodule update --init --recursive`
+7. 更新根 `build.gradle.kts` 的 `targetExclude("core/material3/material-color-utilities/**")`
+8. 重新跑构建和 `git submodule status`
 
 如果 `git mv` 在 submodule 上失败，停止并检查 gitlink，不要用普通文件复制硬搬。Phase 2 单独验证，不和 Phase 1 混在一起。
 
-也可以选择让 `material3` 永久留在根目录。布局会略不对称，但 submodule 风险最低，Phase 1 的收益不受影响。
+本次已经执行 Phase 2，`material3` 现在位于 `core/material3`。保留“永久留在根目录”作为将来遇到 submodule 工具链问题时的退路，不再作为待选方案。
 
 ## Phase 3：可选，移动 app
 
@@ -188,7 +190,7 @@ Phase 1 明确不改：
 
 这一步收益只是目录对称，不建议和 Phase 1/2 一起做。
 
-## 文档路径 sweep
+## 迁移时路径检查
 
 迁移后至少检查：
 
@@ -272,13 +274,12 @@ packages/common
 - 根目录只剩 `app/`、`core/`、`integrations/`、`platform/` 和基础设施目录
 - 所有 project path 不变
 - `:app:assembleGithubDebug`、目标 JVM 测试、`web:buildWebUi`、`spotlessCheck` 通过
-- `git diff` 以 rename 为主，没有源码内容改动
+- `git diff` 以 rename 为主；39 个 Kotlin 文件有 ktlint 格式变化（import 顺序、空行、换行、括号展开等），语义等价
 - CI 任务和产物路径不变
 - 文档链接和路径引用没有旧位置
-- `material3` 的 submodule 状态干净，或明确决定留在根目录
+- `material3` 的 submodule 状态干净
 
 ## 未决项
 
-- `material3` 是否做 Phase 2，还是永久留在根目录
-- 是否以后做 Phase 3 的 `apps/app`
+- Phase 3 的 `apps/app` 暂不做；签名 secret、CI 产物路径和文档改动都留到确有需要时
 - 是否把 `speech`、`document` 这类小模块进一步合并；当前不做，先保持项目边界

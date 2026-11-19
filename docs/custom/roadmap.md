@@ -162,20 +162,20 @@
 
 | 模块 | 性质 | 参考方式 |
 | --- | --- | --- |
-| `ai/` | provider SDK、协议适配、模型注册表，与 UI 重构解耦 | 看改动，协议与模型注册表的变化自己移植 |
-| `search/`、`document/`、`common/` | 工具性质的独立模块 | 看改动，保命层自己移植 |
-| `terminal/` | 从 termux-app 收进来的终端模拟器核心，与 `workspace/` 配合支持本地与 SSH 终端 | 看改动，保命层自己移植 |
-| `workspace/` | 沙箱文件系统与 shell 执行环境 | 看改动，保命层自己移植 |
-| `web/` | Ktor 服务端与 web-ui 前端产物 | 看改动，保命层自己移植 |
-| `material3/`、`ui/` | 主题工具与不依赖 app 逻辑的 Compose 组件 | 看改动，保命层自己移植 |
-| `oauth/` | OAuth 授权与回调处理 | 看改动，保命层自己移植 |
+| `core/ai/` | provider SDK、协议适配、模型注册表，与 UI 重构解耦 | 看改动，协议与模型注册表的变化自己移植 |
+| `integrations/search/`、`core/document/`、`core/common/` | 工具性质的独立模块 | 看改动，保命层自己移植 |
+| `platform/terminal/` | 从 termux-app 收进来的终端模拟器核心，与 `platform/workspace/` 配合支持本地与 SSH 终端 | 看改动，保命层自己移植 |
+| `platform/workspace/` | 沙箱文件系统与 shell 执行环境 | 看改动，保命层自己移植 |
+| `platform/web/` | Ktor 服务端与 web-ui 前端产物 | 看改动，保命层自己移植 |
+| `core/material3/`、`core/ui/` | 主题工具与不依赖 app 逻辑的 Compose 组件 | 看改动，保命层自己移植 |
+| `integrations/oauth/` | OAuth 授权与回调处理 | 看改动，保命层自己移植 |
 | `app/` | UI、业务、Service，也是大部分定制的所在地 | 我们的地盘，上游功能只借鉴思路 |
-| `speech/` | C5 删掉了全部运行时实现，只留两个序列化类与它们的序列化测试 | 不看 |
-| `mediagen/` | C1 保留模块以维持数据兼容，界面不使用 | 不主动看，改到 `MediaGenerationProviderSetting` 这类持久化类型时复核 |
+| `integrations/speech/` | C5 删掉了全部运行时实现，只留两个序列化类与它们的序列化测试 | 不看 |
+| `integrations/mediagen/` | C1 保留模块以维持数据兼容，界面不使用 | 不主动看，改到 `MediaGenerationProviderSetting` 这类持久化类型时复核 |
 
-`ai/` 下有这些改动：C3 删掉了 `ai/util/Request.kt` 里给 aihubmix.com 加 `APP-Code` 请求头的分支；C52 把 `ClaudeProvider` 的缓存断点收敛到官方标准；C53 把 Claude 缓存策略改成按 provider 切换，默认保留上游原来的 4 个断点；C47 在 `ai/ui/Message.kt` 新增了只读的 `contextLimitStart`，不改 `limitContext`；C51 在 `ai/ui/Message.kt` 新增了序列化字段 `isCompressionPrompt`，用于标记压缩提示词；C58 在 `ai/ui/Message.kt` 新增了 `status`、`isModelVisible`、`filterModelVisible` 和 `mergeAdjacentUserMessages`；C59 让五个 `StreamChunkDecoder` 在未见终止事件时抛 `IOException`，并在五个 provider 接线点的 `onClosed` 里 `close(e)`；C61 在 `ErrorParser.kt` 增加 `LlmFailureCode`/`HttpException` 错误码和 `Retry-After`，`RetryPolicy` 按码表、jitter 和 `maxDelay` 重试，`AgentLoop` 把空回复转成 `EMPTY_RESPONSE`；C62 给 `AgentRequest` 增加 `streamIdleTimeout`，`AgentLoop` 用 `Flow.timeout` 把流内空闲转成 `TIMEOUT`，Claude 的 ping 产出心跳并重置看门狗；C65 让工具错误结果只带摘要，堆栈只进日志（C78 起 `Log.e`），并给 `AgentRequest` 增加 `toolTimeout`，`AgentLoop` 用 `withTimeoutOrNull` 执行工具，工具声明 `timeoutMillis` 与外层取较大值；C78 把工具失败日志从 `printStackTrace` 改成 `Log.e`；C67 在 `UIMessage` 增加 `isGenerating`，加载时据此把进程死亡留下的半截回复补成 `INTERRUPTED`；C68 增加 `withoutCompressionScratch`，把压缩提示词和紧随回复从请求与导出里过滤掉；C85 让 Claude 的 `redacted_thinking` 与思考块签名可以回放；C86 把 `NOTSET` 与 `OFF` 拆开，内部调用默认不写 `reasoning_effort`，官方出口把 `NOTSET` 归一化成 `OFF`；C96 删掉了 `configureReferHeaders`（OpenRouter 的 `X-Title` 与 `HTTP-Referer`）。C35 的 `filterByKeywords` 与上游 `5ad19405` 逐字一致，不算分叉。移植上游对这些文件的改动时保留这些改动。
+`core/ai/` 下有这些改动：C3 删掉了 `core/ai/util/Request.kt` 里给 aihubmix.com 加 `APP-Code` 请求头的分支；C52 把 `ClaudeProvider` 的缓存断点收敛到官方标准；C53 把 Claude 缓存策略改成按 provider 切换，默认保留上游原来的 4 个断点；C47 在 `core/ai/ui/Message.kt` 新增了只读的 `contextLimitStart`，不改 `limitContext`；C51 在 `core/ai/ui/Message.kt` 新增了序列化字段 `isCompressionPrompt`，用于标记压缩提示词；C58 在 `core/ai/ui/Message.kt` 新增了 `status`、`isModelVisible`、`filterModelVisible` 和 `mergeAdjacentUserMessages`；C59 让五个 `StreamChunkDecoder` 在未见终止事件时抛 `IOException`，并在五个 provider 接线点的 `onClosed` 里 `close(e)`；C61 在 `ErrorParser.kt` 增加 `LlmFailureCode`/`HttpException` 错误码和 `Retry-After`，`RetryPolicy` 按码表、jitter 和 `maxDelay` 重试，`AgentLoop` 把空回复转成 `EMPTY_RESPONSE`；C62 给 `AgentRequest` 增加 `streamIdleTimeout`，`AgentLoop` 用 `Flow.timeout` 把流内空闲转成 `TIMEOUT`，Claude 的 ping 产出心跳并重置看门狗；C65 让工具错误结果只带摘要，堆栈只进日志（C78 起 `Log.e`），并给 `AgentRequest` 增加 `toolTimeout`，`AgentLoop` 用 `withTimeoutOrNull` 执行工具，工具声明 `timeoutMillis` 与外层取较大值；C78 把工具失败日志从 `printStackTrace` 改成 `Log.e`；C67 在 `UIMessage` 增加 `isGenerating`，加载时据此把进程死亡留下的半截回复补成 `INTERRUPTED`；C68 增加 `withoutCompressionScratch`，把压缩提示词和紧随回复从请求与导出里过滤掉；C85 让 Claude 的 `redacted_thinking` 与思考块签名可以回放；C86 把 `NOTSET` 与 `OFF` 拆开，内部调用默认不写 `reasoning_effort`，官方出口把 `NOTSET` 归一化成 `OFF`；C96 删掉了 `configureReferHeaders`（OpenRouter 的 `X-Title` 与 `HTTP-Referer`）。C35 的 `filterByKeywords` 与上游 `5ad19405` 逐字一致，不算分叉。移植上游对这些文件的改动时保留这些改动。
 
-上游从 3.0.0 起把多步生成循环放进 `ai/`（`ai/src/main/java/me/rerere/ai/agent/AgentLoop.kt`），3.1.1 又把工具执行计时与 models.dev 的模型能力数据放进去。现在还值得看 `ai/` 吗，取决于它是不是一块能单独参考的区域：如果它继续吸收 `app/` 侧的耦合，读改动的成本会变高。
+上游从 3.0.0 起把多步生成循环放进 `ai/`（本地对应 `core/ai/src/main/java/me/rerere/ai/agent/AgentLoop.kt`），3.1.1 又把工具执行计时与 models.dev 的模型能力数据放进去。现在还值得看 `core/ai/` 吗，取决于它是不是一块能单独参考的区域：如果它继续吸收 `app/` 侧的耦合，读改动的成本会变高。
 
 ### 一次参考上游的动作
 
@@ -199,7 +199,7 @@
 - 在 `app/` 里，该删的实现直接删掉，不必为了可合并性留一整段死代码
 - `ChatVM.kt`、`ChatService.kt` 这类高频文件可以随手改，不必专门绕开
 
-`ai/` 仍要参考上游，C3 与 C96 的删除在移植上游对 `ai/util/Request.kt` 的改动时要带回来，「改动尽量小」在那里仍然成立。
+`core/ai/` 仍要参考上游，C3 与 C96 的删除在移植上游对 `core/ai/util/Request.kt` 的改动时要带回来，「改动尽量小」在那里仍然成立。
 
 同类的合并成本让步还有几处：把删掉的文件路径记进定制清单以便合并时逐项核对；新定制避开上游重构期；定制清单里那些「刻意保留」的条目，比如 C1 留下未删的实现，留着都是为了不与上游产生 modify/delete 冲突。这些让步不再需要；清单本身仍然保留，用途从「合并时逐项重放」变成「移植上游改动时核对」。
 
@@ -308,7 +308,7 @@
 | C75 自动重试次数可调（默认关闭，已恢复） | L3 | 无（网络设置） |
 | C76 重试 attempt 可见化（已持久化） | L3 | 无（MessageStep.attempts 与聊天列表卡片） |
 | C77 错误卡片重试本步（永久取消） | L3 | 无（ChatError 与错误卡片） |
-| C78 工具失败日志分级 | L3 | 无（ai/AgentLoop.kt） |
+| C78 工具失败日志分级 | L3 | 无（core/ai/agent/AgentLoop.kt） |
 | C79 本地导出默认包含工作区文件 | L2 | C29 |
 | C80 用量成功失败区分与官方 schema 裁剪 | L2 | C18、C30 |
 
@@ -338,12 +338,13 @@
 - Gemini 缓存控制已调研，结论是不做 explicit `cachedContents`：默认 generateContent 路径的 implicit caching 已自动生效并解析成 cachedTokens，explicit 只支持 Gemini 3/2.5 且是 Beta，有 4096/2048 token 下限和按小时计的存储费，约 18 到 60 次复用才回本，还会关闭同一请求的 implicit caching。剩余可选小项：给 OpenAI 兼容入口的 usage 解析补一个 cached token 字段的兜底。
 - U+FFFD 替换字符按 C100 重新登记为独立行为对齐项，低优先级、不排期：经中转使用 Claude 时偶发，用户侧对照显示同一中转下官方 Claude Code 正常，中转方称不是服务端问题；根因尚未定位，可能在 SSE 分块、UTF-8 边界、流式合并或中转改写。等 B2 剩余消费方和 C87 之后，用同一 prompt 对照官方 Claude Code、官方 API 与中转，抓原始字节确认第一处替换字符出现在哪一层，再决定改 decoder 还是只记兼容性说明。不要先做全局替换字符清洗。
 - 提示词注入、世界书与酒馆先搁置，必要时可整体删除；若重做，按“提示词注入与世界书的搁置决定”一节的方向，把系统触发的提示作为新轮次追加到消息列表末尾，而不是修改已有消息。
-- Gradle 模块目录收进语义分组（规划已确认，见 [`design/gradle-layout.md`](design/gradle-layout.md)，未排期）：`app` 留在根目录，`ai/common/document/ui` 进 `core/`，`mediagen/oauth/search/speech` 进 `integrations/`，`terminal/web/workspace` 进 `platform/`；所有 project path 保持 `:app`、`:ai` 等不变，靠 `settings.gradle.kts` 的 `projectDir` 映射。`material3` 的 submodule 迁移单独作为 Phase 2，`app` 移到 `apps/` 只作为可选 Phase 3；不拆 `app`、不改包名、不混功能改动。
 - 终端功能键样式对齐 Termux（未排期）：双排、不横向滚动、按键等宽；或者提供设置项，在现在的横向 Rikka 风格和 Termux 双排之间切换。先确认目标设备宽度下两排按键的可读性和键盘遮挡，再决定是替换还是可选项。
 - 自 fork 以来新增的用户可见文本做一轮文案打磨（未排期）：假定用户有基本 agent 类工具使用经验，但不熟悉 RikkaHub/RakkiHub；避免内部术语、缩写和直译腔，遵循基本的 UI 文案设计（动作明确、状态可预期、错误可行动）。
 - 导出备份的多工作区选择（未排期）：勾选“导出工作区文件”后，继续多选具体要导出的工作区，默认全选；要同时处理本地导出、WebDAV、S3 以及导入侧对缺失工作区的提示。
 - Dependabot PR 分批处理（未排期）：当前不自动合并；等手头功能队列告一段落后按生态逐批看，优先安全和 patch，major 与 Kotlin/Compose/AGP/KSP 的联动单独验证；每批跑目标测试和一次 smoke，避免一次性合入。
 - 上游更新挑选与移植（未排期）：`ref` 保持只读，按批次查看上游提交，优先 bugfix、安全修复和会影响现有行为的改动；每批一个主题，手工移植并带设备验收，不做整分支 merge。
+- 散落的 Python 脚本补 PEP 723 单文件脚本元数据（未排期）：给需要独立运行的脚本加 `# /// script` 依赖声明，减少对仓库虚拟环境和隐式全局包的依赖；先盘点实际脚本，再统一格式。
+- model provider 的 mock server 入库（未排期）：如果当前还没有可复用的 mock server，整理一个覆盖 OpenAI Chat/Responses、Claude 和 Gemini 流式响应的最小实现，供 provider 测试和本地联调使用；不要提交真实 key 或抓包数据。
 
 上游查看与 issue 调研记录见 [`history/upstream.md`](history/upstream.md)，已完成的落地批次见 [`history/milestones.md`](history/milestones.md)。
 

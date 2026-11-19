@@ -36,22 +36,22 @@ App 有一个 `distribution` 维度的 product flavor：`github`（默认）和 
 ## Module Structure
 
 - **app**: Main application module with UI, ViewModels, and core logic
-- **ai**: AI SDK abstraction layer for different providers (OpenAI, Google, Anthropic)
-- **common**: Common utilities and extensions
-- **document**: Document parsing module for handling PDF, DOCX, PPTX, and EPUB files
-- **material3**: Material color utility extensions used by the app UI
-- **ui**: Reusable Compose UI components that do not depend on app logic
-- **search**: Search functionality SDK for multiple providers (Exa, Tavily, Zhipu, Bing, Brave, SearXNG, and others)
-- **speech**: Only the serialized `TTSProviderSetting` and `ASRProviderSetting` data classes remain (kept so persisted
+- **core/ai**: AI SDK abstraction layer for different providers (OpenAI, Google, Anthropic)
+- **core/common**: Common utilities and extensions
+- **core/document**: Document parsing module for handling PDF, DOCX, PPTX, and EPUB files
+- **core/material3**: Material color utility extensions used by the app UI
+- **core/ui**: Reusable Compose UI components that do not depend on app logic
+- **integrations/search**: Search functionality SDK for multiple providers (Exa, Tavily, Zhipu, Bing, Brave, SearXNG, and others)
+- **integrations/speech**: Only the serialized `TTSProviderSetting` and `ASRProviderSetting` data classes remain (kept so persisted
   settings still decode). The TTS and ASR runtime implementations were removed on this branch, see C5 in
   `docs/custom/checklist/removals.md`.
-- **web**: Embedded web server module that provides Ktor server startup function and hosts static frontend build files (
+- **platform/web**: Embedded web server module that provides Ktor server startup function and hosts static frontend build files (
   built from web-ui/ React project)
-- **workspace**: Sandboxed per-workspace file system and shell execution environment exposed to the AI as tools.
-- **terminal**: Terminal emulator core taken from termux-app's `terminal-emulator` (package `com.termux.terminal`, kept
+- **platform/workspace**: Sandboxed per-workspace file system and shell execution environment exposed to the AI as tools.
+- **platform/terminal**: Terminal emulator core taken from termux-app's `terminal-emulator` (package `com.termux.terminal`, kept
   binary compatible with the `terminal-view` aar). `TerminalSession` runs over a `TerminalTransport`: local PRoot
   terminals use `LocalPtyTransport`, SSH workspaces use the app's `SshTerminalTransport`. Origin and local changes are
-  listed in terminal/README.md.
+  listed in platform/terminal/README.md.
 
 ## Concepts
 
@@ -77,7 +77,7 @@ App 有一个 `distribution` 维度的 product flavor：`github`（默认）和 
 - **UIMessage**: A platform-agnostic message abstraction that encapsulates chat messages with different types of content
   parts (text, images, documents, reasoning, tool calls/results, etc.). Each message has a role (USER, ASSISTANT,
   SYSTEM, TOOL), creation timestamp, model ID, token usage information, and optional annotations. UIMessages support
-  streaming updates through chunk merging. (ai/src/main/java/me/rerere/ai/ui/Message.kt)
+  streaming updates through chunk merging. (core/ai/src/main/java/me/rerere/ai/ui/Message.kt)
 
 - **MessageNode**: A container holding one or more UIMessages to implement message branching functionality. Each node
   maintains a list of alternative messages and tracks which message is currently selected (selectIndex). This enables
@@ -134,12 +134,12 @@ This repository carries personal customizations on top of upstream `rikkahub/rik
 - A Room schema change also makes the official-compatible export fail until its trimming logic exists. C80 implemented
   the known `usage_record.outcome` trim (see C18/C80); other schema divergences still fail deliberately.
 - The branch is on independent updates: upstream is read, not merged. Read its commits, port feature or bugfix ideas
-  by hand, and keep the C3 and C96 deletions in `ai/util/Request.kt` whenever upstream changes to that file are ported. The
+  by hand, and keep the C3 and C96 deletions in `core/ai/util/Request.kt` whenever upstream changes to that file are ported. The
   module reference table and the porting procedure live in the independent-update section of
   `docs/custom/roadmap.md`.
 - The merge-cost concessions are gone now that the branch is on independent updates: inside `app/`, delete
   implementations outright instead of leaving entry-point shells, and edit the hot files freely. Keep changes small
-  inside `ai/`, which is still read against upstream (C3's and C96's deletions, C52's standard cache breakpoints, C53's per-provider cache strategy, C59's terminal-event guard, C61's typed failures/retry policy, C62's stream idle watchdog with heartbeat reset, C65's tool-error summary and declared timeouts, C67's `isGenerating` recovery flag, C68's `withoutCompressionScratch`, C85's Claude thinking-signature replay, C86's NOTSET/OFF split and official-export normalization, and the C47/C51/C58/C122 `ai/ui/Message.kt` additions are the behavior changes there; C35's `filterByKeywords` matches upstream).
+  inside `core/ai/`, which is still read against upstream (C3's and C96's deletions, C52's standard cache breakpoints, C53's per-provider cache strategy, C59's terminal-event guard, C61's typed failures/retry policy, C62's stream idle watchdog with heartbeat reset, C65's tool-error summary and declared timeouts, C67's `isGenerating` recovery flag, C68's `withoutCompressionScratch`, C85's Claude thinking-signature replay, C86's NOTSET/OFF split and official-export normalization, and the C47/C51/C58/C122 `core/ai/ui/Message.kt` additions are the behavior changes there; C35's `filterByKeywords` matches upstream).
 - Before pushing a batch of customizations, run an independent review: dispatch a fresh-context `subagent` (not
   `subagent_fork`) and have it load the `code-review` skill, reviewing `origin/main..main` (the batch; use `ref..main`
   to audit every customization). Fix what it finds and re-run until it passes; only then `git push origin main`.
