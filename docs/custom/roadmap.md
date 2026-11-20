@@ -343,9 +343,9 @@
 - 导出备份的多工作区选择（未排期）：勾选“导出工作区文件”后，继续多选具体要导出的工作区，默认全选；要同时处理本地导出、WebDAV、S3 以及导入侧对缺失工作区的提示。
 - Dependabot PR 分批处理（未排期）：当前不自动合并；等手头功能队列告一段落后按生态逐批看，优先安全和 patch，major 与 Kotlin/Compose/AGP/KSP 的联动单独验证；每批跑目标测试和一次 smoke，避免一次性合入。
 - 上游更新挑选与移植（未排期）：`ref` 保持只读，按批次查看上游提交，优先 bugfix、安全修复和会影响现有行为的改动；每批一个主题，手工移植并带设备验收，不做整分支 merge。
-- 其余协议的签名清除（未排期）：Claude、OpenAI Responses、OpenRouter 的重放要求签名块原样带回，单删签名会留下非法块，需要 provider 侧重放时按缺签名跳过该块后再开放。
 - 散落的 Python 脚本补 PEP 723 单文件脚本元数据（未排期）：给需要独立运行的脚本加 `# /// script` 依赖声明，减少对仓库虚拟环境和隐式全局包的依赖；先盘点实际脚本，再统一格式。
 - model provider 的 mock server 入库（未排期）：如果当前还没有可复用的 mock server，整理一个覆盖 OpenAI Chat/Responses、Claude 和 Gemini 流式响应的最小实现，供 provider 测试和本地联调使用；不要提交真实 key 或抓包数据。
+- 跨协议思考签名重放门禁（调研完成，低优先级、未排期）：目前跨协议切模型的需求不多，方案先放末尾，见 [`design/thinking-signature-replay.md`](design/thinking-signature-replay.md)。切模型时只重放目标协议自己产生的 reasoning，其余整块跳过但保留存储与 UI；DeepSeek thinking 需要无签名回放，门禁必须按协议判断；工具轮与 Gemini 的 `skip_thought_signature_validator` 兜底放在第二阶段。Claude、OpenAI Responses、OpenRouter 的签名清除也依赖这项，单项剥离会留下非法块。
 
 上游查看与 issue 调研记录见 [`history/upstream.md`](history/upstream.md)，已完成的落地批次见 [`history/milestones.md`](history/milestones.md)。
 
