@@ -1,6 +1,6 @@
 # 明细：聊天、上下文与模型
 
-本文件是 [checklist.md](../checklist.md) 的明细，收录 C35、C43 至 C44、C46 至 C47、C49 至 C53、C57 至 C63、C65 至 C78、C81 至 C86、C97 至 C100、C107、C121、C122、C130、C131、C133、C134、C135、C137。
+本文件是 [checklist.md](../checklist.md) 的明细，收录 C35、C43 至 C44、C46 至 C47、C49 至 C53、C57 至 C63、C65 至 C78、C81 至 C86、C97 至 C100、C107、C121、C122、C130、C131、C133、C134、C135、C137、C140、C141。
 
 <a id="c35"></a>
 
@@ -452,3 +452,21 @@
 - 理由：测试连接入口在悬浮工具栏里，键盘弹出时工具栏会移出 composition；弹窗如果挂在这个按钮下，点模型搜索框弹键盘会连同弹窗一起销毁，看起来像自动关闭。
 - 合并注意：开关必须由调用方持有，不要在工具栏内部 `remember`；`ProviderConnectionTestDialog` 不要再包一层入口按钮。后续上游如果重排这个页面，保持「弹窗在工具栏外」这个结构。
 - 测试：`:app:compileGithubDebugKotlin`、`spotlessCheck` 通过；设备上打开 OpenAI 提供商的测试连接弹窗，点模型选择器再点搜索框（弹出键盘），关掉选择层后弹窗仍在，未被销毁。
+
+<a id="c140"></a>
+
+## C140 内置助手可删除
+
+- 落点：`SettingsNormalization` 不再按 id 补齐内置助手，只在列表为空时补回 `DEFAULT_ASSISTANTS`；`withoutInvalidReferences` 在选中的助手失效时回退到第一个；`AssistantVM.removeAssistant` 改到 `AppScope`，在同一次更新里按最新列表检查，至少保留一个，确实删除后才清理记忆与会话。来源是上游 `ce0e3607`。
+- 理由：此前内置助手删不掉，删完后 `assistantId` 还可能悬空；连续删除时旧实现可能把最后一个助手也删掉。
+- 合并注意：本分支没有上游的 `cleanupAssistantFiles`/`FilesManager` 清理路径，移植时去掉了该调用，只保留记忆和会话清理；删除仍走设置更新，不直接改列表。
+- 测试：`:app:compileGithubDebugKotlin` 与 `SettingsStoreTest` 通过；未在设备上实际删除默认助手。
+
+<a id="c141"></a>
+
+## C141 消息概览标出压缩检查点
+
+- 落点：`ChatList.kt` 的预览列表遇到 `isContextCheckpoint` 消息时，渲染独立的 `CheckpointPreviewCard`（Package01 图标、secondaryContainer、整行可点跳转）；按 `isHistoryTruncationMarker` 区分历史截断与上下文压缩，分别使用 `chat_page_truncate_checkpoint_title` 和 `chat_page_compress_checkpoint_title`。来源是上游 `63a5192d`。
+- 理由：预览里看不出上下文压缩边界；单独卡片能把检查点和普通消息区分开。
+- 合并注意：本分支没有上游的 `ChatListPreview.kt`（已并入 `ChatList.kt` 的消息列表），所以只移植卡片语义，不做上游的 round 分组；检查点消息仍占一个原始 index，跳转逻辑不变；`isContextCheckpoint` 同时覆盖空的历史截断标记，标题必须按 `isHistoryTruncationMarker` 分流，不能一律写「已压缩为摘要」。
+- 测试：`:app:compileGithubDebugKotlin` 通过；未在设备上打开带压缩检查点的会话验证。

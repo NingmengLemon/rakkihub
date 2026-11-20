@@ -1,6 +1,6 @@
 # 明细：平台、构建与品牌
 
-本文件是 [checklist.md](../checklist.md) 的明细，收录 C7、C12、C37 至 C39、C45、C48、C55 至 C56、C90 至 C94、C101、C127 至 C129、C136。
+本文件是 [checklist.md](../checklist.md) 的明细，收录 C7、C12、C37 至 C39、C45、C48、C55 至 C56、C90 至 C94、C101、C127 至 C129、C136、C138、C139。
 
 <a id="c7"></a>
 
@@ -166,3 +166,21 @@
 - 理由：这些脚本此前靠 `uv run --with ...` 或全局环境运行，依赖散落在文档命令里；PEP 723 把解释器与依赖声明放进文件，`uv run <script>` 直接可跑。
 - 合并注意：PEP 723 的 `# /// script` 块只要在顶层（列 0）就能被 uv 解析，放在 docstring 之后甚至 import 之后也有效，`gen-icons.py` 就是把块放在 docstring 后；两个 backup 脚本把块放在 shebang 之后、docstring 之前，`gen-icons.py` 没有 shebang，块放在 docstring 之后；位置只影响阅读，不是 uv 的硬性要求。`requires-python` 取 3.10，其中 `backup-ref-counts.py` 的 `str | None` 注解在 3.9 会真实报错。Pillow 没有 pin，因为仓库里没有版本基线，`ImageDraw.rounded_rectangle` 只推出下限；要加 pin 时先确认多尺寸 ICO 的保存路径。`gen-icons.py` 文档里的 `uv run --with pillow` 命令仍然有效，不删。
 - 测试：保留的 3 个脚本都通过 `python -m py_compile`；用 `tomllib` 复核块可解析、`requires-python`/`dependencies` 存在、docstring 仍在、`ast.parse(feature_version=...)` 通过；`uv run --offline --no-project --script` 对两种放置位置各跑过一个合成脚本。
+
+<a id="c138"></a>
+
+## C138 提供商图标补充
+
+- 落点：新增 `app/src/main/assets/icons/sensenova-color.svg`；`AIIconMatcher.kt` 增加 `sensenova|sensetime|sensechat|商汤|日日新` 匹配，并把 NVIDIA 规则扩到 `nemotron|英伟达`。来源是上游 `1ed0a77c`。
+- 理由：上游新增的提供商图标，属于低风险映射表补齐，便于按名称自动识别。
+- 合并注意：匹配顺序在 NVIDIA 之后、PPIO 之前；新增图标保持同名 SVG 放在 `assets/icons/`。
+- 测试：`:app:compileGithubDebugKotlin` 通过；未单独截图验证图标匹配。
+
+<a id="c139"></a>
+
+## C139 请求体日志只在 debug 构建打印
+
+- 落点：`core/ai` 新增 `util/RequestLog.kt` 的 `logRequestBody`，`build.gradle.kts` 打开 `buildConfig`；Claude、Google、Interactions、Chat Completions、OpenAI 图片生成、Responses 的请求体日志改为 `logRequestBody`，发布构建不再执行序列化 lambda。来源是上游 `3adeba47`。
+- 理由：请求体包含历史图片 base64，可能有几十 MB；发布版只为一行日志重新序列化一次，白占内存和 CPU。
+- 合并注意：日志名保持原行为名（generateText/streamText/generateImage）；响应体和错误日志不在此范围。`RequestLog` 是 internal，只在 `core/ai` 内使用。
+- 测试：`:ai:compileDebugKotlin`、`:ai:testDebugUnitTest` 通过；没有在 release APK 里实测日志缺失。
