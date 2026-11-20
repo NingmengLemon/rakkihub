@@ -1616,7 +1616,7 @@
   <string name="chat_page_save_warning_write_failed">Saving failed; this reply may be incomplete</string>
   <string name="chat_page_save_warning_too_large">Reply too large; automatic saving was skipped</string>
   <string name="chat_page_strip_thought_signature">Clear thought signatures</string>
-  <string name="chat_page_strip_thought_signature_desc">Google thought signatures from old messages can expire and make Gemini reject the conversation with 400 corrupted thought signature. Clearing them replays those messages without a signature and cannot be undone.</string>
+  <string name="chat_page_strip_thought_signature_desc">Removes the selected signature metadata from this conversation. This cannot be undone.</string>
   <string name="chat_page_strip_thought_signature_confirm">Clear</string>
   <string name="chat_page_strip_thought_signature_google_generate_content">Google (generateContent)</string>
   <string name="chat_page_strip_thought_signature_google_interactions">Google (Interactions)</string>

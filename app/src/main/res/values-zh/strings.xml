@@ -1618,7 +1618,7 @@ mDNS 地址：使用 .local 主机名，同一网络中的其他设备可通过�
   <string name="chat_page_save_warning_write_failed">消息保存失败，这条回复可能不完整</string>
   <string name="chat_page_save_warning_too_large">回复内容过大，已跳过自动保存</string>
   <string name="chat_page_strip_thought_signature">清除思考签名</string>
-  <string name="chat_page_strip_thought_signature_desc">旧消息里的 Google 思考签名会过期，过期后 Gemini 会以 400 corrupted thought signature 拒绝这段会话。清除后这些消息将以不带签名的形式重放，且无法恢复。</string>
+  <string name="chat_page_strip_thought_signature_desc">清除所选协议的历史思考签名，操作不可撤销。</string>
   <string name="chat_page_strip_thought_signature_confirm">清除</string>
   <string name="chat_page_strip_thought_signature_google_generate_content">Google (generateContent)</string>
   <string name="chat_page_strip_thought_signature_google_interactions">Google (Interactions)</string>

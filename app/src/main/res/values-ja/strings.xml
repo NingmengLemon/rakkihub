@@ -1618,7 +1618,7 @@ mDNSアドレス: .localホスト名を使用し、IPを知らなくても同じ
   <string name="chat_page_save_warning_write_failed">メッセージの保存に失敗しました。この返信は不完全な可能性があります</string>
   <string name="chat_page_save_warning_too_large">返信が大きすぎるため、自動保存をスキップしました</string>
   <string name="chat_page_strip_thought_signature">思考シグネチャを削除</string>
-  <string name="chat_page_strip_thought_signature_desc">古いメッセージの Google 思考シグネチャは期限切れになり、Gemini が 400 corrupted thought signature で会話を拒否することがあります。削除すると署名なしで再送され、元に戻せません。</string>
+  <string name="chat_page_strip_thought_signature_desc">選択したプロトコルの思考シグネチャを履歴から削除します。元に戻せません。</string>
   <string name="chat_page_strip_thought_signature_confirm">削除</string>
   <string name="chat_page_strip_thought_signature_google_generate_content">Google (generateContent)</string>
   <string name="chat_page_strip_thought_signature_google_interactions">Google (Interactions)</string>
