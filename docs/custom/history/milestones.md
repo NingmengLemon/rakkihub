@@ -2,6 +2,10 @@
 
 本文件归档已完成的定制、修复与独立化批次，按时间或主题分组。当前状态以 checklist 索引与明细为准，未来方向见 [roadmap.md](../roadmap.md)。
 
+## 2026-11-20 依赖安全批次
+
+- 按 Dependabot 的 gradle-minor-patch 组筛选安全与 patch 更新：okhttp 5.5.1、jsoup 1.24.1、slf4j 2.0.20、sshd 2.20.1、jmdns 3.6.5、pebble 4.1.3、quickjs 1.0.18、bouncycastle 1.87、uiautomator 2.4.1、slf4j-android 2.0.20-0；通过 `ai`/app 单测、`workspace` 单测（25 条既有 Windows 环境失败不变，其中 sshd 用例跑满 23 条）、release assemble 与安装。Gradle/AGP/KSP、Ktor、Compose 与 Web 侧 major 仍单独验证；uiautomator 只参与 baseline profile，未单独构建。
+
 ## 2026-11-20 测试连接弹窗
 
 - C137：移植上游 `a75f3f9c`，测试连接弹窗的开关移到工具栏外，键盘弹出不再把弹窗一起销毁。

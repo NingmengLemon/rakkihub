@@ -341,7 +341,7 @@
 - 终端功能键样式对齐 Termux（未排期）：双排、不横向滚动、按键等宽；或者提供设置项，在现在的横向 Rikka 风格和 Termux 双排之间切换。先确认目标设备宽度下两排按键的可读性和键盘遮挡，再决定是替换还是可选项。
 - 自 fork 以来新增的用户可见文本做一轮文案打磨（未排期）：假定用户有基本 agent 类工具使用经验，但不熟悉 RikkaHub/RakkiHub；避免内部术语、缩写和直译腔，遵循基本的 UI 文案设计（动作明确、状态可预期、错误可行动）。
 - 导出备份的多工作区选择（未排期）：勾选“导出工作区文件”后，继续多选具体要导出的工作区，默认全选；要同时处理本地导出、WebDAV、S3 以及导入侧对缺失工作区的提示。
-- Dependabot PR 分批处理（未排期）：当前不自动合并；等手头功能队列告一段落后按生态逐批看，优先安全和 patch，major 与 Kotlin/Compose/AGP/KSP 的联动单独验证；每批跑目标测试和一次 smoke，避免一次性合入。
+- Dependabot PR 分批处理（进行中）：安全/patch 批次已完成 okhttp、jsoup、slf4j 与 slf4j-android、sshd、jmdns、pebble、quickjs、bouncycastle、uiautomator，并通过 `ai`/app 单测、`workspace` 单测（25 条既有 Windows 失败不变）、release assemble 与安装；Gradle/AGP/KSP、Ktor、Compose 与 Web 侧 major 仍单独验证，PR 不自动合并，合并或关闭前确认。
 - 上游更新挑选与移植（未排期）：`ref` 保持只读，按批次查看上游提交，优先 bugfix、安全修复和会影响现有行为的改动；每批一个主题，手工移植并带设备验收，不做整分支 merge。
 - model provider 的 mock server 入库（未排期）：如果当前还没有可复用的 mock server，整理一个覆盖 OpenAI Chat/Responses、Claude 和 Gemini 流式响应的最小实现，供 provider 测试和本地联调使用；不要提交真实 key 或抓包数据。
 - 跨协议思考签名重放门禁（调研完成，低优先级、未排期）：目前跨协议切模型的需求不多，方案先放末尾，见 [`design/thinking-signature-replay.md`](design/thinking-signature-replay.md)。切模型时只重放目标协议自己产生的 reasoning，其余整块跳过但保留存储与 UI；DeepSeek thinking 需要无签名回放，门禁必须按协议判断；工具轮与 Gemini 的 `skip_thought_signature_validator` 兜底放在第二阶段。Claude、OpenAI Responses、OpenRouter 的签名清除也依赖这项，单项剥离会留下非法块。
