@@ -6,10 +6,10 @@
     <title>Markdown Preview</title>
 
     <!-- KaTeX for LaTeX math rendering -->
-    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.47/dist/katex.min.css">
+    <link rel="stylesheet" href="{{ASSET_BASE}}katex.min.css">
 
     <!-- Highlight.js for syntax highlighting -->
-    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/highlight.js@11.9.0/styles/atom-one-dark.min.css">
+    <link rel="stylesheet" href="{{ASSET_BASE}}highlight.min.css">
 
     <style>
         body {
@@ -171,19 +171,20 @@
 <body>
     <div id="content"></div>
 
-    <script type="module">
-        // Import markdown-it and plugins using esm.sh
-        import MarkdownIt from 'https://esm.sh/markdown-it@14.0.0';
-        import vscodemarkdownItKatex from 'https://esm.sh/@vscode/markdown-it-katex@1.1.2'
-        import markdownItTaskLists from 'https://esm.sh/markdown-it-task-lists@2.1.1';
-
-        import katex from 'https://esm.sh/katex@0.16.47';
-        // mhchem 扩展: 支持 \ce{} 等化学公式语法
-        import 'https://esm.sh/katex@0.16.47/dist/contrib/mhchem.mjs';
-        import hljs from 'https://esm.sh/highlight.js@11.11.1';
-        import mermaid from 'https://esm.sh/mermaid@11.17.2';
-        import { Base64 } from 'https://esm.sh/js-base64@3.7.5';
-        import DOMPurify from 'https://esm.sh/dompurify@3.4.17';
+    <script src="{{ASSET_BASE}}mermaid.min.js"></script>
+    <script src="{{ASSET_BASE}}mark.bundle.js"></script>
+    <script>
+        // 依赖全部本地打包，离线也能渲染；mermaid 用仓库里已有的 IIFE 全局
+        const {
+            MarkdownIt,
+            markdownItKatex,
+            markdownItTaskLists,
+            katex,
+            hljs,
+            Base64,
+            DOMPurify,
+        } = window.MarkAssets;
+        const mermaid = window.mermaid;
 
         // Configure markdown-it
         const md = new MarkdownIt({
@@ -209,7 +210,7 @@
         // Add plugins
         // 传入已加载 mhchem 扩展的 katex 实例, 否则插件会使用其内部自带的另一个 katex 实例,
         // 导致 \ce 等 mhchem 语法无法识别 (Undefined control sequence: \ce)
-        md.use(vscodemarkdownItKatex, { katex });
+        md.use(markdownItKatex, { katex });
 
         md.use(markdownItTaskLists, {
             enabled: true,
@@ -324,9 +325,6 @@
 
         // Call the render function
         renderMarkdown();
-    </script>
-    <script nomodule>
-        alert('您的系统WebView不支持 ES Modules，请升级WebView或者系统!');
     </script>
 </body>
 </html>

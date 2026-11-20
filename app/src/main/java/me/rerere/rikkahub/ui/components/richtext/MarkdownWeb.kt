@@ -4,6 +4,7 @@ import android.content.Context
 import androidx.compose.material3.ColorScheme
 import me.rerere.rikkahub.utils.base64Encode
 import me.rerere.rikkahub.utils.toCssHex
+import me.rerere.ui.webview.WEB_VIEW_ASSET_URL
 
 /**
  * Build HTML page for markdown preview with support for:
@@ -16,6 +17,7 @@ fun buildMarkdownPreviewHtml(context: Context, markdown: String, colorScheme: Co
     val htmlTemplate = context.assets.open("html/mark.html").bufferedReader().use { it.readText() }
 
     return htmlTemplate
+        .replace("{{ASSET_BASE}}", "$WEB_VIEW_ASSET_URL/html/")
         .replace("{{MARKDOWN_BASE64}}", markdown.base64Encode())
         .replace("{{BACKGROUND_COLOR}}", colorScheme.background.toCssHex())
         .replace("{{ON_BACKGROUND_COLOR}}", colorScheme.onBackground.toCssHex())

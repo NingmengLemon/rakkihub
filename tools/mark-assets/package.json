@@ -1,0 +1,20 @@
+{
+  "name": "@rikkahub/mark-assets",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "build": "node build.mjs"
+  },
+  "dependencies": {
+    "@vscode/markdown-it-katex": "1.1.2",
+    "dompurify": "3.4.17",
+    "highlight.js": "11.11.1",
+    "js-base64": "3.7.5",
+    "katex": "0.16.47",
+    "markdown-it": "14.0.0",
+    "markdown-it-task-lists": "2.1.1"
+  },
+  "devDependencies": {
+    "esbuild": "0.25.12"
+  }
+}

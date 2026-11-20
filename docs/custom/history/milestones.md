@@ -2,6 +2,10 @@
 
 本文件归档已完成的定制、修复与独立化批次，按时间或主题分组。当前状态以 checklist 索引与明细为准，未来方向见 [roadmap.md](../roadmap.md)。
 
+## 2026-11-20 mark.html 离线
+
+- C134：整页 WebView 预览的 markdown-it、KaTeX、highlight、DOMPurify、js-base64 打包进本地 IIFE，CSS 与 KaTeX 字体一并入库，mermaid 复用已有 IIFE；断网也能渲染。
+
 ## 2026-11-20 清除历史思考签名
 
 - C133：会话列表可以按协议清除历史消息里的 Google 思考签名（generateContent 与 Interactions），默认只清 generateContent；Claude/OpenAI/OpenRouter 因重放需要原样签名，暂不提供。
