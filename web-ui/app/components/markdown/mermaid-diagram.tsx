@@ -28,12 +28,24 @@ function loadPlugin(theme: MermaidTheme): Promise<DiagramPlugin> {
 // Mermaid honours %%{init: ...}%% and YAML frontmatter for non-secure config,
 // including themeCSS, which can reference remote URLs and end up in the SVG
 // <style> without being sanitized. Our plugin config is the only accepted
-// source, so drop both directives before rendering.
+// source, so drop both directives before rendering. Mermaid also accepts an
+// unclosed directive at EOF, single quotes, CR-only line endings and indented
+// frontmatter, so normalize line endings and strip through EOF when needed.
 export function sanitizeMermaidSource(source: string): string {
-  return source
-    .replace(/%%\{[\s\S]*?\}%%/g, "")
-    .replace(/^\s*---\r?\n[\s\S]*?\r?\n---\s*(?:\r?\n|$)/, "")
-    .trim();
+  let next = source.replace(/\r\n?/g, "\n");
+  // Stripping a directive can expose a frontmatter that was behind it, and
+  // removing one frontmatter can expose another. Loop both rules until stable,
+  // then refuse anything that still looks like a config block.
+  let previous: string;
+  do {
+    previous = next;
+    next = next
+      .replace(/%%\{[\s\S]*?(?:\}%%|$)/g, "")
+      .replace(/^\s*---[ \t]*\n[\s\S]*?\n[ \t]*---[ \t]*(?:\n|$)/, "");
+  } while (next !== previous);
+  if (next.includes("%%{")) return next.slice(0, next.indexOf("%%{")).trim();
+  if (/^---[ \t]*$/.test(next.trimStart().split("\n", 1)[0] ?? "")) return "";
+  return next.trim();
 }
 
 export default function MermaidDiagram({ code, isDark }: { code: string; isDark: boolean }) {

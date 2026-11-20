@@ -15,8 +15,10 @@ dependencies). Full license texts for every bundled package are generated into
 | dompurify | 3.4.17 | MPL-2.0 OR Apache-2.0 |
 
 `mark.html` also loads `assets/html/mermaid.min.js`, the official mermaid
-11.17.2 IIFE (MIT). Its license text is appended to `THIRD_PARTY_LICENSES.txt`
-by the build script; the minified file itself does not carry a mermaid banner.
+11.17.2 IIFE (MIT). Its license text is vendored at
+`tools/mark-assets/third-party/mermaid-11.17.2.LICENSE` and included in
+`THIRD_PARTY_LICENSES.txt`; the build fails if that file is missing. The
+minified file itself does not carry a mermaid banner.
 
 License banners preserved by esbuild are not a substitute for the notices
 file: several packages ship license text only in their package directory, not

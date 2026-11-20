@@ -6,3 +6,4 @@ app/src/release/generated/baselineProfiles/*.txt text eol=lf
 
 # 压缩后的生成资产：不参与 whitespace 检查
 app/src/main/assets/html/mark.bundle.js -whitespace
+app/src/main/assets/html/THIRD_PARTY_LICENSES.txt -whitespace

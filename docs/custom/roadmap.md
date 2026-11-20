@@ -345,6 +345,7 @@
 - 上游更新挑选与移植（未排期）：`ref` 保持只读，按批次查看上游提交，优先 bugfix、安全修复和会影响现有行为的改动；每批一个主题，手工移植并带设备验收，不做整分支 merge。
 - model provider 的 mock server 入库（未排期）：如果当前还没有可复用的 mock server，整理一个覆盖 OpenAI Chat/Responses、Claude 和 Gemini 流式响应的最小实现，供 provider 测试和本地联调使用；不要提交真实 key 或抓包数据。
 - 跨协议思考签名重放门禁（调研完成，低优先级、未排期）：目前跨协议切模型的需求不多，方案先放末尾，见 [`design/thinking-signature-replay.md`](design/thinking-signature-replay.md)。切模型时只重放目标协议自己产生的 reasoning，其余整块跳过但保留存储与 UI；DeepSeek thinking 需要无签名回放，门禁必须按协议判断；工具轮与 Gemini 的 `skip_thought_signature_validator` 兜底放在第二阶段。Claude、OpenAI Responses、OpenRouter 的签名清除也依赖这项，单项剥离会留下非法块。
+- WebUI 图标微调（未排期）：网页端的 icon/favicon 与应用图标使用一致的缩放与裁切，避免四周留白或背景块；也可以直接做成完全透明背景。先对比应用图标各密度的留白与圆角裁切，再决定统一缩放还是透明背景，并确认 favicon 多尺寸和暗色背景下的可读性。
 
 上游查看与 issue 调研记录见 [`history/upstream.md`](history/upstream.md)，已完成的落地批次见 [`history/milestones.md`](history/milestones.md)。
 
@@ -367,7 +368,7 @@
 ### Markdown 渲染能力
 
 - HTML `<svg>` 支持已定：Web 正文保留静态 SVG，但改走显式 allowlist（`svg-schema.ts`）并限制尺寸；Android 正文在气泡内用 Coil `SvgDecoder` 渲染块级 SVG（C121），默认折叠、点击展开一级，不安全或解码失败才回退到整条消息预览。SVG 文件预览的相对 `<image href>` 已由 C132 接入（WebView 以文件目录为 base，未做真机验证）；Markdown 预览里的相对 `![]()` 仍未解析，且聊天内联 SVG 仍整体拒绝 `<image>`。
-- Mermaid 版本已统一到 11.17.2：Android 资产换成官方 IIFE（DOMPurify 3.4.12）、Web workbench 和 `mark.html` 的本地版本钉死，三处都改成 `securityLevel: strict` + `htmlLabels: false`；`controls.mermaid=false` 只隐藏按钮，不控制渲染。Web 正文的 Mermaid 已由 C135 接入；引擎目前仍随聊天路由 chunk 加载（约 1.36 MB，gzip 412 KB），不是按需。`mark.html` 的离线依赖已由 C134 本地化，不再依赖 esm.sh。
+- Mermaid 版本已统一到 11.17.2：Android 资产换成官方 IIFE（DOMPurify 3.4.12）、Web workbench 和 `mark.html` 的本地版本钉死，三处都改成 `securityLevel: strict` + `htmlLabels: false`；`controls.mermaid=false` 只隐藏按钮，不控制渲染。Web 正文的 Mermaid 已由 C135 接入；引擎在独立的懒加载 chunk 里（约 0.68 MB，gzip 162 KiB），首次出现图时才加载；聊天路由另有约 1.36 MB 的 route/streamdown chunk，不含引擎。`mark.html` 的离线依赖已由 C134 本地化，不再依赖 esm.sh。
 
 ### 重试、失败尝试与用量
 
