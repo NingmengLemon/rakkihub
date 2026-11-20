@@ -1,6 +1,6 @@
 # 明细：数据、备份与附件
 
-本文件是 [checklist.md](../checklist.md) 的明细，收录 C10 至 C11、C17 至 C34、C36、C40 至 C42、C79 至 C80、C87 至 C88、C108 至 C110。
+本文件是 [checklist.md](../checklist.md) 的明细，收录 C10 至 C11、C17 至 C34、C36、C40 至 C42、C79 至 C80、C87 至 C88、C108 至 C110、C142。
 
 <a id="c10"></a>
 
@@ -32,7 +32,7 @@
 
 - 落点：新增 `BackupTarget`（`SELF` / `OFFICIAL`）、`OfficialDatabaseCompatibility`（判定我们的库还在不在官方形状上，比较版本与 identity hash，配 `OfficialDatabaseCompatibilityTest`）、`OfficialDatabaseAdapter`（一致时把附件路径改写成官方安装的位置再交出，已知分叉裁剪，其它分叉抛 `OfficialExportUnsupportedException`）；`BackupManager.createBackup` 与 `WebDavSync.prepareBackupFile` 加目标参数，`BackupVM.exportToFile` 透传，只有 `SELF` 会更新备份提醒的时间戳；`ImportExportTab` 加第二个导出入口，落在官方 RikkaHub 分组里（C42），与自家导出的区别在数据库与其中的路径，目标用 `rememberSaveable` 存，避免选择文件期间被回收后退回自家格式；8 个 locale 新增 `backup_page_export_official`、`backup_page_export_official_desc`、`backup_page_export_failed`、`backup_page_export_schema_diverged`；`BackupManagerTest` 补一条官方目标的 androidTest
 - 理由：改结构之后自家备份官方读不了，需要一个能把数据交回官方的出口；它和自家导出并列，不是把现有导出改掉
-- 合并注意：C80 后本仓库 Room 33，C87 后为 Room 34、官方 v32；适配层对一致形状改写路径，对已登记的 `usage_record.outcome` 做列裁剪、对 `file_derivations` 做整表 drop，其它分叉仍失败。失败是刻意的，静默产出官方打不开的备份要等到恢复时才发现；分叉走单独的提示文案，技术原因只进日志。导出失败时会尝试删掉选择位置时建出的空文档，尽量不留 0 字节文件（删除本身可能被 provider 拒绝，是 best-effort）。`settings.json` 不裁字段，官方解码器的 `ignoreUnknownKeys` 会忽略多余字段，这一点由 `OfficialSettingsCompatibilityTest` 钉住；但官方不认识的枚举值它吞不掉，所以官方出口会把工作区选项去掉（C29）。WebDAV 出口暂时只产出 `SELF` 格式。上游若改 `createBackup` 的签名或备份页的导出分组，第二个入口要跟着调整。消息 JSON 的 `steps`/`callComplete` 依赖官方解码器的 `ignoreUnknownKeys` 容忍，上游 `ref` 的 `JsonInstant` 已开启；官方 3.1.1 已用普通消息与带 steps 两份样本确认容忍，不做 JSON 投影兜底，见 [`backup/acceptance.md`](../backup/acceptance.md) 的「B1 官方兼容样本」。
+- 合并注意：C80 后本仓库 Room 33，C87 后为 Room 34，C142 后为 Room 35；官方 v32 不变。适配层对一致形状改写路径，对已登记的 `usage_record.outcome` 做列裁剪、对 `file_derivations` 做整表 drop，并在 C142 后把 `message_node` 的复合索引换回官方单列索引，其它分叉仍失败。失败是刻意的，静默产出官方打不开的备份要等到恢复时才发现；分叉走单独的提示文案，技术原因只进日志。导出失败时会尝试删掉选择位置时建出的空文档，尽量不留 0 字节文件（删除本身可能被 provider 拒绝，是 best-effort）。`settings.json` 不裁字段，官方解码器的 `ignoreUnknownKeys` 会忽略多余字段，这一点由 `OfficialSettingsCompatibilityTest` 钉住；但官方不认识的枚举值它吞不掉，所以官方出口会把工作区选项去掉（C29）。WebDAV 出口暂时只产出 `SELF` 格式。上游若改 `createBackup` 的签名或备份页的导出分组，第二个入口要跟着调整。消息 JSON 的 `steps`/`callComplete` 依赖官方解码器的 `ignoreUnknownKeys` 容忍，上游 `ref` 的 `JsonInstant` 已开启；官方 3.1.1 已用普通消息与带 steps 两份样本确认容忍，不做 JSON 投影兜底，见 [`backup/acceptance.md`](../backup/acceptance.md) 的「B1 官方兼容样本」。
 
 <a id="c19"></a>
 
@@ -257,3 +257,12 @@
 - 理由：手改 OCR 是用户内容，不是可重新生成的缓存；整表清空会让恢复后的附件丢掉手工修正。自动行仍可重新识别，不需要保留。
 - 合并注意：保留行已有同 producer 的手改时保留保留行，不覆盖；落选手改行随后显式删除，避免外键未开启时留下孤儿。同版本外来路径转换会由 `OfficialDatabaseConverter` 按原 `file_id` 补回手改行，再做 UploadNames 合并。官方导出仍 drop 整张表，手改文本不随官方备份保留。恢复后首次发送会重新识别自动行，但手改行继续覆盖。
 - 测试：`BackupManagerTest`（开发机）覆盖自动行清空、手改行保留，两份同内容上传合并后只保留落选行的手改文本，以及同版本外来路径转换后手改行仍在；`connectedGithubDebugAndroidTest` 通过。
+
+<a id="c142"></a>
+
+## C142 message_node 复合索引
+
+- 落点：`MessageNodeEntity` 的索引从 `conversation_id` 改为 `(conversation_id, node_index)`；`AppDatabase` 版本升到 35，新增并注册 `Migration_34_35`（只建复合索引、删旧单列索引，不重建表），Room 生成 `app/schemas/.../35.json`；新增 `Migration_34_35_Test` 验证旧索引被替换为复合索引。来源是上游 `c1c3c4d1`。
+- 理由：按会话加载消息时按 `node_index` 排序分页，只有 `conversation_id` 索引时每页都要把整个会话的行取出来排序，几千条消息的会话打开会明显变慢；复合索引仍以 `conversation_id` 开头，外键和按会话查询照常可用。
+- 合并注意：本分支的 schema 33 已被 `usage_record.outcome` 占用，不能直接套上游的 32→33 迁移，所以另起 34→35；这是纯索引迁移，不改表数据，也不能用 AutoMigration（Room 会重建整张 `message_node`）。官方兼容导出只按表/列判断分叉，索引差异不在 `canReadAsV32` 检查里，所以 `OfficialSchemaTrimmer.trim` 会额外把复合索引换回官方单列索引，避免导出库带着自定义索冒充官方库；官方客户端上的导出验收仍未重跑。
+- 测试：`:app:kspGithubDebugKotlin` 生成 35.json，`:app:compileGithubDebugKotlin`、`:app:compileGithubDebugAndroidTestKotlin` 通过；设备上执行 `:app:connectedGithubDebugAndroidTest` 的 `Migration_34_35_Test` 通过，确认旧索引被替换为复合索引；`OfficialSchemaTrimmerTest` 增加断言，导出后 `message_node` 只有官方单列索引。

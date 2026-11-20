@@ -7,7 +7,7 @@
 六类，至少各一份：
 
 1. 带附件引用的官方客户端备份。跨安装，会命中 C25 的探测而走转换器，验的是转换与附件路径重写。内容要覆盖多分支会话与重新生成、带附件与工具调用的消息、多 provider 与自定义 assistant、自定义主题与提示词。
-2. 构造样本：把备份库的 identity 改掉，验证恢复分流。C80 后本仓库 Room 33、C87 后为 v34，官方快照只到 v32；同版本但 identity 未知且没有官方快照会被拒绝。Convert 分支要求双方版本号相同、identity 不同且该版本有快照，当前生产不可达，`OfficialRestorePlannerTest` 用显式的 v32 快照覆盖该分支。
+2. 构造样本：把备份库的 identity 改掉，验证恢复分流。C80 后本仓库 Room 33、C87 后为 v34、C142 后为 v35，官方快照只到 v32；同版本但 identity 未知且没有官方快照会被拒绝。Convert 分支要求双方版本号相同、identity 不同且该版本有快照，当前生产不可达，`OfficialRestorePlannerTest` 用显式的 v32 快照覆盖该分支。
 3. 本 fork 旧构建导出的备份（改包名前，包名还是 `me.rerere.rikkahub`，带附件引用）。同样跨安装、同样命中 C25 走转换器；与第 1 类的区别是版本更低、settings 更旧。
 4. 本应用自己导出、且与当前安装同一包名同一用户号的备份。不跨安装。消息引用里新写或重存过的是相对形态（C36），按当前安装解析；没重存过的仍是绝对路径，可能是当前安装的，也可能是官方或旧包名的，带这类引用的库按 [`README.md`](README.md) 的探测说明处理。设置仍是绝对路径。版本低于当前的自家备份没有样本或用例。
 5. 版本高于我们的库，必须明确报错。
@@ -117,13 +117,13 @@ v31 的样本推成 `rikkahub-sample-v31.db` 与 `backup-expectations-v31.json`�
 | 类别 | 样本或测试 | 状态 |
 | --- | --- | --- |
 | 官方客户端导出 | v32（官方 3.1.1，带附件引用） | 表数据与转换产物全量；附件逐个比；settings 的条数、id 集合、当前助手与模型 |
-| 构造样本 | `BackupManagerTest` 里改当前 Room 34 identity 的拒绝用例、`OfficialRestorePlannerTest` 的 v32 Convert 用例 | 覆盖当前拒绝和未来 Convert 分支接线 |
+| 构造样本 | `BackupManagerTest` 里改当前 Room 35 identity 的拒绝用例、`OfficialRestorePlannerTest` 的 v32 Convert 用例 | 覆盖当前拒绝和未来 Convert 分支接线 |
 | 本 fork 旧构建 | v31（产出自 3.1.0 (193)，包名还是 `me.rerere.rikkahub`） | 表数据与内容摘要；settings 只手工核对过条数（经 migrate 与 decode 后不变），没有脚本或测试复现；附件未逐个比 |
 | 本应用自己导出 | `BackupManagerTest` 的常规恢复用例与 `foreignAttachmentPathsAreRewrittenOnSameVersionRestore`、`OfficialForeignAttachmentPathsTest`（探测判定） | 常规用例覆盖原路径，但没有插入引用，「引用都属于当前安装、恢复时不走转换器」这条恢复路径没有用例；探测判定由 `OfficialForeignAttachmentPathsTest` 覆盖（androidTest，不进 CI）。指向别的安装的旧绝对引用命中 C25，同版本也走转换器；新写或重存过的消息引用是相对形态，按当前安装解析；迁移链升级无样本或用例 |
 | 高版本库 | `BackupManagerTest` 的拒绝用例 | 验过 |
 | 缺条目拒绝 | `BackupManagerTest` 的缺库、缺设置、附件名带反斜杠三条用例 | 2026-11-04 设备上验过：三条都在解压之前失败，不留暂存，现有库与附件不动 |
 | 导入改名与去重 | `ImportedUploadFilesTest`（JVM）、`BackupManagerTest` 的改名与成链用例、`OfficialBackupRestoreAcceptanceTest`、`RestoreAppliedOutcomeTest` | 2026-11-04 设备上验过：v32 样本的附件按内容命名且集合一致；5GB 样本的 8080 个 upload 条目落成 682 个唯一内容 |
-| 官方兼容出口 | `BackupManagerTest` 的两条路径改写用例，外加一条「官方出口归档再恢复回本应用」 | 绝对与相对路径改写验过；设备上两次交给官方客户端恢复：v32 样本（170 会话 / 676 节点 / 98 个 upload 文件）与 5GB 数据（1664 会话 / 11483 节点 / 682 个内容名附件，图片与头像能显示）；`usage_record.outcome` 的已知裁剪已实现（C80），其它 schema 分叉仍待实现 |
+| 官方兼容出口 | `BackupManagerTest` 的两条路径改写用例，外加一条「官方出口归档再恢复回本应用」 | 绝对与相对路径改写验过；设备上两次交给官方客户端恢复：v32 样本（170 会话 / 676 节点 / 98 个 upload 文件）与 5GB 数据（1664 会话 / 11483 节点 / 682 个内容名附件，图片与头像能显示）；`usage_record.outcome` 的已知裁剪已实现（C80），C142 的复合索引在导出时换回官方单列索引，官方客户端设备验收待重跑；其它 schema 分叉仍待实现 |
 | 本应用自己导出、换包名恢复 | 临时 `.crosscheck` 包名的构建 | 170 会话 / 676 节点；2 个节点带相对引用，按新安装解析；64 个节点带官方绝对引用，经 C25 改写；98 个 upload 文件；测试图片显示 |
 
 ## 5GB 样本

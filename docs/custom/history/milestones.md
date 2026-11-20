@@ -2,6 +2,10 @@
 
 本文件归档已完成的定制、修复与独立化批次，按时间或主题分组。当前状态以 checklist 索引与明细为准，未来方向见 [roadmap.md](../roadmap.md)。
 
+## 2026-11-20 message_node 复合索引
+
+- C142：按会话加载消息改为 `(conversation_id, node_index)` 复合索引，Room 34→35 用只建/删索引的 `Migration_34_35`；`OfficialSchemaTrimmer` 导出时换回官方单列索引，官方客户端设备验收尚未重跑。
+
 ## 2026-11-20 上游 3.3.0 小批次
 
 - C138：补齐 SenseNova 提供商图标与 NVIDIA 匹配。

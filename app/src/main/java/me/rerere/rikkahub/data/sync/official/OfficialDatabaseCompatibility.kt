@@ -4,8 +4,8 @@ package me.rerere.rikkahub.data.sync.official
  * 判断我们当前的数据库还在不在官方 v32 的形状上。
  *
  * 官方兼容导出只有在分叉时才需要裁剪；C80 的 `usage_record.outcome` 按列裁，C87 的
- * `file_derivations` 按表 drop，其它分叉仍直接失败。这里只负责说清楚「在不在同一形状上」，
- * 不负责转换。
+ * `file_derivations` 按表 drop，C142 的 `message_node` 复合索引在裁剪时换回官方单列索引，
+ * 其它分叉仍直接失败。这里只负责说清楚「在不在同一形状上」，不负责转换。
  */
 internal object OfficialDatabaseCompatibility {
 

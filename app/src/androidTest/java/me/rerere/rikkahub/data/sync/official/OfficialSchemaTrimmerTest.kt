@@ -54,6 +54,11 @@ class OfficialSchemaTrimmerTest {
                 buildSet { while (cursor.moveToNext()) add(cursor.getString(0)) }
             }
             assertFalse("官方导出不应包含 file_derivations", "file_derivations" in tables)
+            val nodeIndexes = db.rawQuery("PRAGMA index_list(`message_node`)", null).use { cursor ->
+                buildSet { while (cursor.moveToNext()) add(cursor.getString(1)) }
+            }
+            assertTrue("官方导出应恢复 conversation_id 单列索引", "index_message_node_conversation_id" in nodeIndexes)
+            assertFalse("官方导出不应保留自定义复合索引", "index_message_node_conversation_id_node_index" in nodeIndexes)
             db.rawQuery("SELECT COUNT(*), SUM(prompt_tokens), SUM(cached_tokens) FROM usage_record", null).use {
                 it.moveToFirst()
                 assertEquals(2, it.getInt(0))

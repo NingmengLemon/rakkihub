@@ -143,8 +143,9 @@
 | C139 | [请求体日志只在 debug 构建打印](checklist/platform.md#c139) | 上游移植 |
 | C140 | [内置助手可删除](checklist/chat.md#c140) | 上游移植 |
 | C141 | [消息概览标出压缩检查点](checklist/chat.md#c141) | 上游移植 |
+| C142 | [message_node 复合索引](checklist/data.md#c142) | 上游移植 |
 
-C112 至 C119 是 C111 历史阶段的保留段，不再用作顶层编号；下一个新项从 C142 起。
+C112 至 C119 是 C111 历史阶段的保留段，不再用作顶层编号；下一个新项从 C143 起。
 
 ## 明细
 
@@ -153,7 +154,7 @@ C112 至 C119 是 C111 历史阶段的保留段，不再用作顶层编号；下
 | 文件 | 领域 | 覆盖 |
 | --- | --- | --- |
 | [removals.md](checklist/removals.md) | 移除与清理 | C1 至 C6、C8 至 C9、C13 至 C16、C54、C64、C95 至 C96 |
-| [data.md](checklist/data.md) | 数据、备份与附件 | C10 至 C11、C17 至 C34、C36、C40 至 C42、C79 至 C80、C87 至 C88、C108 至 C110 |
+| [data.md](checklist/data.md) | 数据、备份与附件 | C10 至 C11、C17 至 C34、C36、C40 至 C42、C79 至 C80、C87 至 C88、C108 至 C110、C142 |
 | [chat.md](checklist/chat.md) | 聊天、上下文与模型 | C35、C43 至 C44、C46 至 C47、C49 至 C53、C57 至 C63、C65 至 C78、C81 至 C86、C97 至 C100、C107、C121、C122、C130、C131、C133、C134、C135、C137、C140、C141 |
 | [platform.md](checklist/platform.md) | 平台、构建与品牌 | C7、C12、C37 至 C39、C45、C48、C55 至 C56、C90 至 C94、C101、C127 至 C129、C136、C138、C139 |
 | [workspace.md](checklist/workspace.md) | 工作区与 MCP | C89、C102 至 C106、C111、C120、C123 至 C126、C132 |

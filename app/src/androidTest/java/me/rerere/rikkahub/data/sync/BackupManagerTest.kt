@@ -235,7 +235,7 @@ class BackupManagerTest {
     /**
      * 官方兼容出口的核心安全属性：schema 一致时改写附件路径后交出，已知分叉裁剪，其它分叉失败。
      *
-     * 现在本仓库 Room 34、官方 v32；C80 的 usage_record.outcome 和 C87 的 file_derivations 走已知裁剪，其它分叉的
+     * 现在本仓库 Room 35、官方 v32；C80 的 usage_record.outcome 和 C87 的 file_derivations 走已知裁剪，其它分叉的
      * 负向用例在 `OfficialSchemaTrimmerTest`。
      */
     @Test fun officialTargetWritesArchiveThatStagingAccepts() = runBlocking {

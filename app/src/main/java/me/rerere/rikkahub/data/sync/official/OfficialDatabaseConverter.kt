@@ -49,7 +49,7 @@ internal class OfficialDatabaseConverter(
     }
 
     /**
-     * 转换器按官方 v32 列写库，当前 Room 34 的 `usage_record.outcome` 不在官方快照里，
+     * 转换器按官方 v32 列写库，当前 Room 35 的 `usage_record.outcome` 不在官方快照里，
      * 写完后会回默认 UNKNOWN。当前版本自家库带外来附件路径时也会走这条转换器，所以要把
      * outcome 按 id 从源库补回去；官方 v32 源没有这一列，跳过。
      */

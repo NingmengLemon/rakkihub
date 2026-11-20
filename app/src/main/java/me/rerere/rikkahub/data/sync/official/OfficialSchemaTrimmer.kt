@@ -46,6 +46,7 @@ internal object OfficialSchemaTrimmer {
                     val extras = columns(database, name) - official
                     if (extras.isNotEmpty()) rebuildWithout(database, table)
                 }
+                reconcileMessageNodeIndexes(database)
                 database.version = OfficialDatabaseSchema.VERSION
                 setRoomIdentity(database)
                 database.setTransactionSuccessful()
@@ -100,6 +101,18 @@ internal object OfficialSchemaTrimmer {
             val columns = index.columns.joinToString { "`$it`" }
             database.execSQL("CREATE ${unique}INDEX IF NOT EXISTS `${index.name}` ON `${table.name}` ($columns)")
         }
+    }
+
+    /**
+     * C142 把 message_node 的索引换成了 (conversation_id, node_index)；官方 v32 只有
+     * conversation_id 单列索引。导出前换回官方形状，避免带着自定义索引冒充官方库。
+     */
+    private fun reconcileMessageNodeIndexes(database: SQLiteDatabase) {
+        database.execSQL("DROP INDEX IF EXISTS `index_message_node_conversation_id_node_index`")
+        database.execSQL(
+            "CREATE INDEX IF NOT EXISTS `index_message_node_conversation_id` " +
+                "ON `message_node` (`conversation_id`)"
+        )
     }
 
     private fun setRoomIdentity(database: SQLiteDatabase) {

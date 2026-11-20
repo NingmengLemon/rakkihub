@@ -14,10 +14,10 @@ internal object OfficialDatabaseSchema {
     const val VERSION = 32
 
     /** 当前 Room schema 版本；它与 [VERSION] 不一致时通过 [KNOWN_EXTRA_COLUMNS] 和 [KNOWN_EXTRA_TABLES] 裁剪。 */
-    const val ROOM_VERSION = 34
+    const val ROOM_VERSION = 35
 
-    /** 当前 Room schema（v34）的 identity hash，供恢复判定使用。 */
-    const val ROOM_IDENTITY_HASH = "d766edcc0373886887c73b9e3869be11"
+    /** 当前 Room schema（v35）的 identity hash，供恢复判定使用。 */
+    const val ROOM_IDENTITY_HASH = "562fa049f32d658f59fe4df3d5f85dfa"
 
     /** 官方快照里没有、但我们后加的自定义列；官方兼容导出前会裁掉。 */
     val KNOWN_EXTRA_COLUMNS: Map<String, Set<String>> = mapOf(
