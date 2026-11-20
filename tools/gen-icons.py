@@ -17,6 +17,13 @@
 改插画或参数后重跑一遍，再按 docs/custom/checklist.md 的 C90、C92、C94 核对。
 """
 
+# /// script
+# requires-python = ">=3.10"
+# dependencies = [
+#   "pillow",
+# ]
+# ///
+
 import os
 
 from PIL import Image, ImageDraw

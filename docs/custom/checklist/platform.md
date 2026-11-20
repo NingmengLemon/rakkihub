@@ -1,6 +1,6 @@
 # 明细：平台、构建与品牌
 
-本文件是 [checklist.md](../checklist.md) 的明细，收录 C7、C12、C37 至 C39、C45、C48、C55 至 C56、C90 至 C94、C101、C127 至 C129。
+本文件是 [checklist.md](../checklist.md) 的明细，收录 C7、C12、C37 至 C39、C45、C48、C55 至 C56、C90 至 C94、C101、C127 至 C129、C136。
 
 <a id="c7"></a>
 
@@ -157,3 +157,12 @@
 - 理由：nightly 用的是固定 tag，每晚覆盖同一个 Release，只能看到最新一版；按提交追溯某次每日构建的产物和 mapping 就没了。上传到 Actions Artifacts 后每次运行各留一份，名字带 SHA，可直接对上 commit。
 - 合并注意：`continue-on-error: true` 让上传失败不连带跳过 Release，附加产物不能卡住主产物；`overwrite: true` 用于重跑同一次运行，v4 起 artifact 不可变、同名会直接失败，而重跑沿用同一个 SHA 与同一个 run、名字必然重复；步骤放在发布之前，所以 Release 失败也不影响这一轮的产物；artifact 保留 14 天，超过就随运行记录清理，长期留档仍以 Release 为准；`mapping.txt` 未压缩时有 167 MB 左右，加 3 个 APK 每次约 210 MB，公开仓库不占配额但上传耗时和保存期都要留意；`actions/upload-artifact` 的大版本要和 `checks.yml` 里的一起升，两处不同步时先看各自文档的 breaking change；`path` 给了两个模式时，artifact 根取公共父目录，zip 里会带 `apk/github/release/` 与 `mapping/githubRelease/` 前缀，不是平铺。
 - 测试：本次只改 workflow 与文档，本地无法执行 Actions；推送后触发一次 `workflow_dispatch` 确认 artifact 出现在运行页面、内容为 3 个 APK（arm64-v8a、x86_64、universal）加 `mapping.txt`，且 nightly Release 仍照常更新。
+
+<a id="c136"></a>
+
+## C136 Python 脚本 PEP 723 元数据
+
+- 落点：`tools/gen-icons.py` 在模块 docstring 后加 `# /// script`，声明 `requires-python = ">=3.10"` 与 `pillow`；`tools/backup-expectations.py`、`tools/backup-ref-counts.py` 在 shebang 后加同样的块，依赖为空。`.agents/skills/` 下的 vendored 脚本不加：它们随 skills 整批同步，单独加会被覆盖。
+- 理由：这些脚本此前靠 `uv run --with ...` 或全局环境运行，依赖散落在文档命令里；PEP 723 把解释器与依赖声明放进文件，`uv run <script>` 直接可跑。
+- 合并注意：PEP 723 块必须在 shebang 之后、模块 docstring 之前，否则 uv 不解析；`gen-icons.py` 没有 shebang，块放在 docstring 后。`requires-python` 统一取 3.10，其中 `backup-ref-counts.py` 的 `str | None` 注解在 3.9 会真实报错。Pillow 没有 pin，因为仓库里没有版本基线，`ImageDraw.rounded_rectangle` 只推出下限；要加 pin 时先确认多尺寸 ICO 的保存路径。`gen-icons.py` 文档里的 `uv run --with pillow` 命令仍然有效，不删。
+- 测试：保留的 3 个脚本都通过 `python -m py_compile`；用 `tomllib` 复核块可解析、`requires-python`/`dependencies` 存在、docstring 仍在、`ast.parse(feature_version=...)` 通过；`uv run --offline --no-project --script` 对两种放置位置各跑过一个合成脚本。

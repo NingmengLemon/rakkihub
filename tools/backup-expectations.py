@@ -1,4 +1,9 @@
 #!/usr/bin/env python3
+# /// script
+# requires-python = ">=3.10"
+# dependencies = []
+# ///
+
 """从官方备份里的数据库算出验收用的期望值。
 
 期望值必须独立于我们自己的读取层，否则「读对了」只是自证。这个脚本用 Python 的 sqlite3

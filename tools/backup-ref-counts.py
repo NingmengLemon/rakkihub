@@ -1,4 +1,9 @@
 #!/usr/bin/env python3
+# /// script
+# requires-python = ">=3.10"
+# dependencies = []
+# ///
+
 """统计一份 RikkaHub 数据库里的附件引用形状。
 
 设备验收用：恢复之后把库拉下来，数会话、节点，以及消息里的附件引用落在哪种形态。
