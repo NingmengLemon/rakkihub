@@ -9,6 +9,7 @@ import me.rerere.hugeicons.stroke.ArrowUpDouble
 import me.rerere.hugeicons.stroke.CursorPointer01
 import me.rerere.hugeicons.stroke.Search01
 import me.rerere.hugeicons.stroke.Cancel01
+import me.rerere.hugeicons.stroke.Package01
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.AnimatedVisibilityScope
@@ -105,6 +106,7 @@ import me.rerere.rikkahub.data.model.MessageNode
 import me.rerere.rikkahub.data.model.contextLimitBoundaryIndex
 import me.rerere.rikkahub.data.model.getAssistantOf
 import me.rerere.rikkahub.data.model.hasVisiblePendingTool
+import me.rerere.rikkahub.data.model.isHistoryTruncationMarker
 import me.rerere.rikkahub.data.model.withConversation
 import me.rerere.rikkahub.data.model.isAwaitingToolApproval
 import me.rerere.rikkahub.data.model.pendingToolCalls
@@ -724,6 +726,45 @@ private fun buildHighlightedText(
 }
 
 @Composable
+private fun CheckpointPreviewCard(
+    isTruncation: Boolean,
+    onClick: () -> Unit,
+) {
+    Surface(
+        onClick = onClick,
+        modifier = Modifier.fillMaxWidth(),
+        shape = MaterialTheme.shapes.large,
+        color = MaterialTheme.colorScheme.secondaryContainer,
+        contentColor = MaterialTheme.colorScheme.onSecondaryContainer,
+    ) {
+        Row(
+            modifier = Modifier.padding(horizontal = 16.dp, vertical = 12.dp),
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Icon(
+                imageVector = HugeIcons.Package01,
+                contentDescription = null,
+                modifier = Modifier.size(18.dp),
+            )
+            Text(
+                text = stringResource(
+                    if (isTruncation) {
+                        R.string.chat_page_truncate_checkpoint_title
+                    } else {
+                        R.string.chat_page_compress_checkpoint_title
+                    }
+                ),
+                style = MaterialTheme.typography.titleSmall,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+                modifier = Modifier.weight(1f),
+            )
+        }
+    }
+}
+
+@Composable
 private fun ChatListPreview(
     innerPadding: PaddingValues,
     conversation: Conversation,
@@ -794,6 +835,13 @@ private fun ChatListPreview(
                 key = { index, item -> item.second.id },
             ) { _, (originalIndex, node) ->
                 val message = node.currentMessage
+                if (message.isContextCheckpoint) {
+                    CheckpointPreviewCard(
+                        isTruncation = message.isHistoryTruncationMarker,
+                        onClick = { onJumpToMessage(originalIndex) },
+                    )
+                    return@itemsIndexed
+                }
                 val isUser = message.role == me.rerere.ai.core.MessageRole.USER
                 Column(
                     modifier = Modifier
