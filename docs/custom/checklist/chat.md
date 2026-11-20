@@ -1,6 +1,6 @@
 # 明细：聊天、上下文与模型
 
-本文件是 [checklist.md](../checklist.md) 的明细，收录 C35、C43 至 C44、C46 至 C47、C49 至 C53、C57 至 C63、C65 至 C78、C81 至 C86、C97 至 C100、C107、C121、C122、C130、C131、C133、C134。
+本文件是 [checklist.md](../checklist.md) 的明细，收录 C35、C43 至 C44、C46 至 C47、C49 至 C53、C57 至 C63、C65 至 C78、C81 至 C86、C97 至 C100、C107、C121、C122、C130、C131、C133、C134、C135。
 
 <a id="c35"></a>
 
@@ -295,7 +295,7 @@
 
 - 落点：Web 正文改用显式 `rehypeRaw -> rehypeSanitize(svgSchema) -> rehypeSvgGuard -> rehypeKatex` 管线（`web-ui/app/components/markdown/` 下新增 `svg-schema.ts`、`rehype-svg-guard.ts`，`preprocess.ts` 收拢 LaTeX 归一化和 SVG 尺寸上限），`markdown.css` 给 `.markdown svg` 加 `max-width`，新增 `scripts/check-markdown-sanitize.ts` 与 `pnpm run check:markdown`；`mark.html` 的错误分支改用 `textContent`、Mermaid 围栏内容先 `escapeHtml` 再交给 mermaid、`mermaid.run` 加 `suppressErrors: true`；workbench 的 Mermaid 钉到 `esm.sh/mermaid@11.17.2`、`securityLevel: strict`、`htmlLabels: false`，iframe 去掉 `allow-same-origin`，SVG 预览加 CSP；`assets/html/mark.html` 引入 DOMPurify 3.4.17 清洗 `md.render` 结果、钉死 esm.sh 版本、Mermaid 改 strict、KaTeX 关 trust；workspace 的 `.svg` 预览在组合期间就把 `javaScriptEnabled` 置 false（AndroidView 的 update 会同步加载，放 SideEffect 会晚一帧）并限制 1M 字符；`assets/html/mermaid.min.js` 换成官方 11.17.2 IIFE（DOMPurify 3.4.12，SHA-256 记录在 `Mermaid.kt` 的 KDoc），Android 内嵌 Mermaid 加 strict/htmlLabels/maxTextSize/maxEdges
 - 理由：Web 正文原来自己传 `rehypePlugins`，把 Streamdown 默认的 raw -> sanitize -> harden 整条顶掉，`<script>`、`onload`、`<foreignObject>`、`javascript:` 链接都能进 DOM；`mark.html` 和 workspace 的 SVG 预览没有清洗，其中 workspace 是顶层 SVG 文档，`<script>` 会真的执行；Mermaid 三处版本分别是 11.16.0 / 10.6.1 / 浮动 `@11`，前两者命中 2026-08-06 那批安全通告，且两处 `securityLevel: loose` 允许 HTML 标签和点击回调
-- 合并注意：sanitize 必须排在 katex 之前，并且要放行 `span`/`div` 上以 `math` 开头的 class，否则公式不渲染；`hast-util-sanitize` 会把 `id` 加 `user-content-` 前缀，`rehypeSvgGuard` 负责把同文档的 `<use href="#x">` 以及 `fill`/`stroke`/`clip-path`/`mask`/`marker-*` 里的 `url(#x)`（含带引号和空白的写法）一起改前缀；SVG 只放静态元素，`style`/`foreignObject`/动画/滤镜和所有 `on*` 都不在 allowlist 里，`href` 允许 http/https/mailto/tel（`javascript:` 仍被拒），`xlink:href` 只允许 http/https；单块 SVG 超过 128 KiB（按字符数）或 1000 个元素时替换成提示文案，占位用 `span` 避免嵌在段落里产生非法嵌套。KaTeX 关掉 `trust` 后 `\href`/`\url` 会变成报错片段，这是有意的安全取舍。`style` 属性被移除会丢掉用户 HTML 的内联样式，这是刻意的。`mark.html` 为了 KaTeX 布局仍允许 `style` 属性，CSS 注入不在本轮范围；workspace 的 HTML 预览仍开 JavaScript（模型本来就能在工作区执行命令），SVG 改为静态。Web 正文的 Mermaid 仍未启用，`controls.mermaid=false` 只隐藏按钮。C134 起 `mark.html` 改为本地打包，不再依赖 esm.sh。
+- 合并注意：sanitize 必须排在 katex 之前，并且要放行 `span`/`div` 上以 `math` 开头的 class，否则公式不渲染；`hast-util-sanitize` 会把 `id` 加 `user-content-` 前缀，`rehypeSvgGuard` 负责把同文档的 `<use href="#x">` 以及 `fill`/`stroke`/`clip-path`/`mask`/`marker-*` 里的 `url(#x)`（含带引号和空白的写法）一起改前缀；SVG 只放静态元素，`style`/`foreignObject`/动画/滤镜和所有 `on*` 都不在 allowlist 里，`href` 允许 http/https/mailto/tel（`javascript:` 仍被拒），`xlink:href` 只允许 http/https；单块 SVG 超过 128 KiB（按字符数）或 1000 个元素时替换成提示文案，占位用 `span` 避免嵌在段落里产生非法嵌套。KaTeX 关掉 `trust` 后 `\href`/`\url` 会变成报错片段，这是有意的安全取舍。`style` 属性被移除会丢掉用户 HTML 的内联样式，这是刻意的。`mark.html` 为了 KaTeX 布局仍允许 `style` 属性，CSS 注入不在本轮范围；workspace 的 HTML 预览仍开 JavaScript（模型本来就能在工作区执行命令），SVG 改为静态。C135 起 Web 正文的 Mermaid 已启用；C134 起 `mark.html` 改为本地打包，不再依赖 esm.sh。
 - 测试：`pnpm run check:markdown` 38 条，覆盖 allowlist（保留静态 SVG/math class/本地 `use`/mailto/tel，丢弃 script/style/foreignObject/事件属性/`javascript:`/`data:` 图片/style 属性/动画/iframe）、SVG 尺寸与代码块跳过、`use` 与 `url(#x)` 前缀改写、marker 属性、元素数上限与占位标签，以及完整 pipeline（标题、GFM 表格、行内代码、KaTeX 保留，脚本/事件/foreignObject 被清掉）；`pnpm run typecheck`、`pnpm run build` 通过；`:app:assembleGithubDebug` 与 `:app:testGithubDebugUnitTest` 798 条，7 条既有 Windows 失败未变；`data.sync` 53 条、数据库迁移/DAO/live 4 条不受影响；spotless、markdownlint 通过。设备上确认安装后能正常启动和打开聊天；Mermaid 图实际渲染、workspace SVG 的脚本不执行、`mark.html` 预览这三项没有在设备上逐项截图验证，原因是本轮环境里 provider 不可达、自动化输入和截图判读受限
 
 <a id="c83"></a>
@@ -434,3 +434,12 @@
 - 理由：页面原来从 esm.sh 与 jsdelivr 动态 import，断网或 CDN 不可达时整块 WebView 预览是空白。Android WebView 对 `file://` 下的 ES module 还有 CORS 限制，所以打成 IIFE 而不是 ESM。
 - 合并注意：生成的 `mark.bundle.js`、CSS、字体全部入库，CI 不运行打包；升级任一库时改 `package.json`、重跑 `pnpm run build` 并提交产物。`mark.html` 里所有静态资源都必须走 `{{ASSET_BASE}}`，漏一个就回到线上依赖；KaTeX 的 CSS 保持相对 `fonts/`，由虚拟资源路径解析，不要改成绝对 file 路径。mermaid 不在 bundle 里，避免与 `mermaid.min.js` 出现两份版本。bundle 约 1.8 MB，字体约 1 MB，APK 的 assets 增加约 6.2 MB。
 - 测试：本地 `file://` 打开注入样例的页面，标题、行内公式、mhchem 块公式、highlight.js 代码块、mermaid 图、任务列表均渲染，`document.fonts.check('12px KaTeX_Main')` 为真，控制台无错误，页面无任何 http(s) 资源；APK 里确认 65 个 `assets/html` 文件、共约 6.2 MB。没有在真机 WebView 里逐项截图验证。
+
+<a id="c135"></a>
+
+## C135 Web 正文 Mermaid
+
+- 落点：`web-ui` 新增 `@streamdown/mermaid@1.0.4`；`markdown.tsx` 用 `createMermaidPlugin` 固定 `startOnLoad: false`、`securityLevel: "strict"`、`htmlLabels: false`、`fontFamily: "inherit"`，主题随 `<html>` 的 `light`/`dark` class 切换；自定义 `code` 分支在语言为 `mermaid` 且消息不再流式时交给 `MermaidDiagram`，后者用插件实例的 `getMermaid().render` 生成 SVG，带 loading、错误回退和唯一 id；代码块其余语言仍走原来的 `CodeBlock`。
+- 理由：Web 正文此前只显示 mermaid 源码。Streamdown 自带的图渲染器在它的 `code` 组件内部，而自定义 `code` 为了代码预览覆盖了它，所以这里直接复用同一个插件实例渲染，避免引入第二套配置。
+- 合并注意：mermaid 引擎被 Vite 拆成约 1.95 MB 的懒加载 chunk，只在正文出现图时加载；`securityLevel` 与 `htmlLabels` 不能放松，SVG 通过 `dangerouslySetInnerHTML` 注入，依赖 mermaid strict 自己清洗标签；`rehypeSanitize` 仍在 mermaid 之前，围栏内容对它是代码文本；流式期间刻意保留源码，等 `isAnimating` 结束再渲染，避免半截围栏反复报错；图的控件没有启用，错误时展示源码而不是空白。
+- 测试：`pnpm run typecheck`、`pnpm run check:markdown`、`pnpm run build` 通过；用 esbuild 把真实 `Markdown` 组件打进临时页面，mermaid 围栏渲染出 1 个 SVG、KaTeX 与普通代码块正常、切换 `dark` class 后仍能渲染、控制台无错误。没有在完整的 Web UI 路由与真机上逐项截图验证。

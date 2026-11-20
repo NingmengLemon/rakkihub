@@ -368,7 +368,7 @@
 ### Markdown 渲染能力
 
 - HTML `<svg>` 支持已定：Web 正文保留静态 SVG，但改走显式 allowlist（`svg-schema.ts`）并限制尺寸；Android 正文在气泡内用 Coil `SvgDecoder` 渲染块级 SVG（C121），默认折叠、点击展开一级，不安全或解码失败才回退到整条消息预览。SVG 文件预览的相对 `<image href>` 已由 C132 接入（WebView 以文件目录为 base，未做真机验证）；Markdown 预览里的相对 `![]()` 仍未解析，且聊天内联 SVG 仍整体拒绝 `<image>`。
-- Mermaid 版本已统一到 11.17.2：Android 资产换成官方 IIFE（DOMPurify 3.4.12）、Web workbench 和 `mark.html` 的 CDN 版本钉死，三处都改成 `securityLevel: strict` + `htmlLabels: false`；`controls.mermaid=false` 只隐藏按钮，不控制渲染，Web 正文目前仍是代码块。剩余可做项：Web 正文接入 `@streamdown/mermaid`（需要恢复 sanitize 后单独做，注意插件会静态引入整个引擎）。`mark.html` 的离线依赖已由 C134 本地化，不再依赖 esm.sh。
+- Mermaid 版本已统一到 11.17.2：Android 资产换成官方 IIFE（DOMPurify 3.4.12）、Web workbench 和 `mark.html` 的 CDN 版本钉死，三处都改成 `securityLevel: strict` + `htmlLabels: false`；`controls.mermaid=false` 只隐藏按钮，不控制渲染。Web 正文的 Mermaid 已由 C135 接入，正文出现图时才加载插件引擎；`mark.html` 的离线依赖已由 C134 本地化，不再依赖 esm.sh。
 
 ### 重试、失败尝试与用量
 

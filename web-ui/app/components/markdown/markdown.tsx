@@ -2,6 +2,7 @@ import * as React from "react";
 import { useTranslation } from "react-i18next";
 import { Streamdown } from "streamdown";
 import { cjk } from "@streamdown/cjk";
+import { createMermaidPlugin, type DiagramPlugin } from "@streamdown/mermaid";
 import remarkGfm from "remark-gfm";
 import remarkMath from "remark-math";
 import rehypeKatex from "rehype-katex";
@@ -29,6 +30,61 @@ type MarkdownProps = {
   isAnimating?: boolean;
 };
 
+// Streamdown's diagram renderer lives inside its own code component, which our
+// preview-aware `code` override replaces. Render through the same plugin
+// instance here so both paths share the strict security config.
+function MermaidDiagram({ code, plugin }: { code: string; plugin: DiagramPlugin }) {
+  const reactId = React.useId();
+  const renderCount = React.useRef(0);
+  const [svg, setSvg] = React.useState("");
+  const [error, setError] = React.useState<string | null>(null);
+
+  React.useEffect(() => {
+    let cancelled = false;
+    const id = `mermaid-${reactId.replace(/[^a-zA-Z0-9_-]/g, "")}-${renderCount.current++}`;
+    setSvg("");
+    setError(null);
+    plugin
+      .getMermaid()
+      .render(id, code)
+      .then(({ svg: next }) => {
+        if (!cancelled) setSvg(next);
+      })
+      .catch((reason: unknown) => {
+        if (!cancelled) setError(reason instanceof Error ? reason.message : String(reason));
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [code, plugin, reactId]);
+
+  if (error) {
+    return (
+      <div className="my-4 rounded-md border border-border bg-muted/40 p-3">
+        <p className="font-medium text-sm">Mermaid Error</p>
+        <pre className="mt-2 overflow-x-auto text-xs">{code}</pre>
+      </div>
+    );
+  }
+
+  if (!svg) {
+    return (
+      <div className="my-4 flex min-h-[160px] items-center justify-center text-muted-foreground text-sm">
+        Loading diagram...
+      </div>
+    );
+  }
+
+  return (
+    <div
+      className="my-4 flex justify-center overflow-x-auto"
+      role="img"
+      aria-label="Mermaid chart"
+      dangerouslySetInnerHTML={{ __html: svg }}
+    />
+  );
+}
+
 function getNodeText(node: React.ReactNode): string {
   if (node == null || typeof node === "boolean") return "";
   if (typeof node === "string" || typeof node === "number") return String(node);
@@ -37,6 +93,25 @@ function getNodeText(node: React.ReactNode): string {
     return getNodeText(node.props.children);
   }
   return "";
+}
+
+// ThemeProvider swaps the `light`/`dark` class on <html>; Mermaid needs a
+// concrete theme when it generates the SVG, so follow that class.
+function useIsDarkTheme() {
+  const [isDark, setIsDark] = React.useState(
+    () => typeof document !== "undefined" && document.documentElement.classList.contains("dark"),
+  );
+
+  React.useEffect(() => {
+    const root = document.documentElement;
+    const update = () => setIsDark(root.classList.contains("dark"));
+    update();
+    const observer = new MutationObserver(update);
+    observer.observe(root, { attributes: true, attributeFilter: ["class"] });
+    return () => observer.disconnect();
+  }, []);
+
+  return isDark;
 }
 
 export default function Markdown({
@@ -49,6 +124,21 @@ export default function Markdown({
   const { t } = useTranslation("markdown");
   const workbench = useOptionalWorkbench();
   const displaySetting = useSettingsStore((state) => state.settings?.displaySetting);
+  const isDark = useIsDarkTheme();
+  const mermaidPlugin = React.useMemo(
+    () =>
+      createMermaidPlugin({
+        config: {
+          startOnLoad: false,
+          securityLevel: "strict",
+          htmlLabels: false,
+          theme: isDark ? "dark" : "default",
+          fontFamily: "inherit",
+        },
+      }),
+    [isDark],
+  );
+  const plugins = React.useMemo(() => ({ cjk, mermaid: mermaidPlugin }), [mermaidPlugin]);
   const svgPlaceholder = t("markdown.svg_too_large");
   const processedContent = React.useMemo(
     () => preProcess(content, { svgOversizePlaceholder: svgPlaceholder }),
@@ -93,7 +183,7 @@ export default function Markdown({
       <Streamdown
         remarkPlugins={[remarkGfm, remarkMath]}
         rehypePlugins={rehypePlugins}
-        plugins={{ cjk: cjk }}
+        plugins={plugins}
         animated={{ animation: "fadeIn", sep: "word", duration: 150 }}
         isAnimating={isAnimating}
         controls={{ code: false, mermaid: false }}
@@ -106,6 +196,12 @@ export default function Markdown({
 
             if (match || isBlock) {
               const language = match?.[1] || "";
+              // Our CodeBlock would otherwise show the chart source as a plain
+              // code block. While the message is still streaming the fence may
+              // be incomplete, so keep the source until generation finishes.
+              if (language === "mermaid" && !isAnimating) {
+                return <MermaidDiagram code={code} plugin={mermaidPlugin} />;
+              }
               return (
                 <CodeBlock
                   language={language}

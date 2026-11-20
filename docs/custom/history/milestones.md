@@ -2,6 +2,10 @@
 
 本文件归档已完成的定制、修复与独立化批次，按时间或主题分组。当前状态以 checklist 索引与明细为准，未来方向见 [roadmap.md](../roadmap.md)。
 
+## 2026-11-20 Web 正文 Mermaid
+
+- C135：Web 正文的 mermaid 围栏真正渲染成图，复用 `@streamdown/mermaid` 的 strict 配置；流式期间保留源码，结束后出图。
+
 ## 2026-11-20 mark.html 离线
 
 - C134：整页 WebView 预览的 markdown-it、KaTeX、highlight、DOMPurify、js-base64 打包进本地 IIFE，CSS 与 KaTeX 字体一并入库，mermaid 复用已有 IIFE；断网也能渲染。
