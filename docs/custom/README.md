@@ -63,7 +63,7 @@ git log --oneline <上次查看点>..upstream/master
 
 ### 上次查看点
 
-上游镜像停在 `5ad19405`，`ref` 尚未更新；查看点、每轮提交与 issue 调研记录见 [`history/upstream.md`](history/upstream.md)。下一次查看从 `b10c1685` 之后开始。
+上游镜像停在 `5ad19405`，`ref` 尚未更新；查看点、每轮提交与 issue 调研记录见 [`history/upstream.md`](history/upstream.md)。下一次查看从 `358e2931` 之后开始。
 
 ## 定制原则
 

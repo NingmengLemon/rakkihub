@@ -1,6 +1,6 @@
 # 明细：聊天、上下文与模型
 
-本文件是 [checklist.md](../checklist.md) 的明细，收录 C35、C43 至 C44、C46 至 C47、C49 至 C53、C57 至 C63、C65 至 C78、C81 至 C86、C97 至 C100、C107、C121、C122、C130、C131、C133、C134、C135。
+本文件是 [checklist.md](../checklist.md) 的明细，收录 C35、C43 至 C44、C46 至 C47、C49 至 C53、C57 至 C63、C65 至 C78、C81 至 C86、C97 至 C100、C107、C121、C122、C130、C131、C133、C134、C135、C137。
 
 <a id="c35"></a>
 
@@ -443,3 +443,12 @@
 - 理由：Web 正文此前只显示 mermaid 源码。Streamdown 自带的图渲染器在它的 `code` 组件内部，而自定义 `code` 为了代码预览覆盖了它，所以这里直接复用同一个插件实例渲染，避免引入第二套配置。
 - 合并注意：引擎在独立的懒加载 chunk 里（约 0.68 MB，gzip 162 KiB），第一次出现 mermaid 围栏时才请求；聊天路由本身还有一个约 1.36 MB（gzip 403 KiB）的 route/streamdown/mermaid UI chunk，随页面加载，但不含引擎。`securityLevel` 与 `htmlLabels` 只约束 mermaid 的标签清洗，不等于 CSS 安全：围栏里的 `themeCSS` 可以通过闭合或未闭合的 init 指令、单引号、CR 换行或缩进 frontmatter 注入外链，所以必须在渲染前整段剥离，不能只依赖 strict。SVG 仍通过 `dangerouslySetInnerHTML` 注入，自定义渲染器绕过了仓库的 `svgSchema`/`rehypeSvgGuard`；`rehypeSanitize` 在 mermaid 之前，围栏内容对它是代码文本。流式期间保留源码，等 `isAnimating` 结束再渲染；图的控件没有启用，错误时展示源码而不是空白。
 - 测试：`pnpm run typecheck`、`pnpm run check:markdown`、`pnpm run build` 通过；用 esbuild 把真实 `Markdown` 组件打进临时页面，覆盖两张普通图、闭合指令、未闭合指令、CR-only frontmatter、缩进 frontmatter、单引号 themeCSS、指令+恶意 frontmatter、双 frontmatter、指令+双 frontmatter 三种组合，以及 9 段 benign 加第 10 段恶意 frontmatter、非法围栏和流式消息，并断言 sanitize 对组合输入和超过旧上限的多段 frontmatter 都幂等：所有恶意围栏都能出图，但生成的 `<style>` 与 fill/style 属性里没有 attacker.example，也没有对应网络请求；非法围栏显示错误回退；`isAnimating=true` 时保留代码块，切成 false 后出现 SVG；切 `dark` class 后 3 个 SVG 仍正常，控制台无错误。没有测试渲染中切换主题的取消，也没有在完整 Web UI 路由与真机上逐项验证。
+
+<a id="c137"></a>
+
+## C137 测试连接弹窗不再被键盘关闭
+
+- 落点：`ProviderConnectionTester` 拆成 `ProviderConnectionTestDialog`，只保留弹窗内容与 `onDismissRequest`；`showTestDialog` 状态移到 `SettingProviderConfigPage`，工具栏里的按钮只负责置位，`AlertDialog` 放在工具栏和外层 `Box` 之外。来源是上游 `a75f3f9c`。
+- 理由：测试连接入口在悬浮工具栏里，键盘弹出时工具栏会移出 composition；弹窗如果挂在这个按钮下，点模型搜索框弹键盘会连同弹窗一起销毁，看起来像自动关闭。
+- 合并注意：开关必须由调用方持有，不要在工具栏内部 `remember`；`ProviderConnectionTestDialog` 不要再包一层入口按钮。后续上游如果重排这个页面，保持「弹窗在工具栏外」这个结构。
+- 测试：`:app:compileGithubDebugKotlin`、`spotlessCheck` 通过；设备上打开 OpenAI 提供商的测试连接弹窗，点模型选择器再点搜索框（弹出键盘），关掉选择层后弹窗仍在，未被销毁。
