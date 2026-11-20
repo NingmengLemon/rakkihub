@@ -31,6 +31,6 @@ dependency version or the entry list in `build.mjs`; CI does not run this tool.
 - `mark.html` references the files through `{{ASSET_BASE}}`; the app replaces it
   with `WEB_VIEW_ASSET_URL/html/`, which maps to APK assets through
   `WebViewLocalAssets`.
-- Versions are pinned in `package.json`; keep them aligned with the versions
-  documented in `docs/custom/checklist/chat.md` when upgrading.
+- Versions are pinned in `package.json`; keep them aligned with
+  `THIRD_PARTY_NOTICES.md` and the generated license file when upgrading.
 - `entry.js` and `node_modules/` are generated and gitignored.

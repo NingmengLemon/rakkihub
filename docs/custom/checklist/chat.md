@@ -430,16 +430,16 @@
 
 ## C134 mark.html 离线渲染
 
-- 落点：新增 `tools/mark-assets/`（`package.json` 固定版本、`build.mjs`、README），用 esbuild 把 markdown-it、@vscode/markdown-it-katex、markdown-it-task-lists、katex、highlight.js、js-base64、dompurify 打成单个 IIFE（`window.MarkAssets`），输出 `app/src/main/assets/html/mark.bundle.js`，并把 KaTeX 与 highlight 的 CSS、KaTeX 的 60 个字体文件复制到同目录；`mark.html` 改成经典 script 加载本地 bundle，mermaid 继续用仓库已有的 `mermaid.min.js` IIFE；模板里用 `{{ASSET_BASE}}` 占位，`MarkdownWeb.kt` 替换成 `WEB_VIEW_ASSET_URL/html/`，经 `WebViewLocalAssets` 映射到 APK assets。
-- 理由：页面原来从 esm.sh 与 jsdelivr 动态 import，断网或 CDN 不可达时整块 WebView 预览是空白。Android WebView 对 `file://` 下的 ES module 还有 CORS 限制，所以打成 IIFE 而不是 ESM。
-- 合并注意：生成的 `mark.bundle.js`、CSS、字体全部入库，CI 不运行打包；升级任一库时改 `package.json`、重跑 `pnpm run build` 并提交产物。`mark.html` 里所有静态资源都必须走 `{{ASSET_BASE}}`，漏一个就回到线上依赖；KaTeX 的 CSS 保持相对 `fonts/`，由虚拟资源路径解析，不要改成绝对 file 路径。mermaid 不在 bundle 里，避免与 `mermaid.min.js` 出现两份版本。bundle 约 1.8 MB，字体约 1 MB，APK 的 assets 增加约 6.2 MB。
-- 测试：本地 `file://` 打开注入样例的页面，标题、行内公式、mhchem 块公式、highlight.js 代码块、mermaid 图、任务列表均渲染，`document.fonts.check('12px KaTeX_Main')` 为真，控制台无错误，页面无任何 http(s) 资源；APK 里确认 65 个 `assets/html` 文件、共约 6.2 MB。没有在真机 WebView 里逐项截图验证。
+- 落点：新增 `tools/mark-assets/`（`package.json` 固定版本、`build.mjs`、README），用 esbuild 把 markdown-it、@vscode/markdown-it-katex、markdown-it-task-lists、katex、highlight.js、js-base64、dompurify 打成单个 IIFE（`window.MarkAssets`），输出 `app/src/main/assets/html/mark.bundle.js`，并把 KaTeX 与 highlight 的 CSS、KaTeX 的 60 个字体文件复制到同目录；打包时从 esbuild metafile 收集所有被打包依赖的许可证，生成 `THIRD_PARTY_LICENSES.txt` 随 APK 分发，mermaid 的 MIT 文本也追加在里面；`mark.html` 改成经典 script 加载本地 bundle，mermaid 继续用仓库已有的 `mermaid.min.js` IIFE；模板里用 `{{ASSET_BASE}}` 占位，`MarkdownWeb.kt` 替换成 `WEB_VIEW_ASSET_URL/html/`，经 `WebViewLocalAssets` 映射到 APK assets。
+- 理由：页面原来从 esm.sh 与 jsdelivr 动态 import，断网或 CDN 不可达时整块 WebView 预览是空白。打成 IIFE 而不是 ESM：页面由 `loadDataWithBaseURL` 以虚拟域名加载，经典 script 加全局不需要处理模块解析差异，模板也只需替换资源前缀。
+- 合并注意：生成的 `mark.bundle.js`、CSS、字体、许可证文件全部入库，CI 不运行打包；升级任一库时改 `package.json`、重跑 `pnpm run build` 并提交产物。`mark.html` 里所有静态资源都必须走 `{{ASSET_BASE}}`，漏一个就回到线上依赖；KaTeX 的 CSS 保持相对 `fonts/`，由虚拟资源路径解析，不要改成绝对 file 路径。mermaid 不在 bundle 里，避免与 `mermaid.min.js` 出现两份版本。新增资产约 2.8 MiB（bundle、CSS、字体、许可证），加上原有的 `mermaid.min.js` 后整个 `assets/html` 约 6.2 MiB。
+- 测试：本地 `file://` 打开注入样例的页面，标题、行内公式、mhchem 块公式、highlight.js 代码块、mermaid 图、任务列表均渲染，`document.fonts.check('12px KaTeX_Main')` 为真，控制台无错误，页面无任何 http(s) 资源；APK 里确认 67 个 `assets/html` 文件、共约 6.2 MiB，其中新增部分 2.81 MiB。没有在真机 WebView 里逐项截图验证，`WebViewLocalAssets` 的拦截路径只做了静态核对。
 
 <a id="c135"></a>
 
 ## C135 Web 正文 Mermaid
 
-- 落点：`web-ui` 新增 `@streamdown/mermaid@1.0.4`；`markdown.tsx` 用 `createMermaidPlugin` 固定 `startOnLoad: false`、`securityLevel: "strict"`、`htmlLabels: false`、`fontFamily: "inherit"`，主题随 `<html>` 的 `light`/`dark` class 切换；自定义 `code` 分支在语言为 `mermaid` 且消息不再流式时交给 `MermaidDiagram`，后者用插件实例的 `getMermaid().render` 生成 SVG，带 loading、错误回退和唯一 id；代码块其余语言仍走原来的 `CodeBlock`。
+- 落点：`web-ui` 新增 `@streamdown/mermaid@1.0.4`；`mermaid-diagram.tsx` 作为 `React.lazy` 模块，用 `createMermaidPlugin` 固定 `startOnLoad: false`、`securityLevel: "strict"`、`htmlLabels: false`、`fontFamily: "inherit"`，主题随 `<html>` 的 `light`/`dark` class 切换，渲染前去掉 `%%{init: ...}%%` 与 YAML frontmatter；`markdown.tsx` 的自定义 `code` 分支在语言为 `mermaid` 且消息不再流式时交给该模块，用插件实例的 `getMermaid().render` 生成 SVG，带 loading、错误回退和唯一 id；代码块其余语言仍走原来的 `CodeBlock`。
 - 理由：Web 正文此前只显示 mermaid 源码。Streamdown 自带的图渲染器在它的 `code` 组件内部，而自定义 `code` 为了代码预览覆盖了它，所以这里直接复用同一个插件实例渲染，避免引入第二套配置。
-- 合并注意：mermaid 引擎被 Vite 拆成约 1.95 MB 的懒加载 chunk，只在正文出现图时加载；`securityLevel` 与 `htmlLabels` 不能放松，SVG 通过 `dangerouslySetInnerHTML` 注入，依赖 mermaid strict 自己清洗标签；`rehypeSanitize` 仍在 mermaid 之前，围栏内容对它是代码文本；流式期间刻意保留源码，等 `isAnimating` 结束再渲染，避免半截围栏反复报错；图的控件没有启用，错误时展示源码而不是空白。
-- 测试：`pnpm run typecheck`、`pnpm run check:markdown`、`pnpm run build` 通过；用 esbuild 把真实 `Markdown` 组件打进临时页面，mermaid 围栏渲染出 1 个 SVG、KaTeX 与普通代码块正常、切换 `dark` class 后仍能渲染、控制台无错误。没有在完整的 Web UI 路由与真机上逐项截图验证。
+- 合并注意：即使用了 `React.lazy` 和动态 import，Rollup 仍把 mermaid 引擎并进聊天路由 chunk，打开聊天页就会加载，不是按需；当前该 chunk 约 1.36 MB（gzip 412 KB）。`securityLevel` 与 `htmlLabels` 只约束 mermaid 的标签清洗，不等于 CSS 安全：围栏里的 `themeCSS` 能通过 init 指令或 frontmatter 注入外链，所以渲染前必须剥掉这两类配置块，不能只依赖 strict。SVG 仍通过 `dangerouslySetInnerHTML` 注入，自定义渲染器也绕过了仓库的 `svgSchema`/`rehypeSvgGuard`；`rehypeSanitize` 在 mermaid 之前，围栏内容对它是代码文本。流式期间保留源码，等 `isAnimating` 结束再渲染；图的控件没有启用，错误时展示源码而不是空白。
+- 测试：`pnpm run typecheck`、`pnpm run check:markdown`、`pnpm run build` 通过；用 esbuild 把真实 `Markdown` 组件打进临时页面，同时渲染两张图、一条带恶意 `themeCSS` 外链的围栏、一条非法围栏和一条 `isAnimating` 消息：两张图和恶意围栏各出 1 个 SVG，恶意指令被剥离且页面没有向 `attacker.example` 发请求，非法围栏显示错误回退，流式消息保留代码块；切 `dark` class 后 3 个 SVG 仍正常，控制台无错误。没有测试渲染中切换主题的取消、也没有在完整 Web UI 路由与真机上逐项验证。

@@ -164,5 +164,5 @@
 
 - 落点：`tools/gen-icons.py` 在模块 docstring 后加 `# /// script`，声明 `requires-python = ">=3.10"` 与 `pillow`；`tools/backup-expectations.py`、`tools/backup-ref-counts.py` 在 shebang 后加同样的块，依赖为空。`.agents/skills/` 下的 vendored 脚本不加：它们随 skills 整批同步，单独加会被覆盖。
 - 理由：这些脚本此前靠 `uv run --with ...` 或全局环境运行，依赖散落在文档命令里；PEP 723 把解释器与依赖声明放进文件，`uv run <script>` 直接可跑。
-- 合并注意：PEP 723 块必须在 shebang 之后、模块 docstring 之前，否则 uv 不解析；`gen-icons.py` 没有 shebang，块放在 docstring 后。`requires-python` 统一取 3.10，其中 `backup-ref-counts.py` 的 `str | None` 注解在 3.9 会真实报错。Pillow 没有 pin，因为仓库里没有版本基线，`ImageDraw.rounded_rectangle` 只推出下限；要加 pin 时先确认多尺寸 ICO 的保存路径。`gen-icons.py` 文档里的 `uv run --with pillow` 命令仍然有效，不删。
+- 合并注意：PEP 723 的 `# /// script` 块只要在顶层（列 0）就能被 uv 解析，放在 docstring 之后甚至 import 之后也有效，`gen-icons.py` 就是把块放在 docstring 后；这里统一放在 shebang 之后、docstring 之前，只是为了靠近文件头、便于阅读，不是 uv 的硬性要求。`requires-python` 取 3.10，其中 `backup-ref-counts.py` 的 `str | None` 注解在 3.9 会真实报错。Pillow 没有 pin，因为仓库里没有版本基线，`ImageDraw.rounded_rectangle` 只推出下限；要加 pin 时先确认多尺寸 ICO 的保存路径。`gen-icons.py` 文档里的 `uv run --with pillow` 命令仍然有效，不删。
 - 测试：保留的 3 个脚本都通过 `python -m py_compile`；用 `tomllib` 复核块可解析、`requires-python`/`dependencies` 存在、docstring 仍在、`ast.parse(feature_version=...)` 通过；`uv run --offline --no-project --script` 对两种放置位置各跑过一个合成脚本。

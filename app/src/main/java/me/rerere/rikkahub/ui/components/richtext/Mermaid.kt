@@ -47,7 +47,8 @@ import me.rerere.ui.webview.rememberWebViewState
  * DOMPurify 3.4.12，SHA-256 `581ED7D74BD9048D0E3A91363927D72EF22942D7722546B27F7CC29E35390EB8`），
  * 从 `https://rikkahub.local/assets/` 离线加载。DOMPurify 版本由 mermaid 打包决定，有已知通告但
  * 默认配置不走受影响路径，升级 mermaid 时一并更新。升级时同时更新这份资产、这里的
- * `securityLevel`/`htmlLabels` 配置，以及 `mark.html` 里的 CDN 版本。
+ * `securityLevel`/`htmlLabels` 配置，以及 `mark.html` 的本地版本（`tools/mark-assets/package.json`
+ * 与打包产物）。
  */
 @Composable
 fun Mermaid(
