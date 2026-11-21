@@ -2,6 +2,13 @@
 
 本文件归档已完成的定制、修复与独立化批次，按时间或主题分组。当前状态以 checklist 索引与明细为准，未来方向见 [roadmap.md](../roadmap.md)。
 
+## 2026-11-22 WebUI 图标裁切统一
+
+- `web-ui/public/icon.png` 与 favicon 由 `tools/gen-icons.py` 的 `visible_canvas()` 生成：先按 adaptive 72/108 安全区裁切，缩放与裁切对齐 launcher 的可视区；Web PNG 仍用 legacy 的 20.8% 圆角，adaptive 的遮罩由 OEM 决定，两者轮廓不完全相同。favicon 从 48/64/128/256 扩到 16/32/48/64/128/256 六帧。
+- 新增 `web-ui/public/apple-touch-icon.png`（180，不透明方图，圆角交给 iOS），`root.tsx` 增加 PNG icon 与 apple-touch-icon 链接。
+- 透明背景方案没有采用：插画本身带不透明品牌底色，去掉圆角裁切得不到透明底，要抠图；16px 下浅色头发与浅色主题对比也不足，所以保留 `#F4EEEF` 底色。
+- 测试：icon 256 RGBA 四角透明，apple-touch 180 全不透明，favicon 六帧尺寸正确；launcher、`docs/icon.png`、`docs/readme-icon.png` 重跑后无 diff；`pnpm typecheck`、`pnpm build`、markdownlint 通过。K60 上重建 release 后启动 Web Server，三个文件都返回 200 且哈希与仓库文件一致，页面生成三条图标链接，空状态 logo 正常。
+
 ## 2026-11-21 B2 消费方收尾
 
 - `projectForRequest` 与 `projectForSummary` 之前对非 FAILED 消息原样返回，`IN_PROGRESS` 的 ServerTool 仍可能进请求或摘要；现在带 steps 的消息按 step 状态投影并重映射范围，未完成的 ServerTool 一律丢弃；没有 steps 的旧消息只经 `withoutUnfinishedServerTools` 兜底。失败消息的请求投影也保留已完成的 ServerTool 与成功 step 的正文。

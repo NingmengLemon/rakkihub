@@ -117,10 +117,10 @@
 
 ## C94 图标收尾：favicon、Web 空状态 logo、清理旧素材
 
-- 落点：`web-ui/public/favicon.ico` 重做成四帧（48/64/128/256，全部用插画，标签页那枚 16px 由浏览器从 48 帧缩下去）；新增 `web-ui/public/icon.png`（256，与 `docs/icon.png` 同一构图）；`web-ui/app/components/logo.tsx` 从内联的旧兔子线稿 SVG 改成渲染 `/icon.png`（`alt` 用品牌名，宽高属性是 256，显示尺寸由调用方的 `className` 决定），`web-ui/app/routes/conversations.tsx` 的新会话空状态去掉 `[&>svg]:size-16` 包裹与 `text-primary`；删除整个 `docs/img/`（海报 `poster.png` 与五张没有引用的界面截图，共约 4.2 MB）；生成脚本移到 `tools/gen-icons.py`，一次覆盖 launcher 图标、`docs/icon.png`、`docs/readme-icon.png`、`web-ui/public/icon.png` 与 favicon（在仓库根目录运行 `uv run --with pillow python -P tools/gen-icons.py`，Pillow 由 uv 临时安装；`build/` 被 gitignore，脚本放那里不可复现）
+- 落点：`web-ui/public/favicon.ico` 用 16/32/48/64/128/256 六帧，全部取 launcher 的 72/108 安全区裁切；`web-ui/public/icon.png`（256）用同一裁切套 20.8% 圆角，另有不透明方图 `web-ui/public/apple-touch-icon.png`（180）；`web-ui/app/root.tsx` 同时声明 favicon.ico、256 PNG 与 apple-touch-icon；`web-ui/app/components/logo.tsx` 从内联的旧兔子线稿 SVG 改成渲染 `/icon.png`（`alt` 用品牌名，宽高属性是 256，显示尺寸由调用方的 `className` 决定），`web-ui/app/routes/conversations.tsx` 的新会话空状态去掉 `[&>svg]:size-16` 包裹与 `text-primary`；删除整个 `docs/img/`（海报 `poster.png` 与五张没有引用的界面截图，共约 4.2 MB）；生成脚本移到 `tools/gen-icons.py`，一次覆盖 launcher 图标、`docs/icon.png`、`docs/readme-icon.png`、`web-ui/public/icon.png`、`web-ui/public/favicon.ico` 与 `web-ui/public/apple-touch-icon.png`（在仓库根目录运行 `uv run --with pillow python -P tools/gen-icons.py`，Pillow 由 uv 临时安装；`build/` 被 gitignore，脚本放那里不可复现）
 - 理由：C90 只换了 launcher 与 README 图标，浏览器标签页、Web UI 新会话空状态、海报三处还是旧兔子；本分支对 `docs/img/` 没有任何引用（根 README 是 fork 说明，见 C39），五张截图连上游 README 都没用，留着只是几 MB 的旧素材
-- 合并注意：favicon 统一用插画，不再为 16px 单独准备兔子头剪影：16px 标签页是 48 帧缩下去的，糊一点但只有一套形象；`web-ui/public/` 由 `web` 模块 preBuild 的 `pnpm run build` 拷进 `platform/web/src/main/resources/static`（该目录 gitignored），只改 `web-ui/public` 而不重新构建 APK 不会生效；`docs/icon.png` 保持 512（通用），`docs/readme-icon.png` 也取 512 但按 adaptive 72/108 安全区裁切，README 用它显示 launcher 的真实裁切效果；`web-ui/public/icon.png` 取 256，够 64px 显示的四倍屏；通知栏小图标 `ic_stat_rikkahub` 是有意保留的兔子头剪影（见 C90）
-- 测试：四个尺寸逐帧导出核对；`pnpm run typecheck` 通过，oxfmt 对改动的两个文件通过（整棵 `web-ui/app` 在 oxfmt 默认配置下另有 64 个既有格式差异，与本次无关，CI 也不跑这项）；`:app:assembleGithubDebug` 通过，解包 APK 后 `static/favicon.ico`（72560 字节）与 `static/icon.png`（43496 字节）和 `web-ui/public` 下的文件哈希一致，打包产物里能看到 `<img src="/icon.png" alt="RakkiHub">`；用本地静态服务器把构建产物打开，新会话空状态显示插画图标，`/favicon.ico` 与 `/icon.png` 都返回 200。设备上的 Web 服务器开关要在设置里手动打开，本次没开，所以没在真机浏览器里核对标签页图标
+- 合并注意：favicon 统一用插画，16/32 帧也从同一构图生成，不再为 16px 单独准备兔子头剪影；`web-ui/public/icon.png` 与 favicon 先按 adaptive 72/108 裁切，避免比 launcher 多一圈留白；圆角沿用 legacy PNG 的 20.8%，adaptive 图标的遮罩由 OEM 决定，两者轮廓不完全相同；透明背景没有采用：插画本身带不透明品牌底色，去掉圆角裁切得不到透明底，要抠图，且 16px 下浅色头发与浅色主题对比不足，所以保留 `#F4EEEF` 底色，`apple-touch-icon.png` 不透明、圆角交给 iOS 自己裁；`web-ui/public/` 由 `web` 模块 preBuild 的 `pnpm run build` 拷进 `platform/web/src/main/resources/static`（该目录 gitignored），只改 `web-ui/public` 而不重新构建 APK 不会生效；`docs/icon.png` 保持 512（通用），`docs/readme-icon.png` 也取 512 但按 adaptive 72/108 安全区裁切，README 用它显示 launcher 的真实裁切效果；`web-ui/public/icon.png` 取 256，够 64px 显示的四倍屏；通知栏小图标 `ic_stat_rikkahub` 是有意保留的兔子头剪影（见 C90）
+- 测试：六个尺寸逐帧导出核对，`web-ui/public/icon.png` 为 256 RGBA 透明圆角，`apple-touch-icon.png` 为 180 全不透明；`pnpm run typecheck`、`pnpm run build` 通过，oxfmt 对 `root.tsx` 的改动行无新增差异（整棵 `web-ui/app` 另有既有格式差异，CI 不跑这项）；Pillow 13.0.0（uv 临时安装，脚本未钉版本）；`:app:assembleGithubRelease` 通过，解包 APK 后 `static/favicon.ico`（95232 字节）、`static/icon.png`（54238 字节）、`static/apple-touch-icon.png`（33120 字节）与 `web-ui/public` 下的文件哈希一致；K60 上启动 Web Server 后三个文件都返回 200 且内容一致，页面运行时生成 favicon、256 PNG 与 apple-touch-icon 三条链接，新会话空状态 logo 在深色主题下显示正常。没有在桌面浏览器标签栏里做像素级核对
 
 <a id="c101"></a>
 
@@ -129,7 +129,8 @@
 - 落点：`tools/gen-icons.py` 增加 `readme_icon()`，按 adaptive `72/108` 安全区裁切并保留同一圆角；`docs/readme-icon.png`（512）由脚本生成，`README.md` 改引用它；`docs/icon.png`、`web-ui/public/icon.png`、favicon 和 launcher 各密度保持不变。
 - 理由：README 原来直接用完整 108dp 画布的 `docs/icon.png`，插画只占 78%，在实际 launcher 的安全区裁切后视觉上偏小；单独生成安全区版本，不改变桌面和 Web 资源。
 - 合并注意：改插画参数后要重跑 `uv run --with pillow python -P tools/gen-icons.py`，三个图标和 README 图标一起更新；`docs/readme-icon.png` 是生成物，不要手工改。
-- 测试：`docs/readme-icon.png` 为 512x512 RGBA，和脚本重跑结果一致；README 引用路径存在；launcher、Web、favicon 无 diff。
+- 测试：`docs/readme-icon.png` 为 512x512 RGBA，和脚本重跑结果一致；README 引用路径存在；本项落地时 launcher、Web、favicon 无 diff。
+- 2026-11-22 更新：Web 侧 `icon.png`、`favicon.ico` 与新增的 `apple-touch-icon.png` 已由 C94 改为与 `docs/readme-icon.png` 相同的 72/108 裁切；本项当时写的 Web 资源保持不变只适用于当时，`docs/readme-icon.png` 的生成逻辑未变。
 
 <a id="c127"></a>
 

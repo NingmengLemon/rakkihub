@@ -10,10 +10,12 @@
 
 - app/src/main/res/mipmap-*/ 的 ic_launcher、ic_launcher_foreground、ic_launcher_background
 - docs/icon.png（通用 512）与 docs/readme-icon.png（README 用，adaptive 安全区裁切）
-- web-ui/public/icon.png（Web UI 空状态用，256）
-- web-ui/public/favicon.ico（48/64/128/256，全部用插画）
+- web-ui/public/icon.png（Web UI 空状态用，256，与 launcher 同裁切）
+- web-ui/public/apple-touch-icon.png（180，不透明方图）
+- web-ui/public/favicon.ico（16/32/48/64/128/256，全部用插画）
 
 插画占 108dp 画布的 78%，相对画布中心左移 1.5%、上移 6%；圆角 20.8%，背景取插画主色 #F4EEEF。
+Web icon 与 favicon 先按 adaptive 72/108 安全区裁切，缩放与裁切对齐 launcher 的可视区；圆角沿用 legacy PNG 的 20.8%，adaptive 的遮罩仍由系统决定。
 改插画或参数后重跑一遍，再按 docs/custom/checklist.md 的 C90、C92、C94 核对。
 """
 
@@ -75,8 +77,8 @@ def icon(size):
     return round_out(canvas, size, int(s * RADIUS))
 
 
-def readme_icon(size):
-    """README 预览：按 adaptive 72/108 安全区裁切，和 launcher 的实际显示一致。"""
+def visible_canvas(size):
+    """adaptive 72/108 安全区裁切后的画布，对应 launcher 的可视区。"""
     s = size * SS
     canvas = Image.new("RGBA", (s, s), BG)
     art = img.resize((round(s * SCALE),) * 2, Image.LANCZOS)
@@ -85,8 +87,24 @@ def readme_icon(size):
     canvas.alpha_composite(art, (x, y))
     visible = round(s * 72 / 108)
     left = (s - visible) // 2
-    cropped = canvas.crop((left, left, left + visible, left + visible))
-    return round_out(cropped, size, int(visible * RADIUS))
+    return canvas.crop((left, left, left + visible, left + visible))
+
+
+def readme_icon(size):
+    """README 预览：按 adaptive 72/108 安全区裁切，和 launcher 的实际显示一致。"""
+    canvas = visible_canvas(size)
+    return round_out(canvas, size, int(canvas.width * RADIUS))
+
+
+def web_icon(size):
+    """Web 空状态与 favicon 共用 launcher 的裁切，避免比应用图标多一圈留白。"""
+    return readme_icon(size)
+
+
+def apple_touch_icon(size):
+    """iOS 主屏图标：不透明方图，圆角由系统自己裁。"""
+    canvas = visible_canvas(size)
+    return canvas.resize((size, size), Image.LANCZOS)
 
 
 def legacy(size):
@@ -119,11 +137,12 @@ for name, scale in {
 
 icon(512).save(r"docs/icon.png")
 readme_icon(512).save(r"docs/readme-icon.png")
-icon(256).save(r"web-ui/public/icon.png")
+web_icon(256).save(r"web-ui/public/icon.png")
+apple_touch_icon(180).save(r"web-ui/public/apple-touch-icon.png")
 
-# favicon：统一用插画，标签页那枚 16px 由浏览器从 48 帧缩下去
-FAVICON = [(48, 48), (64, 64), (128, 128), (256, 256)]
-frames = [icon(s) for s, _ in FAVICON]
+# favicon：统一用插画，16px 也由同一构图生成，避免浏览器再从 48 帧缩一遍
+FAVICON = [(16, 16), (32, 32), (48, 48), (64, 64), (128, 128), (256, 256)]
+frames = [web_icon(s) for s, _ in FAVICON]
 frames[-1].save(
     r"web-ui/public/favicon.ico", format="ICO", sizes=FAVICON, append_images=frames[:-1]
 )
