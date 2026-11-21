@@ -2,6 +2,13 @@
 
 本文件归档已完成的定制、修复与独立化批次，按时间或主题分组。当前状态以 checklist 索引与明细为准，未来方向见 [roadmap.md](../roadmap.md)。
 
+## 2026-11-22 安全模式清理超大设置
+
+- 移植上游 `27976e4d`：`SettingsStore.largeStoredFieldsFlow` 只按盘上字符串长度列出达到 5,000,000 字符的字段，`resetStoredField` 经 `SettingsField.reset` 恢复默认值并落盘；安全模式新增「数据过大」分组与确认对话框。
+- 同批调整安全模式的按钮顺序（进入应用主按钮在前，切换助手描边在后）与说明文案，不再暗示切换助手能解决问题。
+- 上游硬编码英文改为 4 个 locale 的字符串资源；清理经 `normalized()`，引用该字段的关联值会一起收敛，并不是只改一个 key。单字段是本次修复的目标；同时存在多个超大字段时，第一次写盘仍可能因为重新编码其余字段而 OOM，这一限制已写进 C144。
+- 测试：`SettingsStoreTest` 15 条全过；app 单测 906 条；K60 上注入 5.1M 字符 lorebooks 后安全模式列出并清除，设置文件 5,121,043 字节降到 20,931 字节，除 `launch_count` 外与恢复后的设置一致。
+
 ## 2026-11-22 WebUI 图标裁切统一
 
 - `web-ui/public/icon.png` 与 favicon 由 `tools/gen-icons.py` 的 `visible_canvas()` 生成：先按 adaptive 72/108 安全区裁切，缩放与裁切对齐 launcher 的可视区；Web PNG 仍用 legacy 的 20.8% 圆角，adaptive 的遮罩由 OEM 决定，两者轮廓不完全相同。favicon 从 48/64/128/256 扩到 16/32/48/64/128/256 六帧。

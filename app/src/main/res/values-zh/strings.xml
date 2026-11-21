@@ -558,7 +558,7 @@
   <string name="safe_mode_crash_report">崩溃报告</string>
   <string name="safe_mode_current_assistant">当前助手：%s</string>
   <string name="safe_mode_default_assistant">默认助手</string>
-  <string name="safe_mode_description">应用上次启动时崩溃了。您可以切换到其他助手来解决此问题。</string>
+  <string name="safe_mode_description">上次启动时应用崩溃了。</string>
   <string name="safe_mode_switch_assistant">切换助手</string>
   <string name="safe_mode_title">安全模式</string>
   <string name="search_ability_scrape">抓取</string>
@@ -1622,4 +1622,9 @@ mDNS 地址：使用 .local 主机名，同一网络中的其他设备可通过�
   <string name="chat_page_strip_thought_signature_confirm">清除</string>
   <string name="chat_page_strip_thought_signature_google_generate_content">Google (generateContent)</string>
   <string name="chat_page_strip_thought_signature_google_interactions">Google (Interactions)</string>
+  <string name="safe_mode_oversized_data">数据过大</string>
+  <string name="safe_mode_oversized_size">约 %1$.1f 百万字符</string>
+  <string name="safe_mode_clear">清除</string>
+  <string name="safe_mode_clear_title">清除 %1$s？</string>
+  <string name="safe_mode_clear_message">数据过大，可能导致应用内存不足。清除后将重置为默认值，且无法撤销。</string>
 </resources>

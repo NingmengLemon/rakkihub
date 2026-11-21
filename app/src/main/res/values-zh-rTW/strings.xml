@@ -555,7 +555,7 @@
   <string name="safe_mode_crash_report">當機報告</string>
   <string name="safe_mode_current_assistant">目前助理：%s</string>
   <string name="safe_mode_default_assistant">預設助理</string>
-  <string name="safe_mode_description">應用程式在上次啟動時崩潰。您可以切換到其他助理來解決此問題。</string>
+  <string name="safe_mode_description">應用程式上次啟動時發生當機。</string>
   <string name="safe_mode_switch_assistant">切換助理</string>
   <string name="safe_mode_title">安全模式</string>
   <string name="search_ability_scrape">爬取</string>
@@ -1620,4 +1620,9 @@
   <string name="chat_page_strip_thought_signature_confirm">清除</string>
   <string name="chat_page_strip_thought_signature_google_generate_content">Google (generateContent)</string>
   <string name="chat_page_strip_thought_signature_google_interactions">Google (Interactions)</string>
+  <string name="safe_mode_oversized_data">資料過大</string>
+  <string name="safe_mode_oversized_size">約 %1$.1f 百萬字元</string>
+  <string name="safe_mode_clear">清除</string>
+  <string name="safe_mode_clear_title">清除 %1$s？</string>
+  <string name="safe_mode_clear_message">此資料量過大，可能導致應用程式記憶體不足。清除後將重設為預設值，且無法復原。</string>
 </resources>

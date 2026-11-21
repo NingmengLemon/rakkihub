@@ -555,7 +555,7 @@
   <string name="safe_mode_crash_report">クラッシュレポート</string>
   <string name="safe_mode_current_assistant">現在のアシスタント: %s</string>
   <string name="safe_mode_default_assistant">デフォルトアシスタント</string>
-  <string name="safe_mode_description">前回の起動時にアプリがクラッシュしました。別のアシスタントに切り替えて問題を解決できます。</string>
+  <string name="safe_mode_description">前回の起動時にアプリがクラッシュしました。</string>
   <string name="safe_mode_switch_assistant">アシスタントを切り替える</string>
   <string name="safe_mode_title">セーフモード</string>
   <string name="search_ability_scrape">スクレイピング</string>
@@ -1622,4 +1622,9 @@ mDNSアドレス: .localホスト名を使用し、IPを知らなくても同じ
   <string name="chat_page_strip_thought_signature_confirm">削除</string>
   <string name="chat_page_strip_thought_signature_google_generate_content">Google (generateContent)</string>
   <string name="chat_page_strip_thought_signature_google_interactions">Google (Interactions)</string>
+  <string name="safe_mode_oversized_data">データが大きすぎます</string>
+  <string name="safe_mode_oversized_size">約 %1$.1f 百万文字</string>
+  <string name="safe_mode_clear">クリア</string>
+  <string name="safe_mode_clear_title">%1$sをクリアしますか？</string>
+  <string name="safe_mode_clear_message">このデータは大きすぎて、アプリの記憶が不足する可能性があります。クリアするとデフォルトにリセットされ、元に戻せません。</string>
 </resources>
