@@ -18,6 +18,26 @@ internal object DatabaseBackup {
         database.execSQL("VACUUM main INTO ?", arrayOf(destination.absolutePath))
     }
 
+    /**
+     * Snapshot the database file directly, without Room: works when Room cannot open the database
+     * (failed migration or a downgraded install). The snapshot keeps the on-disk schema version and
+     * goes through the normal migration on restore. Opens the source read-only, so it does not
+     * change the database file (journal mode, android_metadata).
+     */
+    fun createFileSnapshot(context: Context, databaseFile: File, destination: File) {
+        check(!destination.exists()) { "Backup snapshot already exists" }
+        require(databaseFile.isFile) { "Database file not found" }
+        val configuration = SQLiteConfiguration.configure(
+            context,
+            SQLiteDatabaseConfiguration(databaseFile.absolutePath, SQLiteDatabase.OPEN_READONLY)
+        )
+        SQLiteDatabase.openDatabase(configuration, null) {
+            error("Database is corrupt")
+        }.use { database ->
+            database.execSQL("VACUUM main INTO ?", arrayOf(destination.absolutePath))
+        }
+    }
+
     /** Only opens the staged copy. The caller must place its matching WAL beside it first. */
     fun normalize(context: Context, databaseFile: File) {
         require(databaseFile.isFile && databaseFile.length() > 0) { "Backup database is missing or empty" }

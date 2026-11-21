@@ -119,7 +119,7 @@ class BackupManager(
                 // 快照与（官方出口的）整库改写都没法按条目切分，这一段只报阶段
                 onProgress?.invoke(BackupProgress(BackupStage.DATABASE))
                 val snapshot = File(staging, SQLiteConfiguration.DATABASE_NAME)
-                DatabaseBackup.createSnapshot(database.openHelper.writableDatabase, snapshot)
+                createDatabaseSnapshot(snapshot)
                 val databaseEntry = when (backupTarget) {
                     BackupTarget.SELF -> snapshot
                     BackupTarget.OFFICIAL -> OfficialDatabaseAdapter.adaptForOfficial(
@@ -138,6 +138,27 @@ class BackupManager(
             throw e
         } finally {
             staging.deleteRecursively()
+        }
+    }
+
+    private fun createDatabaseSnapshot(destination: File) {
+        try {
+            DatabaseBackup.createSnapshot(database.openHelper.writableDatabase, destination)
+        } catch (e: Exception) {
+            // 迁移失败、降级安装时 Room 打不开库，应用一碰数据库就崩，只能进安全模式导出。
+            // 迁移在事务里，失败会回滚，盘上还是迁移前的完整数据，直接从文件拍快照
+            Log.w(TAG, "Room snapshot failed, falling back to the database file", e)
+            check(!destination.exists() || destination.delete()) { "Cannot remove partial snapshot" }
+            try {
+                DatabaseBackup.createFileSnapshot(
+                    context,
+                    context.getDatabasePath(SQLiteConfiguration.DATABASE_NAME),
+                    destination
+                )
+            } catch (fallback: Exception) {
+                e.addSuppressed(fallback)
+                throw e
+            }
         }
     }
 
