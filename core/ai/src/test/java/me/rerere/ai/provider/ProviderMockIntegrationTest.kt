@@ -31,6 +31,7 @@ import me.rerere.tools.providermock.MockScenario
 import me.rerere.tools.providermock.ProviderMockRule
 import okhttp3.OkHttpClient
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertTrue
 import org.junit.Rule
@@ -296,6 +297,37 @@ class ProviderMockIntegrationTest {
 
         val llmFailure = failure as? LlmFailure ?: error("expected LlmFailure, got $failure")
         assertEquals(LlmFailureCode.EMPTY_RESPONSE, llmFailure.code)
+    }
+
+    // ---- UTF-8 boundaries ----
+
+    @Test
+    fun `claude utf8 split stream decodes without replacement characters`() = runTest {
+        val model = model(MockScenario.UTF8_SPLIT)
+        val provider = ClaudeProvider(client)
+
+        val streamed = collectStream(
+            provider.streamText(claudeSetting(), userMessages, params(model)),
+            model,
+        )
+
+        assertEquals(MockPayloads.UTF8_TEXT, streamed.message.text())
+        assertFalse(streamed.message.text().contains('\uFFFD'))
+    }
+
+    @Test
+    fun `claude invalid utf8 on the wire surfaces replacement characters`() = runTest {
+        val model = model(MockScenario.UTF8_BROKEN)
+        val provider = ClaudeProvider(client)
+
+        val streamed = collectStream(
+            provider.streamText(claudeSetting(), userMessages, params(model)),
+            model,
+        )
+
+        val text = streamed.message.text()
+        assertTrue("expected U+FFFD, got '$text'", text.contains('\uFFFD'))
+        assertFalse(text == MockPayloads.UTF8_TEXT)
     }
 
     // ---- Model listing ----

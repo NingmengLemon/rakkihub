@@ -55,8 +55,12 @@ adb -s <序列号> reverse tcp:18080 tcp:18080
 | `mock-truncate` | 发一段增量后直接断开，没有终止事件 |
 | `mock-empty` | 只有终止事件、没有内容 |
 | `mock-slow` | 正常内容，chunk 之间加延迟 |
+| `mock-utf8-split` | Claude 载荷换成中文与 emoji，按 7 字节切片写出，每片之间延迟 1ms，字符会跨写边界 |
+| `mock-utf8-broken` | Claude 载荷同上，但整帧写出前删掉一个 UTF-8 续字节（不切片），线上字节非法 |
 
-`mock-slow` 的延迟可用 `X-Mock-Delay-Ms` 请求头覆盖，默认 200ms；其它场景不延迟。
+`mock-slow` 的延迟可用 `X-Mock-Delay-Ms` 请求头覆盖，默认 200ms；`mock-utf8-split` 固定每片 1ms；其它场景不延迟。
+
+两个 `mock-utf8-*` 场景的文本只走 Claude 载荷，其它协议仍用各自正常文本；它们的文本是 ASCII，选择这两个场景时切分与删续字节不会命中字符，所以断言只放在 Claude 上。
 
 模型 id 不认识时按 `mock-normal` 处理，所以随便填一个模型名也能联调。
 

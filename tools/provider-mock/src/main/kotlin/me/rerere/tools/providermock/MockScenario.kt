@@ -34,6 +34,19 @@ enum class MockScenario(val wireName: String) {
      * or [DELAY_HEADER].
      */
     SLOW("slow"),
+
+    /**
+     * Valid multi-byte text written a few bytes at a time, so CJK and emoji characters span write
+     * boundaries. Only the Claude payload uses the non-ASCII text; other protocols keep their normal
+     * payload while still receiving the split writes.
+     */
+    UTF8_SPLIT("utf8-split"),
+
+    /**
+     * Like [UTF8_SPLIT], but one continuation byte is dropped from a CJK character, so the stream
+     * carries invalid UTF-8 and a decoder replaces it with U+FFFD.
+     */
+    UTF8_BROKEN("utf8-broken"),
     ;
 
     /** Model id that selects this scenario. */

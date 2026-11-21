@@ -30,6 +30,9 @@ object MockPayloads {
     const val TEXT_HEAD = "Hello from "
     const val TEXT_TAIL = "mock"
 
+    /** Multi-byte text for the UTF-8 boundary scenarios: CJK plus a 4-byte emoji. */
+    const val UTF8_TEXT = "中文 🙂 边界"
+
     const val REASONING = "Let me think."
     const val REASONING_HEAD = "Let me "
     const val REASONING_TAIL = "think."
@@ -105,6 +108,7 @@ object MockPayloads {
 
     /** Anthropic Messages streaming frames. */
     fun claudeFrames(scenario: MockScenario, model: String): List<SseFrame> = when (scenario) {
+        MockScenario.UTF8_SPLIT, MockScenario.UTF8_BROKEN -> claudeTextFrames(model, UTF8_TEXT)
         MockScenario.REASONING -> claudeReasoningFrames(model)
         MockScenario.TOOL -> claudeToolFrames(model)
         MockScenario.EMPTY -> listOf(claudeMessageStart(model), claudeMessageStop())
@@ -505,18 +509,26 @@ object MockPayloads {
 
     // ---- Anthropic Messages ----
 
-    private fun claudeTextFrames(model: String): List<SseFrame> = listOf(
-        claudeMessageStart(model),
-        claudeContentBlockStart(0, buildJsonObject {
-            put("type", "text")
-            put("text", "")
-        }),
-        claudeTextDelta(0, TEXT_HEAD),
-        claudeTextDelta(0, TEXT_TAIL),
-        claudeContentBlockStop(0),
-        claudeMessageDelta(outputTokens = COMPLETION_TOKENS),
-        claudeMessageStop(),
-    )
+    private fun claudeTextFrames(model: String, text: String? = null): List<SseFrame> = buildList {
+        add(claudeMessageStart(model))
+        add(
+            claudeContentBlockStart(0, buildJsonObject {
+                put("type", "text")
+                put("text", "")
+            })
+        )
+        // The default payload keeps the two-delta shape the existing assertions expect; the UTF-8
+        // scenarios send one delta so the whole multi-byte character is inside one chunk list.
+        if (text == null) {
+            add(claudeTextDelta(0, TEXT_HEAD))
+            add(claudeTextDelta(0, TEXT_TAIL))
+        } else {
+            add(claudeTextDelta(0, text))
+        }
+        add(claudeContentBlockStop(0))
+        add(claudeMessageDelta(outputTokens = COMPLETION_TOKENS))
+        add(claudeMessageStop())
+    }
 
     private fun claudeReasoningFrames(model: String): List<SseFrame> = listOf(
         claudeMessageStart(model),

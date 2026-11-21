@@ -19,6 +19,7 @@ import io.ktor.server.response.respondText
 import io.ktor.server.routing.get
 import io.ktor.server.routing.post
 import io.ktor.server.routing.routing
+import io.ktor.utils.io.ByteWriteChannel
 import io.ktor.utils.io.writeFully
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.runBlocking
@@ -214,10 +215,41 @@ class ProviderMockServer(
             status = HttpStatusCode.OK,
         ) {
             frames.forEach { frame ->
-                writeFully(frame.encode().toByteArray(Charsets.UTF_8))
-                flush()
+                val bytes = frame.encode().toByteArray(Charsets.UTF_8)
+                    .let { if (scenario == MockScenario.UTF8_BROKEN) dropContinuationByte(it) else it }
+                if (scenario == MockScenario.UTF8_SPLIT) {
+                    writeUtf8Split(bytes)
+                } else {
+                    writeFully(bytes)
+                    flush()
+                }
                 if (delayMillis > 0) delay(delayMillis)
             }
+        }
+    }
+
+    private suspend fun ByteWriteChannel.writeUtf8Split(bytes: ByteArray) {
+        splitForUtf8Boundary(bytes).forEach { chunk ->
+            writeFully(chunk)
+            flush()
+            delay(UTF8_SPLIT_DELAY_MILLIS)
+        }
+    }
+
+    /** Splits the stream into fixed-size chunks so multi-byte characters cross write boundaries. */
+    internal fun splitForUtf8Boundary(bytes: ByteArray): List<ByteArray> =
+        (0 until bytes.size step UTF8_SPLIT_CHUNK_BYTES).map { offset ->
+            bytes.copyOfRange(offset, minOf(offset + UTF8_SPLIT_CHUNK_BYTES, bytes.size))
+        }
+
+    /** Drops the continuation byte of the first 3-byte character, producing invalid UTF-8. */
+    private fun dropContinuationByte(bytes: ByteArray): ByteArray {
+        val lead = bytes.indexOfFirst { (it.toInt() and 0xFF) in 0xE0..0xEF }
+        if (lead < 0 || lead + 1 >= bytes.size) return bytes
+        val continuation = bytes[lead + 1].toInt() and 0xFF
+        if (continuation !in 0x80..0xBF) return bytes
+        return ByteArray(bytes.size - 1) { index ->
+            if (index <= lead) bytes[index] else bytes[index + 1]
         }
     }
 
@@ -237,6 +269,8 @@ class ProviderMockServer(
         const val DEFAULT_SLOW_DELAY_MILLIS = 200L
         private const val RETRY_AFTER_SECONDS = "2"
         private const val MAX_DELAY_MILLIS = 10_000L
+        private const val UTF8_SPLIT_CHUNK_BYTES = 7
+        private const val UTF8_SPLIT_DELAY_MILLIS = 1L
         private const val STOP_TIMEOUT_MILLIS = 1_000L
     }
 }

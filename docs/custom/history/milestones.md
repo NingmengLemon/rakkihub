@@ -2,6 +2,12 @@
 
 本文件归档已完成的定制、修复与独立化批次，按时间或主题分组。当前状态以 checklist 索引与明细为准，未来方向见 [roadmap.md](../roadmap.md)。
 
+## 2026-11-21 U+FFFD 边界实验
+
+- `tools/provider-mock` 新增 `mock-utf8-split` 与 `mock-utf8-broken` 两个场景：前者把合法多字节文本（中文与 emoji）按 7 字节切片写出，字符会跨 socket 写边界，每片延迟 1ms；后者把同样的文本按整帧写出，但先删掉一个 UTF-8 续字节，让线上字节非法。文本只放在 Claude 载荷里。
+- 结论：`mock-utf8-broken` 能复现 U+FFFD，`mock-utf8-split` 经真实 ClaudeProvider 解码后与原文逐字相等。代码上这条链路之所以对切分不敏感，是因为 SSE 读取器把字节缓冲到完整事件后再统一解码，看不出拆分；集成用例的作用是把这条路径钉住，不让它以后被改坏，而不是单独证明解码正确。范围只覆盖 `core/ai` 的 Claude 流式路径；Web UI 的读取器、其它 provider、中继在行以上的改写、以及线上已经是 U+FFFD 的情况都没有覆盖，仍要在真实失败会话上抓原始字节。
+- 测试：provider-mock 27 条、`ai` 410 条全过（新增 5 条：两个线上字节断言、两个 ClaudeProvider 端到端断言，以及一条证明切片确实切在多字节字符中间的正向对照），`spotlessCheck` 通过。
+
 ## 2026-11-21 Compose material3 与 ink 批次
 
 - `material3` 1.5.0-beta02 → 1.5.0-rc01，`androidx.ink` 1.1.0-alpha10 → 1.1.0-alpha11；两处只改 `gradle/libs.versions.toml`，没有源码适配。

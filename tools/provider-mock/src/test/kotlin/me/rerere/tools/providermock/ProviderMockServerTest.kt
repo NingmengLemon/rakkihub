@@ -18,6 +18,9 @@ import java.net.URI
 import java.net.http.HttpClient
 import java.net.http.HttpRequest
 import java.net.http.HttpResponse
+import java.nio.ByteBuffer
+import java.nio.charset.CharacterCodingException
+import java.nio.charset.CodingErrorAction
 import java.time.Duration
 
 class ProviderMockServerTest {
@@ -377,12 +380,66 @@ class ProviderMockServerTest {
         )
     }
 
+    // ---- UTF-8 boundary scenarios ----
+
+    @Test
+    fun `utf8 split scenario keeps multi-byte text intact`() {
+        val response = postJsonBytes(
+            "${mock.claudeBaseUrl}/messages",
+            """{"model":"mock-utf8-split","stream":true}""",
+        )
+
+        val body = response.body().toString(Charsets.UTF_8)
+        assertTrue("expected ${MockPayloads.UTF8_TEXT} in the stream", body.contains(MockPayloads.UTF8_TEXT))
+        assertFalse("no replacement characters expected", body.contains('\uFFFD'))
+    }
+
+    @Test
+    fun `utf8 broken scenario is invalid on the wire`() {
+        val response = postJsonBytes(
+            "${mock.claudeBaseUrl}/messages",
+            """{"model":"mock-utf8-broken","stream":true}""",
+        )
+
+        val decoder = Charsets.UTF_8.newDecoder().onMalformedInput(CodingErrorAction.REPORT)
+        assertThrows(CharacterCodingException::class.java) {
+            decoder.decode(ByteBuffer.wrap(response.body()))
+        }
+    }
+
+    @Test
+    fun `utf8 split chunks cut through multi-byte characters`() {
+        val frame = MockPayloads.claudeFrames(MockScenario.UTF8_SPLIT, "mock-utf8-split")
+            .first { it.data.contains(MockPayloads.UTF8_TEXT) }
+        val chunks = mock.server.splitForUtf8Boundary(frame.encode().toByteArray(Charsets.UTF_8))
+
+        val cutInsideCharacter = chunks.any { chunk ->
+            runCatching {
+                Charsets.UTF_8.newDecoder()
+                    .onMalformedInput(CodingErrorAction.REPORT)
+                    .decode(ByteBuffer.wrap(chunk))
+            }.isFailure
+        }
+
+        assertTrue("expected at least one chunk to cut a multi-byte character", cutInsideCharacter)
+    }
+
     // ---- HTTP helpers ----
 
     private fun get(url: String): HttpResponse<String> = HTTP.send(
         HttpRequest.newBuilder(URI.create(url)).timeout(REQUEST_TIMEOUT).GET().build(),
         HttpResponse.BodyHandlers.ofString(),
     )
+
+    private fun postJsonBytes(url: String, body: String): HttpResponse<ByteArray> {
+        val builder = HttpRequest.newBuilder(URI.create(url))
+            .timeout(REQUEST_TIMEOUT)
+            .header("Content-Type", "application/json")
+        return HTTP.send(
+            builder.POST(HttpRequest.BodyPublishers.ofString(body)).build(),
+            HttpResponse.BodyHandlers.ofByteArray(),
+        )
+    }
 
     private fun postJson(
         url: String,
