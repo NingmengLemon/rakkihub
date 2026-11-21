@@ -35,6 +35,9 @@ rootProject.name = "rikkahub"
 include(":app")
 include(":app:baselineprofile")
 
+// 开发工具模块，目录与 project path 一致，不参与 app 构建，也不作为任何已发布产物的依赖。
+include(":tools:provider-mock")
+
 // 目录按职责分组，project path 保持不变，避免 CI 和 ./gradlew :ai:... 等命令失效。
 val relocatedModules = mapOf(
     ":ai" to "core/ai",
