@@ -106,7 +106,7 @@ class SafeModeActivity : ComponentActivity() {
                 val scope = rememberCoroutineScope()
                 val context = LocalContext.current
 
-                // 崩溃后进不去主界面时的兜底：导出和备份页一样的完整备份包，之后能在备份页正常导入
+                // 崩溃后进不去主界面时的兜底：导出设置、数据库与附件；不带工作区文件，数据库打不开时也能走文件快照
                 val exportLauncher = rememberLauncherForActivityResult(
                     ActivityResultContracts.CreateDocument("application/zip")
                 ) { uri ->
@@ -114,7 +114,7 @@ class SafeModeActivity : ComponentActivity() {
                     exporting = true
                     scope.launch {
                         try {
-                            val archive = backupManager.createBackup(includeFiles = true, includeWorkspaceFiles = true)
+                            val archive = backupManager.createBackup(includeFiles = true)
                             try {
                                 withContext(Dispatchers.IO) {
                                     val output = contentResolver.openOutputStream(uri)
