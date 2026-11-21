@@ -2,6 +2,12 @@
 
 本文件归档已完成的定制、修复与独立化批次，按时间或主题分组。当前状态以 checklist 索引与明细为准，未来方向见 [roadmap.md](../roadmap.md)。
 
+## 2026-11-21 Gradle 依赖批次
+
+- Gradle wrapper 9.6.0 → 9.9.1（`gradlew`、`gradlew.bat` 与 wrapper jar 一并重新生成；两个脚本的 diff 来自 9.9 的 wrapper 模板换代，不是手写），AGP 9.4.0 → 9.5.2、KSP 2.3.10 → 2.3.14、Ktor 3.5.2 → 3.6.1、spotless 8.10.3 → 8.11.0、kotlinx-serialization-json 1.12.0 → 1.13.0、haze 2.0.1 → 2.1.0、image-viewer 1.1.0-alpha.7 → 1.1.1-beta.3。
+- haze 2.1.0 删掉了 `GlassStyle.Material3` 与 `GlassDefaults.optics`：`ChatInputHaze` 改成先 `GlassStyle.material3(containerColor, tint)`，再用 `then { }` 叠加外观、光学与形状，optics 用 `optics { copy(...) }` 从当前值变换，不再从已删除的默认值复制。
+- 验证：app 905、ai 408、provider-mock 24 条全过；workspace 56 条里 25 条既有 Windows 失败不变；`spotlessCheck` 通过；release assemble 后装到 K60，开启输入栏背景效果（Blur 与 Glass 两条路径）聊天页正常渲染、无崩溃；应用内 Web Server（Ktor 3.6.1）首页、会话列表、SSE 流与消息加载正常；`image-viewer` 1.1.1-beta.3 的图片查看器能打开测试图片并正常返回，没有崩溃。
+
 ## 2026-11-21 web-ui 依赖批次
 
 - web-ui 升到本轮 Dependabot 目标的大部分：react/react-dom 19.3.1、streamdown 2.8、zod 4.6、zustand 5.1、radix-ui 1.8、react-resizable-panels 4.24、tailwindcss 4.3、@types/react 19.3，以及 ky 2.2、i18next 27、react-i18next 17、file-type 22。katex 仍留在 0.16：rehype-katex 7.0.1 依赖 katex ^0.16，单独升到 0.19 会让 `\ce` 静默失效，等 rehype-katex 支持后再动。0.16.47 带着 GHSA-238p-pmpm-9mq7（低危，0.18.2 已修），origin/main 也是同一状态，不是这批引入的；如果确认 rehype-katex 的 `renderToString` 与 0.19 兼容，可以用 pnpm override 把它的 katex 也指到 0.19.1 再升。

@@ -15,7 +15,7 @@ import dev.chrisbanes.haze.glass.GlassStyle
 import dev.chrisbanes.haze.glass.GlassStyleScope
 import dev.chrisbanes.haze.glass.OpticalSizeValue
 import dev.chrisbanes.haze.glass.hazeGlass
-import dev.chrisbanes.haze.glass.material3.Material3
+import dev.chrisbanes.haze.glass.material3.material3
 import me.rerere.rikkahub.data.datastore.BackgroundEffectType
 import me.rerere.rikkahub.data.datastore.DisplaySetting
 import me.rerere.rikkahub.ui.theme.LocalDarkMode
@@ -43,20 +43,21 @@ internal fun Modifier.chatInputHaze(
 
         BackgroundEffectType.GLASS -> {
             val darkMode = LocalDarkMode.current
+            val material3Style = GlassStyle.material3(
+                containerColor = containerColor,
+                tint = containerColor.copy(alpha = 0.3f),
+            )
             hazeGlass(
                 input = HazeInput.Sources(hazeState),
-                style = GlassStyle.Material3(
-                    containerColor = containerColor,
-                    tint = containerColor.copy(alpha = 0.3f),
-                ) {
+                style = material3Style.then {
                     appearanceResponse(dark = darkMode)
                     // Keep background text from competing with the input text.
-                    optics(
-                        GlassDefaults.optics.copy(
+                    optics {
+                        copy(
                             blurRadius = OpticalSizeValue.Fixed(16.dp),
                             depth = OpticalSizeValue.Fixed(0.5f),
                         )
-                    )
+                    }
                     shape(shape)
                 },
             )
