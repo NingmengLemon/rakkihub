@@ -123,7 +123,7 @@ v31 的样本推成 `rikkahub-sample-v31.db` 与 `backup-expectations-v31.json`�
 | 高版本库 | `BackupManagerTest` 的拒绝用例 | 验过 |
 | 缺条目拒绝 | `BackupManagerTest` 的缺库、缺设置、附件名带反斜杠三条用例 | 2026-11-04 设备上验过：三条都在解压之前失败，不留暂存，现有库与附件不动 |
 | 导入改名与去重 | `ImportedUploadFilesTest`（JVM）、`BackupManagerTest` 的改名与成链用例、`OfficialBackupRestoreAcceptanceTest`、`RestoreAppliedOutcomeTest` | 2026-11-04 设备上验过：v32 样本的附件按内容命名且集合一致；5GB 样本的 8080 个 upload 条目落成 682 个唯一内容 |
-| 官方兼容出口 | `BackupManagerTest` 的两条路径改写用例，外加一条「官方出口归档再恢复回本应用」 | 绝对与相对路径改写验过；设备上两次交给官方客户端恢复：v32 样本（170 会话 / 676 节点 / 98 个 upload 文件）与 5GB 数据（1664 会话 / 11483 节点 / 682 个内容名附件，图片与头像能显示）；`usage_record.outcome` 的已知裁剪已实现（C80），C142 的复合索引在导出时换回官方单列索引，官方客户端设备验收待重跑；其它 schema 分叉仍待实现 |
+| 官方兼容出口 | `BackupManagerTest` 的两条路径改写用例，外加一条「官方出口归档再恢复回本应用」 | 绝对与相对路径改写验过；设备上两次交给官方客户端恢复：v32 样本（170 会话 / 676 节点 / 98 个 upload 文件）与 5GB 数据（1664 会话 / 11483 节点 / 682 个内容名附件，图片与头像能显示）；`usage_record.outcome` 的已知裁剪已实现（C80），C142 的复合索引在导出时换回官方单列索引，2026-11-21 已在官方 RikkaHub 3.1.1 上复验（见文末 C142 一节）；其它 schema 分叉仍待实现 |
 | 本应用自己导出、换包名恢复 | 临时 `.crosscheck` 包名的构建 | 170 会话 / 676 节点；2 个节点带相对引用，按新安装解析；64 个节点带官方绝对引用，经 C25 改写；98 个 upload 文件；测试图片显示 |
 
 ## 5GB 样本
@@ -207,3 +207,15 @@ B1 第一阶段已给 `UIMessage` 增加 `steps`，给 `UIMessagePart.Tool` 增�
 2026-11-17 开发机验证普通消息：把同一份带 steps 的官方样本去掉消息里的 `steps`（其中的 `attempts` 一并去掉）和 Tool part 的 `callComplete`，生成普通归档；官方 3.1.1 导入并重启后正常打开。读取官方库确认 15 个消息节点，助手消息没有 `steps` 字段（样本里已剥掉），正文 `MOCK OK: test` 可读；没有因普通消息缺少新增字段崩溃。这是旧格式的剥离形状，不是本应用新导出的 `steps: []`、`callComplete: true` 形状；新字段的未知键容忍由 2026-11-16 带 steps 样本覆盖，两份合起来覆盖普通消息和新字段。
 
 两份样本均已覆盖：普通消息空 steps、带步骤和工具调用的消息。
+
+## 2026-11-21 C142 官方客户端复验
+
+C142 把 `message_node` 的索引换成复合索引（Room 34 到 35），官方兼容出口在导出时把它换回官方单列索引。这次在 K60 上按上面的标准重跑出口这一段，构建是 `82367066` 的 release 安装。
+
+- 源数据（本应用库）：v35、identity `562fa049...`、22 个会话、59 个消息节点、1 条 `managed_files`、10 条 `usage_record`、`upload/` 1 个文件。
+- 导出：应用内「官方兼容」出口，归档 3 个条目（`rikka_hub.db` 166,912 字节、`settings.json` 20,285 字节、`upload/<内容名>.png` 265,111 字节）。
+- 导出库：`user_version` 32，identity `c64deeb1...`（官方 v32），24 张表（比本库少 `file_derivations`），`message_node` 只有 `index_message_node_conversation_id` 单列索引，`usage_record` 没有 `outcome` 列；会话数、节点数、`managed_files`、`usage_record` 与源库一致；1 处附件引用已改写成官方安装的绝对路径，没有残留本安装的绝对路径或相对形态。
+- 官方恢复：官方 RikkaHub 3.1.1（`me.rerere.rikkahub`）从文件导入这份归档，重启后正常打开、无崩溃。恢复后官方库仍为 v32、官方 identity 与同样的 24 张表，计数与导出一致；`files/upload/` 落 1 个同内容名文件。
+- 界面：会话里的测试图片正常显示；两边用同一组查询 `describe` 都能搜到这条消息（同一个命中与时间戳，官方侧恢复后 FTS 已重建）。
+- 回归：同一构建上 `:app:connectedGithubDebugAndroidTest` 的 `data.sync` 包 56 条全部通过（`BackupManagerTest` 28、`DatabaseBackupTest` 3、`OfficialBackupRestoreAcceptanceTest` 2、`RestoreAppliedOutcomeTest` 1、`OfficialDatabaseConverterTest` 2、`OfficialDatabaseReaderTest` 7、`OfficialDatabaseWriterTest` 4、`OfficialForeignAttachmentPathsTest` 4、`OfficialSampleAcceptanceTest` 2、`OfficialSchemaTrimmerTest` 3），设备上的 v32/v31 样本与 124MB 整份归档都实际跑过。
+- 官方客户端原数据是 4 个测试会话（库 87,040 字节），导入前已备份到设备 `/data/local/tmp/official-prev.db`；当前官方客户端保留的是这份恢复结果。

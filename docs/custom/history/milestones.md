@@ -4,7 +4,7 @@
 
 ## 2026-11-20 message_node 复合索引
 
-- C142：按会话加载消息改为 `(conversation_id, node_index)` 复合索引，Room 34→35 用只建/删索引的 `Migration_34_35`；`OfficialSchemaTrimmer` 导出时换回官方单列索引，官方客户端设备验收尚未重跑。
+- C142：按会话加载消息改为 `(conversation_id, node_index)` 复合索引，Room 34→35 用只建/删索引的 `Migration_34_35`；`OfficialSchemaTrimmer` 导出时换回官方单列索引，官方客户端设备验收已在 2026-11-21 重跑（导出库 identity 与索引为官方 v32 形状，官方 3.1.1 恢复后计数一致、图片正常显示）。
 
 ## 2026-11-20 上游 3.3.0 小批次
 
