@@ -1628,5 +1628,5 @@
   <string name="safe_mode_export_failed">匯出失敗：%1$s</string>
   <string name="safe_mode_import_failed">匯入失敗：%1$s</string>
   <string name="chat_page_export_include_tool_details">包含工具呼叫詳細資料</string>
-  <string name="chat_page_export_include_tool_details_desc">僅影響 Markdown；關閉後僅保留工具名稱</string>
+  <string name="chat_page_export_include_tool_details_desc">僅影響 Markdown；詳細資訊預設為開啟，關閉後只保留工具名稱</string>
 </resources>

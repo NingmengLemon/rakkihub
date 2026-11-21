@@ -487,4 +487,4 @@
 - 落点：`ConversationExport.kt` 的 `ExportOptions` 增加 `includeToolDetails`，默认 `true`；导出选项里加「包含工具调用详情」开关，说明只影响 Markdown。工具分支改用 `internal fun toolMarkdown(tool, includeDetails)`：开启时按原样写工具名、Call ID、Input 与 Output（含输出媒体），关闭时只写 `**Tool**: 名称` 并留一个空行。新增两条字符串并在 values、values-zh、values-zh-rTW、values-ja 同步。Web 端本次不改。
 - 理由：带工具调用的会话导出成 Markdown 后，完整参数与结果会把正文冲得很散；分享或存档时经常只需要知道调用过哪个工具。默认保持完整输出，避免已有导出结果变化。
 - 合并注意：开关只作用于 Markdown，图片导出仍按原逻辑渲染工具；关闭时连 Call ID、参数、结果和工具输出里的媒体一起省略，不会写出半截结构。Web 的 `convertMessageToMarkdown` 目前完全不输出工具 part，要两端一致需要先补工具名摘要，不能只把开关搬过去。`toolMarkdown` 是 `internal`，只给导出与测试用，不要当通用 Markdown 序列化器。
-- 测试：新增 `ConversationExportToolMarkdownTest` 2 条，分别验证开启时写全、关闭时只剩工具名且不出现 Call ID/Input/结果；`:app:testGithubDebugUnitTest` 908 条、`spotlessCheck` 通过。设备上未逐项核对导出对话框与真实导出文件。
+- 测试：新增 `ConversationExportToolMarkdownTest` 2 条，分别验证开启时写全、关闭时只剩工具名且不出现 Call ID/Input/结果；`:app:testGithubDebugUnitTest` 908 条、`spotlessCheck` 通过。没有在设备上验证导出对话框与真实导出文件，验证只到单元测试与编译。
