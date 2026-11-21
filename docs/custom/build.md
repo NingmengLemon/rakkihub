@@ -42,7 +42,7 @@ $env:JAVA_HOME='E:\WorkBench\Java\jdk-23.0.2'; $env:PATH="$env:JAVA_HOME\bin;$en
 
 workspace 模块另有 `workspace.ExampleUnitTest`（4/10，硬编码执行 `/bin/sh`，Windows 上 `CreateProcess error=2`）、`workspace.RootfsInstallerTest`（1/3，软链断言期望 `/bin/busybox`）与 `workspace.SshWorkspaceBackendTest`（20 条，路径断言要求绝对 Unix 路径，Windows 上报 `Path must be absolute: C:\…`）失败，合计 25 条。
 
-CI 的 checks workflow 在 Linux 上跑 app、ai、workspace 的 JVM 测试，判据是全绿；上面这张表是本机 Windows 的判据。Linux 上那批文件占用失败预期不再出现，首次跑批确认。
+CI 的 checks workflow 在 Linux 上跑 app、ai、workspace、provider-mock 的 JVM 测试，判据是全绿；上面这张表是本机 Windows 的判据。Linux 上那批文件占用失败预期不再出现，首次跑批确认。
 
 ## 格式检查
 

@@ -52,7 +52,7 @@ App 有一个 `distribution` 维度的 product flavor：`github`（默认）和 
   binary compatible with the `terminal-view` aar). `TerminalSession` runs over a `TerminalTransport`: local PRoot
   terminals use `LocalPtyTransport`, SSH workspaces use the app's `SshTerminalTransport`. Origin and local changes are
   listed in platform/terminal/README.md.
-- **tools/provider-mock**: JVM 工具模块，为 provider 测试与本地联调提供四种流式协议的 mock server；不参与 app 构建，也不随应用发布。
+- **tools/provider-mock**: JVM-only tool module providing a mock HTTP server for the four streaming protocols; used by provider tests and local integration, not part of the app build or any release artifact.
 
 ## Concepts
 

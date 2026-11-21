@@ -29,6 +29,18 @@ Gemini base:                  http://127.0.0.1:<port>/v1beta  (POST /models/{mod
 
 默认绑定 `127.0.0.1` 的临时端口（端口 `0`），测试之间不会抢端口。
 
+### 设备联调
+
+服务只监听宿主的 loopback，设备上的应用访问不到。用固定端口起服务，再把设备的 loopback 反向打到宿主：
+
+```powershell
+.\gradlew.bat :tools:provider-mock:run --args="--port 18080"
+adb -s <序列号> reverse tcp:18080 tcp:18080
+# 应用的 provider baseUrl 填 http://127.0.0.1:18080/v1，Gemini 用 http://127.0.0.1:18080/v1beta
+```
+
+用完执行 `adb -s <序列号> reverse --remove tcp:18080` 撤掉转发。
+
 ## 场景
 
 模型 id 选择场景，也可以在请求头加 `X-Mock-Scenario` 覆盖：

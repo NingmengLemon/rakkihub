@@ -283,3 +283,7 @@ packages/common
 
 - Phase 3 的 `apps/app` 暂不做；签名 secret、CI 产物路径和文档改动都留到确有需要时
 - 是否把 `speech`、`document` 这类小模块进一步合并；当前不做，先保持项目边界
+
+## 后续变更
+
+- 2026-11-21 C143 在 `tools/` 下新增 JVM 工具模块 `:tools:provider-mock`（目录即 project path），`tools/` 因此不再是纯非模块目录；本文其余内容描述的是这次布局迁移本身，仍然有效。
