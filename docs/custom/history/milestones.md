@@ -2,6 +2,13 @@
 
 本文件归档已完成的定制、修复与独立化批次，按时间或主题分组。当前状态以 checklist 索引与明细为准，未来方向见 [roadmap.md](../roadmap.md)。
 
+## 2026-11-21 B2 消费方收尾
+
+- `projectForRequest` 与 `projectForSummary` 之前对非 FAILED 消息原样返回，`IN_PROGRESS` 的 ServerTool 仍可能进请求或摘要；现在带 steps 的消息按 step 状态投影并重映射范围，未完成的 ServerTool 一律丢弃；没有 steps 的旧消息只经 `withoutUnfinishedServerTools` 兜底。失败消息的请求投影也保留已完成的 ServerTool 与成功 step 的正文。
+- Web 聊天页开始消费 DTO 里已有的 `status` 与 `steps`：assistant 消息显示「生成失败」/「已中断」标签，assistant 消息带 attempts 时按 step 显示历史重试摘要（次数、原因、等待秒数）；补了 `MessageAttemptDto`、`MessageStepDto` 的 `attempts`/`failureCode`/`id` 与中英文案。
+- 错误卡片原计划的 retry 目标字段随 C77 永久取消而作废，B2 设计文档与路线图同步收口。
+- 测试：ai 417 条、app 905 条全过，`spotlessCheck` 通过；设备上把 Web Server 指向 K60，用构造的失败与中断消息确认两种标签、attempt 摘要与原因显示正常。
+
 ## 2026-11-21 U+FFFD 边界实验
 
 - `tools/provider-mock` 新增 `mock-utf8-split` 与 `mock-utf8-broken` 两个场景：前者把合法多字节文本（中文与 emoji）按 7 字节切片写出，字符会跨 socket 写边界，每片延迟 1ms；后者把同样的文本按整帧写出，但先删掉一个 UTF-8 续字节，让线上字节非法。文本只放在 Claude 载荷里。

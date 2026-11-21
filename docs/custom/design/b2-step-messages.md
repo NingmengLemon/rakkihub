@@ -1,6 +1,6 @@
 # B2：step 级提交与失败投影（完整版草稿）
 
-- 状态：部分落地。`MessageStep.id`、`failureCode` 已落地；Web DTO 的 status/steps、conversation_search 的失败消息过滤（scratch 与状态共用一次会话加载）、contextLimitBoundaryIndex 的投影对齐已完成；手动 step 重试与 C76 attempt 持久化已落地；标题与摘要已按 step 投影（C122），记忆保持整条隔离；官方普通消息（无 steps 字段）与带 steps 样本均已验。
+- 状态：已落地。`MessageStep.id`、`failureCode`；Web DTO 的 status/steps、conversation_search 的失败消息过滤（scratch 与状态共用一次会话加载）、contextLimitBoundaryIndex 的投影对齐；手动 step 重试与 C76 attempt 持久化；标题与摘要按 step 投影（C122）；非 FAILED 消息的 ServerTool 收口与 Web 端状态/attempt 展示（2026-11-21）；官方普通消息（无 steps 字段）与带 steps 样本均已验。错误卡片的 retry 目标字段随 C77 作废；记忆保持整条隔离是既定口径。
 - 日期：2026-11-15
 - 前置：先完成 [`b1-step-commits.md`](b1-step-commits.md)；本文档保留手动重试、错误卡片、C76、搜索过滤、Web/导出兜底等 B2 内容
 - 对齐参考：DSH `dsh-v0.2.2-rc.1`（tag 指向 commit `66491b05e3f05ad35bcdd4f6cd7ed26041d9e3db`，2026-11-04；本地 clone `E:\MyWorkspace\deepseek-harness` 的 HEAD 是 `dsh-v0.2.1-rc.5`，本文档的 0.2.2 事实均用 `git show dsh-v0.2.2-rc.1:<path>` 读取）
@@ -184,7 +184,7 @@ val callComplete: Boolean = true
 - `callComplete = false` 的 Tool 在 `finishStep` 时就地删除；AgentLoop 主循环的待工具判断、审批判断和 `executeTools` 都以 `isExecuted && callComplete` 为准，避免半截调用被标记 Pending 或造成无挂起点忙循环。
 - 审批冲突契约：`handleToolApproval` 返回 `ApprovalResult`（Accepted / Conflict / Stale）；ChatVM、浮动窗口与 Web 路由按 Conflict 显示提示或 409，不抛到全局错误。
 - 首 token 前取消：AgentLoop 在 step 开始、发起请求前发一次 step-start 的 `MessageUpdated`，确保消息与 step 记录先存在，取消时结算有真实目标。
-- 取消时未派发的完整调用补 `not_started`；已派发但没拿到结果的补 `outcome_unknown`；`ServerTool` 里仍是 `IN_PROGRESS` 的调用在摘要投影中丢弃，已经 COMPLETED 或 FAILED 的按第 6 节保留；请求投影的目标同样是丢弃，但当前 `projectForRequest` 对非 FAILED 消息原样返回，这个收口尚未做。
+- 取消时未派发的完整调用补 `not_started`；已派发但没拿到结果的补 `outcome_unknown`；`ServerTool` 里仍是 `IN_PROGRESS` 的调用在摘要投影中丢弃，已经 COMPLETED 或 FAILED 的按第 6 节保留；请求与摘要投影都按 step 状态过滤，未完成的 ServerTool 一律丢弃；没有 steps 的旧消息只做 ServerTool 兜底，旧失败消息在摘要投影整条丢弃，请求投影保留工具事实（C97 兼容例外）。
 - 进程死亡时只关闭 RUNNING 或 TOOLS 的 step；审批暂停的 TOOLS（消息 COMPLETE、仍有 Pending 工具）保持原样；最后一步已经 SUCCEEDED 的保持成功，消息仍标 INTERRUPTED，表示这一轮没有正常走完。
 - 每条消息仍由现有保存循环落库；step 的收尾更新在同一个节点行内完成，不新增行。
 
@@ -238,7 +238,7 @@ RUNNING 会出现在当前请求里：AgentLoop 把正在生成的 assistant 消
 | `ConversationMetaGenerator` 标题 | `projectForSummary` | 失败回复按 step 取成功部分 |
 | `ConversationTools` 的 `dialogueMessages` | `filterModelVisible` | 记忆继续整条隔离失败回复 |
 | `ConversationTools` 的 `conversation_search` | 工具边界按 status 过滤 | 失败正文不进入模型上下文，UI 搜索不受影响 |
-| Web DTO | 不投影，新增 `status` 与 `steps` 字段 | 给人看的内容保留 |
+| Web DTO | 不投影，新增 `status` 与 `steps` 字段 | 给人看的内容保留；Web 端显示状态标签与历史 attempt 摘要 |
 | FTS、Markdown 导出、浮动窗口 | 不投影 | FTS 没有新增字段；导出与预览仍按消息处理 |
 
 ## 7. 上下文与压缩
@@ -277,7 +277,7 @@ RUNNING 会出现在当前请求里：AgentLoop 把正在生成的 assistant 消
 - 浮动窗口、Markdown 导出、长图、通知：仍按消息处理，不按 step 拆分。
 - 官方兼容导出：行结构与 JSON 字段保留，`OfficialDatabaseAdapter` 的附件路径改写不变；`steps` 作为 `UIMessage` 的未知字段，容忍路径与现有 `status`、`isGenerating` 相同。上游 `ref` 的 `JsonInstant` 已经开了 `ignoreUnknownKeys`，官方 3.1.1 已用普通消息与带 steps 的消息验证，样本记入 `docs/custom/backup/acceptance.md`。
 - 官方兜底：上游 `ref` 的 `JsonInstant` 已开启 `ignoreUnknownKeys`，消息节点也用同一解码器；`steps`、`status`、`isGenerating`、`isCompressionPrompt` 和 Tool part 里的 `callComplete` 按未知字段容忍，不做 JSON 投影。官方 3.1.1 已确认容忍，不需要猜测性的裁剪；若将来拒绝，再在 `OfficialDatabaseAdapter` 对 `messages` JSON 投影，剔除所有官方不认识的字段（至少上述几项），保留 JSON 树里的官方未知键。字段清单按本分支对 `UIMessage` 与 `UIMessagePart` 的新增字段派生，不靠手工记忆；导入侧的 raw copy 不变量不改变，导出侧说明写进 C18 的登记与 `docs/custom/backup/acceptance.md`。
-- 错误卡片（C71）：`ChatErrorStore` 的私有 `StoredError` 也要加 `retryNodeId`、`retryStepId`，旧 `chat-errors.json` 解码为 null，按陈旧卡片处理。
+- 错误卡片（C71）：C77 已永久取消错误卡片重试，原计划的 `retryNodeId`、`retryStepId` 不再需要，`StoredError` 保持现状；旧 `chat-errors.json` 里的 `retryable`、`retryMessageId` 继续由 `ignoreUnknownKeys` 忽略。
 - 消息队列（C70）：只存 user 消息，不受 steps 影响。
 - 进程死亡（C67）：只处理 `isGenerating = true` 的消息；审批暂停的消息不参与。
 - 用量（C80）：仍按每次模型请求记录。
@@ -300,7 +300,7 @@ RUNNING 会出现在当前请求里：AgentLoop 把正在生成的 assistant 消
 - C67：只恢复可恢复的非终态 step；审批暂停保持 TOOLS；取消审批等待时由 runTurn 的 NonCancellable 结算或 stopGeneration 的无 job 分支关闭目标 step。
 - C68：压缩提示词与回复仍是独立消息，投影后继续走 `withoutCompressionScratch`。
 - C70：消息队列不受影响。
-- C71：错误卡片存储增加 step 目标字段。
+- C71：错误卡片不增加 step 目标字段（C77 已取消重试）。
 - C72：`contextMessageLimit` 仍按消息条数。
 - C74：`ContextPressure` 按 token 水位，投影改为请求投影，不按条数。
 - C76：attempt 卡片使用 step 里的 attempts 与 maxRetries；实时倒计时仍用会话内存。
