@@ -2,6 +2,11 @@
 
 本文件归档已完成的定制、修复与独立化批次，按时间或主题分组。当前状态以 checklist 索引与明细为准，未来方向见 [roadmap.md](../roadmap.md)。
 
+## 2026-11-21 Compose material3 与 ink 批次
+
+- `material3` 1.5.0-beta02 → 1.5.0-rc01，`androidx.ink` 1.1.0-alpha10 → 1.1.0-alpha11；两处只改 `gradle/libs.versions.toml`，没有源码适配。
+- 验证：JBR 21 下 app 905、ai 408、provider-mock 24 条全过；workspace 56 条里 25 条既有 Windows 失败不变；`spotlessCheck` 通过；release assemble 后装到 K60，设置页、模型选择、附件面板与对话框等 Material 3 界面正常；草图的墨迹绘制、画纸下方的工具栏（含画笔粗细）与确认后落成 `sketch.png` 附件都正常，没有崩溃。撤销重做、多指绘制与导出格式没有单独验。
+
 ## 2026-11-21 Gradle 依赖批次
 
 - Gradle wrapper 9.6.0 → 9.9.1（`gradlew`、`gradlew.bat` 与 wrapper jar 一并重新生成；两个脚本的 diff 来自 9.9 的 wrapper 模板换代，不是手写），AGP 9.4.0 → 9.5.2、KSP 2.3.10 → 2.3.14、Ktor 3.5.2 → 3.6.1、spotless 8.10.3 → 8.11.0、kotlinx-serialization-json 1.12.0 → 1.13.0、haze 2.0.1 → 2.1.0、image-viewer 1.1.0-alpha.7 → 1.1.1-beta.3。
