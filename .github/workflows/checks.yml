@@ -81,7 +81,7 @@ jobs:
           ./gradlew spotlessCheck
 
       - name: JVM tests
-        run: ./gradlew :app:testGithubDebugUnitTest :ai:testDebugUnitTest :workspace:testDebugUnitTest --continue --stacktrace
+        run: ./gradlew :app:testGithubDebugUnitTest :ai:testDebugUnitTest :workspace:testDebugUnitTest :tools:provider-mock:test --continue --stacktrace
 
       - name: Upload test reports
         if: failure()
