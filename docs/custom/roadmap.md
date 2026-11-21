@@ -340,6 +340,7 @@
 - 提示词注入、世界书与酒馆先搁置，必要时可整体删除；若重做，按“提示词注入与世界书的搁置决定”一节的方向，把系统触发的提示作为新轮次追加到消息列表末尾，而不是修改已有消息。
 - 终端功能键样式对齐 Termux（未排期）：双排、不横向滚动、按键等宽；或者提供设置项，在现在的横向 Rikka 风格和 Termux 双排之间切换。先确认目标设备宽度下两排按键的可读性和键盘遮挡，再决定是替换还是可选项。
 - 自 fork 以来新增的用户可见文本做一轮文案打磨（未排期）：假定用户有基本 agent 类工具使用经验，但不熟悉 RikkaHub/RakkiHub；避免内部术语、缩写和直译腔，遵循基本的 UI 文案设计（动作明确、状态可预期、错误可行动）。
+- Markdown 导出支持省略工具调用详情（未排期）：Android 的 `ExportOptions` 目前只控制推理与图片展开，`Tool` part 会写出名称、Call ID、输入和输出；增加默认开启的「包含工具调用详情」，关闭时只保留 `**Tool**: 名称` 一行，不写 Call ID、参数、结果和工具输出里的媒体，方便阅读与分享。默认保持当前输出不变，避免已有导出结果变化。Web 端 `convertMessageToMarkdown` 目前完全不输出工具 part；如果两端要一致，先补工具名摘要再共用这个开关。落地时补 values、zh、zh-TW、ja 文案，并在导出选项里写清默认行为。
 - 导出备份的多工作区选择（未排期）：勾选“导出工作区文件”后，继续多选具体要导出的工作区，默认全选；要同时处理本地导出、WebDAV、S3 以及导入侧对缺失工作区的提示。
 - Dependabot PR 分批处理（进行中）：安全/patch 批次已完成 okhttp、jsoup、slf4j 与 slf4j-android、sshd、jmdns、pebble、quickjs、bouncycastle、uiautomator；web-ui 批次已完成 react 19.3、streamdown 2.8、ky 2.2、i18next 27、react-i18next 17、file-type 22、react-resizable-panels 4.24 等升级；Gradle 批次已完成 wrapper 9.9.1、AGP 9.5.2、KSP 2.3.14、Ktor 3.6.1、spotless 8.11.0 等升级，并把 haze 2.1.0 的玻璃样式 API 改到 `GlassStyle.material3` 与 `optics { }`。两批都在真机上看过对应界面与 Web Server。material3 `1.5.0-rc01` 与 `androidx.ink` `1.1.0-alpha11` 同一次升级落地并验过界面，对应的 PR 等 Dependabot 自行回收；两项目前都已有更新的版本（material3 1.5.0 正式版、ink alpha12），等新 PR 出来再按同样方式验。仍待处理：等 rehype-katex 支持后再升的 katex 0.19 与单独重排的 oxfmt；PR 不自动合并，合并或关闭前确认。
 - 上游更新挑选与移植（未排期）：`ref` 保持只读，按批次查看上游提交，优先 bugfix、安全修复和会影响现有行为的改动；每批一个主题，手工移植并带设备验收，不做整分支 merge。
