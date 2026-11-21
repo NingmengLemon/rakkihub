@@ -70,11 +70,11 @@ function dispatchWebAuthRequired(detail: WebAuthRequiredEventDetail) {
 }
 
 const kyInstance = ky.create({
-  prefixUrl: "/api",
+  prefix: "/api",
   timeout: 30000,
   hooks: {
     beforeRequest: [
-      (request) => {
+      ({ request }) => {
         const token = getValidWebAuthToken();
         if (!token || request.headers.has("Authorization")) return;
         request.headers.set("Authorization", `Bearer ${token}`);
@@ -83,15 +83,17 @@ const kyInstance = ky.create({
   },
 });
 
+function isErrorResponse(value: unknown): value is ErrorResponse {
+  if (typeof value !== "object" || value === null) return false;
+  const candidate = value as { error?: unknown; code?: unknown };
+  return typeof candidate.error === "string" && typeof candidate.code === "number";
+}
+
 async function handleError(error: unknown): Promise<never> {
   if (error instanceof HTTPError) {
-    const { response } = error;
-    let errorData: ErrorResponse | undefined;
-    try {
-      errorData = await response.json();
-    } catch {
-      // Ignore JSON parse error
-    }
+    const { response, data } = error;
+    // ky 2 consumes the response body into `data`; `response.json()` is no longer readable.
+    const errorData = isErrorResponse(data) ? data : undefined;
     const code = errorData?.code ?? response.status;
     const message = errorData?.error ?? error.message;
     const isAuthTokenEndpoint = response.url.includes("/api/auth/token");

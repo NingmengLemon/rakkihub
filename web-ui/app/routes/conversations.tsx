@@ -50,6 +50,7 @@ import {
 import { MessageSquare } from "lucide-react";
 import Logo from "~/components/logo";
 import type { PanelImperativeHandle } from "react-resizable-panels";
+import type { TFunction } from "i18next";
 import { useTranslation } from "react-i18next";
 import { toast } from "sonner";
 import { v4 as uuidv4 } from "uuid";
@@ -96,10 +97,7 @@ function truncatePreviewText(value: string, maxLength = 48): string {
   return `${value.slice(0, maxLength)}...`;
 }
 
-function getQuickJumpPreview(
-  message: MessageDto,
-  t: (key: string, options?: Record<string, unknown>) => string,
-): string {
+function getQuickJumpPreview(message: MessageDto, t: TFunction<"page">): string {
   const textPreview = message.parts
     .filter((part): part is Extract<UIMessagePart, { type: "text" }> => part.type === "text")
     .map((part) => part.text.trim())

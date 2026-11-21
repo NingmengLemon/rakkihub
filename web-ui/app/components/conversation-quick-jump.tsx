@@ -1,4 +1,5 @@
 import * as React from "react";
+import type { TFunction } from "i18next";
 import { useTranslation } from "react-i18next";
 
 import { Tooltip, TooltipContent, TooltipTrigger } from "~/components/ui/tooltip";
@@ -45,10 +46,7 @@ function getRoleDotClass(role: string): string {
   return "bg-foreground/80";
 }
 
-function getRoleLabel(
-  role: string,
-  t: (key: string, options?: Record<string, unknown>) => string,
-): string {
+function getRoleLabel(role: string, t: TFunction): string {
   const normalizedRole = role.toUpperCase();
   if (normalizedRole === "USER") return t("quick_jump.role_user");
   if (normalizedRole === "ASSISTANT") return t("quick_jump.role_assistant");

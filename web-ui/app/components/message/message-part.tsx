@@ -1,4 +1,5 @@
 import * as React from "react";
+import type { TFunction } from "i18next";
 import { useTranslation } from "react-i18next";
 
 import type { ReasoningPart, ToolPart, UIMessagePart } from "~/types";
@@ -72,7 +73,7 @@ interface MessagePartsProps {
 
 function renderContentPart(
   part: UIMessagePart,
-  t: (key: string, options?: Record<string, unknown>) => string,
+  t: TFunction<"message">,
   loading?: boolean,
   onClickCitation?: (id: string) => void,
 ) {

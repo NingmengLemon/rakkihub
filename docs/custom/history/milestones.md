@@ -2,6 +2,13 @@
 
 本文件归档已完成的定制、修复与独立化批次，按时间或主题分组。当前状态以 checklist 索引与明细为准，未来方向见 [roadmap.md](../roadmap.md)。
 
+## 2026-11-21 web-ui 依赖批次
+
+- web-ui 升到本轮 Dependabot 目标的大部分：react/react-dom 19.3.1、streamdown 2.8、zod 4.6、zustand 5.1、radix-ui 1.8、react-resizable-panels 4.24、tailwindcss 4.3、@types/react 19.3，以及 ky 2.2、i18next 27、react-i18next 17、file-type 22。katex 仍留在 0.16：rehype-katex 7.0.1 依赖 katex ^0.16，单独升到 0.19 会让 `\ce` 静默失效，等 rehype-katex 支持后再动。0.16.47 带着 GHSA-238p-pmpm-9mq7（低危，0.18.2 已修），origin/main 也是同一状态，不是这批引入的；如果确认 rehype-katex 的 `renderToString` 与 0.19 兼容，可以用 pnpm override 把它的 katex 也指到 0.19.1 再升。
+- 三处破坏性改动按新 API 改写：ky 2 的 `prefixUrl` 换成 `prefix`，`beforeRequest` 钩子改成从状态对象取 `request`；ky 2 的 `HTTPError` 会读掉响应体，错误处理改用 `error.data`，否则服务端的错误文案会静默丢失；react-i18next 17 的 `TFunction` 签名收紧，三个只接受 `(key, options?)` 的辅助函数改成 `TFunction` / `TFunction<"message">` / `TFunction<"page">`。
+- oxfmt 留在 0.32：新版格式化会重排大约 60 个文件，与依赖升级分开处理。oxlint 的 spec 没改，但锁文件解析到 1.94，`oxlint app` 仍是 0 个错误。
+- 验证：`pnpm typecheck`、`pnpm build`、`pnpm check:markdown`、`pnpm install --frozen-lockfile` 通过。release assemble 后装到 K60，在应用内的 Web Server 上验了首页与会话列表、中英语言切换、Markdown（KaTeX 0.16、表格、代码高亮、Mermaid）与图片上传（`/api/files/upload` 201）；打开鉴权后用错误密码登录会显示服务端的 `Invalid password`，正确密码可以解锁并继续加载，走的就是 `error.data` 这条路径。`fmt:check` 在 origin/main 上有 16 个文件不通过，本批把动过的那两个文件格式化后仍是 16 个。上传与导航同时进行时见过一次指向 Mermaid chunk 的 console error，干净重载后不再出现。
+
 ## 2026-11-21 provider mock server
 
 - C143：新增 `tools/provider-mock`，在 `127.0.0.1` 的临时端口上实现 OpenAI Chat Completions、OpenAI Responses、Anthropic Messages 与 Gemini generateContent 的流式与非流式响应，外加两个模型列表接口；按模型名或 `X-Mock-Scenario` 切换正常、推理、工具调用、429、500、截断、空与慢场景；请求记录器对凭据类请求头只留存在性与 scheme 前缀。`core/ai` 新增 `ProviderMockIntegrationTest`，用真实 provider 实现走完整 HTTP 路径并断言文本、工具参数、usage 与失败映射。模块不参与 app 构建。

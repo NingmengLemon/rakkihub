@@ -8,13 +8,13 @@ web-ui 是 RikkaHub 项目的嵌入式 Web 前端，基于 React Router 7 的单
 
 ## Technology Stack
 
-- **React Router 7** (7.12.0): 文件路由系统 + Vite 构建 (SPA 模式: `ssr: false`)
-- **React 19** (19.2.4): UI 框架
-- **TypeScript** (5.9.2): 严格类型检查，与 Kotlin 后端类型完全对齐
+- **React Router 7** (7.13.0): 文件路由系统 + Vite 构建 (SPA 模式: `ssr: false`)
+- **React 19** (19.3.1): UI 框架
+- **TypeScript** (5.9.3): 严格类型检查，与 Kotlin 后端类型完全对齐
 - **Tailwind CSS v4**: 原子化 CSS 框架 + CSS 变量主题系统
 - **shadcn/ui** (New York style): 组件库，基于 Radix UI
-- **Zustand** (5.0.11): 轻量级状态管理（组合 slices 模式）
-- **ky** (1.14.3): 基于 fetch 的 HTTP 客户端
+- **Zustand** (5.1.0): 轻量级状态管理（组合 slices 模式）
+- **ky** (2.2.0): 基于 fetch 的 HTTP 客户端
 - **i18next + react-i18next**: 国际化方案（zh-CN / en-US）
 - **pnpm**: 包管理器
 
@@ -107,12 +107,14 @@ app/
 │   │   ├── common.json       # 通用 UI 翻译（侧边栏、主题等）
 │   │   ├── input.json        # 输入相关翻译（聊天、模型选择）
 │   │   ├── markdown.json     # Markdown 渲染翻译
-│   │   └── message.json      # 消息显示翻译（消息部分、工具）
+│   │   ├── message.json      # 消息显示翻译（消息部分、工具）
+│   │   └── page.json         # 会话页翻译（会话列表、快捷跳转）
 │   └── en-US/                # 英文
 │       ├── common.json
 │       ├── input.json
 │       ├── markdown.json
-│       └── message.json
+│       ├── message.json
+│       └── page.json
 │
 ├── assets/                   # 静态资源
 ├── i18n.ts                   # i18next 配置
@@ -265,6 +267,7 @@ server: {
 - `input`: 输入相关翻译(聊天输入、模型选择、文件选择器等)
 - `markdown`: Markdown 渲染翻译(代码块、复制按钮等)
 - `message`: 消息显示翻译(消息部分、工具调用、推理步骤等)
+- `page`: 会话页文案(会话列表、快捷跳转预览等)
 
 **配置** (`app/i18n.ts`):
 ```typescript
@@ -281,11 +284,12 @@ i18n.use(initReactI18next).init({
       input: zhCNInput,
       markdown: zhCNMarkdown,
       message: zhCNMessage,
+      page: zhCNPage,
     },
     "en-US": { /* ... */ },
   },
   defaultNS: "common",  // 默认命名空间
-  ns: ["common", "input", "markdown", "message"],
+  ns: ["common", "input", "markdown", "message", "page"],
 });
 ```
 
@@ -296,12 +300,14 @@ app/locales/
 │   ├── common.json     # 通用翻译
 │   ├── input.json      # 输入相关
 │   ├── markdown.json   # Markdown 渲染
-│   └── message.json    # 消息显示
+│   ├── message.json    # 消息显示
+│   └── page.json       # 会话页
 └── en-US/
     ├── common.json
     ├── input.json
     ├── markdown.json
-    └── message.json
+    ├── message.json
+    └── page.json
 ```
 
 **使用方式**:
@@ -323,7 +329,7 @@ function MyComponent() {
 ```
 
 **添加新翻译键**:
-1. 确定合适的命名空间 (common/input/markdown/message)
+1. 确定合适的命名空间 (common/input/markdown/message/page)
 2. 在对应的 `zh-CN/*.json` 和 `en-US/*.json` 中添加键值对
 3. 使用 `t("namespace:key")` 或 `t("key")` (默认命名空间) 访问
 
