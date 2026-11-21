@@ -33,7 +33,13 @@
     "duration_seconds": "{{value}}s",
     "context_checkpoint": "以上内容已压缩为摘要",
     "context_checkpoint_hint": "分隔线以上的消息不再发送给模型，由这份摘要代替。删除摘要即可恢复发送完整历史。",
-    "context_checkpoint_delete_confirm": "确认删除这份摘要吗？删除后会重新向模型发送完整历史。"
+    "context_checkpoint_delete_confirm": "确认删除这份摘要吗？删除后会重新向模型发送完整历史。",
+    "status_failed": "生成失败",
+    "status_interrupted": "已中断",
+    "attempts_title": "重试记录",
+    "attempt_row": "第 {{attempt}}/{{maxRetries}} 次尝试",
+    "attempt_waited": "等待 {{seconds}} 秒",
+    "attempt_unknown": "未知原因"
   },
   "tool_part": {
     "memory_create": "创建记忆",

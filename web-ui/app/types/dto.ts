@@ -67,12 +67,25 @@ export interface ConversationListInvalidateEventDto {
 export type MessageStatus = "complete" | "interrupted" | "failed";
 export type StepStatus = "running" | "tools" | "succeeded" | "failed" | "cancelled";
 
+export interface MessageAttemptDto {
+  attempt: number;
+  maxRetries: number;
+  code?: string | null;
+  message?: string | null;
+  delayMs: number;
+  durationMs: number;
+  recordedAt: string;
+}
+
 export interface MessageStepDto {
+  id: string;
   status: StepStatus;
   startPartIndex: number;
   endPartIndex: number;
   startedAt: string;
   finishedAt?: string | null;
+  attempts?: MessageAttemptDto[];
+  failureCode?: string | null;
   legacy: boolean;
 }
 

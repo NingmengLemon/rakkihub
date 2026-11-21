@@ -10,6 +10,8 @@ import {
   ChevronRight,
   ChevronUp,
   Clock3,
+  CircleAlert,
+  CircleStop,
   Copy,
   Ellipsis,
   FileDown,
@@ -522,6 +524,80 @@ const ChatMessageNerdLineRow = React.memo(({
   );
 });
 
+const ChatMessageStatusBadge = React.memo(({ message }: { message: MessageDto }) => {
+  const { t } = useTranslation("message");
+
+  if (message.role !== "ASSISTANT") return null;
+  if (message.status !== "failed" && message.status !== "interrupted") return null;
+
+  const failed = message.status === "failed";
+  const failureCode = failed
+    ? ([...(message.steps ?? [])].reverse().find((step) => step.failureCode)?.failureCode ?? null)
+    : null;
+
+  return (
+    <div
+      className={cn(
+        "inline-flex w-fit items-center gap-1.5 rounded-full border px-2.5 py-1 text-xs font-medium",
+        failed
+          ? "border-destructive/30 bg-destructive/10 text-destructive"
+          : "border-amber-500/30 bg-amber-500/10 text-amber-700 dark:text-amber-400",
+      )}
+      title={failureCode ?? undefined}
+    >
+      {failed ? <CircleAlert className="size-3.5" /> : <CircleStop className="size-3.5" />}
+      {failed ? t("chat_message.status_failed") : t("chat_message.status_interrupted")}
+    </div>
+  );
+});
+
+const ChatMessageAttempts = React.memo(({ message }: { message: MessageDto }) => {
+  const { t } = useTranslation("message");
+  const attempts = React.useMemo(
+    () => (message.steps ?? []).flatMap((step) => step.attempts ?? []),
+    [message.steps],
+  );
+
+  if (message.role !== "ASSISTANT" || attempts.length === 0) return null;
+
+  return (
+    <div className="w-full rounded-lg border border-border/60 bg-muted/30 px-3 py-2 text-xs">
+      <div className="mb-1 font-medium text-foreground/80">{t("chat_message.attempts_title")}</div>
+      <ul className="flex flex-col gap-1">
+        {attempts.map((attempt, index) => {
+          const reason =
+            attempt.message?.trim().slice(0, 160) ||
+            attempt.code ||
+            t("chat_message.attempt_unknown");
+          const seconds = Math.max(0, Math.round(attempt.delayMs / 1000));
+          return (
+            <li
+              key={`${attempt.attempt}-${index}`}
+              className="flex items-start justify-between gap-3"
+            >
+              <div className="min-w-0">
+                <div className="text-foreground/80">
+                  {t("chat_message.attempt_row", {
+                    attempt: attempt.attempt,
+                    maxRetries: attempt.maxRetries,
+                  })}
+                </div>
+                <div className="truncate text-muted-foreground" title={reason}>
+                  {reason}
+                </div>
+              </div>
+              {seconds > 0 ? (
+                <span className="shrink-0 text-muted-foreground">
+                  {t("chat_message.attempt_waited", { seconds })}
+                </span>
+              ) : null}
+            </li>
+          );
+        })}
+      </ul>
+    </div>
+  );
+});
 // Messages above the divider stay readable but are no longer sent to the model;
 // this summary replaces them. Collapsed by default so it does not interrupt the history.
 const ChatMessageContextCheckpoint = React.memo(({
@@ -671,6 +747,9 @@ export const ChatMessage = React.memo(({
             />
           </div>
         </div>
+
+        {!isUser && <ChatMessageStatusBadge message={message} />}
+        {!isUser && <ChatMessageAttempts message={message} />}
       </div>
 
       {showActions && (
