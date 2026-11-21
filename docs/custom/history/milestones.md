@@ -2,6 +2,10 @@
 
 本文件归档已完成的定制、修复与独立化批次，按时间或主题分组。当前状态以 checklist 索引与明细为准，未来方向见 [roadmap.md](../roadmap.md)。
 
+## 2026-11-21 provider mock server
+
+- C143：新增 `tools/provider-mock`，在 `127.0.0.1` 的临时端口上实现 OpenAI Chat Completions、OpenAI Responses、Anthropic Messages 与 Gemini generateContent 的流式与非流式响应，外加两个模型列表接口；按模型名或 `X-Mock-Scenario` 切换正常、推理、工具调用、429、500、截断、空与慢场景；请求记录器对凭据类请求头只留存在性与 scheme 前缀。`core/ai` 新增 `ProviderMockIntegrationTest`，用真实 provider 实现走完整 HTTP 路径并断言文本、工具参数、usage 与失败映射。模块不参与 app 构建。
+
 ## 2026-11-20 message_node 复合索引
 
 - C142：按会话加载消息改为 `(conversation_id, node_index)` 复合索引，Room 34→35 用只建/删索引的 `Migration_34_35`；`OfficialSchemaTrimmer` 导出时换回官方单列索引，官方客户端设备验收已在 2026-11-21 重跑（导出库 identity 与索引为官方 v32 形状，官方 3.1.1 恢复后计数一致、图片正常显示）。
