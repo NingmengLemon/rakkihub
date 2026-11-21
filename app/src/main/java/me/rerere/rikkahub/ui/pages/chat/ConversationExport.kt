@@ -155,6 +155,25 @@ fun ChatExportSheet(
                     )
                 }
 
+                OutlinedCard(
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    ListItem(
+                        headlineContent = { Text(stringResource(R.string.chat_page_export_include_tool_details)) },
+                        supportingContent = {
+                            Text(stringResource(R.string.chat_page_export_include_tool_details_desc))
+                        },
+                        trailingContent = {
+                            Switch(
+                                checked = exportOptions.includeToolDetails,
+                                onCheckedChange = {
+                                    exportOptions = exportOptions.copy(includeToolDetails = it)
+                                }
+                            )
+                        }
+                    )
+                }
+
                 val markdownSuccessMessage =
                     stringResource(id = R.string.chat_page_export_success, "Markdown")
                 OutlinedCard(
@@ -298,70 +317,7 @@ private fun exportToMarkdown(
                     }
 
                     is UIMessagePart.Tool -> {
-                        append("**Tool**: `${part.toolName}`")
-                        appendLine()
-                        if (part.toolCallId.isNotBlank()) {
-                            append("- Call ID: `${part.toolCallId}`")
-                            appendLine()
-                        }
-
-                        append("Input:")
-                        appendLine()
-                        append("```json")
-                        appendLine()
-                        append(JsonInstantPretty.encodeToString(part.inputAsJson()))
-                        appendLine()
-                        append("```")
-                        appendLine()
-
-                        if (part.output.isNotEmpty()) {
-                            append("Output:")
-                            appendLine()
-                            part.output.forEach { outputPart ->
-                                when (outputPart) {
-                                    is UIMessagePart.Text -> {
-                                        append("```text")
-                                        appendLine()
-                                        append(outputPart.text)
-                                        appendLine()
-                                        append("```")
-                                        appendLine()
-                                    }
-
-                                    is UIMessagePart.Reasoning -> {
-                                        outputPart.reasoning.lines()
-                                            .filter { it.isNotBlank() }
-                                            .forEach {
-                                                append("> $it")
-                                                appendLine()
-                                            }
-                                    }
-
-                                    is UIMessagePart.Image -> {
-                                        append("![Tool Image](${outputPart.encodeBase64().getOrNull()?.base64})")
-                                        appendLine()
-                                    }
-
-                                    is UIMessagePart.Document -> {
-                                        append("[Document: ${outputPart.fileName}](${outputPart.url})")
-                                        appendLine()
-                                    }
-
-                                    is UIMessagePart.Video -> {
-                                        append("[Video](${outputPart.url})")
-                                        appendLine()
-                                    }
-
-                                    is UIMessagePart.Audio -> {
-                                        append("[Audio](${outputPart.url})")
-                                        appendLine()
-                                    }
-
-                                    else -> {}
-                                }
-                            }
-                        }
-                        appendLine()
+                        append(toolMarkdown(part, options.includeToolDetails))
                     }
 
                     else -> {}
@@ -397,6 +353,80 @@ private fun exportToMarkdown(
     } catch (e: Exception) {
         e.printStackTrace()
     }
+}
+
+
+/** 工具调用在 Markdown 里的写法；[includeDetails] 为 false 时只保留工具名。 */
+internal fun toolMarkdown(tool: UIMessagePart.Tool, includeDetails: Boolean): String = buildString {
+    append("**Tool**: `${tool.toolName}`")
+    appendLine()
+    if (!includeDetails) {
+        appendLine()
+        return@buildString
+    }
+
+    if (tool.toolCallId.isNotBlank()) {
+        append("- Call ID: `${tool.toolCallId}`")
+        appendLine()
+    }
+
+    append("Input:")
+    appendLine()
+    append("```json")
+    appendLine()
+    append(JsonInstantPretty.encodeToString(tool.inputAsJson()))
+    appendLine()
+    append("```")
+    appendLine()
+
+    if (tool.output.isNotEmpty()) {
+        append("Output:")
+        appendLine()
+        tool.output.forEach { outputPart ->
+            when (outputPart) {
+                is UIMessagePart.Text -> {
+                    append("```text")
+                    appendLine()
+                    append(outputPart.text)
+                    appendLine()
+                    append("```")
+                    appendLine()
+                }
+
+                is UIMessagePart.Reasoning -> {
+                    outputPart.reasoning.lines()
+                        .filter { it.isNotBlank() }
+                        .forEach {
+                            append("> $it")
+                            appendLine()
+                        }
+                }
+
+                is UIMessagePart.Image -> {
+                    append("![Tool Image](${outputPart.encodeBase64().getOrNull()?.base64})")
+                    appendLine()
+                }
+
+                is UIMessagePart.Document -> {
+                    append("[Document: ${outputPart.fileName}](${outputPart.url})")
+                    appendLine()
+                }
+
+                is UIMessagePart.Video -> {
+                    append("[Video](${outputPart.url})")
+                    appendLine()
+                }
+
+                is UIMessagePart.Audio -> {
+                    append("[Audio](${outputPart.url})")
+                    appendLine()
+                }
+
+                else -> {}
+            }
+        }
+    }
+    appendLine()
 }
 
 private suspend fun exportToImage(
@@ -459,6 +489,7 @@ private suspend fun exportToImage(
 data class ExportOptions(
     val includeReasoning: Boolean = true,
     val expandReasoning: Boolean = false,
+    val includeToolDetails: Boolean = true,
 )
 
 @Composable

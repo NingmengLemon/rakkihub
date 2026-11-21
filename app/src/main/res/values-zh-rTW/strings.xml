@@ -1627,4 +1627,6 @@
   <string name="safe_mode_clear_message">此資料量過大，可能導致應用程式記憶體不足。清除後將重設為預設值，且無法復原。</string>
   <string name="safe_mode_export_failed">匯出失敗：%1$s</string>
   <string name="safe_mode_import_failed">匯入失敗：%1$s</string>
+  <string name="chat_page_export_include_tool_details">包含工具呼叫詳細資料</string>
+  <string name="chat_page_export_include_tool_details_desc">僅影響 Markdown；關閉後僅保留工具名稱</string>
 </resources>

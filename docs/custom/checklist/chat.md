@@ -1,6 +1,6 @@
 # 明细：聊天、上下文与模型
 
-本文件是 [checklist.md](../checklist.md) 的明细，收录 C35、C43 至 C44、C46 至 C47、C49 至 C53、C57 至 C63、C65 至 C78、C81 至 C86、C97 至 C100、C107、C121、C122、C130、C131、C133、C134、C135、C137、C140、C141、C145。
+本文件是 [checklist.md](../checklist.md) 的明细，收录 C35、C43 至 C44、C46 至 C47、C49 至 C53、C57 至 C63、C65 至 C78、C81 至 C86、C97 至 C100、C107、C121、C122、C130、C131、C133、C134、C135、C137、C140、C141、C145、C147。
 
 <a id="c35"></a>
 
@@ -479,3 +479,12 @@
 - 理由：兼容 Gemini 格式的接口不一定返回 `displayName`，原来的 `!!` 会让整张模型列表解析失败；模型名只显示一行时，长前缀会把真正可区分的后缀截掉；导出时间方便回顾对话。
 - 合并注意：`displayName` 空串也回退，别只判 null；`jsonPrimitiveOrNull` 在 `me.rerere.common.http` 已有；ModelList 只改选择列表的标题，其它 `maxLines = 1` 不要跟着改；导出的时间格式跟随系统 locale，和聊天页的时间展示共用 `toLocalString()`，不是固定 `yyyy-MM-dd`。
 - 测试：`:ai:testDebugUnitTest` 420 条、`:app:testGithubDebugUnitTest` 906 条、`spotlessCheck` 通过；Google 兼容接口缺 `displayName`、两行模型名与导出时间都没有在设备上单独验。
+
+<a id="c147"></a>
+
+## C147 Markdown 导出可省略工具调用详情
+
+- 落点：`ConversationExport.kt` 的 `ExportOptions` 增加 `includeToolDetails`，默认 `true`；导出选项里加「包含工具调用详情」开关，说明只影响 Markdown。工具分支改用 `internal fun toolMarkdown(tool, includeDetails)`：开启时按原样写工具名、Call ID、Input 与 Output（含输出媒体），关闭时只写 `**Tool**: 名称` 并留一个空行。新增两条字符串并在 values、values-zh、values-zh-rTW、values-ja 同步。Web 端本次不改。
+- 理由：带工具调用的会话导出成 Markdown 后，完整参数与结果会把正文冲得很散；分享或存档时经常只需要知道调用过哪个工具。默认保持完整输出，避免已有导出结果变化。
+- 合并注意：开关只作用于 Markdown，图片导出仍按原逻辑渲染工具；关闭时连 Call ID、参数、结果和工具输出里的媒体一起省略，不会写出半截结构。Web 的 `convertMessageToMarkdown` 目前完全不输出工具 part，要两端一致需要先补工具名摘要，不能只把开关搬过去。`toolMarkdown` 是 `internal`，只给导出与测试用，不要当通用 Markdown 序列化器。
+- 测试：新增 `ConversationExportToolMarkdownTest` 2 条，分别验证开启时写全、关闭时只剩工具名且不出现 Call ID/Input/结果；`:app:testGithubDebugUnitTest` 908 条、`spotlessCheck` 通过。设备上未逐项核对导出对话框与真实导出文件。

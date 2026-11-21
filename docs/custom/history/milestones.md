@@ -2,6 +2,12 @@
 
 本文件归档已完成的定制、修复与独立化批次，按时间或主题分组。当前状态以 checklist 索引与明细为准，未来方向见 [roadmap.md](../roadmap.md)。
 
+## 2026-11-22 Markdown 导出工具详情开关
+
+- `ExportOptions` 增加默认开启的 `includeToolDetails`，导出对话框加「包含工具调用详情」；关闭后 Markdown 只写 `**Tool**: 名称`，省略 Call ID、参数、结果与输出媒体。
+- 工具渲染抽成 `internal fun toolMarkdown()`，图片导出不经过它；Web 端仍不输出工具 part，本次不改。
+- 测试：新增 `ConversationExportToolMarkdownTest` 2 条覆盖开启与关闭；app 单测 908 条、spotless 通过。
+
 ## 2026-11-22 上游 3.3.1 小批次
 
 - 3.3.1 从 `358e2931` 到 `2435dbdf` 共 7 个提交。移植三个小修正为 C145：Google 模型列表 `displayName` 缺失时回退 `modelId`、模型选择列表名称最多两行、Markdown 导出在角色后写消息时间。

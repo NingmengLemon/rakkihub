@@ -1629,4 +1629,6 @@ mDNSアドレス: .localホスト名を使用し、IPを知らなくても同じ
   <string name="safe_mode_clear_message">このデータは大きすぎて、アプリの記憶が不足する可能性があります。クリアするとデフォルトにリセットされ、元に戻せません。</string>
   <string name="safe_mode_export_failed">エクスポートに失敗しました: %1$s</string>
   <string name="safe_mode_import_failed">インポートに失敗しました: %1$s</string>
+  <string name="chat_page_export_include_tool_details">ツール呼び出しの詳細を含める</string>
+  <string name="chat_page_export_include_tool_details_desc">Markdown にのみ影響します。オフにするとツール名だけを保持します</string>
 </resources>

@@ -1627,4 +1627,6 @@
   <string name="safe_mode_clear_message">This data is large enough to make the app run out of memory. Clearing resets it to the default and cannot be undone.</string>
   <string name="safe_mode_export_failed">Export failed: %1$s</string>
   <string name="safe_mode_import_failed">Import failed: %1$s</string>
+  <string name="chat_page_export_include_tool_details">Include tool call details</string>
+  <string name="chat_page_export_include_tool_details_desc">Only affects Markdown; turn off to keep just the tool name</string>
 </resources>
