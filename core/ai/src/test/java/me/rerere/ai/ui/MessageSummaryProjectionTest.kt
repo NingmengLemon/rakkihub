@@ -251,6 +251,44 @@ class MessageSummaryProjectionTest {
     }
 
     @Test
+    fun `summary projection drops media and annotations from a succeeded step`() {
+        val message = UIMessage(
+            role = MessageRole.ASSISTANT,
+            parts = listOf(
+                UIMessagePart.Text("kept body"),
+                UIMessagePart.Image(url = "https://example.com/image.png"),
+                UIMessagePart.Tool(
+                    toolCallId = "image-tool",
+                    toolName = "generate_image",
+                    input = "{}",
+                    output = listOf(UIMessagePart.Image(url = "https://example.com/out.png")),
+                ),
+            ),
+            status = MessageStatus.COMPLETE,
+            annotations = listOf(UIMessageAnnotation.UrlCitation(title = "x", url = "https://example.com")),
+            steps = listOf(step(StepStatus.SUCCEEDED, 0, 3)),
+        )
+
+        val projected = listOf(message).projectForSummary().single()
+
+        assertEquals(listOf(UIMessagePart.Text("kept body")), projected.parts)
+        assertTrue(projected.annotations.isEmpty())
+        assertEquals(0 to 1, projected.steps.single().startPartIndex to projected.steps.single().endPartIndex)
+    }
+
+    @Test
+    fun `summary projection drops a running step`() {
+        val message = UIMessage(
+            role = MessageRole.ASSISTANT,
+            parts = listOf(UIMessagePart.Text("still running")),
+            status = MessageStatus.COMPLETE,
+            steps = listOf(step(StepStatus.RUNNING, 0, 1)),
+        )
+
+        assertTrue(listOf(message).projectForSummary().isEmpty())
+    }
+
+    @Test
     fun `non-failed messages are unchanged`() {
         val message = UIMessage(
             role = MessageRole.ASSISTANT,
@@ -260,6 +298,34 @@ class MessageSummaryProjectionTest {
         )
 
         assertEquals(listOf(message), listOf(message).projectForSummary())
+    }
+
+    @Test
+    fun `in-progress server tools are dropped from the summary projection`() {
+        val message = UIMessage(
+            role = MessageRole.ASSISTANT,
+            parts = listOf(
+                UIMessagePart.Text("done"),
+                UIMessagePart.ServerTool(
+                    toolCallId = "finished",
+                    toolName = "search",
+                    status = ServerToolStatus.COMPLETED,
+                ),
+                UIMessagePart.ServerTool(
+                    toolCallId = "running",
+                    toolName = "search",
+                    status = ServerToolStatus.IN_PROGRESS,
+                ),
+            ),
+            status = MessageStatus.COMPLETE,
+            steps = listOf(step(StepStatus.SUCCEEDED, 0, 3)),
+        )
+
+        val projected = listOf(message).projectForSummary().single()
+
+        val ids = projected.parts.filterIsInstance<UIMessagePart.ServerTool>().map { it.toolCallId }
+        assertEquals(listOf("finished"), ids)
+        assertTrue(projected.parts.any { it is UIMessagePart.Text })
     }
 
     private fun failed(

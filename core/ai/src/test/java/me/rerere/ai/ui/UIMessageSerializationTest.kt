@@ -5,8 +5,10 @@ import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertNull
+import org.junit.Assert.assertSame
 import org.junit.Assert.assertTrue
 import org.junit.Test
+import kotlin.time.Instant
 import kotlin.uuid.Uuid
 
 class UIMessageSerializationTest {
@@ -172,6 +174,210 @@ class UIMessageSerializationTest {
         val tool = Json.decodeFromString<UIMessage>(legacy).parts.filterIsInstance<UIMessagePart.Tool>().single()
 
         assertTrue(tool.callComplete)
+    }
+
+    @Test
+    fun `in-progress server tools are dropped from the request projection`() {
+        val message = UIMessage(
+            role = me.rerere.ai.core.MessageRole.ASSISTANT,
+            parts = listOf(
+                UIMessagePart.Text("done"),
+                UIMessagePart.ServerTool(
+                    toolCallId = "finished",
+                    toolName = "search",
+                    status = ServerToolStatus.COMPLETED,
+                ),
+                UIMessagePart.ServerTool(
+                    toolCallId = "running",
+                    toolName = "search",
+                    status = ServerToolStatus.IN_PROGRESS,
+                ),
+            ),
+            status = MessageStatus.COMPLETE,
+        )
+
+        val projected = listOf(message).projectForRequest().single()
+
+        val names = projected.parts.filterIsInstance<UIMessagePart.ServerTool>().map { it.toolCallId }
+        assertEquals(listOf("finished"), names)
+        assertTrue(projected.parts.any { it is UIMessagePart.Text })
+    }
+
+    @Test
+    fun `failed request projection keeps finished server tools`() {
+        val failed = UIMessage(
+            role = me.rerere.ai.core.MessageRole.ASSISTANT,
+            parts = listOf(
+                UIMessagePart.Text("failed narration"),
+                UIMessagePart.Tool(
+                    toolCallId = "local",
+                    toolName = "write",
+                    input = "{}",
+                    output = listOf(UIMessagePart.Text("written")),
+                ),
+                UIMessagePart.ServerTool(
+                    toolCallId = "finished",
+                    toolName = "search",
+                    status = ServerToolStatus.COMPLETED,
+                ),
+                UIMessagePart.ServerTool(
+                    toolCallId = "running",
+                    toolName = "search",
+                    status = ServerToolStatus.IN_PROGRESS,
+                ),
+            ),
+            status = MessageStatus.FAILED,
+        )
+
+        val projected = listOf(failed).projectForRequest().single()
+
+        val ids = projected.parts.mapNotNull {
+            when (it) {
+                is UIMessagePart.Tool -> it.toolCallId
+                is UIMessagePart.ServerTool -> it.toolCallId
+                else -> null
+            }
+        }
+        assertEquals(listOf("local", "finished"), ids)
+        assertTrue(projected.parts.none { it is UIMessagePart.Text })
+    }
+
+    @Test
+    fun `request projection keeps the successful step body of a failed message`() {
+        val failed = UIMessage(
+            role = me.rerere.ai.core.MessageRole.ASSISTANT,
+            parts = listOf(
+                UIMessagePart.Text("first step ok"),
+                UIMessagePart.Text("second step failed"),
+                UIMessagePart.Tool(
+                    toolCallId = "done",
+                    toolName = "write",
+                    input = "{}",
+                    output = listOf(UIMessagePart.Text("written")),
+                ),
+            ),
+            status = MessageStatus.FAILED,
+            steps = listOf(
+                step(StepStatus.SUCCEEDED, 0, 1),
+                step(StepStatus.FAILED, 1, 3),
+            ),
+        )
+
+        val projected = listOf(failed).projectForRequest().single()
+
+        assertEquals(
+            listOf("first step ok"),
+            projected.parts.filterIsInstance<UIMessagePart.Text>().map { it.text },
+        )
+        assertEquals(listOf("done"), projected.parts.filterIsInstance<UIMessagePart.Tool>().map { it.toolCallId })
+        assertEquals(listOf(0 to 1, 1 to 2), projected.steps.map { it.startPartIndex to it.endPartIndex })
+    }
+
+    @Test
+    fun `request projection drops unexecuted tools from a tools step`() {
+        val message = UIMessage(
+            role = me.rerere.ai.core.MessageRole.ASSISTANT,
+            parts = listOf(
+                UIMessagePart.Text("working"),
+                UIMessagePart.Tool(
+                    toolCallId = "pending",
+                    toolName = "write",
+                    input = "{}",
+                    output = emptyList(),
+                    callComplete = false,
+                ),
+                UIMessagePart.Tool(
+                    toolCallId = "done",
+                    toolName = "write",
+                    input = "{}",
+                    output = listOf(UIMessagePart.Text("written")),
+                ),
+                UIMessagePart.ServerTool(
+                    toolCallId = "running",
+                    toolName = "search",
+                    status = ServerToolStatus.IN_PROGRESS,
+                ),
+                UIMessagePart.ServerTool(
+                    toolCallId = "finished",
+                    toolName = "search",
+                    status = ServerToolStatus.COMPLETED,
+                ),
+            ),
+            status = MessageStatus.COMPLETE,
+            steps = listOf(step(StepStatus.TOOLS, 0, 5)),
+        )
+
+        val projected = listOf(message).projectForRequest().single()
+
+        val ids = projected.parts.mapNotNull {
+            when (it) {
+                is UIMessagePart.Tool -> it.toolCallId
+                is UIMessagePart.ServerTool -> it.toolCallId
+                else -> null
+            }
+        }
+        assertEquals(listOf("done", "finished"), ids)
+        assertTrue(projected.parts.any { it is UIMessagePart.Text })
+        assertEquals(0 to 3, projected.steps.single().startPartIndex to projected.steps.single().endPartIndex)
+    }
+
+    private fun step(status: StepStatus, start: Int, end: Int) = MessageStep(
+        status = status,
+        startPartIndex = start,
+        endPartIndex = end,
+        startedAt = Instant.fromEpochMilliseconds(0),
+    )
+
+    @Test
+    fun `step-less messages keep their identity in the request projection`() {
+        val message = UIMessage(
+            role = me.rerere.ai.core.MessageRole.ASSISTANT,
+            parts = listOf(UIMessagePart.Text("done")),
+            status = MessageStatus.COMPLETE,
+        )
+
+        assertSame(message, listOf(message).projectForRequest().single())
+    }
+
+    @Test
+    fun `completed multi-step messages round-trip unchanged through the request projection`() {
+        val message = UIMessage(
+            role = me.rerere.ai.core.MessageRole.ASSISTANT,
+            parts = listOf(UIMessagePart.Text("first"), UIMessagePart.Text("second")),
+            status = MessageStatus.COMPLETE,
+            steps = listOf(
+                step(StepStatus.SUCCEEDED, 0, 1),
+                step(StepStatus.SUCCEEDED, 1, 2),
+            ),
+        )
+
+        assertEquals(listOf(message), listOf(message).projectForRequest())
+    }
+
+    @Test
+    fun `cancelled step keeps its body for requests and drops it for summaries`() {
+        val message = UIMessage(
+            role = me.rerere.ai.core.MessageRole.ASSISTANT,
+            parts = listOf(
+                UIMessagePart.Text("delivered prefix"),
+                UIMessagePart.Tool(
+                    toolCallId = "done",
+                    toolName = "write",
+                    input = "{}",
+                    output = listOf(UIMessagePart.Text("written")),
+                ),
+            ),
+            status = MessageStatus.COMPLETE,
+            steps = listOf(step(StepStatus.CANCELLED, 0, 2)),
+        )
+
+        val request = listOf(message).projectForRequest().single()
+        assertEquals(listOf("delivered prefix"), request.parts.filterIsInstance<UIMessagePart.Text>().map { it.text })
+        assertTrue(request.parts.any { it is UIMessagePart.Tool })
+
+        val summary = listOf(message).projectForSummary().single()
+        assertTrue(summary.parts.none { it is UIMessagePart.Text })
+        assertEquals(listOf("done"), summary.parts.filterIsInstance<UIMessagePart.Tool>().map { it.toolCallId })
     }
 
     @Test

@@ -210,32 +210,108 @@ fun List<UIMessage>.filterModelVisible(): List<UIMessage> = filter { it.isModelV
 /**
  * 请求投影：失败回复不再整条丢弃，而是只保留已经执行的工具调用与结果，
  * 让下一轮还能看到失败前已经发生的写入与查询。没有工具事实时整条丢弃。
+ *
+ * 带 step 的消息按 step 状态逐段投影，成功 step 的正文会保留；投影后的 step 范围同步收窄，
+ * Claude 的 step 级配对不会因为中间丢了 part 而错位。
  */
 fun List<UIMessage>.projectForRequest(): List<UIMessage> = mapNotNull { message ->
-    if (message.status != MessageStatus.FAILED) {
-        message
-    } else {
-        val tools = message.parts.filterIsInstance<UIMessagePart.Tool>()
-            .filter { it.isExecuted && it.callComplete }
-        if (tools.isEmpty()) {
-            null
-        } else {
-            message.copy(parts = tools, steps = emptyList())
-        }
+    when {
+        message.steps.isNotEmpty() -> message.projectStepsForRequest()
+        message.status == MessageStatus.FAILED -> message.projectLegacyForRequest()
+        else -> message.withoutUnfinishedServerTools()
     }
 }
 
 /**
- * 标题与摘要投影：失败回复不再整条丢弃，而是保留成功 step 的正文和工具事实；
- * 失败 step 只保留已经执行完成的工具，避免把半截正文当事实。没有 step 的旧消息整条丢弃。
+ * 标题与摘要投影：带 steps 的消息按 step 状态重建 parts，成功 step 保留正文和工具事实，
+ * 失败 step 只保留已经执行完成的工具；媒体、annotations 与 RUNNING step 丢弃。
+ * 没有 steps 的旧失败消息整条丢弃；旧的非失败消息只丢弃 IN_PROGRESS 的 ServerTool。
  */
 fun List<UIMessage>.projectForSummary(): List<UIMessage> = mapNotNull { message ->
-    if (message.status != MessageStatus.FAILED) {
-        message
-    } else {
-        message.projectFailedForSummary()
+    when {
+        message.status == MessageStatus.FAILED -> message.projectFailedForSummary()
+        message.steps.isNotEmpty() -> message.projectStepsForSummary()
+        else -> message.withoutUnfinishedServerTools()
     }
 }
+
+/** 旧消息没有 step 范围，失败时只能按工具事实整条保留，作为兼容例外。 */
+private fun UIMessage.projectLegacyForRequest(): UIMessage? {
+    val tools = parts.filter { it.isRequestToolFact() }
+    if (tools.isEmpty()) return null
+    return copy(parts = tools, steps = emptyList())
+}
+
+private fun UIMessage.projectStepsForRequest(): UIMessage? = projectByStep { part, step ->
+    when (step) {
+        StepStatus.SUCCEEDED -> part !is UIMessagePart.ServerTool || part.isFinished
+        StepStatus.TOOLS, StepStatus.CANCELLED, StepStatus.RUNNING ->
+            part.isBodyPart() || part.isRequestToolFact()
+
+        StepStatus.FAILED -> part.isRequestToolFact()
+    }
+}
+
+private fun UIMessage.projectStepsForSummary(): UIMessage? {
+    val projectedParts = ArrayList<UIMessagePart>(parts.size)
+    val projectedSteps = ArrayList<MessageStep>(steps.size)
+    for (step in steps) {
+        if (step.status == StepStatus.RUNNING) continue
+        val start = projectedParts.size
+        forEachStepPart(step) { part ->
+            val kept = when {
+                part.isBodyPart() && step.status != StepStatus.FAILED && step.status != StepStatus.CANCELLED ->
+                    part
+
+                else -> part.summaryToolOrNull()
+            }
+            if (kept != null) projectedParts += kept
+        }
+        projectedSteps += step.copy(startPartIndex = start, endPartIndex = projectedParts.size)
+    }
+    if (projectedParts.isEmpty()) return null
+    return copy(parts = projectedParts, annotations = emptyList(), steps = projectedSteps)
+}
+
+private inline fun UIMessage.projectByStep(
+    keep: (UIMessagePart, StepStatus) -> Boolean,
+): UIMessage? {
+    val projectedParts = ArrayList<UIMessagePart>(parts.size)
+    val projectedSteps = ArrayList<MessageStep>(steps.size)
+    for (step in steps) {
+        val start = projectedParts.size
+        forEachStepPart(step) { part ->
+            if (keep(part, step.status)) projectedParts += part
+        }
+        projectedSteps += step.copy(startPartIndex = start, endPartIndex = projectedParts.size)
+    }
+    if (projectedParts.isEmpty()) return null
+    return copy(parts = projectedParts, steps = projectedSteps)
+}
+
+private inline fun UIMessage.forEachStepPart(
+    step: MessageStep,
+    block: (UIMessagePart) -> Unit,
+) {
+    val from = step.startPartIndex.coerceIn(0, parts.size)
+    val to = step.endPartIndex.coerceIn(from, parts.size)
+    for (index in from until to) {
+        block(parts[index])
+    }
+}
+
+/** ServerTool 只有 COMPLETED/FAILED 才算事实；IN_PROGRESS 不能进入任何投影。 */
+private fun UIMessage.withoutUnfinishedServerTools(): UIMessage {
+    if (parts.none { it is UIMessagePart.ServerTool && !it.isFinished }) return this
+    return copy(parts = parts.filterNot { it is UIMessagePart.ServerTool && !it.isFinished })
+}
+
+private fun UIMessagePart.isBodyPart(): Boolean =
+    this is UIMessagePart.Text || this is UIMessagePart.Reasoning
+
+private fun UIMessagePart.isRequestToolFact(): Boolean =
+    (this is UIMessagePart.Tool && isExecuted && callComplete) ||
+        (this is UIMessagePart.ServerTool && isFinished)
 
 private fun UIMessage.projectFailedForSummary(): UIMessage? {
     if (steps.isEmpty()) return null
@@ -246,7 +322,7 @@ private fun UIMessage.projectFailedForSummary(): UIMessage? {
             val stepParts = parts.subList(start, end)
             when (step.status) {
                 StepStatus.SUCCEEDED, StepStatus.TOOLS -> addAll(stepParts.mapNotNull { part ->
-                    if (part.isSummaryBody()) part else part.summaryToolOrNull()
+                    if (part.isBodyPart()) part else part.summaryToolOrNull()
                 })
 
                 StepStatus.FAILED, StepStatus.CANCELLED -> addAll(stepParts.mapNotNull { part ->
@@ -266,9 +342,6 @@ private fun UIMessage.projectFailedForSummary(): UIMessage? {
         isGenerating = false,
     )
 }
-
-private fun UIMessagePart.isSummaryBody(): Boolean =
-    this is UIMessagePart.Text || this is UIMessagePart.Reasoning
 
 private fun UIMessagePart.summaryToolOrNull(): UIMessagePart? = when (this) {
     is UIMessagePart.Tool -> {
