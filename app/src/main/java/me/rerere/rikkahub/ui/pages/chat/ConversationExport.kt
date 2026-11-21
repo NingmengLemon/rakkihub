@@ -77,6 +77,7 @@ import me.rerere.ai.ui.isEmptyUIMessage
 import me.rerere.ai.ui.withoutCompressionScratch
 import me.rerere.ai.util.encodeBase64
 import me.rerere.common.android.appTempFolder
+import kotlinx.datetime.toJavaLocalDateTime
 import me.rerere.rikkahub.R
 import me.rerere.rikkahub.data.ai.tools.MemoryToolNames
 import me.rerere.rikkahub.data.datastore.Settings
@@ -272,7 +273,7 @@ private fun exportToMarkdown(
 
         messages.forEach { message ->
             val role = if (message.role == MessageRole.USER) "**User**" else "**Assistant**"
-            append("$role:\n\n")
+            append("$role · *${message.createdAt.toJavaLocalDateTime().toLocalString()}*:\n\n")
             message.parts.forEach { part ->
                 when (part) {
                     is UIMessagePart.Text -> {
