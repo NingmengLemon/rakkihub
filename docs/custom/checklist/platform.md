@@ -1,6 +1,6 @@
 # 明细：平台、构建与品牌
 
-本文件是 [checklist.md](../checklist.md) 的明细，收录 C7、C12、C37 至 C39、C45、C48、C55 至 C56、C90 至 C94、C101、C127 至 C129、C136、C138、C139。
+本文件是 [checklist.md](../checklist.md) 的明细，收录 C7、C12、C37 至 C39、C45、C48、C55 至 C56、C90 至 C94、C101、C127 至 C129、C136、C138、C139、C143、C144、C146。
 
 <a id="c7"></a>
 
@@ -203,3 +203,12 @@
 - 理由：导入超大世界书后，设置落盘时整份 JSON 编码会 OOM，而且每次启动后的第一次写入都会重现。安全模式原来只能切换助手，遇到这类数据没有出口；现在可以清掉撑爆内存的字段，先让应用能继续写盘。清理仍走 `update` 的 `normalized()`，引用该字段的关联值会一起收敛，例如清掉 `lorebooks` 会移除助手上指向它的 `lorebookIds`，清掉 `assistants` 可能改变当前助手。`largeStoredFieldsFlow` 只看盘上字符串长度，不触发 JSON 解码，避免在列表里再次分配大对象。
 - 合并注意：5,000,000 字符的阈值只针对 DataStore 里的 String 字段，布尔和数字不参与；字段名用 `Preferences.Key.name`，界面只把 `lorebooks` 与 `assistants` 映射成可读标签，其余显示原始 key。`resetStoredField` 走 `update`，内存和盘上一起改；清完后 `largeStoredFieldsFlow` 会重新发射，卡片自动消失。上游的英文文案没有照搬成硬编码，已本地化；`safe_mode_description` 同步删除「切换助手可解决」的承诺。进入安全模式后不要先点「进入应用」，否则下一次写盘仍可能 OOM。上游只做单字段清理：启动后第一次写盘的 `persisted` 还是 null，会重新编码整份设置，如果同时存在两个超大字段，清掉一个时另一个仍可能把这次写盘撑爆，这种文件需要先手工清多个字段或恢复备份。
 - 测试：`SettingsStoreTest` 15 条（新增 1 条：写入 20 万字符的 Lorebook，`largeStoredFieldsFlow` 能列出 `lorebooks`，重启后 `resetStoredField` 把盘上字段缩回默认值且保留 `titlePrompt`）；`:app:testGithubDebugUnitTest` 906 条、`spotlessCheck` 通过。K60 上安装 release 后直接启动 `SafeModeActivity`：说明文案与按钮顺序正确；手工把 5.1M 字符的 `lorebooks` 注入 `settings.preferences_pb` 后，安全模式显示「Oversized data / Lorebook / 5.1 million characters / Clear」，确认清除后卡片消失，设置文件从 5,121,043 字节缩回 20,931 字节，其余字段与恢复后的设置只有 `launch_count` 差异；本次注入的样本没有被任何助手引用，归一化联动与多个超大字段、横屏布局都没有在设备上覆盖。
+
+<a id="c146"></a>
+
+## C146 安全模式导出与导入备份
+
+- 落点：`SafeModeActivity` 增加「Export app data to a file」与「Import local backup file」两个描边按钮，导出走 `CreateDocument("application/zip")` 和 `BackupManager.createBackup(includeFiles = true)`，导入走 `OpenDocument`、确认框、`BackupManager.stageRestore(archive, includeFiles = true)`，完成后 `BackupDialog()` 提示重启；`DatabaseBackup.createFileSnapshot` 只读打开库文件后 `VACUUM main INTO` 拍快照，保留盘上 schema；`BackupManager.createDatabaseSnapshot` 先走 Room 快照，失败时回退到文件快照并记录警告。新增 `safe_mode_export_failed` / `safe_mode_import_failed` 两条字符串。来源 `2d93676e`。
+- 理由：崩溃后进不去主界面时，备份页也打不开；数据库迁移失败或降级安装时 Room 打不开库，但盘上数据完整，需要绕过 Room 直接导出。导入沿用备份页的 staged restore，下次启动在 Room 打开库之前替换，当前库坏了也能恢复。
+- 合并注意：安全模式导出固定 SELF 归档并包含工作区文件（与备份页的本地默认一致），正式备份页的官方出口与按工作区勾选不在这里；文件快照只读打开，不 checkpoint、不改 journal 模式；导出失败和导入失败用 Toast 显示 `e.message`，可能很长，但异常已被捕获；导入确认后只暂存，`BackupDialog` 的 Restart 会 `exitProcess(0)`，下次启动才真正替换；安全模式注入 `BackupManager` 不会提前打开 Room，数据库对象是懒打开的。上游没有给这两个入口写测试。
+- 测试：`:app:testGithubDebugUnitTest` 906 条、`spotlessCheck` 通过。K60 上安装 release 后直接启动 `SafeModeActivity`，两个按钮显示；点导出能打开 DocumentsUI 并把 282,506 字节的 `rikkahub_backup_20261122_055244.zip` 写进 Downloads，`unzip -l` 能看到 `workspaces/...` 条目；点导入能弹出覆盖确认框，取消后没有暂存。完整的导入重启与 `createFileSnapshot` 回退没有在设备上验证。

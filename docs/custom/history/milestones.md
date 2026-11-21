@@ -2,6 +2,13 @@
 
 本文件归档已完成的定制、修复与独立化批次，按时间或主题分组。当前状态以 checklist 索引与明细为准，未来方向见 [roadmap.md](../roadmap.md)。
 
+## 2026-11-22 上游 3.3.1 小批次
+
+- 3.3.1 从 `358e2931` 到 `2435dbdf` 共 7 个提交。移植三个小修正为 C145：Google 模型列表 `displayName` 缺失时回退 `modelId`、模型选择列表名称最多两行、Markdown 导出在角色后写消息时间。
+- 移植安全模式的导出与导入备份为 C146：崩溃后进不去主界面时也能导出 SELF 归档（含工作区文件）；数据库迁移失败或降级安装导致 Room 打不开库时，导出回退到只读库文件快照；导入沿用 staged restore，重启后生效。
+- 跳过 `2435dbdf`（只是版本号）、`b7cf74dd`（Phone Use 无障碍修复，本分支不做 Phone Use）与 `a2479770`（tag 发布工作流；本分支没有 tag 驱动的 Play 上传，发布走 Daily Build）。
+- 测试：`ai` 420 条、`app` 906 条、`spotlessCheck` 通过；K60 上安全模式的导出按钮能把 282,506 字节的备份写进 Downloads（含 `workspaces/...` 条目），导入确认框正常，完整导入重启与文件快照回退未验。
+
 ## 2026-11-22 安全模式清理超大设置
 
 - 移植上游 `27976e4d`：`SettingsStore.largeStoredFieldsFlow` 只按盘上字符串长度列出达到 5,000,000 字符的字段，`resetStoredField` 经 `SettingsField.reset` 恢复默认值并落盘；安全模式新增「数据过大」分组与确认对话框。

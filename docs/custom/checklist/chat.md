@@ -1,6 +1,6 @@
 # 明细：聊天、上下文与模型
 
-本文件是 [checklist.md](../checklist.md) 的明细，收录 C35、C43 至 C44、C46 至 C47、C49 至 C53、C57 至 C63、C65 至 C78、C81 至 C86、C97 至 C100、C107、C121、C122、C130、C131、C133、C134、C135、C137、C140、C141。
+本文件是 [checklist.md](../checklist.md) 的明细，收录 C35、C43 至 C44、C46 至 C47、C49 至 C53、C57 至 C63、C65 至 C78、C81 至 C86、C97 至 C100、C107、C121、C122、C130、C131、C133、C134、C135、C137、C140、C141、C145。
 
 <a id="c35"></a>
 
@@ -470,3 +470,12 @@
 - 理由：预览里看不出上下文压缩边界；单独卡片能把检查点和普通消息区分开。
 - 合并注意：本分支没有上游的 `ChatListPreview.kt`（已并入 `ChatList.kt` 的消息列表），所以只移植卡片语义，不做上游的 round 分组；检查点消息仍占一个原始 index，跳转逻辑不变；`isContextCheckpoint` 同时覆盖空的历史截断标记，标题必须按 `isHistoryTruncationMarker` 分流，不能一律写「已压缩为摘要」。
 - 测试：`:app:compileGithubDebugKotlin` 通过；未在设备上打开带压缩检查点的会话验证。
+
+<a id="c145"></a>
+
+## C145 上游 3.3.1 的模型名与导出修正
+
+- 落点：`GoogleProvider` 的模型列表把 `displayName` 改成可缺省，缺失或空白时回退到 `modelId`（上游 `fbfb9926`）；`ModelList` 的模型名 `maxLines` 从 1 改为 2（`48a68f87`）；Markdown 导出在角色后写消息时间，`kotlinx.datetime.LocalDateTime` 先转成 java time 再走 `toLocalString()`（`e4646a77`）。同一个 3.3.1 的安全模式备份见 C146。
+- 理由：兼容 Gemini 格式的接口不一定返回 `displayName`，原来的 `!!` 会让整张模型列表解析失败；模型名只显示一行时，长前缀会把真正可区分的后缀截掉；导出时间方便回顾对话。
+- 合并注意：`displayName` 空串也回退，别只判 null；`jsonPrimitiveOrNull` 在 `me.rerere.common.http` 已有；ModelList 只改选择列表的标题，其它 `maxLines = 1` 不要跟着改；导出的时间格式跟随系统 locale，和聊天页的时间展示共用 `toLocalString()`，不是固定 `yyyy-MM-dd`。
+- 测试：`:ai:testDebugUnitTest` 420 条、`:app:testGithubDebugUnitTest` 906 条、`spotlessCheck` 通过；Google 兼容接口缺 `displayName`、两行模型名与导出时间都没有在设备上单独验。
