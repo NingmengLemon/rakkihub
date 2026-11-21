@@ -247,7 +247,12 @@ class ChatRequestFactory(
         )
     }
 
-    /** 一步请求实际发出的消息和参数；普通请求与压缩摘要共用，无失败消息时前缀一致才能命中提示词缓存 */
+    /**
+     * 一步请求实际发出的消息和参数；普通请求与压缩摘要共用。
+     *
+     * 两条路径都走投影，摘要投影还会剔除媒体、annotations 与被取消 step 的正文，所以只有历史里
+     * 没有这类内容时前缀才一致，压缩请求才可能命中正常请求的提示词缓存。
+     */
     private suspend fun buildStep(
         turn: ChatTurnContext,
         messages: List<UIMessage>,
