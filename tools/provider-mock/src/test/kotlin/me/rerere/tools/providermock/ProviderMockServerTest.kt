@@ -307,8 +307,31 @@ class ProviderMockServerTest {
 
     @Test
     fun `strict chat assertion rejects a stream missing the terminal event`() {
+        assertChatTextTrace(chatFrames("mock-normal"))
         val truncated = chatFrames("mock-truncate")
         assertThrows(AssertionError::class.java) { assertChatTextTrace(truncated) }
+    }
+
+    @Test
+    fun `openai reasoning scenarios stream reasoning deltas before the text`() {
+        val chat = chatFrames("mock-reasoning")
+        val chatReasoning = chatJsonFrames(chat).joinToString("") { frame ->
+            val delta = frame.json()["choices"]?.jsonArray?.firstOrNull()?.jsonObject?.get("delta")?.jsonObject
+            delta?.get("reasoning_content")?.jsonPrimitive?.contentOrNull.orEmpty()
+        }
+        assertEquals(MockPayloads.REASONING, chatReasoning)
+        assertEquals(MockPayloads.TEXT, chatText(chat))
+        assertEquals("stop", chatFinishReason(chat))
+        assertEquals("[DONE]", chat.last().data)
+
+        val responses = responsesFrames("mock-reasoning")
+        val responsesReasoning = responses.joinToString("") { frame ->
+            if (frame.event != "response.reasoning_summary_text.delta") return@joinToString ""
+            frame.json()["delta"]!!.jsonPrimitive.content
+        }
+        assertEquals(MockPayloads.REASONING, responsesReasoning)
+        assertEquals(MockPayloads.TEXT, responsesText(responses))
+        assertEquals("response.completed", responses.last().event)
     }
 
     @Test

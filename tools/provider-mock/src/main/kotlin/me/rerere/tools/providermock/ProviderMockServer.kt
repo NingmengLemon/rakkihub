@@ -39,20 +39,21 @@ import kotlinx.serialization.json.contentOrNull
  */
 class ProviderMockServer(
     private val host: String = DEFAULT_HOST,
+    port: Int = 0,
     val slowChunkDelayMillis: Long = DEFAULT_SLOW_DELAY_MILLIS,
 ) : AutoCloseable {
     val recorder = RequestRecorder()
 
     private val engine: ApplicationEngine
 
-    /** Resolved ephemeral port. */
+    /** Resolved port; equals the requested one when a fixed port was passed. */
     val port: Int
 
     init {
-        val server = embeddedServer(CIO, port = 0, host = host) { installRoutes() }
+        val server = embeddedServer(CIO, port = port, host = host) { installRoutes() }
         server.start(wait = false)
         engine = server.engine
-        port = runBlocking { engine.resolvedConnectors().first().port }
+        this.port = runBlocking { engine.resolvedConnectors().first().port }
     }
 
     val baseUrl: String get() = "http://$host:$port"

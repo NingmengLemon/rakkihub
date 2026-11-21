@@ -3,9 +3,10 @@ package me.rerere.tools.providermock
 /**
  * One HTTP request observed by [ProviderMockServer].
  *
- * Sensitive headers (credentials and cookies) are recorded as presence plus, for `Authorization`,
- * the scheme prefix only. Raw credential values never enter this object, the logs or a test failure
- * message.
+ * Method, path, query and raw body are recorded verbatim, because payload assertions need them and
+ * the server only listens on loopback. Credential headers are the exception: [RequestRecorder.redact]
+ * stores presence only, plus the scheme prefix for `Authorization`, so a token cannot leak into a
+ * recorded request or a test failure message.
  */
 data class RecordedRequest(
     val method: String,
@@ -16,10 +17,6 @@ data class RecordedRequest(
     val timestampMillis: Long,
 ) {
     fun header(name: String): String? = headers[name.lowercase()]?.firstOrNull()
-
-    fun headerValues(name: String): List<String> = headers[name.lowercase()].orEmpty()
-
-    fun hasHeader(name: String): Boolean = header(name) != null
 }
 
 /**
@@ -51,15 +48,6 @@ class RequestRecorder {
 
     fun requests(): List<RecordedRequest> = synchronized(lock) { items.toList() }
 
-    fun size(): Int = synchronized(lock) { items.size }
-
-    fun clear() {
-        synchronized(lock) { items.clear() }
-    }
-
-    fun last(): RecordedRequest = synchronized(lock) { items.lastOrNull() }
-        ?: fail("no request was recorded")
-
     fun single(): RecordedRequest {
         val all = requests()
         check(all.size == 1) { "expected exactly one recorded request, got ${all.size}" }
@@ -73,25 +61,10 @@ class RequestRecorder {
         find(method, path)
             ?: fail("no $method $path request; recorded: ${requests().map { "${it.method} ${it.path}" }}")
 
-    fun awaitRequest(
-        timeoutMillis: Long = DEFAULT_TIMEOUT_MILLIS,
-        predicate: (RecordedRequest) -> Boolean,
-    ): RecordedRequest {
-        val deadline = System.currentTimeMillis() + timeoutMillis
-        while (System.currentTimeMillis() < deadline) {
-            requests().firstOrNull(predicate)?.let { return it }
-            Thread.sleep(POLL_INTERVAL_MILLIS)
-        }
-        return fail("no matching request within ${timeoutMillis}ms")
-    }
-
     private fun fail(message: String): Nothing = throw AssertionError(message)
 
     companion object {
         const val REDACTED = "<redacted>"
-
-        private const val DEFAULT_TIMEOUT_MILLIS = 5_000L
-        private const val POLL_INTERVAL_MILLIS = 10L
 
         private val SENSITIVE_HEADERS = setOf(
             "authorization",

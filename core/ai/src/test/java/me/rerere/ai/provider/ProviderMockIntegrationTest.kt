@@ -251,21 +251,27 @@ class ProviderMockIntegrationTest {
     @Test
     fun `closing a truncated claude stream raises IOException`() = runTest {
         val provider = ClaudeProvider(client)
-        val failure = failure(
+        val (failure, chunks) = failureWithChunks(
             provider.streamText(claudeSetting(), userMessages, params(model(MockScenario.TRUNCATE))),
         )
 
         assertTrue("expected IOException, got $failure", failure is IOException)
+        assertEquals("Claude stream closed before message_stop", failure.message)
+        val text = chunks.filterIsInstance<StreamChunk.TextDelta>().joinToString("") { it.text }
+        assertTrue("expected partial text before the failure, got '$text'", text.isNotEmpty())
     }
 
     @Test
     fun `closing a truncated gemini stream raises IOException`() = runTest {
         val provider = GoogleProvider(client)
-        val failure = failure(
+        val (failure, chunks) = failureWithChunks(
             provider.streamText(googleSetting(), userMessages, params(model(MockScenario.TRUNCATE))),
         )
 
         assertTrue("expected IOException, got $failure", failure is IOException)
+        assertEquals("Google stream closed before finishReason or [DONE]", failure.message)
+        val text = chunks.filterIsInstance<StreamChunk.TextDelta>().joinToString("") { it.text }
+        assertTrue("expected partial text before the failure, got '$text'", text.isNotEmpty())
     }
 
     @Test
@@ -327,6 +333,14 @@ class ProviderMockIntegrationTest {
     private suspend fun failure(flow: Flow<StreamChunk>): Throwable =
         runCatching { flow.collect { } }.exceptionOrNull()
             ?: throw AssertionError("expected the stream to fail")
+
+    /** Collects the chunks emitted before the failure, so a closed connection cannot stand in for a truncated stream. */
+    private suspend fun failureWithChunks(flow: Flow<StreamChunk>): Pair<Throwable, List<StreamChunk>> {
+        val chunks = mutableListOf<StreamChunk>()
+        val failure = runCatching { flow.collect { chunks += it } }.exceptionOrNull()
+            ?: throw AssertionError("expected the stream to fail")
+        return failure to chunks
+    }
 
     private suspend fun emptyResponseFailure(
         provider: Provider<ProviderSetting>,
