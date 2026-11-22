@@ -5,7 +5,7 @@
   <string name="sketch_dialog_clear">清除</string>
   <string name="sketch_dialog_eraser">橡皮擦</string>
   <string name="sketch_dialog_discard_title">要捨棄草圖嗎？</string>
-  <string name="sketch_dialog_discard_message">您的繪圖將會遺失。</string>
+  <string name="sketch_dialog_discard_message">您的繪圖將會遺失</string>
   <string name="sketch_dialog_custom_color">自訂顏色</string>
   <string name="sketch_dialog_paper">畫布</string>
   <string name="sketch_dialog_paper_auto">符合螢幕</string>

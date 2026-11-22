@@ -25,9 +25,17 @@ rg -n 'RikkaHub' app/src/main/res integrations/oauth/src/main/res -g '**/values*
 
 放行的这五条都指官方应用：官方那组的标题、两条导入引导、两条导出说明。`web-ui` 的 `search-picker.tsx` 里 `rikkahub: "RikkaHub"` 是搜索服务的显示名，指官方接口，同样保留。
 
+## 标点与句式
+
+- 中文（简中与繁中）句末不加「。」；问句、感叹句保留「？」「！」，句内的句号照常用。`app`、`integrations/search`、`integrations/oauth` 与 `core/ui` 的中文资源都按这条；唯一例外是 `setting_display_page_font_size_preview`，它是字体样例，保留原文标点。
+- 省略号统一用「…」，不用 `...`。
+- 中文之间用全角逗号、分号、冒号；URL、代码标识符与英文括注里的标点保持原样。
+- 日文句末保留「。」，不要跟着中文一起裁；并列用「、」。日文的变量说明保留「変数: 」这种半角冒号加空格。
+
 ## 欠账
 
 本文件只列未结清项；已结清的批次见 [`history/milestones.md`](history/milestones.md)。
 
 - 仍硬编码的界面文案集中在上游文件：工作区文件管理页与它的 ViewModel 错误诊断、WebView 与日志页的 `contentDescription`、模型列表的 Clear、聊天气泡的 Prev/Next 等。按 C151 的口径属于上游文案，不在本分支文案打磨范围；改到这些页面时再逐条登记。调试页同样不在范围。
+- 工具卡片这类中文标签冒号仍是半角 `:` 加空格（「读取: %s」），没有随变量说明一起统一；改到这些页面时再逐条处理。
 - `McpOAuthCoordinator` 的异常信息是中文技术诊断（例如「授权服务器缺少 token_endpoint」），会显示在 MCP 错误卡片里；本地化要把 `Context` 传进协调器，尚未处理。

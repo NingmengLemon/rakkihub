@@ -5,7 +5,14 @@
 ## 2026-11-22 conversation_search 按助手过滤（C154）
 
 - 上游 `#2372`：`ConversationTools.kt` 构造 `conversation_search` 时没有传 `assistantId`，当前助手能搜到其它助手的对话。现在把当前助手传给 `searchMessagesForModel`，查询路径与结果投影不变，后台记忆用的多助手搜索路径也不受影响。
-- 测试：新增 `ConversationToolsTest`（真机、临时 Room 库）建两个不同助手的会话，执行工具后只返回当前助手的会话；FTS 层过滤由既有 `MessageFtsManagerTest` 覆盖。app 单测 910 条、`spotlessCheck` 通过。
+- 测试：新增 `ConversationToolsTest`（真机、临时 Room 库）建两个不同助手的会话，执行工具后只返回当前助手的会话，K60 上 1 test / 0 failures；CI 只跑 JVM，androidTest 需手动跑。FTS 层过滤由既有 `MessageFtsManagerTest` 覆盖。app 单测 910 条、`spotlessCheck` 通过。
+
+## 2026-11-22 中文标点与省略号统一（C155）
+
+- 简中、繁中去掉句末「。」（`setting_display_page_font_size_preview` 字体样例保留），规则覆盖 `app` 与 `search`、`oauth`、`ui` 三个模块；三份非英文 locale 的 `...` 统一成「…」；中文之间的半角逗号、分号、冒号改成全角（含变量说明的标签冒号）；繁中「導入」统一成「匯入」；日文两处变量说明的逗号改成「、」。
+- 同批修了简中/日文 Web Server 地址说明的换行（真实换行被 aapt2 压成空格）、备份导入标签的误译（「恢复」改成「导入」、「恢復」改成「匯入」）与日文官方导出说明的繁中误植。
+- 规则写进 `locale.md` 的「标点与句式」；工具卡片的标签冒号登记为欠账，没有在本批强改。
+- 测试：`i18n list --missing` 为 0、`:app:processGithubDebugResources`、markdownlint 通过；只改字符串资源，未跑 JVM 测试。四份文件的 key 集合与格式参数逐 key 比对无变化，英文 `values` 零改动。
 
 ## 2026-11-22 硬编码文案清理（C153）
 

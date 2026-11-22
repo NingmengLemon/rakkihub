@@ -248,3 +248,12 @@
 - 理由：`locale.md` 从 2026-11-01 起记着「附件清理与扫描的一组仍硬编码」，核对后这组已经不存在：`SettingFilesPage` 的界面文案全部走 `stringResource`（C149 覆盖了 `setting_files_page_*`），`AttachmentCleaner` 只返回结果对象。实际剩下的本分支新增硬编码是聊天多选三条、搜索框 Clear 与 Web Mermaid 五条（含 Suspense 兜底）。MCP OAuth 的提示原本是上游硬编码中文，在英文与日文界面里显示中文，按 C150 的遗留说明一并收掉。
 - 合并注意：Web 只有 zh-CN 与 en-US，Mermaid 的键在 `markdown` 命名空间，不要只加 Android 一份；`aria-label` 与 Suspense 兜底也走翻译，不要留在组件里。聊天多选的三条 tooltip 用 `chat_page_` 前缀，不要复用带计数的 `setting_provider_page_select_all`。MCP OAuth 的四条 key 用 `setting_mcp_page_oauth_` 前缀，和 stdio 的 `setting_mcp_page_stdio_*` 分开；日文四条统一用「認可」，不要与「認証」混用。
 - 测试：`:app:testGithubDebugUnitTest` 910 条、`spotlessCheck`、`i18n list --missing` 为 0、`pnpm typecheck`、markdownlint 通过。设备（en-US）截图核对了本批直接改到的可见界面：聊天多选的三条 tooltip、MCP 列表与 stdio 详情；搜索框 Clear 只有无障碍文案、没有可见文本可截图；设置、文件管理、备份与上下文管理面板只是顺手复核资源没有受影响，不作为本批验收。MCP OAuth 四条没有可触发的 OAuth 服务器，未做界面截图；Web Mermaid 只过了 typecheck，没有在浏览器里逐项核对。
+
+<a id="c155"></a>
+
+## C155 中文标点与省略号统一
+
+- 落点：`app` 的 `values-zh`、`values-zh-rTW` 界面文案去掉句末「。」，`setting_display_page_font_size_preview` 作为字体样例保留原标点；同一条规则推到 `integrations/search`、`integrations/oauth` 与 `core/ui` 的繁简中文资源；三份非英文 locale 的进度与占位文案把 `...` 改成「…」；简中/繁中里夹在中文之间的半角 `,` `;` `:` 改成全角，`_prompt_vars` 的变量标签冒号也一并改成全角；繁中备份页的两处「導入」统一成「匯入」；日文两处变量说明的逗号改成「、」。同批修了三处：`setting_page_web_server_address_note_desc` 在简中与日文里用真实换行（aapt2 会压成空格），改成 `\n`；简中/繁中 `backup_page_importing` 从「恢复/恢復」改成「导入/匯入」；日文 `backup_page_export_official_desc` 原本误植繁中，改成日文。规则写进 `locale.md` 的「标点与句式」。
+- 理由：中文界面句末不加句号、省略号用「…」；原有翻译混用 `...` 与「…」、半角与全角标点，繁中同一页还混用「導入」「匯入」，日文有一句误植繁中，地址说明的换行在编译后会被压成空格。
+- 合并注意：日文句末保留「。」，日文「変数: 」的半角冒号加空格也保留；全角化只处理中文之间的标点，URL、代码标识符与英文括注不要动。`setting_provider_page_test_tool_called` 两字段之间是双空格分隔，没改。变量说明的标签冒号已全角，工具卡片这类其余标签冒号仍是半角，已记进 `locale.md` 欠账。
+- 测试：`i18n list --missing` 为 0、`:app:processGithubDebugResources`、markdownlint 通过；只改字符串资源，未跑 JVM 测试。逐 key 比对过四份文件的 key 集合与格式参数（`%1$s` 等）没有变化，英文 `values` 零改动。
