@@ -1,6 +1,6 @@
 # 明细：平台、构建与品牌
 
-本文件是 [checklist.md](../checklist.md) 的明细，收录 C7、C12、C37 至 C39、C45、C48、C55 至 C56、C90 至 C94、C101、C127 至 C129、C136、C138、C139、C143、C144、C146。
+本文件是 [checklist.md](../checklist.md) 的明细，收录 C7、C12、C37 至 C39、C45、C48、C55 至 C56、C90 至 C94、C101、C127 至 C129、C136、C138、C139、C143、C144、C146、C149。
 
 <a id="c7"></a>
 
@@ -199,7 +199,7 @@
 
 ## C144 安全模式清除超大设置
 
-- 落点：`SettingsField` 增加 `reset()`，把字段恢复成 key 不存在时的默认值；`SettingsStore.largeStoredFieldsFlow(minChars)` 只读盘上原始字符串长度、不解码，列出达到阈值的字段并按字符数倒序；`resetStoredField(keyName)` 通过 `update` 把字段恢复默认值并落盘，认不出的 key 直接返回。`SafeModeActivity` 在存在超大字段时显示「数据过大」分组，每行是字段标签与百万字符数，点「清除」弹确认框；「进入应用」改为第一位主按钮，「切换助手」改为描边按钮，说明文案去掉「可以切换助手解决问题」。新增 5 条字符串并在 values、values-zh、values-zh-rTW、values-ja 同步。来源是上游 `27976e4d`。
+- 落点：`SettingsField` 增加 `reset()`，把字段恢复成 key 不存在时的默认值；`SettingsStore.largeStoredFieldsFlow(minChars)` 只读盘上原始字符串长度、不解码，列出达到阈值的字段并按字符数倒序；`resetStoredField(keyName)` 通过 `update` 把字段恢复默认值并落盘，认不出的 key 直接返回。`SafeModeActivity` 在存在超大字段时显示「数据过大」分组，每行是字段标签与本地化数字格式的字符数，点「清除」弹确认框；「进入应用」改为第一位主按钮，「切换助手」改为描边按钮，说明文案去掉「可以切换助手解决问题」。新增 5 条字符串并在 values、values-zh、values-zh-rTW、values-ja 同步。来源是上游 `27976e4d`。
 - 理由：导入超大世界书后，设置落盘时整份 JSON 编码会 OOM，而且每次启动后的第一次写入都会重现。安全模式原来只能切换助手，遇到这类数据没有出口；现在可以清掉撑爆内存的字段，先让应用能继续写盘。清理仍走 `update` 的 `normalized()`，引用该字段的关联值会一起收敛，例如清掉 `lorebooks` 会移除助手上指向它的 `lorebookIds`，清掉 `assistants` 可能改变当前助手。`largeStoredFieldsFlow` 只看盘上字符串长度，不触发 JSON 解码，避免在列表里再次分配大对象。
 - 合并注意：5,000,000 字符的阈值只针对 DataStore 里的 String 字段，布尔和数字不参与；字段名用 `Preferences.Key.name`，界面只把 `lorebooks` 与 `assistants` 映射成可读标签，其余显示原始 key。`resetStoredField` 走 `update`，内存和盘上一起改；清完后 `largeStoredFieldsFlow` 会重新发射，卡片自动消失。上游的英文文案没有照搬成硬编码，已本地化；`safe_mode_description` 同步删除「切换助手可解决」的承诺。进入安全模式后不要先点「进入应用」，否则下一次写盘仍可能 OOM。上游只做单字段清理：启动后第一次写盘的 `persisted` 还是 null，会重新编码整份设置，如果同时存在两个超大字段，清掉一个时另一个仍可能把这次写盘撑爆，这种文件需要先手工清多个字段或恢复备份。
 - 测试：`SettingsStoreTest` 15 条（新增 1 条：写入 20 万字符的 Lorebook，`largeStoredFieldsFlow` 能列出 `lorebooks`，重启后 `resetStoredField` 把盘上字段缩回默认值且保留 `titlePrompt`）；`:app:testGithubDebugUnitTest` 906 条、`spotlessCheck` 通过。K60 上安装 release 后直接启动 `SafeModeActivity`：说明文案与按钮顺序正确；手工把 5.1M 字符的 `lorebooks` 注入 `settings.preferences_pb` 后，安全模式显示「Oversized data / Lorebook / 5.1 million characters / Clear」，确认清除后卡片消失，设置文件从 5,121,043 字节缩回 20,931 字节，其余字段与恢复后的设置只有 `launch_count` 差异；本次注入的样本没有被任何助手引用，归一化联动与多个超大字段、横屏布局都没有在设备上覆盖。
@@ -210,5 +210,14 @@
 
 - 落点：`SafeModeActivity` 增加「Export app data to a file」与「Import local backup file」两个描边按钮，导出走 `CreateDocument("application/zip")` 和 `BackupManager.createBackup(includeFiles = true)`（不带工作区文件），导入走 `OpenDocument`、确认框、`BackupManager.stageRestore(archive, includeFiles = true, includeWorkspaceFiles = true)`，完成后 `BackupDialog()` 提示重启；`DatabaseBackup.createFileSnapshot` 只读打开库文件后 `VACUUM main INTO` 拍快照，保留盘上 schema；`BackupManager.createDatabaseSnapshot` 先走 Room 快照，失败时回退到文件快照并记录警告。新增 `safe_mode_export_failed` / `safe_mode_import_failed` 两条字符串。来源 `2d93676e`。
 - 理由：崩溃后进不去主界面时，备份页也打不开；数据库迁移失败或降级安装时 Room 打不开库，但盘上数据完整，需要绕过 Room 直接导出。导入沿用备份页的 staged restore，下次启动在 Room 打开库之前替换，当前库坏了也能恢复。
-- 合并注意：安全模式导出固定 SELF 归档，包含设置、数据库与附件，不带工作区文件：工作区列表要从数据库读，放在快照前会让数据库打不开时的文件快照回退还没开始就失败，所以安全模式统一不导出工作区。导入仍接受归档里的工作区条目，归档带 workspace 时会一起恢复；正式备份页的官方出口与按工作区勾选不在这里；文件快照只读打开，不 checkpoint、不改 journal 模式；导出失败和导入失败用 Toast 显示 `e.message`，可能很长，但异常已被捕获；导入确认后只暂存，`BackupDialog` 的 Restart 会 `exitProcess(0)`，下次启动才真正替换；安全模式注入 `BackupManager` 不会提前打开 Room，数据库对象是懒打开的。上游没有给这两个入口写测试。
+- 合并注意：安全模式导出固定 SELF 归档，包含设置、数据库与附件，不带工作区文件：工作区列表要从数据库读，放在快照前会让数据库打不开时的文件快照回退还没开始就失败，所以安全模式统一不导出工作区。导入仍接受归档里的工作区条目，归档带 workspace 时会一起恢复；正式备份页的官方出口与按工作区勾选不在这里；文件快照只读打开，不 checkpoint、不改 journal 模式；导出失败和导入失败用本地化 Toast 提示，异常细节只写日志；导入确认后只暂存，`BackupDialog` 的 Restart 会 `exitProcess(0)`，下次启动才真正替换；安全模式注入 `BackupManager` 不会提前打开 Room，数据库对象是懒打开的。上游没有给这两个入口写测试。
 - 测试：`:app:testGithubDebugUnitTest` 906 条、`spotlessCheck` 通过。K60 上安装 release 后直接启动 `SafeModeActivity`，两个按钮显示。完整导入：用一个 282,506 字节、含 `workspaces/...` 条目的归档走完确认、选择、暂存与重启（该归档由不含工作区裁剪的旧构建导出，用来验证导入侧仍接受工作区条目），导入前放进 `upload/` 的标记文件在重启后消失，库回到 22 个会话、59 个节点，主界面正常；没有逐项核对工作区文件内容。文件快照回退：把库的 `PRAGMA user_version` 改成 999 让 Room 打不开，安全模式导出仍成功，生成 280,100 字节归档，`unzip -l` 里是数据库、`settings.json` 与 `upload/`，数据库 `user_version` 仍是 999、22 个会话，日志有 `Room snapshot failed, falling back to the database file`，没有工作区条目；之后用开工前的安全快照恢复库、设置、附件与工作区文件，主界面正常。
+
+<a id="c149"></a>
+
+## C149 设置与备份文案打磨
+
+- 落点：第一批共改 32 条英文文案，覆盖 `backup_page_*`、`setting_files_page_*`、`setting_display_page_*`、`setting_page_*`（通用、显示、通知、网络、工具时限）、`setting_model_page_fast_model_desc` 与 `safe_mode_*`。主要改动：`chat records` 统一成 `chats/conversations`；进度 `%1$d / %2$d` 改成 `of`；导出失败、官方兼容失败、缺失库/设置等错误补上下一步动作；OCR、文件清理、网络超时、工具超时等说明去掉直译腔；`Auto Dismiss Errors` 改成句首大写的 `Auto-dismiss error cards`；Web Server 描述改成 `Allow access to RakkiHub from a web browser.`。安全模式的导出/导入 Toast 不再拼接原始异常文本，只显示本地化的可行动提示，异常细节留在日志。超大设置的大小改成两个格式参数，英文用百万、简中/繁中用「万」、日文用「万文字」。
+- 理由：这批界面是用户排障与恢复数据时最容易停下来的地方，原来的“chat records”“Packing files x / y”和直接显示异常 message 都不符合动作明确、错误可行动的要求；`Auto Dismiss Errors` 也不符合句首大写的界面语气。统一术语后，后续批次可以复用同一套词。Web Server 的开关说明在本批顺带修了，Web 页面本身还没过。
+- 合并注意：官方 RikkaHub 的导入导出 5 条文案保持官方品牌；`Conversation` 统一译成「对话」而不是「聊天记录」，附件仍用「附件」。`safe_mode_oversized_size` 的英文只使用 `%1$`、简中/繁中/日文使用 `%2$`，调用方必须同时传百万与万的数值，不能只传一个。安全模式 Toast 不再带 `%1$s`，改文案时不要把占位符加回去。MCP、provider、主题、搜索详情、Web 与聊天页还没过，留给后续批次。
+- 测试：`uv run --project tools/i18n i18n list --missing` 为 0；`:app:compileGithubDebugKotlin`、`:app:testGithubDebugUnitTest` 910 条、`spotlessCheck`、markdownlint 通过。设备上未逐页截图核对长文案换行，排序与格式参数已用资源文件核对。

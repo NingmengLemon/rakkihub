@@ -16,14 +16,14 @@
 
 品牌改写按 key 查不出来：C12 的 `app_name`、C14 的 `setting_page_web_server_desc` 与 `oauth` 的四条 `oauth_callback_*_hint`，在新补的文案里会以官方品牌出现，合并后要逐条重放成 `RakkiHub`。
 
-判据不靠数行数，而是排除掉有意保留的几条 key 之后必须为空：
+判据不靠数行数，而是排除掉有意保留的几条 key 之后必须为空。C149 之后 `backup_page_export_schema_diverged` 不再带官方品牌，放行列表只剩五条：
 
 ```powershell
 rg -n 'RikkaHub' app/src/main/res integrations/oauth/src/main/res -g '**/values*/strings.xml' |
-  Select-String -NotMatch 'name="(backup_page_group_official|backup_page_import_from_official|backup_page_import_official_desc|backup_page_export_official|backup_page_export_official_desc|backup_page_export_schema_diverged)"'
+  Select-String -NotMatch 'name="(backup_page_group_official|backup_page_import_from_official|backup_page_import_official_desc|backup_page_export_official|backup_page_export_official_desc)"'
 ```
 
-放行的这六条都指官方应用：官方那组的标题、两条导入引导、两条导出说明，以及分叉时的失败提示。`web-ui` 的 `search-picker.tsx` 里 `rikkahub: "RikkaHub"` 是搜索服务的显示名，指官方接口，同样保留。
+放行的这五条都指官方应用：官方那组的标题、两条导入引导、两条导出说明。`web-ui` 的 `search-picker.tsx` 里 `rikkahub: "RikkaHub"` 是搜索服务的显示名，指官方接口，同样保留。
 
 ## 欠账
 

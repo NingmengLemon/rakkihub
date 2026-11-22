@@ -74,6 +74,7 @@ import org.koin.android.ext.android.inject
 import java.io.File
 import java.time.LocalDateTime
 import java.time.format.DateTimeFormatter
+import java.text.NumberFormat
 import kotlin.uuid.Uuid
 
 // 盘上单个字段超过这么多字符才算「超大」：正常使用到不了这个量级，到了就可能在读写设置时撑爆内存
@@ -136,7 +137,7 @@ class SafeModeActivity : ComponentActivity() {
                             runCatching { contentResolver.delete(uri, null, null) }
                             Toast.makeText(
                                 context,
-                                getString(R.string.safe_mode_export_failed, e.message ?: e.toString()),
+                                getString(R.string.safe_mode_export_failed),
                                 Toast.LENGTH_LONG
                             ).show()
                         } finally {
@@ -177,7 +178,7 @@ class SafeModeActivity : ComponentActivity() {
                             Log.e(TAG, "Failed to import backup", e)
                             Toast.makeText(
                                 context,
-                                getString(R.string.safe_mode_import_failed, e.message ?: e.toString()),
+                                getString(R.string.safe_mode_import_failed),
                                 Toast.LENGTH_LONG
                             ).show()
                         } finally {
@@ -266,7 +267,7 @@ class SafeModeActivity : ComponentActivity() {
                                     item(
                                         headlineContent = { Text(storedFieldLabel(key)) },
                                         supportingContent = {
-                                            Text(stringResource(R.string.safe_mode_oversized_size, chars / 1_000_000f))
+                                            Text(stringResource(R.string.safe_mode_oversized_size, NumberFormat.getIntegerInstance().format(chars)))
                                         },
                                         trailingContent = {
                                             FilledTonalButton(
