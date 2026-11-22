@@ -337,7 +337,7 @@
 - 默认提示词重写（含压缩提示词和摘要文案）暂缓：现状、调研结论与草稿保留在 [`prompts.md`](prompts.md)，等压缩面板和交互稳定后再按同一套方法过标题、翻译、OCR。
 - Gemini 缓存控制已调研，结论是不做 explicit `cachedContents`：默认 generateContent 路径的 implicit caching 已自动生效并解析成 cachedTokens，explicit 只支持 Gemini 3/2.5 且是 Beta，有 4096/2048 token 下限和按小时计的存储费，约 18 到 60 次复用才回本，还会关闭同一请求的 implicit caching。剩余可选小项：给 OpenAI 兼容入口的 usage 解析补一个 cached token 字段的兜底。
 - U+FFFD 替换字符按 C100 重新登记为独立行为对齐项，低优先级、不排期：经中转使用 Claude 时偶发，用户侧对照显示同一中转下官方 Claude Code 正常，中转方称不是服务端问题。2026-11-21 用 provider mock 做过一轮定位：把合法多字节文本按 7 字节切片写出、让字符跨写边界时，真实 ClaudeProvider 解码后逐字正确且没有 U+FFFD；只有线上字节本身非法（删掉一个续字节）时才复现出 U+FFFD。SSE 读取器是把字节缓冲到完整事件后再解码的，这条路径上分块边界不可能是原因；但 Web UI、其它 provider、中继在行以上的改写、以及线上已经是 U+FFFD 的情况都没有覆盖，要定位仍得在真实失败会话上抓原始字节。两个场景留在 `tools/provider-mock` 里作回归用例。不要先做全局替换字符清洗。
-- 提示词注入、世界书与酒馆先搁置，必要时可整体删除；若重做，按“提示词注入与世界书的搁置决定”一节的方向，把系统触发的提示作为新轮次追加到消息列表末尾，而不是修改已有消息。
+- 移除提示词注入与世界书（已排期，落地时再登记编号）：整体删掉 `ModeInjection`、`Lorebook`/`RegexInjection` 与 `PromptInjectionTransformer`，连同扩展页的注入/世界书入口、助手与会话的绑定 UI、相关设置字段与 SillyTavern 世界书导入。`Settings` 里旧备份的 `mode_injections`/`lorebooks` 键由 `ignoreUnknownKeys` 忽略，不回填；序列化类按 C5 的先例决定留不留。验收判据是旧备份能导入、请求里不再出现注入、官方兼容导出的 settings 不再带这两个键。
 - 简易文件管理器（未排期）：现在「设置 → 文件管理」只列 `upload/` 附件，工作区文件要进工作区详情的 Files tab，或从系统文件管理器通过 SAF 访问；两处能力也不一致（附件页有 OCR、清理，工作区页有导入/导出/分享/删除）。先定范围：只做统一入口和互相跳转，还是做一个只读的统一列表（附件 + 各本地工作区的 `files/`）；不做移动/重命名/新建文件夹这类通用管理器能力，远程工作区不暴露。落地时注意 `AttachmentCleaner` 的引用语义、大目录分页、缩略图与删除确认。
 - 导出备份的多工作区选择（未排期）：勾选“导出工作区文件”后，继续多选具体要导出的工作区，默认全选；要同时处理本地导出、WebDAV、S3 以及导入侧对缺失工作区的提示。
 - Dependabot PR 分批处理（进行中）：安全/patch 批次已完成 okhttp、jsoup、slf4j 与 slf4j-android、sshd、jmdns、pebble、quickjs、bouncycastle、uiautomator；web-ui 批次已完成 react 19.3、streamdown 2.8、ky 2.2、i18next 27、react-i18next 17、file-type 22、react-resizable-panels 4.24 等升级；Gradle 批次已完成 wrapper 9.9.1、AGP 9.5.2、KSP 2.3.14、Ktor 3.6.1、spotless 8.11.0 等升级，并把 haze 2.1.0 的玻璃样式 API 改到 `GlassStyle.material3` 与 `optics { }`。两批都在真机上看过对应界面与 Web Server。material3 `1.5.0-rc01` 与 `androidx.ink` `1.1.0-alpha11` 同一次升级落地并验过界面，对应的 PR 等 Dependabot 自行回收；两项目前都已有更新的版本（material3 1.5.0 正式版、ink alpha12），等新 PR 出来再按同样方式验。仍待处理：等 rehype-katex 支持后再升的 katex 0.19 与单独重排的 oxfmt；PR 不自动合并，合并或关闭前确认。
@@ -347,10 +347,11 @@
 
 上游查看与 issue 调研记录见 [`history/upstream.md`](history/upstream.md)，已完成的落地批次见 [`history/milestones.md`](history/milestones.md)。
 
-### 提示词注入与世界书的搁置决定
+### 提示词注入与世界书的移除决定
 
-- 提示词注入、世界书和酒馆相关能力本机没有实际使用，先搁置，必要时可以整体删掉，不为兼容性保留空壳。
-- 若以后重做，方向不是修改已有消息的注入，而是像 DSH 那样把系统触发的提示作为新的轮次追加到消息列表末尾，避免破坏已有消息和前缀缓存。现有实现尚未细看，这里只记录方向，不排期。
+- 决定：模式注入与世界书整体移除，已加进上面的待办方向，落地时再登记编号。原因是这套实现与需求不匹配：注入靠改写已有消息（拼 system、往历史中间插）破坏前缀缓存；没有 token 预算、触发概率、递归触发与全词/CJK 匹配；会话固定的是 id 而不是内容快照；`scanDepth` 之类的边界也没有防护。
+- 范围：`PromptInjection`/`ModeInjection`/`RegexInjection`/`Lorebook` 的运行时与界面、`PromptInjectionTransformer` 及其在 `ChatRequestFactory` 管线里的位置、扩展页与助手/会话绑定入口、SillyTavern 世界书导入、官方兼容导出里的相关字段。序列化兼容按 C5 的做法：先确认旧备份与官方备份还能解码，再决定这些类留不留。
+- 若以后重做，需要重新立项，方向仍是把系统触发的提示作为新轮次追加到消息列表末尾，而不是修改已有消息。
 
 ### 失败恢复与上下文的返工
 
