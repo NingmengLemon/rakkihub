@@ -20,4 +20,19 @@ class DisplaySettingTest {
         )
         assertFalse(JsonInstant.decodeFromString(DisplaySetting.serializer(), encoded).confirmStopGeneration)
     }
+
+    @Test
+    fun `old display settings default to two-row terminal keys`() {
+        val setting = JsonInstant.decodeFromString(DisplaySetting.serializer(), "{}")
+        assertTrue(setting.terminalTwoRowKeys)
+    }
+
+    @Test
+    fun `two-row terminal key setting round trips`() {
+        val encoded = JsonInstant.encodeToString(
+            DisplaySetting.serializer(),
+            DisplaySetting(terminalTwoRowKeys = false),
+        )
+        assertFalse(JsonInstant.decodeFromString(DisplaySetting.serializer(), encoded).terminalTwoRowKeys)
+    }
 }

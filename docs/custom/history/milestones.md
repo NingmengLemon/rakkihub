@@ -2,6 +2,12 @@
 
 本文件归档已完成的定制、修复与独立化批次，按时间或主题分组。当前状态以 checklist 索引与明细为准，未来方向见 [roadmap.md](../roadmap.md)。
 
+## 2026-11-22 终端功能键双排布局
+
+- `DisplaySetting.terminalTwoRowKeys` 默认开启；设置 → 通用增加开关，可退回原来的单行横向滚动。
+- 终端功能键栏改成两行等宽：第一行 IME/ESC/TAB/CTRL/ALT/`-`/`/`/`|`，第二行方向键与 HOME/END/PGUP/PGDN；IME 开关隐藏时第一行 7 个键仍铺满。横向分支键序不变。
+- 测试：`DisplaySettingTest` 增加默认值与往返 2 条；app 单测 910 条、`spotlessCheck` 通过。K60 上弹出键盘时两行按键等宽、无横向滚动、终端区域未被遮挡。
+
 ## 2026-11-22 Markdown 导出工具详情开关
 
 - `ExportOptions` 增加默认开启的 `includeToolDetails`，导出对话框加「包含工具调用详情」；关闭后 Markdown 只写 `**Tool**: 名称`，省略 Call ID、参数、结果与输出媒体。

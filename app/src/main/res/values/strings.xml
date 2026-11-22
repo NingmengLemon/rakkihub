@@ -1629,4 +1629,6 @@
   <string name="safe_mode_import_failed">Import failed: %1$s</string>
   <string name="chat_page_export_include_tool_details">Include tool call details</string>
   <string name="chat_page_export_include_tool_details_desc">Only affects Markdown; details are on by default, turn off to keep just the tool name</string>
+  <string name="setting_display_page_terminal_two_row_keys_title">Two-row terminal extra keys</string>
+  <string name="setting_display_page_terminal_two_row_keys_desc">Use a Termux-style two-row extra-keys bar with equal-width keys instead of a horizontally scrolling row. On by default.</string>
 </resources>

@@ -277,6 +277,8 @@ data class DisplaySetting(
     val volumeKeyScrollRatio: Float = 1.0f,
     // 终端功能键栏是否显示 IME/直连切换；关闭后固定走传统直连
     val terminalImeToggleVisible: Boolean = true,
+    // 终端功能键栏用 Termux 式双排等宽按键；关闭后回到单排横向滚动
+    val terminalTwoRowKeys: Boolean = true,
     val conversationSortOrder: ConversationSortOrder = ConversationSortOrder.UPDATE_TIME,
 )
 

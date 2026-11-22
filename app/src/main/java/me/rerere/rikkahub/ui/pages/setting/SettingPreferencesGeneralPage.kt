@@ -226,6 +226,14 @@ fun SettingPreferencesGeneralPage(vm: SettingVM = koinViewModel()) {
                         supportingContent = { Text(stringResource(R.string.setting_display_page_terminal_ime_toggle_desc)) },
                         headlineContent = { Text(stringResource(R.string.setting_display_page_terminal_ime_toggle_title)) },
                     )
+                    switchItem(
+                        checked = displaySetting.terminalTwoRowKeys,
+                        onCheckedChange = {
+                            updateDisplaySetting(displaySetting.copy(terminalTwoRowKeys = it))
+                        },
+                        supportingContent = { Text(stringResource(R.string.setting_display_page_terminal_two_row_keys_desc)) },
+                        headlineContent = { Text(stringResource(R.string.setting_display_page_terminal_two_row_keys_title)) },
+                    )
                 }
             }
 

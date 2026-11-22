@@ -1629,4 +1629,6 @@
   <string name="safe_mode_import_failed">匯入失敗：%1$s</string>
   <string name="chat_page_export_include_tool_details">包含工具呼叫詳細資料</string>
   <string name="chat_page_export_include_tool_details_desc">僅影響 Markdown；詳細資訊預設為開啟，關閉後只保留工具名稱</string>
+  <string name="setting_display_page_terminal_two_row_keys_title">雙列終端機功能鍵</string>
+  <string name="setting_display_page_terminal_two_row_keys_desc">使用 Termux 風格的雙列功能鍵列，按鍵等寬，而非水平捲動的單列。預設為開啟。</string>
 </resources>

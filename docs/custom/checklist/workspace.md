@@ -1,6 +1,6 @@
 # 明细：工作区与 MCP
 
-本文件是 [checklist.md](../checklist.md) 的明细，收录 C89、C102 至 C106、C111、C120、C123 至 C126、C132。
+本文件是 [checklist.md](../checklist.md) 的明细，收录 C89、C102 至 C106、C111、C120、C123 至 C126、C132、C148。
 
 <a id="c89"></a>
 
@@ -178,3 +178,12 @@
 - 理由：预览原来固定用 `https://workspace-preview.invalid/` 做 base 并关闭文件访问，SVG 里同目录的 `<image href="pic.png">` 解析不到，只能显示空白。存储区的相对路径必须按所在区换算，LINUX 区传进来的是 `root/demo.svg` 这类相对路径，直接当绝对路径用会解析失败。
 - 合并注意：`allowFileAccess` 是 WebView 全局开关，拿不到目录时保持 false；打开后模型写的 SVG 可以引用任意应用可读的 `file://` 路径，JS 仍关闭，因此只能渲染、无法读回内容外发，仍可能被用作探测或远程信标的触发点，这是本项接受的取舍；HTML 预览涉及脚本，不给文件访问，仍用假 base；`WebView` 的 settings 只在创建时应用，所以必须靠 `key` 重建，不能只改 state；Markdown 预览走 Compose 的 `MaterialMarkdown`，相对 `![]()` 仍未解析。
 - 测试：路径换算复用 `WorkspaceLayout.absolutePath`，已有 `LocalWorkspaceBackendTest` 覆盖两个存储区（含 LINUX 的相对路径补 `/`）；`:app:compileGithubDebugKotlin` 通过。2026-11-21 在 K60 上验过渲染：往 FILES 区放 `rel-pic.svg` 与同目录的 `pic.png`，预览里相对引用的图片正常显示。
+
+<a id="c148"></a>
+
+## C148 终端功能键双排布局
+
+- 落点：`DisplaySetting` 增加 `terminalTwoRowKeys`，默认 `true`；设置 → 通用加「两行终端按键」开关，两条字符串在 values、values-zh、values-zh-rTW、values-ja 同步。`WorkspaceTerminalPage` 把开关传进终端内容；`TerminalExtraKeysBar` 改成两种布局：开启时第一行 IME/ESC/TAB/CTRL/ALT/`-`/`/`/`|`、第二行方向键与 HOME/END/PGUP/PGDN，两行都用 `weight(1f)` 等宽、`labelSmall` 与单行省略；关闭时回到原来的单行横向滚动，键序不变。`TerminalExtraKey` 增加 `modifier`、`compact` 参数。
+- 理由：单行栏在窄屏上要横向滚动，最右边的 PGUP/PGDN 经常要点两下才能看到；Termux 式双排把常用控制键与导航键分成两行，等宽后每个键都有固定的触控面积。默认开启是因为双排不需要滚动；开关保留原来的横向布局。
+- 合并注意：两行的键位是固定分组，不要按数量简单对半分；IME 开关隐藏时第一行是 7 个键加 1 个空槽，两行仍按 8 列对齐。横向分支保留原先的键序（IME 在最前、导航键在最后），不要为了复用把两行顺序直接拼过去。`TerminalExtraKey` 的 `compact` 只用于双排，横向布局仍是原来的内边距与字号。终端的 IME 高度处理没有改动，双排只是多占一行高度。`terminalTwoRowKeys` 是新增的 DisplaySetting 字段，旧构建会忽略它，写回 displaySetting 时按默认值 true 重新编码；关掉开关后降级再回退，会回到开启状态。
+- 测试：`DisplaySettingTest` 增加 2 条，覆盖旧 JSON 默认 `true` 与关闭值的往返；`:app:testGithubDebugUnitTest` 910 条、`spotlessCheck` 通过。K60 上打开 TestWorkspace 的终端并弹出键盘：两行按键等宽、没有横向滚动，终端区域与键盘之间没有遮挡；设置页关闭后的单行横向布局没有在设备上单独切回验证。

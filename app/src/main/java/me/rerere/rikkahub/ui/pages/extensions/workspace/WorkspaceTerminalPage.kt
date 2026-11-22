@@ -12,6 +12,7 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.consumeWindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
@@ -50,6 +51,7 @@ import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -77,6 +79,7 @@ fun WorkspaceTerminalPage(id: String) {
     val settingsStore: SettingsStore = koinInject()
     val settings by settingsStore.settingsFlow.collectAsStateWithLifecycle()
     val showImeToggle = settings.displaySetting.terminalImeToggleVisible
+    val twoRowKeys = settings.displaySetting.terminalTwoRowKeys
     val workspace = state.workspace
     val focusManager = LocalFocusManager.current
     val keyboardController = LocalSoftwareKeyboardController.current
@@ -107,6 +110,7 @@ fun WorkspaceTerminalPage(id: String) {
                 state = terminalState,
                 contentPadding = innerPadding,
                 showImeToggle = showImeToggle,
+                twoRowKeys = twoRowKeys,
                 onCreateTab = { workspace?.let(sessionManager::createTab) },
                 onSelectTab = { tabId ->
                     root?.let { sessionManager.selectTab(it, tabId) }
@@ -159,6 +163,7 @@ private fun WorkspaceTerminalContent(
     state: WorkspaceTerminalTabsState,
     contentPadding: PaddingValues,
     showImeToggle: Boolean,
+    twoRowKeys: Boolean,
     onCreateTab: () -> Unit,
     onSelectTab: (Long) -> Unit,
     onCloseTab: (Long) -> Unit,
@@ -268,6 +273,7 @@ private fun WorkspaceTerminalContent(
                 WorkspaceTerminalTabContent(
                     tab = selectedTab,
                     showImeToggle = showImeToggle,
+                    twoRowKeys = twoRowKeys,
                     modifier = Modifier
                         .weight(1f)
                         .fillMaxWidth(),
@@ -303,6 +309,7 @@ private fun WorkspaceTerminalContent(
 private fun WorkspaceTerminalTabContent(
     tab: WorkspaceTerminalTab,
     showImeToggle: Boolean,
+    twoRowKeys: Boolean,
     modifier: Modifier = Modifier,
 ) {
     val context = LocalContext.current
@@ -430,6 +437,7 @@ private fun WorkspaceTerminalTabContent(
             altDown = altDown,
             imeEnabled = effectiveIme,
             showImeToggle = showImeToggle,
+            twoRowKeys = twoRowKeys,
             onControlToggle = { controlDown = !controlDown },
             onAltToggle = { altDown = !altDown },
             onImeToggle = { tab.imeEnabled.value = !tab.imeEnabled.value },
@@ -438,44 +446,98 @@ private fun WorkspaceTerminalTabContent(
     }
 }
 
+private data class TerminalExtraKeySpec(
+    val label: String,
+    val selected: Boolean = false,
+    val onClick: () -> Unit,
+)
+
 @Composable
 private fun TerminalExtraKeysBar(
     controlDown: Boolean,
     altDown: Boolean,
     imeEnabled: Boolean,
     showImeToggle: Boolean,
+    twoRowKeys: Boolean,
     onControlToggle: () -> Unit,
     onAltToggle: () -> Unit,
     onImeToggle: () -> Unit,
     onSendText: (String) -> Unit,
 ) {
-    Row(
+    val primaryKeys = buildList {
+        if (showImeToggle) add(TerminalExtraKeySpec("IME", imeEnabled, onImeToggle))
+        add(TerminalExtraKeySpec("ESC") { onSendText("\u001B") })
+        add(TerminalExtraKeySpec("TAB") { onSendText("\t") })
+        add(TerminalExtraKeySpec("CTRL", controlDown, onControlToggle))
+        add(TerminalExtraKeySpec("ALT", altDown, onAltToggle))
+        add(TerminalExtraKeySpec("-") { onSendText("-") })
+        add(TerminalExtraKeySpec("/") { onSendText("/") })
+        add(TerminalExtraKeySpec("|") { onSendText("|") })
+    }
+    val navigationKeys = listOf(
+        TerminalExtraKeySpec("←") { onSendText("\u001B[D") },
+        TerminalExtraKeySpec("↓") { onSendText("\u001B[B") },
+        TerminalExtraKeySpec("↑") { onSendText("\u001B[A") },
+        TerminalExtraKeySpec("→") { onSendText("\u001B[C") },
+        TerminalExtraKeySpec("HOME") { onSendText("\u001B[H") },
+        TerminalExtraKeySpec("END") { onSendText("\u001B[F") },
+        TerminalExtraKeySpec("PGUP") { onSendText("\u001B[5~") },
+        TerminalExtraKeySpec("PGDN") { onSendText("\u001B[6~") },
+    )
+
+    Column(
         modifier = Modifier
             .fillMaxWidth()
-            .background(MaterialTheme.colorScheme.surface)
-            .horizontalScroll(rememberScrollState())
-            .padding(horizontal = 8.dp, vertical = 6.dp),
-        horizontalArrangement = Arrangement.spacedBy(6.dp),
-        verticalAlignment = Alignment.CenterVertically,
+            .background(MaterialTheme.colorScheme.surface),
     ) {
-        if (showImeToggle) {
-            TerminalExtraKey("IME", selected = imeEnabled, onClick = onImeToggle)
+        if (twoRowKeys) {
+            Column(
+                modifier = Modifier.padding(horizontal = 8.dp, vertical = 6.dp),
+                verticalArrangement = Arrangement.spacedBy(6.dp),
+            ) {
+                TerminalExtraKeyRow(primaryKeys, slotCount = 8)
+                TerminalExtraKeyRow(navigationKeys, slotCount = 8)
+            }
+        } else {
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .horizontalScroll(rememberScrollState())
+                    .padding(horizontal = 8.dp, vertical = 6.dp),
+                horizontalArrangement = Arrangement.spacedBy(6.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                (primaryKeys + navigationKeys).forEach { key ->
+                    TerminalExtraKey(
+                        label = key.label,
+                        selected = key.selected,
+                        onClick = key.onClick,
+                    )
+                }
+            }
         }
-        TerminalExtraKey("ESC") { onSendText("\u001B") }
-        TerminalExtraKey("TAB") { onSendText("\t") }
-        TerminalExtraKey("CTRL", selected = controlDown, onClick = onControlToggle)
-        TerminalExtraKey("ALT", selected = altDown, onClick = onAltToggle)
-        TerminalExtraKey("-") { onSendText("-") }
-        TerminalExtraKey("/") { onSendText("/") }
-        TerminalExtraKey("|") { onSendText("|") }
-        TerminalExtraKey("←") { onSendText("\u001B[D") }
-        TerminalExtraKey("↓") { onSendText("\u001B[B") }
-        TerminalExtraKey("↑") { onSendText("\u001B[A") }
-        TerminalExtraKey("→") { onSendText("\u001B[C") }
-        TerminalExtraKey("HOME") { onSendText("\u001B[H") }
-        TerminalExtraKey("END") { onSendText("\u001B[F") }
-        TerminalExtraKey("PGUP") { onSendText("\u001B[5~") }
-        TerminalExtraKey("PGDN") { onSendText("\u001B[6~") }
+    }
+}
+
+@Composable
+private fun TerminalExtraKeyRow(keys: List<TerminalExtraKeySpec>, slotCount: Int) {
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.spacedBy(4.dp),
+    ) {
+        keys.forEach { key ->
+            TerminalExtraKey(
+                label = key.label,
+                selected = key.selected,
+                modifier = Modifier.weight(1f),
+                compact = true,
+                onClick = key.onClick,
+            )
+        }
+        // IME 开关隐藏时保留一个空槽，两行仍然按同样的列宽对齐
+        repeat(slotCount - keys.size) {
+            Spacer(modifier = Modifier.weight(1f))
+        }
     }
 }
 
@@ -483,11 +545,13 @@ private fun TerminalExtraKeysBar(
 private fun TerminalExtraKey(
     label: String,
     selected: Boolean = false,
+    modifier: Modifier = Modifier,
+    compact: Boolean = false,
     onClick: () -> Unit,
 ) {
     Text(
         text = label,
-        modifier = Modifier
+        modifier = modifier
             .background(
                 color = if (selected) {
                     MaterialTheme.colorScheme.primary
@@ -497,13 +561,23 @@ private fun TerminalExtraKey(
                 shape = RoundedCornerShape(6.dp),
             )
             .clickable(onClick = onClick)
-            .padding(horizontal = 12.dp, vertical = 8.dp),
-        style = MaterialTheme.typography.labelMedium,
+            .padding(
+                horizontal = if (compact) 0.dp else 12.dp,
+                vertical = 8.dp,
+            ),
+        style = if (compact) {
+            MaterialTheme.typography.labelSmall
+        } else {
+            MaterialTheme.typography.labelMedium
+        },
         color = if (selected) {
             MaterialTheme.colorScheme.onPrimary
         } else {
             MaterialTheme.colorScheme.onSurface.copy(alpha = 0.9f)
         },
+        maxLines = 1,
+        overflow = TextOverflow.Ellipsis,
+        textAlign = TextAlign.Center,
     )
 }
 

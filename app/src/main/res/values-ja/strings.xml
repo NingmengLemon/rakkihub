@@ -1631,4 +1631,6 @@ mDNSアドレス: .localホスト名を使用し、IPを知らなくても同じ
   <string name="safe_mode_import_failed">インポートに失敗しました: %1$s</string>
   <string name="chat_page_export_include_tool_details">ツール呼び出しの詳細を含める</string>
   <string name="chat_page_export_include_tool_details_desc">Markdownのみに適用されます。詳細はデフォルトでオンです。オフにするとツール名のみになります</string>
+  <string name="setting_display_page_terminal_two_row_keys_title">ターミナル機能キーを2段表示</string>
+  <string name="setting_display_page_terminal_two_row_keys_desc">横スクロールする1行の代わりに、同じ幅のキーを並べたTermuxスタイルの2段キーバーを使用します。デフォルトでオンです。</string>
 </resources>

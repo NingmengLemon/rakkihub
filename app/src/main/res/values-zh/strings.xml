@@ -1631,4 +1631,6 @@ mDNS 地址：使用 .local 主机名，同一网络中的其他设备可通过�
   <string name="safe_mode_import_failed">导入失败：%1$s</string>
   <string name="chat_page_export_include_tool_details">包含工具调用详情</string>
   <string name="chat_page_export_include_tool_details_desc">仅影响 Markdown；详情默认开启，关闭后仅保留工具名称</string>
+  <string name="setting_display_page_terminal_two_row_keys_title">两行终端功能键</string>
+  <string name="setting_display_page_terminal_two_row_keys_desc">使用 Termux 风格的两行功能键栏，按键等宽，而非横向滚动的单行。默认开启。</string>
 </resources>
