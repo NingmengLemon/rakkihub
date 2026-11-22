@@ -2,6 +2,12 @@
 
 本文件归档已完成的定制、修复与独立化批次，按时间或主题分组。当前状态以 checklist 索引与明细为准，未来方向见 [roadmap.md](../roadmap.md)。
 
+## 2026-11-22 MCP 与 provider 文案打磨（第二批）
+
+- 重写 stdio MCP 的 14 条说明与 Claude prompt cache 策略说明；强调停止后的状态、参数不经过 shell、startup timeout 只限制 initialize，并保留 `cache_control`、`Found 5` 等排障关键词。
+- 四份 locale 同步；中文不再保留英文所有格，zh-TW 继续使用「匯出」。
+- 测试：app 单测 910 条、processResources、spotless、markdownlint 通过，i18n 缺条目为 0。
+
 ## 2026-11-22 设置与备份文案打磨（第一批）
 
 - 改写 32 条设置、文件管理、备份与安全模式英文文案；统一 conversations 术语，进度改成 `of`，错误提示补上可执行的下一步，zh-TW 的备份页统一用「匯出」。

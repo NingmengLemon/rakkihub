@@ -1,6 +1,6 @@
 # 明细：平台、构建与品牌
 
-本文件是 [checklist.md](../checklist.md) 的明细，收录 C7、C12、C37 至 C39、C45、C48、C55 至 C56、C90 至 C94、C101、C127 至 C129、C136、C138、C139、C143、C144、C146、C149。
+本文件是 [checklist.md](../checklist.md) 的明细，收录 C7、C12、C37 至 C39、C45、C48、C55 至 C56、C90 至 C94、C101、C127 至 C129、C136、C138、C139、C143、C144、C146、C149、C150。
 
 <a id="c7"></a>
 
@@ -221,3 +221,12 @@
 - 理由：这批界面是用户排障与恢复数据时最容易停下来的地方，原来的“chat records”“Packing files x / y”和直接显示异常 message 都不符合动作明确、错误可行动的要求；`Auto Dismiss Errors` 也不符合句首大写的界面语气。统一术语后，后续批次可以复用同一套词。Web Server 的开关说明在本批顺带修了，Web 页面本身还没过。
 - 合并注意：官方 RikkaHub 的导入导出 5 条文案保持官方品牌；`Conversation` 统一译成「对话」而不是「聊天记录」，附件仍用「附件」。`safe_mode_oversized_size` 的英文只使用 `%1$`、简中/繁中/日文使用 `%2$`，调用方必须同时传百万与万的数值，不能只传一个。安全模式 Toast 不再带 `%1$s`，改文案时不要把占位符加回去。MCP、provider、主题、搜索详情、Web 与聊天页还没过，留给后续批次。
 - 测试：`uv run --project tools/i18n i18n list --missing` 为 0；`:app:compileGithubDebugKotlin`、`:app:testGithubDebugUnitTest` 910 条、`spotlessCheck`、markdownlint 通过。设备上未逐页截图核对长文案换行，排序与格式参数已用资源文件核对。
+
+<a id="c150"></a>
+
+## C150 MCP 与 provider 文案打磨
+
+- 落点：stdio MCP 的 14 条说明与状态文案、Claude prompt cache 策略说明共 15 条英文重写，四份 locale 同步。主要改动：`Stopping keeps the server stopped...` 改成先讲结果再讲保留项；workspace 说明去掉大写 `READY` 与 `Only local...` 的倒装；command/args/env 说明改成「每行一项」并明确不做 shell 解析；startup timeout 明确只限制 initialize；日志说明补成完整句；`Workspace unavailable` 冲突文案改成可直接执行的「Another stdio server already uses this workspace」；prompt cache 的 `usually gives more cache hits` 改成 `usually hits the cache more often`，其他保留 `cache_control` 与 `Found 5` 这两个排障关键词。
+- 理由：MCP 的 stdio 配置是本分支新增的能力，读者有 agent 工具经验但不一定知道 MCP 生命周期；原文案大量用结果从句与内部状态词，容易让人不知道停掉后会发生什么、参数是否经过 shell。provider 的缓存说明面向排障，保留错误关键词但把语气改成“通常命中更多”。
+- 合并注意：`cache_control`、`Found 5`、`rootfs`、`stdio` 是排障时可直接搜索的词，不要翻成中文或改写；`setting_mcp_page_stdio_startup_timeout_desc` 里的 `SDK's` 在 XML 里保留 `\'` 转义，中文写成「SDK 的」而不是保留英文所有格。MCP 的 OAuth 授权提示仍是上游硬编码中文，不在本批范围；主题、搜索详情、Web 与聊天页也还没过。
+- 测试：`:app:processGithubDebugResources`、`:app:testGithubDebugUnitTest` 910 条、`spotlessCheck`、markdownlint 通过；`i18n list --missing` 为 0。设备上未逐项打开 MCP 配置页截图核对。
