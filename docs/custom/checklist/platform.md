@@ -235,7 +235,7 @@
 
 ## C151 Web 文案打磨与主题/搜索审计
 
-- 落点：Web 的自定义文案集中在 `message`、`input`、`markdown`、`page` 四个命名空间。本批只改 4 条英文与 1 条简中：重试次数从 `Attempt 1/3` 改成 `Attempt 1 of 3`；等待文案改成句首大写的 `Waited 2s`；未知原因从 `Unknown reason` 改成 `Reason not recorded`，简中对应「未记录原因」。其余新增文案（生成失败/已中断、上下文检查点删除确认、`notset` 推理档、代码预览标题、SVG 过大、Web 标题与描述）逐条看过，保留。
+- 落点：Web 的自定义文案集中在 `message`、`input`、`markdown`、`page` 四个命名空间。本批只改 3 条英文与 1 条简中：重试次数从 `Attempt 1/3` 改成 `Attempt 1 of 3`；等待文案改成句首大写的 `Waited 2s`；未知原因从 `Unknown reason` 改成 `Reason not recorded`，简中对应「未记录原因」。其余新增文案（生成失败/已中断、上下文检查点删除确认、`notset` 推理档、代码预览标题、SVG 过大、Web 标题与描述）逐条看过，保留。
 - 理由：Web 的文案范围比 Android 小，很多是状态标签；`Attempt 1/3` 与 `waited` 小写在卡片里不够像完整句子，`Unknown reason` 也会让人以为系统知道原因但没显示。主题与搜索详情页对上游没有 diff，本分支没有新增用户可见文本，不做改写。
 - 合并注意：Web 只有 zh-CN 与 en-US 两份 locale，和 Android 的四份分开维护；不要因为 Android 的 C149/C150 改了术语就把英文键直接搬过来，Web 的 status/attempt 文案在 `message.json`，不在 Android 资源里。主题/搜索页的硬编码字符串属于上游，不在本分支文案打磨范围；如果以后改了这两页，再把新增文本登记进来。
 - 测试：`pnpm typecheck`、`pnpm check:markdown` 通过；没有在浏览器里逐页截图核对，也没有跑 Android 测试（本批不碰 Android 资源）。
