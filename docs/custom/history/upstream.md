@@ -19,3 +19,21 @@
 ## 2026-11-13 issue 调研
 
 上游 issue 区做了一轮只读调研（293 个 open）。优先候选：GoogleProvider 遇到独立 `thoughtSignature` 直接抛错（#2316）、Claude thinking 签名与 `redacted_thinking` 处理缺失（#2206/#1629，上游 3.2.0 的 `e1667163` 已移植，见 C85；上游标记 Fixes #2308）、OCR 默认 `reasoning_effort=none`（#1644，已修，见 C86）、Exa 正文没有长度上限（#1569，已修，见 C88）、历史图片每次请求重复 OCR（#1736/#1678，已修，见 C87）、workspace shell 超时后残留进程（#2225，已修前台命令，见 C89；后台命令未移植）。Phone Use 和自动压缩相关的一律不做；这批修复往后排。
+
+## 2026-11-22 issue 调研
+
+上游 open issue 309 条（上一轮 293），自 2026-11-13 以来新建 51 条、更新 67 条、关闭 34 条；3.3.1 之后没有新的上游提交。本轮只读调研约 22 条，重点是 11-01 之后的新建/活跃帖，以及工作区、MCP、step 与失败恢复直接相关的老帖。
+
+建议跟进，按优先级：
+
+- `#2372` `conversation_search` 未按当前助手过滤。已在本仓库核对：`ConversationTools.kt` 的 `conversationSearchTool` 只调用 `searchMessagesForModel(query, RELEVANCE)`，没有传 `assistantId`，而仓库层早已有该参数；`recent_chats` 与记忆工具都按助手过滤了。属跨助手内容泄露，上游 3.3.1 一样未修。
+- `#1573` 月之暗面 thinking 参数按 host 一刀切：K3 的档位失效，k2.7-code 在关闭推理时必 400。上游 PR #1585 已 closed 未合并，需要按模型分派而不是按 host。
+- `#2376` 模型页自定义 body 的 `tools` 字段整段覆盖本地工具（`mergeCustomBody` 对数组是替换）。要先定合并策略或加显式开关，否则会改坏「用户想完全覆盖」的用法。
+- `#2327` Gemini 原生搜索与 `memory_read` 混用偶发缺 `thought_signature`：C84 的队列可能没覆盖挂在 ServerTool 上的签名，缺 gemini-search 样本，未验证。
+- `#2334` 工作区 `sandbox:` 文件链接点击无反应：`MaterialMarkdown` 的 `onLinkClick` 只有定义没有调用方，失败被 `runCatching` 吞掉（待复核）。
+- `#1678` 纯文本模型收到历史图片：本分支只按模态过滤工具结果，用户消息里的图片没有过滤；会话级模型切换之后更容易踩到。
+- 低成本两条：`#2356` 测试连接不认「添加提供商」的重写（改用 `model.findProvider()`）；`#2252` 旧 Android 上 HTML/SVG 预览返回卡死（C121/C132/C134 改过这条链路，需要设备回归）。
+
+已经覆盖或不适用：`#1166`（C59 截断流）、`#1736`（C87 OCR 派生）、`#1663`/`#2214`/`#1140`（C50/C67/C131）、`#1715`（C31 草稿落盘）、`#1686`（会话级 `ConversationConfig`）、`#1669`（C47/C74）、`#2312`/`#2297`（C44/C46）、`#1644`（C86）、`#2206`/`#1629`（部分，C85/C97）。不适用类别：Phone Use 与无障碍自动化、TTS/STT、生图与媒体创作、Firebase、第三方导入、更新检查、未移植的对话地图与气泡拆分、插件架构与世界书。
+
+另记：上游 3.3.0 的工作区共享存储挂载（`fab0c077`，含 Room 新字段与 `WorkspaceStorageMount*`）没有进本分支，对应 `#2153`/`#1924`；跟进属于移植能力，不是修 bug。
