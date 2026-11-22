@@ -197,6 +197,32 @@ class ModelRegistryTest {
     }
 
     @Test
+    fun testKimiThinkingMatchers() {
+        assertTrue(ModelRegistry.KIMI_K3_FAMILY.match("kimi-k3"))
+        assertTrue(ModelRegistry.KIMI_K3_FAMILY.match("Kimi-K3.5"))
+        assertTrue(ModelRegistry.KIMI_K3_FAMILY.match("k3"))
+        assertTrue(ModelRegistry.KIMI_K3_FAMILY.match("k3-256k"))
+        assertFalse(ModelRegistry.KIMI_K3_FAMILY.match("kimi-k2.5"))
+
+        assertTrue(ModelRegistry.KIMI_ALWAYS_THINKING.match("kimi-k2.7-code"))
+        assertTrue(ModelRegistry.KIMI_ALWAYS_THINKING.match("kimi-k2.7-code-highspeed"))
+        assertTrue(ModelRegistry.KIMI_ALWAYS_THINKING.match("kimi-for-coding"))
+        assertTrue(ModelRegistry.KIMI_ALWAYS_THINKING.match("kimi-for-coding-highspeed"))
+        assertFalse(ModelRegistry.KIMI_ALWAYS_THINKING.match("kimi-k2.5"))
+        assertFalse(ModelRegistry.KIMI_ALWAYS_THINKING.match("kimi-k2-0905-preview"))
+
+        val toolReasoning = listOf(ModelAbility.TOOL, ModelAbility.REASONING)
+        assertEquals(toolReasoning, ModelRegistry.MODEL_ABILITIES.getData("k3-256k"))
+        assertEquals(toolReasoning, ModelRegistry.MODEL_ABILITIES.getData("kimi-for-coding"))
+        // KIMI_K2_7 只是纯 matcher，能力解析仍由 KIMI_K2 提供，这里钉住这层依赖
+        assertEquals(toolReasoning, ModelRegistry.MODEL_ABILITIES.getData("kimi-k2.7-code"))
+        assertEquals(
+            listOf(Modality.TEXT, Modality.IMAGE),
+            ModelRegistry.MODEL_INPUT_MODALITIES.getData("kimi-for-coding"),
+        )
+    }
+
+    @Test
     fun testContextLengthDefault() {
         assertEquals(null, ModelRegistry.MODEL_CONTEXT_LENGTH.getData("unknown-model-xyz"))
         assertEquals(null, ModelRegistry.MODEL_CONTEXT_LENGTH.getData("gpt-4o"))

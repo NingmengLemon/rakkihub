@@ -452,6 +452,25 @@ object ModelRegistry {
         toolReasoningAbility()
     }
 
+    // kimi-k2.7 系列：始终开启思考、传 disabled 会报错。
+    // 纯 matcher，不加入 ALL_MODELS，能力解析仍由 KIMI_K2 承担
+    private val KIMI_K2_7 = defineModel {
+        tokens("kimi", "k", "2", "7")
+    }
+
+    // Kimi Code 网关（api.kimi.com/coding）的 kimi-for-coding（含 -highspeed），
+    // 思考行为与 kimi-k2.7 一致
+    val KIMI_FOR_CODING = defineModel {
+        tokens("kimi", "for", "coding")
+        visionInput()
+        toolReasoningAbility()
+    }
+
+    // 始终处于思考状态、不能传 thinking 的模型：只能完全不传参数
+    val KIMI_ALWAYS_THINKING = defineGroup {
+        add(KIMI_K2_7, KIMI_FOR_CODING)
+    }
+
     val KIMI_K3 = defineModel {
         tokens("kimi", "k", "3")
         visionInput()
@@ -463,6 +482,18 @@ object ModelRegistry {
         exact("k3")
         visionInput()
         toolReasoningAbility()
+    }
+
+    // Kimi Code 网关的 k3-256k（K3 的 256K 上下文版本）
+    val KIMI_K3_256K = defineModel {
+        exact("k3-256k")
+        visionInput()
+        toolReasoningAbility()
+    }
+
+    // K3 系列：用顶层 reasoning_effort，不用 thinking
+    val KIMI_K3_FAMILY = defineGroup {
+        add(KIMI_K3, KIMI_K3_ALIAS, KIMI_K3_256K)
     }
 
     private val STEP_3 = defineModel {
@@ -690,8 +721,10 @@ object ModelRegistry {
         KIMI_K2,
         KIMI_K2_5,
         KIMI_K2_6,
+        KIMI_FOR_CODING,
         KIMI_K3,
         KIMI_K3_ALIAS,
+        KIMI_K3_256K,
         STEP_3,
         STEP_3_7_FLASH,
         STEP_5,

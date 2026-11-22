@@ -506,3 +506,12 @@
 - 理由：上游 `#2372`。`recent_chats` 与后台记忆的 `createMemoryConversationTools` 都已按助手过滤，只有聊天侧的 `conversation_search` 漏了；助手 A 能搜到助手 B 的对话内容，属于跨助手内容泄露。修复只改接线，不新增查询路径。
 - 合并注意：`searchMessagesForModel` 的 `assistantId` 默认值保留，别改成必填；后台记忆那条路径用的是 `searchMessagesOfAssistantsForModel`（多助手集合），两者不要合并。搜索范围仍包含当前会话。副作用：助手被删除后 `ConversationConfig` 会把会话配置退回当前助手，这类孤儿会话的 `assistant_id` 仍是旧值，按当前助手过滤时搜不到；目前接受这个范围收紧，不为它加回退。
 - 测试：新增 `ConversationToolsTest`（`app/src/androidTest`）用临时 Room 库建两个不同助手的会话，执行 `conversation_search` 后断言只返回当前助手的会话；已在 K60 上跑通（1 test / 0 failures）。CI 只跑 JVM 测试，androidTest 需手动跑；FTS 层过滤由既有 `MessageFtsManagerTest.searchAppliesAssistantFilterAndLimit` 覆盖。app 单测 910 条、`spotlessCheck` 通过。
+
+<a id="c156"></a>
+
+## C156 月之暗面思考参数按模型分派
+
+- 落点：`ChatCompletionsAPI` 的月之暗面分支从只认 `api.moonshot.cn` 扩到 `api.moonshot.cn`、`api.moonshot.ai` 与 `api.kimi.com`（Kimi Code 网关），并按模型分派：K3 系列（`KIMI_K3_FAMILY`，含 `kimi-k3*`、裸 `k3`、`k3-256k`）不发 `thinking`，改发顶层 `reasoning_effort`，OFF/LOW 映射 low、MEDIUM/HIGH 映射 high、XHIGH/MAX 映射 max，NOTSET 与 AUTO 不发；K2.7 与网关 coding 系列（`KIMI_ALWAYS_THINKING`，含 `kimi-k2.7*` 与 `kimi-for-coding*`）始终推理、不发任何思考参数；其余 Kimi（K2.5、K2.6 等）沿用 `thinking` 开关，K2.6 开启时仍带 `keep: "all"`。`ModelRegistry` 新增 `KIMI_ALWAYS_THINKING`、`KIMI_K3_FAMILY`、`KIMI_FOR_CODING`、`KIMI_K3_256K`，后两个进 `ALL_MODELS` 以解析能力（fallback 下 `kimi-for-coding` 按 vision 处理，与随包 models.dev 数据一致）。
+- 理由：上游 `#1573`。原来对 `api.moonshot.cn` 的所有模型一刀切发 K2.x 的 `thinking`：K3 的档位因此失效，关闭推理时还会发 `disabled`；`kimi-k2.7-code` 传 `disabled` 必 400；国际站与 Kimi Code 网关整条不命中，会落到 OpenAI 的 `reasoning_effort`（含 K3 不接受的 medium/xhigh）。映射参考上游 PR `#1585`（closed 未合并）。
+- 合并注意：C86 的 NOTSET 语义是「不发参数」；AUTO 只在 K3 与 `KIMI_ALWAYS_THINKING` 分支不发，K2.x 沿用旧行为（AUTO 视为开启，K2.6 会带 `keep: "all"`）。K3 无法真正关闭推理，OFF 映射成 low，`KIMI_ALWAYS_THINKING` 的 OFF 表现为始终推理。K2.6 的 `keep: "all"`（#1586）保留。不要动其它 host 分支；月之暗面 K2.5+ 的 temperature/top_p 限制（上游 `#1574`）不在本项，`k3-256k`、`kimi-for-coding` 与 `kimi-k2.7-code` 目前仍会带 `temperature`/`top_p`，等 `#1574` 一并按新 matcher 收口。
+- 测试：`ChatCompletionsMoonshotRequestTest` 覆盖 K3 六档映射、NOTSET/AUTO 语义（K3 与 K2.6 分别断言）、裸 `k3` 与 `k3-256k`、K2.7 与网关 coding 的四个 id、国际站 host、非月之暗面 host 的负向用例，以及 K2.6 的 keep；`ModelRegistryTest` 覆盖新 matcher、`kimi-k2.7-code` 的能力来源与 `kimi-for-coding` 的模态。`:ai:testDebugUnitTest` 428 条全绿、`spotlessCheck` 通过；改动是请求体构造，另有两个网关 id 的能力/模态解析，未上真机。

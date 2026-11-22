@@ -2,6 +2,12 @@
 
 本文件归档已完成的定制、修复与独立化批次，按时间或主题分组。当前状态以 checklist 索引与明细为准，未来方向见 [roadmap.md](../roadmap.md)。
 
+## 2026-11-22 月之暗面思考参数按模型分派（C156）
+
+- 上游 `#1573`：月之暗面分支原来只认 `api.moonshot.cn` 并给所有模型发 K2.x 的 `thinking`。现在覆盖 `api.moonshot.cn`、`api.moonshot.ai` 与 `api.kimi.com`，按模型分派：K3 系列改发顶层 `reasoning_effort`（low/high/max），`KIMI_ALWAYS_THINKING`（`kimi-k2.7*` 与 `kimi-for-coding*`）不发思考参数，其余 Kimi 保持 `thinking` 与 K2.6 的 `keep: "all"`。
+- 新增 `KIMI_ALWAYS_THINKING`、`KIMI_K3_FAMILY`、`KIMI_FOR_CODING`、`KIMI_K3_256K` matcher，后两个进能力表；映射参考上游 PR `#1585`（closed 未合并）。
+- 测试：`ChatCompletionsMoonshotRequestTest` 与 `ModelRegistryTest` 新增用例（含 NOTSET/AUTO 语义、负向 host、能力与模态解析），`:ai:testDebugUnitTest` 428 条全绿、`spotlessCheck` 通过；改动是请求体构造与两个网关 id 的解析，未上真机。
+
 ## 2026-11-22 conversation_search 按助手过滤（C154）
 
 - 上游 `#2372`：`ConversationTools.kt` 构造 `conversation_search` 时没有传 `assistantId`，当前助手能搜到其它助手的对话。现在把当前助手传给 `searchMessagesForModel`，查询路径与结果投影不变，后台记忆用的多助手搜索路径也不受影响。

@@ -77,6 +77,18 @@ import kotlin.time.Clock
 
 private const val TAG = "ChatCompletionsAPI"
 
+// 月之暗面系 host：开放平台（国内/国际）与 Kimi Code 网关（api.kimi.com/coding）
+private val MOONSHOT_HOSTS = setOf("api.moonshot.cn", "api.moonshot.ai", "api.kimi.com")
+
+// K3 只认顶层 reasoning_effort（low/high/max）；NOTSET 与 AUTO 不发参数，
+// OFF 落到 low，因为 K3 始终推理、关不掉（#1573）
+private fun kimiK3ReasoningEffort(level: ReasoningLevel): String? = when (level) {
+    ReasoningLevel.OFF, ReasoningLevel.LOW -> "low"
+    ReasoningLevel.MEDIUM, ReasoningLevel.HIGH -> "high"
+    ReasoningLevel.XHIGH, ReasoningLevel.MAX -> "max"
+    ReasoningLevel.NOTSET, ReasoningLevel.AUTO -> null
+}
+
 class ChatCompletionsAPI(
     private val client: OkHttpClient,
     private val keyRoulette: KeyRoulette
@@ -385,16 +397,30 @@ class ChatCompletionsAPI(
                         }
                     }
 
-                    "api.moonshot.cn" -> {
-                        if (level != ReasoningLevel.NOTSET) {
-                            put("thinking", buildJsonObject {
-                                put("type", if (!level.isEnabled) "disabled" else "enabled")
-                                // K2.6 的 thinking.keep 默认为 null（忽略历史思考），思考开启时
-                                // 需显式传 "all" 才是保留式思考；文档推荐与 enabled 搭配（#1586）
-                                if (level.isEnabled && ModelRegistry.KIMI_K2_6.match(params.model.modelId)) {
-                                    put("keep", "all")
+                    in MOONSHOT_HOSTS -> {
+                        // 月之暗面各模型的思考参数体系不同，按模型 id 区分（#1573）
+                        when {
+                            // K3 系列不用 thinking，改为顶层 reasoning_effort
+                            ModelRegistry.KIMI_K3_FAMILY.match(params.model.modelId) -> {
+                                kimiK3ReasoningEffort(level)?.let { put("reasoning_effort", it) }
+                            }
+
+                            // K2.7 与 Kimi Code 网关的 coding 模型始终开启思考；显式 thinking
+                            // 只接受 {"type":"enabled","keep":"all"}，传 disabled 会 400，官方建议完全不传
+                            ModelRegistry.KIMI_ALWAYS_THINKING.match(params.model.modelId) -> {}
+
+                            else -> {
+                                if (level != ReasoningLevel.NOTSET) {
+                                    put("thinking", buildJsonObject {
+                                        put("type", if (!level.isEnabled) "disabled" else "enabled")
+                                        // K2.6 的 thinking.keep 默认为 null（忽略历史思考），思考开启时
+                                        // 需显式传 "all" 才是保留式思考；文档推荐与 enabled 搭配（#1586）
+                                        if (level.isEnabled && ModelRegistry.KIMI_K2_6.match(params.model.modelId)) {
+                                            put("keep", "all")
+                                        }
+                                    })
                                 }
-                            })
+                            }
                         }
                     }
 
