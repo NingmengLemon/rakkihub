@@ -39,7 +39,7 @@
     "attempts_title": "重试记录",
     "attempt_row": "第 {{attempt}}/{{maxRetries}} 次尝试",
     "attempt_waited": "等待 {{seconds}} 秒",
-    "attempt_unknown": "未知原因"
+    "attempt_unknown": "未记录原因"
   },
   "tool_part": {
     "memory_create": "创建记忆",

@@ -2,6 +2,12 @@
 
 本文件归档已完成的定制、修复与独立化批次，按时间或主题分组。当前状态以 checklist 索引与明细为准，未来方向见 [roadmap.md](../roadmap.md)。
 
+## 2026-11-22 Web 文案打磨（第三批）
+
+- Web 的自定义文案只改了重试次数、等待和未知原因 5 条；其余状态标签、检查点确认、推理档和 SVG/代码预览说明保留。
+- 主题与搜索详情页对上游没有 diff，确认没有新增用户可见文本，本批跳过。
+- 测试：`pnpm typecheck`、`pnpm check:markdown` 通过；未做浏览器逐页截图。
+
 ## 2026-11-22 MCP 与 provider 文案打磨（第二批）
 
 - 重写 stdio MCP 的 14 条说明与 Claude prompt cache 策略说明；强调停止后的状态、参数不经过 shell、startup timeout 只限制 initialize，并保留 `cache_control`、`Found 5` 等排障关键词。

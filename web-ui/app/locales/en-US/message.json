@@ -37,9 +37,9 @@
     "status_failed": "Generation failed",
     "status_interrupted": "Interrupted",
     "attempts_title": "Retry attempts",
-    "attempt_row": "Attempt {{attempt}}/{{maxRetries}}",
-    "attempt_waited": "waited {{seconds}}s",
-    "attempt_unknown": "Unknown reason"
+    "attempt_row": "Attempt {{attempt}} of {{maxRetries}}",
+    "attempt_waited": "Waited {{seconds}}s",
+    "attempt_unknown": "Reason not recorded"
   },
   "tool_part": {
     "memory_create": "Create memory",
