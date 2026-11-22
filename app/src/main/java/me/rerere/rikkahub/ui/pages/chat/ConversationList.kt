@@ -1,7 +1,7 @@
 package me.rerere.rikkahub.ui.pages.chat
 
 import me.rerere.hugeicons.HugeIcons
-import me.rerere.hugeicons.stroke.Brush
+import me.rerere.hugeicons.stroke.BrushCleaning
 import me.rerere.hugeicons.stroke.Folder01
 import me.rerere.hugeicons.stroke.Forward02
 import me.rerere.hugeicons.stroke.Pin
@@ -405,7 +405,7 @@ private fun ConversationItem(
                         showDropdownMenu = false
                     },
                     leadingIcon = {
-                        Icon(HugeIcons.Brush, null)
+                        Icon(HugeIcons.BrushCleaning, null)
                     }
                 )
 
