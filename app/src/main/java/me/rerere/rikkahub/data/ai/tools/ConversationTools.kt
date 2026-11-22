@@ -76,9 +76,7 @@ fun createConversationTools(
     },
 )
 
-private fun conversationSearchTool(
-    search: suspend (query: String) -> List<MessageSearchResult>,
-) = Tool(
+private fun conversationSearchTool(search: suspend (query: String) -> List<MessageSearchResult>) = Tool(
     name = "conversation_search",
     description = """
         Full-text search across the user's past conversations to recall specific information they mentioned before.

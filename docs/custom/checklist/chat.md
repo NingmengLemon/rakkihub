@@ -504,5 +504,5 @@
 
 - 落点：`ConversationTools.kt` 构造聊天工具时，`conversation_search` 现在把 `assistantId` 传给 `ConversationRepository.searchMessagesForModel`（第三个参数本来就有，默认 null 表示不限）。工具描述、FTS 查询与结果投影都不变。
 - 理由：上游 `#2372`。`recent_chats` 与后台记忆的 `createMemoryConversationTools` 都已按助手过滤，只有聊天侧的 `conversation_search` 漏了；助手 A 能搜到助手 B 的对话内容，属于跨助手内容泄露。修复只改接线，不新增查询路径。
-- 合并注意：`searchMessagesForModel` 的 `assistantId` 默认值保留，别改成必填；后台记忆那条路径用的是 `searchMessagesOfAssistantsForModel`（多助手集合），两者不要合并。搜索范围仍包含当前会话。
-- 测试：新增 `ConversationToolsTest`（`app/src/androidTest`，真机）用临时 Room 库建两个不同助手的会话，执行 `conversation_search` 后断言只返回当前助手的会话；FTS 层过滤由既有 `MessageFtsManagerTest.searchAppliesAssistantFilterAndLimit` 覆盖。app 单测 910 条、`spotlessCheck` 通过。
+- 合并注意：`searchMessagesForModel` 的 `assistantId` 默认值保留，别改成必填；后台记忆那条路径用的是 `searchMessagesOfAssistantsForModel`（多助手集合），两者不要合并。搜索范围仍包含当前会话。副作用：助手被删除后 `ConversationConfig` 会把会话配置退回当前助手，这类孤儿会话的 `assistant_id` 仍是旧值，按当前助手过滤时搜不到；目前接受这个范围收紧，不为它加回退。
+- 测试：新增 `ConversationToolsTest`（`app/src/androidTest`）用临时 Room 库建两个不同助手的会话，执行 `conversation_search` 后断言只返回当前助手的会话；已在 K60 上跑通（1 test / 0 failures）。CI 只跑 JVM 测试，androidTest 需手动跑；FTS 层过滤由既有 `MessageFtsManagerTest.searchAppliesAssistantFilterAndLimit` 覆盖。app 单测 910 条、`spotlessCheck` 通过。

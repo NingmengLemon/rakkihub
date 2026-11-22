@@ -1,5 +1,6 @@
 package me.rerere.rikkahub.data.ai.tools
 
+import androidx.core.net.toUri
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
 import kotlinx.coroutines.runBlocking
@@ -49,22 +50,22 @@ class ConversationToolsTest {
             favoriteDAO = database.favoriteDao(),
             database = database,
             messageFtsManager = fts,
-            attachmentFilesDirUri = "file:///data/user/0/${context.packageName}/files",
+            attachmentFilesDirUri = context.filesDir.toUri().toString().trimEnd('/'),
         )
     }
 
     @After
     fun tearDown() {
-        database.close()
-        directory.deleteRecursively()
+        if (::database.isInitialized) database.close()
+        if (::directory.isInitialized) directory.deleteRecursively()
     }
 
     @Test
     fun searchOnlyReturnsConversationsOfTheCurrentAssistant() = runBlocking {
         val mine = conversation("mine", UIMessage.user("toolscope needle in mine"))
         val theirs = conversation("theirs", UIMessage.user("toolscope needle in theirs"), owner = Uuid.random())
-        save(mine)
-        save(theirs)
+        repository.insertConversation(mine)
+        repository.insertConversation(theirs)
 
         val tool = createConversationTools(repository, mine.assistantId)
             .single { it.name == "conversation_search" }
@@ -84,8 +85,4 @@ class ConversationToolsTest {
         title = title,
         messageNodes = messages.map { MessageNode.of(it) },
     )
-
-    private suspend fun save(conversation: Conversation) {
-        repository.insertConversation(conversation)
-    }
 }
