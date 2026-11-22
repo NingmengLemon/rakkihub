@@ -403,8 +403,9 @@ class SafeModeActivity : ComponentActivity() {
 // 认得的 key 显示成界面上的名字，其余直接显示 key
 @Composable
 private fun storedFieldLabel(key: String): String = when (key) {
-    SettingsStore.LOREBOOKS.name -> stringResource(R.string.prompt_page_lorebook_tab)
     SettingsStore.ASSISTANTS.name -> stringResource(R.string.safe_mode_assistants)
+    "mode_injections" -> stringResource(R.string.safe_mode_legacy_mode_injections)
+    "lorebooks" -> stringResource(R.string.safe_mode_legacy_lorebooks)
     else -> key
 }
 

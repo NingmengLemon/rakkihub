@@ -61,12 +61,6 @@ data class UpdateConversationTitleRequest(
     val title: String
 )
 
-@Serializable
-data class UpdateConversationInjectionsRequest(
-    val modeInjectionIds: List<String>,
-    val lorebookIds: List<String>,
-)
-
 // 只更新传了值的字段；会话开始前这些修改落在助手上
 @Serializable
 data class UpdateConversationConfigRequest(
@@ -117,11 +111,9 @@ data class UpdateAssistantMcpServersRequest(
 )
 
 @Serializable
-data class UpdateAssistantInjectionsRequest(
+data class UpdateAssistantQuickMessagesRequest(
     val assistantId: String,
-    val modeInjectionIds: List<String>,
-    val lorebookIds: List<String>,
-    val quickMessageIds: List<String> = emptyList(),
+    val quickMessageIds: List<String>,
 )
 
 @Serializable
@@ -205,8 +197,6 @@ data class ConversationDto(
     val chatSuggestions: List<String>,
     val isPinned: Boolean,
     val customSystemPrompt: String? = null,
-    val modeInjectionIds: List<String> = emptyList(),
-    val lorebookIds: List<String> = emptyList(),
     val config: ConversationConfig? = null,
     val workspaceCwd: String? = null,
     val folderId: String? = null,
@@ -361,8 +351,6 @@ fun Conversation.toDto(isGenerating: Boolean = false): ConversationDto {
         chatSuggestions = chatSuggestions,
         isPinned = isPinned,
         customSystemPrompt = customSystemPrompt,
-        modeInjectionIds = modeInjectionIds.map { it.toString() },
-        lorebookIds = lorebookIds.map { it.toString() },
         config = config,
         workspaceCwd = workspaceCwd,
         folderId = folderId?.toString(),

@@ -318,8 +318,6 @@ private fun ChatListNormal(
         settings.assistants,
         conversation.assistantId,
         conversation.config,
-        conversation.modeInjectionIds,
-        conversation.lorebookIds,
     ) {
         // 工作区等配置在会话开始后以会话上固定的为准
         settings.getAssistantById(conversation.assistantId)?.withConversation(conversation)

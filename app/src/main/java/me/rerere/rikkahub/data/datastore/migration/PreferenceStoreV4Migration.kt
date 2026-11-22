@@ -30,10 +30,10 @@ class PreferenceStoreV4Migration : DataMigration<Preferences> {
 }
 
 /**
- * 移除助手的 allowConversationPromptInjection 开关。
+ * 移除助手的 allowConversationPromptInjection 开关，把这类助手的注入绑定清空。
  *
- * 开关开启时助手自身的注入绑定不生效，新会话从空集合开始；现在新会话一律继承助手的绑定，
- * 所以把这类助手的绑定清空，避免原本不生效的注入突然出现在新会话里。
+ * 模式注入与世界书已经移除（C157），这里写入的 modeInjectionIds / lorebookIds 会被解码器忽略；
+ * 迁移保留不动，只处理 version 4 之前的历史 JSON。
  */
 internal fun migrateAssistantsConversationInjections(assistantsJson: String): String {
     return runCatching {

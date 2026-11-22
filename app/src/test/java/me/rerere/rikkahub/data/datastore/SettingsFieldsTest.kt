@@ -4,6 +4,11 @@ import androidx.datastore.preferences.core.emptyPreferences
 import androidx.datastore.preferences.core.mutablePreferencesOf
 import kotlinx.serialization.ExperimentalSerializationApi
 import kotlinx.serialization.descriptors.elementNames
+import kotlinx.serialization.json.JsonArray
+import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.json.JsonPrimitive
+import kotlinx.serialization.json.jsonArray
+import kotlinx.serialization.json.jsonObject
 import me.rerere.ai.core.ReasoningLevel
 import me.rerere.ai.provider.ProviderSetting
 import me.rerere.asr.ASRProviderSetting
@@ -12,18 +17,22 @@ import me.rerere.rikkahub.data.ai.mcp.McpCommonOptions
 import me.rerere.rikkahub.data.ai.mcp.McpServerConfig
 import me.rerere.rikkahub.data.ai.mcp.StdioMcpServer
 import me.rerere.rikkahub.data.ai.prompts.DEFAULT_COMPRESS_PROMPT
+import me.rerere.rikkahub.data.datastore.migration.SettingsJsonMigrator
 import me.rerere.rikkahub.data.model.Assistant
-import me.rerere.rikkahub.data.model.Lorebook
-import me.rerere.rikkahub.data.model.PromptInjection
 import me.rerere.rikkahub.data.model.QuickMessage
 import me.rerere.rikkahub.data.model.Tag
+import me.rerere.rikkahub.data.sync.BackupSettingsShape
+import me.rerere.rikkahub.data.sync.official.forOfficialExport
 import me.rerere.rikkahub.data.sync.s3.S3Config
 import me.rerere.rikkahub.ui.theme.CustomTheme
+import me.rerere.rikkahub.utils.JsonInstant
 import me.rerere.search.SearchCommonOptions
 import me.rerere.search.SearchServiceOptions
 import me.rerere.tts.provider.TTSProviderSetting
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
+import org.junit.Assert.assertNull
+import org.junit.Assert.assertTrue
 import org.junit.Test
 import kotlin.uuid.Uuid
 
@@ -68,13 +77,63 @@ class SettingsFieldsTest {
     }
 
     @Test
+    fun `old backups with removed injection settings still import`() {
+        val base = JsonInstant.parseToJsonElement(JsonInstant.encodeToString(Settings())).jsonObject
+        val assistants = base.getValue("assistants").jsonArray.mapIndexed { index, element ->
+            if (index != 0) {
+                element
+            } else {
+                JsonObject(
+                    element.jsonObject + mapOf(
+                        "modeInjectionIds" to JsonArray(listOf(JsonPrimitive("00000000-0000-0000-0000-000000000001"))),
+                        "lorebookIds" to JsonArray(listOf(JsonPrimitive("00000000-0000-0000-0000-000000000002"))),
+                    )
+                )
+            }
+        }
+        val json = JsonObject(
+            base + mapOf(
+                "mode_injections" to JsonArray(
+                    listOf(
+                        JsonObject(
+                            mapOf(
+                                "type" to JsonPrimitive("mode"),
+                                "id" to JsonPrimitive("00000000-0000-0000-0000-000000000010"),
+                                "name" to JsonPrimitive("Learning Mode"),
+                            )
+                        )
+                    )
+                ),
+                "lorebooks" to JsonArray(
+                    listOf(
+                        JsonObject(
+                            mapOf(
+                                "id" to JsonPrimitive("00000000-0000-0000-0000-000000000011"),
+                                "name" to JsonPrimitive("book"),
+                            )
+                        )
+                    )
+                ),
+                "assistants" to JsonArray(assistants),
+            )
+        ).toString()
+
+        assertNull(BackupSettingsShape.findProblem(json))
+        val settings = JsonInstant.decodeFromString<Settings>(SettingsJsonMigrator.migrate(json))
+        assertTrue(settings.assistants.isNotEmpty())
+
+        val officialJson = JsonInstant.encodeToString(settings.forOfficialExport())
+        assertFalse(officialJson.contains("\"mode_injections\""))
+        assertFalse(officialJson.contains("\"lorebooks\""))
+    }
+
+    @Test
     fun `missing keys read as first launch values`() {
         val settings = emptyPreferences().toSettings()
 
         assertEquals(DEFAULT_MODEL_ID, settings.chatModelId)
         assertEquals(DEFAULT_MODEL_ID, settings.fastModelId)
         assertEquals(DEFAULT_MODEL_ID, settings.translateModeId)
-        assertEquals(DEFAULT_MODE_INJECTIONS, settings.modeInjections)
         assertEquals(DEFAULT_ASSISTANT_ID, settings.assistantId)
         assertEquals(DEFAULT_SYSTEM_TTS_ID, settings.selectedTTSProviderId)
         assertEquals(null, settings.selectedASRProviderId)
@@ -185,8 +244,6 @@ private val SAMPLE = Settings(
     defaultTTSPlaybackSpeed = 1.5f,
     asrProviders = listOf(ASRProviderSetting.OpenAIRealtime(id = id(11))),
     selectedASRProviderId = id(11),
-    modeInjections = listOf(PromptInjection.ModeInjection(id = id(14), name = "mode")),
-    lorebooks = listOf(Lorebook(id = id(12), name = "lorebook")),
     quickMessages = listOf(QuickMessage(id = id(13), title = "hi")),
     webServerEnabled = true,
     webServerPort = 9090,
@@ -247,8 +304,6 @@ private val STORED_KEYS = setOf(
     "web_server_jwt_enabled",
     "web_server_access_password",
     "web_server_localhost_only",
-    "mode_injections",
-    "lorebooks",
     "quick_messages",
     "backup_reminder_config",
     "sponsor_alert_dismissed_at",

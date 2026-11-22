@@ -16,7 +16,6 @@ import kotlin.uuid.Uuid
  *
  * 新会话没有这份配置，聊天页里的切换直接改助手；会话落库时从助手拍一份快照，
  * 之后的切换只影响当前会话，别处的改动不会打乱它的上下文和缓存。
- * 模式注入和 Lorebook 同样随会话固定，沿用 [Conversation.modeInjectionIds] 与 [Conversation.lorebookIds]。
  */
 @Serializable
 data class ConversationConfig(
@@ -51,10 +50,7 @@ private fun Assistant.withConversationConfig(config: ConversationConfig) = copy(
 /** 会话视角下的助手：会话开始后，会话持有的字段覆盖助手自身的值。 */
 fun Assistant.withConversation(conversation: Conversation): Assistant {
     val config = conversation.config ?: return this
-    return withConversationConfig(config).copy(
-        modeInjectionIds = conversation.modeInjectionIds,
-        lorebookIds = conversation.lorebookIds,
-    )
+    return withConversationConfig(config)
 }
 
 /** 聊天页改动助手后留在会话上的部分，[updated] 是会话视角下改动后的助手。 */
@@ -73,8 +69,6 @@ fun Conversation.withAssistantUpdate(updated: Assistant, settings: Settings): Co
                     settings.findModelById(updated.chatModelId)?.tools?.contains(BuiltInTools.Search) == true
                 }
             ),
-            modeInjectionIds = updated.modeInjectionIds,
-            lorebookIds = updated.lorebookIds,
         )
     }
     // 工作目录属于原来的工作区，换工作区后失效
@@ -86,10 +80,7 @@ fun Assistant.withoutConversationFields(conversation: Conversation, stored: Assi
     if (conversation.config == null) {
         this
     } else {
-        withConversationConfig(stored.toConversationConfig()).copy(
-            modeInjectionIds = stored.modeInjectionIds,
-            lorebookIds = stored.lorebookIds,
-        )
+        withConversationConfig(stored.toConversationConfig())
     }
 
 /** 会话所属助手自身的设置，不含会话上固定的配置；助手被删除后退回当前助手。 */
@@ -104,9 +95,6 @@ fun Settings.getAssistantOf(conversation: Conversation): Assistant {
     // 助手自身的失效引用在读取设置时已清理，会话上固定的这份在这里滤掉
     return assistant.copy(
         mcpServers = assistant.mcpServers.filterTo(mutableSetOf()) { id -> id in validMcpIds },
-        modeInjectionIds = assistant.modeInjectionIds
-            .filterTo(mutableSetOf()) { id -> modeInjections.any { it.id == id } },
-        lorebookIds = assistant.lorebookIds.filterTo(mutableSetOf()) { id -> lorebooks.any { it.id == id } },
     )
 }
 
@@ -136,8 +124,5 @@ fun Conversation.bindConfig(settings: Settings): Conversation {
     val assistant = settings.getAssistantOf(this)
     return copy(
         config = assistant.toConversationConfig().copy(chatModelId = model?.id, builtInSearch = builtInSearch),
-        // 旧版本允许会话单独绑定注入，这类会话保留自己的绑定
-        modeInjectionIds = modeInjectionIds.ifEmpty { assistant.modeInjectionIds },
-        lorebookIds = lorebookIds.ifEmpty { assistant.lorebookIds },
     )
 }

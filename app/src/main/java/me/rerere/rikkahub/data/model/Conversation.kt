@@ -34,8 +34,6 @@ data class Conversation(
     @Serializable(with = InstantSerializer::class)
     val updateAt: Instant = Instant.now(),
     val customSystemPrompt: String? = null,
-    val modeInjectionIds: Set<Uuid> = emptySet(),
-    val lorebookIds: Set<Uuid> = emptySet(),
     // 会话开始后固定的配置，null 表示尚未开始、跟随助手
     val config: ConversationConfig? = null,
     // Absolute path inside the workspace rootfs

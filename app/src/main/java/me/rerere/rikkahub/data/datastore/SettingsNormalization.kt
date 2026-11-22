@@ -51,8 +51,6 @@ internal fun Settings.withoutInvalidReferences(): Settings {
     val enabledMcpServerIds = settings.copy(stdioMcpServers = stdioMcpServers).allMcpServers()
         .filter { it.commonOptions.enable && it.commonOptions.name.isNotBlank() }
         .mapTo(HashSet()) { it.id }
-    val validModeInjectionIds = settings.modeInjections.map { it.id }.toSet()
-    val validLorebookIds = settings.lorebooks.map { it.id }.toSet()
     val validQuickMessageIds = settings.quickMessages.map { it.id }.toSet()
     val validModelIds by lazy { settings.providers.flatMap { it.models }.mapTo(HashSet()) { it.id } }
     val asrProviders = settings.asrProviders.distinctBy { it.id }
@@ -71,14 +69,6 @@ internal fun Settings.withoutInvalidReferences(): Settings {
                 mcpServers = assistant.mcpServers.filter { serverId ->
                     serverId in validMcpServerIds
                 }.toSet(),
-                // 过滤掉不存在的模式注入 ID
-                modeInjectionIds = assistant.modeInjectionIds.filter { id ->
-                    id in validModeInjectionIds
-                }.toSet(),
-                // 过滤掉不存在的 Lorebook ID
-                lorebookIds = assistant.lorebookIds.filter { id ->
-                    id in validLorebookIds
-                }.toSet(),
                 // 过滤掉不存在的快捷消息 ID
                 quickMessageIds = assistant.quickMessageIds.filter { id ->
                     id in validQuickMessageIds
@@ -91,8 +81,6 @@ internal fun Settings.withoutInvalidReferences(): Settings {
             ?.takeIf { id -> asrProviders.any { provider -> provider.id == id } }
             ?: asrProviders.firstOrNull()?.id,
         favoriteModels = settings.favoriteModels.filter { it in validModelIds },
-        modeInjections = settings.modeInjections.distinctBy { it.id },
-        lorebooks = settings.lorebooks.distinctBy { it.id },
         quickMessages = settings.quickMessages.distinctBy { it.id },
         stdioMcpServers = stdioMcpServers,
         stoppedMcpServerIds = settings.stoppedMcpServerIds.filterTo(mutableSetOf()) { it in enabledMcpServerIds },

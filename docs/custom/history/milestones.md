@@ -2,6 +2,13 @@
 
 本文件归档已完成的定制、修复与独立化批次，按时间或主题分组。当前状态以 checklist 索引与明细为准，未来方向见 [roadmap.md](../roadmap.md)。
 
+## 2026-11-22 移除模式注入与世界书（C157）
+
+- 整体删掉 `PromptInjection`/`ModeInjection`/`RegexInjection`/`Lorebook` 与 `PromptInjectionTransformer`，以及设置字段、助手/会话绑定、扩展页与聊天扩展面板入口、`PromptPage`、单条导出与 SillyTavern 世界书导入；Web 端删掉两个 injections 端点，补了快捷消息专用的 `settings/assistant/quick-messages`。
+- `conversation` 表的 `mode_injection_ids`/`lorebook_ids` 保留为官方兼容垫片，仓库层固定写 `"[]"`；旧备份与官方备份 settings.json 里的 `mode_injections`/`lorebooks` 由 `ignoreUnknownKeys` 忽略，官方兼容导出不再写这两个键。
+- 删掉四份 locale 里 57 条注入/世界书文案；新增旧备份 settings.json 解码测试。
+- 测试：app 单测、ai 单测、`spotlessCheck`、`pnpm typecheck`、markdownlint 通过；K60 上确认扩展页与聊天扩展面板不再出现注入/世界书入口，并新建、开关、删除一条快捷消息验证了快捷消息链路。
+
 ## 2026-11-22 月之暗面思考参数按模型分派（C156）
 
 - 上游 `#1573`：月之暗面分支原来只认 `api.moonshot.cn` 并给所有模型发 K2.x 的 `thinking`。现在覆盖 `api.moonshot.cn`、`api.moonshot.ai` 与 `api.kimi.com`，按模型分派：K3 系列改发顶层 `reasoning_effort`（low/high/max），`KIMI_ALWAYS_THINKING`（`kimi-k2.7*` 与 `kimi-for-coding*`）不发思考参数，其余 Kimi 保持 `thinking` 与 K2.6 的 `keep: "all"`。

@@ -1,6 +1,6 @@
 # 明细：移除与清理
 
-本文件是 [checklist.md](../checklist.md) 的明细，收录 C1 至 C6、C8 至 C9、C13 至 C16、C54、C64、C95 至 C96。
+本文件是 [checklist.md](../checklist.md) 的明细，收录 C1 至 C6、C8 至 C9、C13 至 C16、C54、C64、C95 至 C96、C157。
 
 <a id="c1"></a>
 
@@ -138,3 +138,12 @@
 - 理由：这两个头是 OpenRouter 的调用来源标识（排行榜归属与应用统计），不参与鉴权，上游 `acdb75e6` 加进来时 `HTTP-Referer` 指 `https://rikka-ai.com`。本分支改名后仍发官方站点，等于把我们的调用在 OpenRouter 那边算成官方 app；本分支没有自己的站点，也没有理由替官方做归属，干脆不发
 - 合并注意：上游再往 `configureReferHeaders` 里加分支时按本项整体保留删除；用户自己在提供商或助手的自定义请求头里写 `X-Title`、`HTTP-Referer` 不受影响，`mergeCustomHeaders` 与 `PropertyEditor` 的常用头列表都没动；`app/src/main/generated/baselineProfiles/` 里还留着 `configureReferHeaders` 的旧条目，同 C13、C95 的说明，ART 会跳过
 - 测试：`ai` 与 `mediagen` 的 JVM 测试全过（mediagen 那条改成断言这两个头都不存在）；`rg` 确认源码里除用户自定义头列表及其测试外没有 `X-Title` 与 `HTTP-Referer`；app JVM 805 条仍全过
+
+<a id="c157"></a>
+
+## C157 移除模式注入与世界书
+
+- 落点：删掉 `PromptInjection`/`ModeInjection`/`RegexInjection`/`Lorebook`/`InjectionPosition` 与触发函数，删掉 `PromptInjectionTransformer`、`data/ai/prompts/LearningMode.kt` 及其在 `ChatRequestFactory` 输入管线里的位置（默认 Learning Mode 注入随之消失）；`Assistant` 与 `Conversation` 去掉注入/世界书绑定，`ConversationConfig` 的会话固定逻辑、`Settings`/`SettingsFields`/`PreferencesStore` 的字段与 DataStore key、`SettingsNormalization` 的清理一起删除。界面删掉 `PromptPage`/`PromptVM`、扩展页与聊天扩展面板的注入/世界书 tab、助手扩展页的两个分页、单条注入/世界书导出与 SillyTavern 世界书导入；Web 删掉两个 injections 端点、相关 DTO 与扩展面板入口，新增快捷消息专用端点 `settings/assistant/quick-messages`。`conversation` 表的 `mode_injection_ids`/`lorebook_ids` 两列保留，只服务官方库导入与官方兼容导出，仓库层写库固定 `"[]"`、读取忽略；老安装盘上遗留的 `mode_injections`/`lorebooks` DataStore key 仍由安全模式列出并清除（`LEGACY_STORED_FIELD_KEYS`），避免整份 JSON 编码时继续背着它们。
+- 理由：这套实现与使用方式不匹配：注入靠改写已有消息（拼 system、往历史中间插）破坏前缀缓存；没有 token 预算、触发概率、递归触发与全词/CJK 匹配；会话固定的是 id 而不是内容快照；`scanDepth` 等边界没有防护。本机没有实际使用，整体删除比继续维护便宜。
+- 合并注意：旧备份的 `settings.json` 里仍可能带 `mode_injections`/`lorebooks` 键，`JsonInstant` 的 `ignoreUnknownKeys` 会忽略，不需要迁移；官方兼容导出现在不写这两个键，官方客户端同名字段有默认值，恢复不受影响。`conversation` 两列是官方 v32 schema 的一部分，删列会连带改 Room 迁移、官方导入写库与官方导出补列，本次不动；`ConversationEntity` 里有注释说明。`PreferenceStoreV4Migration` 与它的测试保留，它们只处理历史 JSON。注入/世界书相关的 57 条文案已从四份 locale 删除，`export_*` 里随 PromptPage 一起失去引用的 7 条也删了。`app/src/main/generated/baselineProfiles/` 里还留着 `PromptInjectionTransformer`、`LearningModeKt` 等旧条目，与 C13/C95 同类，ART 会跳过，重新生成快照时才会消失。`Settings` 序列化结构有变化，`docs/custom/backup/acceptance.md` 的官方/自家备份样本本轮没有重跑，解码路径由新增单测覆盖。
+- 测试：`SettingsFieldsTest` 新增旧备份 settings.json 用例（形状校验、迁移、解码，并断言官方出口不再带这两个键），`SettingsStoreTest` 新增 legacy key 列出与清除用例；`:app:testGithubDebugUnitTest`、`:ai:testDebugUnitTest`、`spotlessCheck`、`pnpm typecheck`、markdownlint 通过；设备上确认设置里的扩展页、助手扩展页与聊天扩展面板都不再出现注入/世界书入口，并通过新建、开关、删除一条快捷消息验证了快捷消息链路。

@@ -17,7 +17,7 @@ internal fun forkConversationTitle(sourceTitle: String, existingTitles: Set<Stri
 /**
  * 从开头复制到 [messageId] 所在的节点（含），得到一个新会话；没有这条消息时返回 null。
  *
- * 继承助手、系统提示词、提示词注入、会话配置、工作目录和文件夹，标题在 [existingTitles] 中顺延编号。
+ * 继承助手、系统提示词、会话配置、工作目录和文件夹，标题在 [existingTitles] 中顺延编号。
  * 节点换新 id；本地附件经 [copyFile] 复制一份，两个会话之后各删各的文件，互不影响。
  */
 internal fun Conversation.fork(
@@ -40,8 +40,6 @@ internal fun Conversation.fork(
             )
         },
         customSystemPrompt = customSystemPrompt,
-        modeInjectionIds = modeInjectionIds,
-        lorebookIds = lorebookIds,
         config = config,
         workspaceCwd = workspaceCwd,
         folderId = folderId,

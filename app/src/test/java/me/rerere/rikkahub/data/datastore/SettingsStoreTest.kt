@@ -4,6 +4,7 @@ import androidx.datastore.core.DataStore
 import androidx.datastore.preferences.core.PreferenceDataStoreFactory
 import androidx.datastore.preferences.core.Preferences
 import androidx.datastore.preferences.core.edit
+import androidx.datastore.preferences.core.stringPreferencesKey
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.CoroutineStart
@@ -19,7 +20,7 @@ import kotlinx.coroutines.job
 import kotlinx.coroutines.joinAll
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
-import me.rerere.rikkahub.data.model.Lorebook
+import me.rerere.rikkahub.data.model.QuickMessage
 import org.junit.After
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
@@ -79,21 +80,43 @@ class SettingsStoreTest {
     @Test
     fun `resetting an oversized stored field shrinks it on disk and keeps the rest`() = runBlocking {
         val store = open().store
-        val big = Lorebook(name = "big", description = "x".repeat(200_000))
-        store.update { it.copy(lorebooks = listOf(big), titlePrompt = "kept") }
+        val big = QuickMessage(title = "big", content = "x".repeat(200_000))
+        store.update { it.copy(quickMessages = listOf(big), titlePrompt = "kept") }
         val (key, chars) = store.largeStoredFieldsFlow(minChars = 100_000).first().single()
-        assertEquals(SettingsStore.LOREBOOKS.name, key)
+        assertEquals(SettingsStore.QUICK_MESSAGES.name, key)
         assertTrue(chars >= 200_000)
 
         // 和安全模式一样：重启后的第一次写入就是清理
         val restarted = open().store
         restarted.resetStoredField(key)
 
-        assertEquals(emptyList<Lorebook>(), restarted.settingsFlow.value.lorebooks)
+        assertEquals(emptyList<QuickMessage>(), restarted.settingsFlow.value.quickMessages)
         assertEquals(emptyList<Pair<String, Int>>(), restarted.largeStoredFieldsFlow(minChars = 100_000).first())
         val reloaded = reopened()
-        assertEquals(emptyList<Lorebook>(), reloaded.lorebooks)
+        assertEquals(emptyList<QuickMessage>(), reloaded.quickMessages)
         assertEquals("kept", reloaded.titlePrompt)
+    }
+
+    @Test
+    fun `legacy injection fields can be listed and cleared`() = runBlocking {
+        val opened = open()
+        val store = opened.store
+        store.awaitLoaded()
+        opened.disk.edit { preferences ->
+            preferences[stringPreferencesKey("lorebooks")] = "x".repeat(200_000)
+        }
+
+        val (key, chars) = store.largeStoredFieldsFlow(minChars = 100_000).first().single()
+        assertEquals("lorebooks", key)
+        assertTrue(chars >= 200_000)
+
+        store.resetStoredField(key)
+
+        assertEquals(emptyList<Pair<String, Int>>(), store.largeStoredFieldsFlow(minChars = 100_000).first())
+        assertEquals(
+            emptyList<Pair<String, Int>>(),
+            open().store.largeStoredFieldsFlow(minChars = 100_000).first(),
+        )
     }
 
     @Test
@@ -191,16 +214,6 @@ class SettingsStoreTest {
         val stored = reopened()
         assertEquals("custom", stored.titlePrompt)
         assertEquals(assistantId, stored.assistantId)
-    }
-
-    @Test
-    fun `first launch offers the built-in mode injection until the user removes it`() = runBlocking {
-        val store = open().store
-        assertEquals(DEFAULT_MODE_INJECTIONS, store.awaitLoaded().modeInjections)
-
-        store.update { it.copy(modeInjections = emptyList()) }
-
-        assertEquals(emptyList<Any>(), reopened().modeInjections)
     }
 
     @Test

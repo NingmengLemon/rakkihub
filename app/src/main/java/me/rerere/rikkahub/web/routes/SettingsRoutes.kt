@@ -13,9 +13,9 @@ import me.rerere.rikkahub.data.datastore.allMcpServerIds
 import me.rerere.rikkahub.data.datastore.findModelById
 import me.rerere.rikkahub.web.BadRequestException
 import me.rerere.rikkahub.web.NotFoundException
-import me.rerere.rikkahub.web.dto.UpdateAssistantInjectionsRequest
 import me.rerere.rikkahub.web.dto.UpdateAssistantMcpServersRequest
 import me.rerere.rikkahub.web.dto.UpdateAssistantModelRequest
+import me.rerere.rikkahub.web.dto.UpdateAssistantQuickMessagesRequest
 import me.rerere.rikkahub.web.dto.UpdateAssistantReasoningLevelRequest
 import me.rerere.rikkahub.web.dto.UpdateAssistantRequest
 import me.rerere.rikkahub.web.dto.UpdateBuiltInToolRequest
@@ -88,26 +88,13 @@ fun Route.settingsRoutes(
             call.respond(HttpStatusCode.OK, mapOf("status" to "ok"))
         }
 
-        post("/assistant/injections") {
-            val request = call.receive<UpdateAssistantInjectionsRequest>()
+        post("/assistant/quick-messages") {
+            val request = call.receive<UpdateAssistantQuickMessagesRequest>()
             val assistantId = request.assistantId.toUuid("assistantId")
 
             val settings = settingsStore.settingsFlow.value
             if (settings.assistants.none { it.id == assistantId }) {
                 throw NotFoundException("Assistant not found")
-            }
-
-            val validModeInjectionIds = settings.modeInjections.map { it.id }.toSet()
-            val requestedModeInjectionIds =
-                request.modeInjectionIds.map { it.toUuid("modeInjectionIds") }.toSet()
-            if (!validModeInjectionIds.containsAll(requestedModeInjectionIds)) {
-                throw BadRequestException("modeInjectionIds contains unknown injection id")
-            }
-
-            val validLorebookIds = settings.lorebooks.map { it.id }.toSet()
-            val requestedLorebookIds = request.lorebookIds.map { it.toUuid("lorebookIds") }.toSet()
-            if (!validLorebookIds.containsAll(requestedLorebookIds)) {
-                throw BadRequestException("lorebookIds contains unknown lorebook id")
             }
 
             val validQuickMessageIds = settings.quickMessages.map { it.id }.toSet()
@@ -117,10 +104,8 @@ fun Route.settingsRoutes(
                 throw BadRequestException("quickMessageIds contains unknown quick message id")
             }
 
-            settingsStore.updateAssistantInjections(
+            settingsStore.updateAssistantQuickMessages(
                 assistantId = assistantId,
-                modeInjectionIds = requestedModeInjectionIds,
-                lorebookIds = requestedLorebookIds,
                 quickMessageIds = requestedQuickMessageIds,
             )
             call.respond(HttpStatusCode.OK, mapOf("status" to "ok"))

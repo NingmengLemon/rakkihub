@@ -294,11 +294,9 @@ internal fun FilesPicker(
                         )
                     }
 
-                    // Extensions (Quick Messages + Prompt Injections + Skills)
+                    // Extensions (Quick Messages + Skills)
                     val activeCount =
                         assistant.quickMessageIds.size +
-                            assistant.modeInjectionIds.size +
-                            assistant.lorebookIds.size +
                             assistant.enabledSkills.size
                     SegmentedListItem(
                         onClick = { page = FilesPickerPage.EXTENSIONS },
@@ -514,10 +512,6 @@ private fun ExtensionPickerPage(
             onNavigateToQuickMessages = {
                 onDismissAll()
                 navController.navigate(Screen.QuickMessages)
-            },
-            onNavigateToPrompts = {
-                onDismissAll()
-                navController.navigate(Screen.Prompts)
             },
             onNavigateToSkills = {
                 onDismissAll()

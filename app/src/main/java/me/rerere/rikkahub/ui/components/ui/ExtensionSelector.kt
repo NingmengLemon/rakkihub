@@ -17,8 +17,6 @@ import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import me.rerere.hugeicons.HugeIcons
-import me.rerere.hugeicons.stroke.Book01
-import me.rerere.hugeicons.stroke.MagicWand01
 import me.rerere.hugeicons.stroke.Puzzle
 import me.rerere.hugeicons.stroke.Zap
 import me.rerere.rikkahub.R
@@ -27,8 +25,6 @@ import me.rerere.rikkahub.data.skills.SkillManager
 import me.rerere.rikkahub.data.skills.SkillMetadata
 import me.rerere.rikkahub.data.model.Assistant
 import me.rerere.rikkahub.ui.components.ai.ExtensionEmptyState
-import me.rerere.rikkahub.ui.components.ai.LorebooksContent
-import me.rerere.rikkahub.ui.components.ai.ModeInjectionsContent
 import me.rerere.rikkahub.ui.components.ai.QuickMessagesContent
 import me.rerere.rikkahub.ui.components.ai.SkillsContent
 import org.koin.compose.koinInject
@@ -38,8 +34,6 @@ internal enum class ExtensionTab(
     @param:StringRes private val labelRes: Int,
 ) : PagerTab {
     QUICK_MESSAGES(HugeIcons.Zap, R.string.extension_selector_tab_quick_messages),
-    MODE_INJECTIONS(HugeIcons.MagicWand01, R.string.extension_selector_tab_mode_injections),
-    LOREBOOKS(HugeIcons.Book01, R.string.extension_selector_tab_lorebooks),
     SKILLS(HugeIcons.Puzzle, R.string.extension_selector_tab_skills);
 
     override val label: String
@@ -54,7 +48,6 @@ fun ExtensionSelector(
     settings: Settings,
     onUpdate: (Assistant) -> Unit,
     onNavigateToQuickMessages: () -> Unit = {},
-    onNavigateToPrompts: () -> Unit = {},
     onNavigateToSkills: () -> Unit = {},
 ) {
     val skillManager: SkillManager = koinInject()
@@ -105,56 +98,6 @@ fun ExtensionSelector(
                             message = stringResource(R.string.extension_selector_quick_messages_empty),
                             buttonText = stringResource(R.string.extension_selector_go_to_extensions),
                             onAction = onNavigateToQuickMessages,
-                            icon = tab.icon,
-                        )
-                    }
-                }
-
-                ExtensionTab.MODE_INJECTIONS -> {
-                    if (settings.modeInjections.isNotEmpty()) {
-                        ModeInjectionsContent(
-                            modeInjections = settings.modeInjections,
-                            selectedIds = assistant.modeInjectionIds,
-                            onToggle = { id, checked ->
-                                val newIds = if (checked) {
-                                    assistant.modeInjectionIds + id
-                                } else {
-                                    assistant.modeInjectionIds - id
-                                }
-                                onUpdate(assistant.copy(modeInjectionIds = newIds))
-                            },
-                            onManage = onNavigateToPrompts,
-                        )
-                    } else {
-                        ExtensionEmptyState(
-                            message = stringResource(R.string.extension_selector_mode_injections_empty),
-                            buttonText = stringResource(R.string.extension_selector_go_to_extensions),
-                            onAction = onNavigateToPrompts,
-                            icon = tab.icon,
-                        )
-                    }
-                }
-
-                ExtensionTab.LOREBOOKS -> {
-                    if (settings.lorebooks.isNotEmpty()) {
-                        LorebooksContent(
-                            lorebooks = settings.lorebooks,
-                            selectedIds = assistant.lorebookIds,
-                            onToggle = { id, checked ->
-                                val newIds = if (checked) {
-                                    assistant.lorebookIds + id
-                                } else {
-                                    assistant.lorebookIds - id
-                                }
-                                onUpdate(assistant.copy(lorebookIds = newIds))
-                            },
-                            onManage = onNavigateToPrompts,
-                        )
-                    } else {
-                        ExtensionEmptyState(
-                            message = stringResource(R.string.extension_selector_lorebooks_empty),
-                            buttonText = stringResource(R.string.extension_selector_go_to_extensions),
-                            onAction = onNavigateToPrompts,
                             icon = tab.icon,
                         )
                     }

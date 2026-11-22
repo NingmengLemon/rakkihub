@@ -23,8 +23,6 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import me.rerere.rikkahub.R
 import me.rerere.rikkahub.Screen
 import me.rerere.rikkahub.ui.components.ai.ExtensionEmptyState
-import me.rerere.rikkahub.ui.components.ai.LorebooksContent
-import me.rerere.rikkahub.ui.components.ai.ModeInjectionsContent
 import me.rerere.rikkahub.ui.components.ai.QuickMessagesContent
 import me.rerere.rikkahub.ui.components.ai.SkillsContent
 import me.rerere.rikkahub.ui.components.nav.BackButton
@@ -80,8 +78,8 @@ fun AssistantExtensionsPage(id: String) {
                     .fillMaxWidth()
                     .weight(1f),
             ) { page ->
-                when (page) {
-                    0 -> {
+                when (ExtensionTab.entries[page]) {
+                    ExtensionTab.QUICK_MESSAGES -> {
                         if (settings.quickMessages.isEmpty()) {
                             ExtensionEmptyState(
                                 message = stringResource(R.string.assistant_extensions_page_empty_quick_messages),
@@ -105,55 +103,7 @@ fun AssistantExtensionsPage(id: String) {
                         }
                     }
 
-                    1 -> {
-                        if (settings.modeInjections.isEmpty()) {
-                            ExtensionEmptyState(
-                                message = stringResource(R.string.assistant_extensions_page_empty_mode_injections),
-                                buttonText = stringResource(R.string.assistant_extensions_page_goto_prompts),
-                                onAction = { navController.navigate(Screen.Prompts) },
-                                icon = ExtensionTab.MODE_INJECTIONS.icon,
-                            )
-                        } else {
-                            ModeInjectionsContent(
-                                contentPadding = listPadding,
-                                colors = listColors,
-                                modeInjections = settings.modeInjections,
-                                selectedIds = assistant.modeInjectionIds,
-                                onToggle = { injId, checked ->
-                                    val newIds = if (checked) assistant.modeInjectionIds + injId
-                                    else assistant.modeInjectionIds - injId
-                                    vm.update(assistant.copy(modeInjectionIds = newIds))
-                                },
-                                onManage = { navController.navigate(Screen.Prompts) },
-                            )
-                        }
-                    }
-
-                    2 -> {
-                        if (settings.lorebooks.isEmpty()) {
-                            ExtensionEmptyState(
-                                message = stringResource(R.string.assistant_extensions_page_empty_lorebooks),
-                                buttonText = stringResource(R.string.assistant_extensions_page_goto_prompts),
-                                onAction = { navController.navigate(Screen.Prompts) },
-                                icon = ExtensionTab.LOREBOOKS.icon,
-                            )
-                        } else {
-                            LorebooksContent(
-                                contentPadding = listPadding,
-                                colors = listColors,
-                                lorebooks = settings.lorebooks,
-                                selectedIds = assistant.lorebookIds,
-                                onToggle = { injId, checked ->
-                                    val newIds = if (checked) assistant.lorebookIds + injId
-                                    else assistant.lorebookIds - injId
-                                    vm.update(assistant.copy(lorebookIds = newIds))
-                                },
-                                onManage = { navController.navigate(Screen.Prompts) },
-                            )
-                        }
-                    }
-
-                    3 -> {
+                    ExtensionTab.SKILLS -> {
                         if (skills.isEmpty()) {
                             ExtensionEmptyState(
                                 message = stringResource(R.string.assistant_extensions_page_empty_skills),

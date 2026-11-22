@@ -41,7 +41,6 @@ import me.rerere.rikkahub.web.dto.SelectMessageNodeRequest
 import me.rerere.rikkahub.web.dto.SendMessageRequest
 import me.rerere.rikkahub.web.dto.ToolApprovalRequest
 import me.rerere.rikkahub.web.dto.UpdateConversationConfigRequest
-import me.rerere.rikkahub.web.dto.UpdateConversationInjectionsRequest
 import me.rerere.rikkahub.web.dto.UpdateConversationTitleRequest
 import me.rerere.rikkahub.web.dto.toDto
 import me.rerere.rikkahub.web.dto.toListDto
@@ -193,26 +192,6 @@ fun Route.conversationRoutes(
 
             chatService.updateTitle(uuid, title)
             call.respond(HttpStatusCode.OK, mapOf("status" to "updated"))
-        }
-
-        // POST /api/conversations/{id}/injections - Update conversation-scoped prompt injections
-        post("/{id}/injections") {
-            val uuid = call.parameters["id"].toUuid("conversation id")
-            val request = call.receive<UpdateConversationInjectionsRequest>()
-            conversationRepo.requireConversation(uuid)
-
-            val (modeInjectionIds, lorebookIds) = validateConversationInjectionIds(
-                settings = settingsStore.awaitLoaded(),
-                modeInjectionIds = request.modeInjectionIds,
-                lorebookIds = request.lorebookIds,
-            )
-            // 已开始的会话自己持有注入绑定
-            chatService.updateChatAssistant(uuid) {
-                it.copy(modeInjectionIds = modeInjectionIds, lorebookIds = lorebookIds)
-            }
-
-            val isGenerating = chatService.getGenerationJobStateFlow(uuid).first() != null
-            call.respond(HttpStatusCode.OK, chatService.getConversationFlow(uuid).first().toDto(isGenerating))
         }
 
         // POST /api/conversations/{id}/config - Update the chat configuration held by the conversation
@@ -475,34 +454,6 @@ fun Route.conversationRoutes(
 private sealed interface ConversationStreamPayload {
     data class Conversation(val value: ConversationDto) : ConversationStreamPayload
     data class BatchErrors(val messages: List<String>) : ConversationStreamPayload
-}
-
-private data class ConversationInjectionIds(
-    val modeInjectionIds: Set<Uuid>,
-    val lorebookIds: Set<Uuid>,
-)
-
-private fun validateConversationInjectionIds(
-    settings: me.rerere.rikkahub.data.datastore.Settings,
-    modeInjectionIds: List<String>,
-    lorebookIds: List<String>,
-): ConversationInjectionIds {
-    val validModeInjectionIds = settings.modeInjections.map { it.id }.toSet()
-    val requestedModeInjectionIds = modeInjectionIds.map { it.toUuid("modeInjectionIds") }.toSet()
-    if (!validModeInjectionIds.containsAll(requestedModeInjectionIds)) {
-        throw BadRequestException("modeInjectionIds contains unknown injection id")
-    }
-
-    val validLorebookIds = settings.lorebooks.map { it.id }.toSet()
-    val requestedLorebookIds = lorebookIds.map { it.toUuid("lorebookIds") }.toSet()
-    if (!validLorebookIds.containsAll(requestedLorebookIds)) {
-        throw BadRequestException("lorebookIds contains unknown lorebook id")
-    }
-
-    return ConversationInjectionIds(
-        modeInjectionIds = requestedModeInjectionIds,
-        lorebookIds = requestedLorebookIds,
-    )
 }
 
 private suspend fun ConversationRepository.requireConversation(id: Uuid) {

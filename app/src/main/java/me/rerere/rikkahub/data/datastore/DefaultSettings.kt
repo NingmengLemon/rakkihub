@@ -1,9 +1,6 @@
 package me.rerere.rikkahub.data.datastore
 
-import me.rerere.rikkahub.data.ai.prompts.LEARNING_MODE_PROMPT
 import me.rerere.rikkahub.data.model.Assistant
-import me.rerere.rikkahub.data.model.InjectionPosition
-import me.rerere.rikkahub.data.model.PromptInjection
 import me.rerere.tts.provider.TTSProviderSetting
 import kotlin.uuid.Uuid
 
@@ -46,13 +43,4 @@ internal val DEFAULT_TTS_PROVIDERS = listOf(
 /** 曾经预置过的赞助商 TTS 提供商，升级后从既有设置中移除。 */
 internal val REMOVED_SPONSOR_TTS_PROVIDER_IDS = setOf(
     Uuid.parse("e36b22ef-ca82-40ab-9e70-60cad861911c"), // AiHubMix
-)
-
-val DEFAULT_MODE_INJECTIONS = listOf(
-    PromptInjection.ModeInjection(
-        id = Uuid.parse("b87eaf16-f5cd-4ac1-9e4f-b11ae3a61d74"),
-        content = LEARNING_MODE_PROMPT,
-        position = InjectionPosition.AFTER_SYSTEM_PROMPT,
-        name = "Learning Mode"
-    )
 )

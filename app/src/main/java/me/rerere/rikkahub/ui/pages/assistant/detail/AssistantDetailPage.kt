@@ -146,7 +146,7 @@ fun AssistantDetailPage(id: String) {
                 val contentColor = MaterialTheme.colorScheme.onTertiaryContainer
                 CardGroup {
                     item(
-                        onClick = { navController.navigate(Screen.AssistantInjections(id)) },
+                        onClick = { navController.navigate(Screen.AssistantExtensions(id)) },
                         leadingContent = { CardGroupIcon(HugeIcons.Puzzle, containerColor = containerColor, contentColor = contentColor) },
                         supportingContent = { Text(stringResource(R.string.assistant_detail_extensions_desc)) },
                         headlineContent = { Text(stringResource(R.string.assistant_page_tab_extensions)) },

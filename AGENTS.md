@@ -58,12 +58,12 @@ App 有一个 `distribution` 维度的 product flavor：`github`（默认）和 
 
 - **Assistant**: An assistant configuration with system prompts, model parameters, and conversation isolation. Each
   assistant maintains its own settings including temperature, context size, custom headers, tools, memory options, regex
-  transformations, and prompt injections (mode/lorebook). Assistants provide isolated chat environments with specific
+  transformations. Assistants provide isolated chat environments with specific
   behaviors and capabilities. (app/src/main/java/me/rerere/rikkahub/data/model/Assistant.kt)
 
 - **Conversation**: A persistent conversation thread between the user and an assistant. Each conversation maintains a
   list of MessageNodes in a tree structure to support message branching, along with metadata like title, creation time,
-  update time, pin status, chat suggestions, optional conversation-level system prompt, and prompt injection bindings.
+  update time, pin status, chat suggestions, and an optional conversation-level system prompt.
   Once a conversation is persisted it also holds a `ConversationConfig` snapshot (chat model, reasoning level, search,
   MCP servers, workspace, skills) taken from the assistant; from then on chat-page changes to those settings stay on
   the conversation, and code should read them through `Settings.getAssistantOf(conversation)` /

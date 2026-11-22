@@ -37,8 +37,6 @@ export interface Conversation {
   chatSuggestions: string[];
   isPinned: boolean;
   customSystemPrompt?: string | null;
-  modeInjectionIds?: string[];
-  lorebookIds?: string[];
   config?: ConversationConfig | null;
   /** Absolute path inside the workspace rootfs */
   workspaceCwd?: string | null;

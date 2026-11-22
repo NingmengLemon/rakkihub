@@ -47,6 +47,10 @@ import kotlin.uuid.Uuid
 
 private const val TAG = "PreferencesStore"
 
+// 已移除功能留下的 DataStore key：设置字段表里已经没有它们，但老安装盘上还留着整份 JSON，
+// 安全模式仍要能列出来并清掉，否则每次写盘都要重新编码这些字节
+private val LEGACY_STORED_FIELD_KEYS = listOf("mode_injections", "lorebooks")
+
 private const val SETTINGS_STORE_NAME = "settings"
 
 // 读取失败时的最大重试次数
@@ -175,9 +179,6 @@ class SettingsStore internal constructor(
         val WEB_SERVER_ACCESS_PASSWORD = stringPreferencesKey("web_server_access_password")
         val WEB_SERVER_LOCALHOST_ONLY = booleanPreferencesKey("web_server_localhost_only")
 
-        // 提示词注入
-        val MODE_INJECTIONS = stringPreferencesKey("mode_injections")
-        val LOREBOOKS = stringPreferencesKey("lorebooks")
         val QUICK_MESSAGES = stringPreferencesKey("quick_messages")
 
         // 备份提醒
@@ -295,8 +296,13 @@ class SettingsStore internal constructor(
      */
     fun largeStoredFieldsFlow(minChars: Int): Flow<List<Pair<String, Int>>> = preferencesFlow
         .map { preferences ->
-            SETTINGS_FIELDS
-                .mapNotNull { field -> (preferences[field.key] as? String)?.let { field.key.name to it.length } }
+            val registered = SETTINGS_FIELDS.mapNotNull { field ->
+                (preferences[field.key] as? String)?.let { field.key.name to it.length }
+            }
+            val legacy = LEGACY_STORED_FIELD_KEYS.mapNotNull { name ->
+                (preferences[stringPreferencesKey(name)] as? String)?.let { name to it.length }
+            }
+            (registered + legacy)
                 .filter { (_, chars) -> chars >= minChars }
                 .sortedByDescending { (_, chars) -> chars }
         }
@@ -304,6 +310,10 @@ class SettingsStore internal constructor(
 
     /** 把 [keyName] 对应的字段恢复成默认值，返回时已经落盘。认不出的 key 不做任何事。 */
     suspend fun resetStoredField(keyName: String) {
+        if (keyName in LEGACY_STORED_FIELD_KEYS) {
+            dataStore.edit { preferences -> preferences.remove(stringPreferencesKey(keyName)) }
+            return
+        }
         val field = SETTINGS_FIELDS.find { it.key.name == keyName } ?: return
         update { field.reset(it) }
     }
@@ -353,18 +363,7 @@ class SettingsStore internal constructor(
         updateAssistant(assistantId) { it.copy(mcpServers = mcpServers) }
     }
 
-    suspend fun updateAssistantInjections(
-        assistantId: Uuid,
-        modeInjectionIds: Set<Uuid>,
-        lorebookIds: Set<Uuid>,
-        quickMessageIds: Set<Uuid> = emptySet(),
-    ) {
-        updateAssistant(assistantId) {
-            it.copy(
-                modeInjectionIds = modeInjectionIds,
-                lorebookIds = lorebookIds,
-                quickMessageIds = quickMessageIds,
-            )
-        }
+    suspend fun updateAssistantQuickMessages(assistantId: Uuid, quickMessageIds: Set<Uuid>) {
+        updateAssistant(assistantId) { it.copy(quickMessageIds = quickMessageIds) }
     }
 }

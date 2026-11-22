@@ -217,8 +217,7 @@ class ChatVM(
 
     // 流式输出时会话每个 chunk 都在变，助手和模型只取决于下面这几个字段
     private val configuredConversation = conversation.distinctUntilChanged { old, new ->
-        old.assistantId == new.assistantId && old.config == new.config &&
-            old.modeInjectionIds == new.modeInjectionIds && old.lorebookIds == new.lorebookIds
+        old.assistantId == new.assistantId && old.config == new.config
     }
 
     // 会话视角下的助手：会话开始后，模型、思考级别、搜索等以会话上固定的配置为准

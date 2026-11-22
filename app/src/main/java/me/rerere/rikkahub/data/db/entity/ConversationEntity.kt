@@ -24,6 +24,8 @@ data class ConversationEntity(
     val isPinned: Boolean,
     @ColumnInfo("custom_system_prompt", defaultValue = "")
     val customSystemPrompt: String = "",
+    // 模式注入与世界书已移除（C157）。这两列是官方 v31/v32 schema 的一部分，保留给官方库导入与
+    // 官方兼容导出；仓库层写库时固定写 "[]"，读取时忽略
     @ColumnInfo("mode_injection_ids", defaultValue = "[]")
     val modeInjectionIds: String = "[]",
     @ColumnInfo("lorebook_ids", defaultValue = "[]")

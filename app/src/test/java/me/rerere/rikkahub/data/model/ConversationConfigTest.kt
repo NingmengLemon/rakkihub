@@ -20,8 +20,6 @@ class ConversationConfigTest {
     private val modelB = Model(modelId = "model-b", displayName = "Model B")
     private val mcpServer = Uuid.random()
     private val workspace = Uuid.random()
-    private val injection = Uuid.random()
-    private val lorebook = Uuid.random()
 
     private val assistant = Assistant(
         chatModelId = modelA.id,
@@ -30,8 +28,6 @@ class ConversationConfigTest {
         mcpServers = setOf(mcpServer),
         workspaceId = workspace,
         enabledSkills = setOf("skill"),
-        modeInjectionIds = setOf(injection),
-        lorebookIds = setOf(lorebook),
     )
 
     private fun settings(assistant: Assistant = this.assistant) = Settings(
@@ -40,8 +36,6 @@ class ConversationConfigTest {
         chatModelId = modelB.id,
         providers = listOf(ProviderSetting.OpenAI(models = listOf(modelA, modelB))),
         mcpServers = listOf(McpServerConfig.StreamableHTTPServer(id = mcpServer)),
-        modeInjections = listOf(PromptInjection.ModeInjection(id = injection)),
-        lorebooks = listOf(Lorebook(id = lorebook)),
     )
 
     private fun conversation(assistant: Assistant = this.assistant) = Conversation(
@@ -73,8 +67,6 @@ class ConversationConfigTest {
             ),
             bound.config,
         )
-        assertEquals(setOf(injection), bound.modeInjectionIds)
-        assertEquals(setOf(lorebook), bound.lorebookIds)
         assertSame(bound, bound.bindConfig(settings(assistant.copy(reasoningLevel = ReasoningLevel.OFF))))
     }
 
@@ -98,8 +90,6 @@ class ConversationConfigTest {
             mcpServers = emptySet(),
             workspaceId = null,
             enabledSkills = emptySet(),
-            modeInjectionIds = emptySet(),
-            lorebookIds = emptySet(),
             systemPrompt = "changed",
         )
 
@@ -143,7 +133,6 @@ class ConversationConfigTest {
         val rebound = bound.bindConfig(withoutModelA)
 
         assertEquals(bound.config?.copy(chatModelId = modelB.id, builtInSearch = false), rebound.config)
-        assertEquals(bound.modeInjectionIds, rebound.modeInjectionIds)
         assertSame(rebound, rebound.bindConfig(withoutModelA))
     }
 
@@ -163,13 +152,11 @@ class ConversationConfigTest {
     @Test
     fun `bound conversation drops references to removed items`() {
         val bound = conversation().bindConfig(settings())
-        val emptied = settings().copy(mcpServers = emptyList(), modeInjections = emptyList(), lorebooks = emptyList())
+        val emptied = settings().copy(mcpServers = emptyList())
 
         val resolved = emptied.getAssistantOf(bound)
 
         assertEquals(emptySet<Uuid>(), resolved.mcpServers)
-        assertEquals(emptySet<Uuid>(), resolved.modeInjectionIds)
-        assertEquals(emptySet<Uuid>(), resolved.lorebookIds)
     }
 
     @Test
@@ -184,10 +171,8 @@ class ConversationConfigTest {
     @Test
     fun `chat page update stays on the started conversation`() {
         val bound = conversation().bindConfig(settings())
-        val newInjection = Uuid.random()
         val updated = settings().getAssistantOf(bound).copy(
             reasoningLevel = ReasoningLevel.LOW,
-            modeInjectionIds = setOf(newInjection),
             quickMessageIds = setOf(Uuid.random()),
         )
 
@@ -195,7 +180,6 @@ class ConversationConfigTest {
         val stored = updated.withoutConversationFields(bound, assistant)
 
         assertEquals(ReasoningLevel.LOW, conversation.config?.reasoningLevel)
-        assertEquals(setOf(newInjection), conversation.modeInjectionIds)
         // 不随会话固定的字段仍然写回助手
         assertEquals(assistant.copy(quickMessageIds = updated.quickMessageIds), stored)
     }
@@ -224,17 +208,5 @@ class ConversationConfigTest {
 
         assertEquals("/workspace/project", sameWorkspace.workspaceCwd)
         assertNull(otherWorkspace.workspaceCwd)
-    }
-
-    @Test
-    fun `conversation bound before per-conversation config keeps its own injections`() {
-        val conversationInjection = Uuid.random()
-        val conversation = conversation().copy(modeInjectionIds = setOf(conversationInjection))
-
-        val bound = conversation.bindConfig(settings())
-
-        // 会话自己绑定过的保留，没绑定过的继承助手
-        assertEquals(setOf(conversationInjection), bound.modeInjectionIds)
-        assertEquals(setOf(lorebook), bound.lorebookIds)
     }
 }

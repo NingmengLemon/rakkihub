@@ -40,62 +40,7 @@ import me.rerere.hugeicons.stroke.Package
 import me.rerere.hugeicons.stroke.Settings03
 import me.rerere.rikkahub.R
 import me.rerere.rikkahub.data.skills.SkillMetadata
-import me.rerere.rikkahub.data.model.Lorebook
-import me.rerere.rikkahub.data.model.PromptInjection
 import me.rerere.rikkahub.data.model.QuickMessage
-
-@Composable
-fun ModeInjectionsContent(
-    modeInjections: List<PromptInjection.ModeInjection>,
-    selectedIds: Set<Uuid>,
-    onToggle: (Uuid, Boolean) -> Unit,
-    modifier: Modifier = Modifier,
-    contentPadding: PaddingValues = PaddingValues(0.dp),
-    colors: ListItemColors = ListItemDefaults.segmentedColors(),
-    onManage: (() -> Unit)? = null,
-) {
-    ExtensionList(
-        items = modeInjections,
-        modifier = modifier,
-        contentPadding = contentPadding,
-        onManage = onManage,
-    ) { injection, shapes ->
-        ExtensionListItem(
-            title = injection.name.ifBlank { stringResource(R.string.extension_content_unnamed) },
-            checked = selectedIds.contains(injection.id),
-            onCheckedChange = { checked -> onToggle(injection.id, checked) },
-            shapes = shapes,
-            colors = colors,
-        )
-    }
-}
-
-@Composable
-fun LorebooksContent(
-    lorebooks: List<Lorebook>,
-    selectedIds: Set<Uuid>,
-    onToggle: (Uuid, Boolean) -> Unit,
-    modifier: Modifier = Modifier,
-    contentPadding: PaddingValues = PaddingValues(0.dp),
-    colors: ListItemColors = ListItemDefaults.segmentedColors(),
-    onManage: (() -> Unit)? = null,
-) {
-    ExtensionList(
-        items = lorebooks,
-        modifier = modifier,
-        contentPadding = contentPadding,
-        onManage = onManage,
-    ) { lorebook, shapes ->
-        ExtensionListItem(
-            title = lorebook.name.ifBlank { stringResource(R.string.extension_content_unnamed_lorebook) },
-            description = lorebook.description,
-            checked = selectedIds.contains(lorebook.id),
-            onCheckedChange = { checked -> onToggle(lorebook.id, checked) },
-            shapes = shapes,
-            colors = colors,
-        )
-    }
-}
 
 @Composable
 fun SkillsContent(

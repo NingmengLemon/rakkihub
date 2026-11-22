@@ -84,7 +84,6 @@ import me.rerere.rikkahub.ui.pages.backup.BackupPage
 import me.rerere.rikkahub.ui.pages.chat.ChatPage
 import me.rerere.rikkahub.ui.pages.debug.DebugPage
 import me.rerere.rikkahub.ui.pages.extensions.ExtensionsPage
-import me.rerere.rikkahub.ui.pages.extensions.PromptPage
 import me.rerere.rikkahub.ui.pages.extensions.QuickMessagesPage
 import me.rerere.rikkahub.ui.pages.extensions.skills.SkillDetailPage
 import me.rerere.rikkahub.ui.pages.memory.MemoryFilePage
@@ -372,7 +371,7 @@ class RouteActivity : ComponentActivity() {
                                 AssistantLocalToolPage(key.id)
                             }
 
-                            entry<Screen.AssistantInjections> { key ->
+                            entry<Screen.AssistantExtensions> { key ->
                                 AssistantExtensionsPage(key.id)
                             }
 
@@ -492,10 +491,6 @@ class RouteActivity : ComponentActivity() {
 
                             entry<Screen.QuickMessages> {
                                 QuickMessagesPage()
-                            }
-
-                            entry<Screen.Prompts> {
-                                PromptPage()
                             }
 
                             entry<Screen.Skills> {
@@ -638,7 +633,7 @@ sealed interface Screen : NavKey {
     data class AssistantLocalTool(val id: String) : Screen
 
     @Serializable
-    data class AssistantInjections(val id: String) : Screen
+    data class AssistantExtensions(val id: String) : Screen
 
     @Serializable
     data object Translator : Screen
@@ -726,9 +721,6 @@ sealed interface Screen : NavKey {
 
     @Serializable
     data object QuickMessages : Screen
-
-    @Serializable
-    data object Prompts : Screen
 
     @Serializable
     data object Skills : Screen

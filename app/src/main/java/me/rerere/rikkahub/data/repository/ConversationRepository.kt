@@ -47,6 +47,9 @@ class ConversationRepository(
 
         // 工具搜索结果先过滤掉失败/删除/scratch，再按调用方 limit 截断；多取候选避免过滤后不足
         private const val MODEL_SEARCH_RESULT_LIMIT = 200
+
+        /** 模式注入/世界书已移除，两列只作官方 schema 垫片，写库固定空集合 */
+        private const val LEGACY_ID_SET_JSON = "[]"
     }
 
     suspend fun getRecentConversations(assistantId: Uuid, limit: Int = 10): List<Conversation> {
@@ -483,8 +486,8 @@ class ConversationRepository(
             chatSuggestions = JsonInstant.encodeToString(conversation.chatSuggestions),
             isPinned = conversation.isPinned,
             customSystemPrompt = conversation.customSystemPrompt ?: "",
-            modeInjectionIds = JsonInstant.encodeToString(conversation.modeInjectionIds),
-            lorebookIds = JsonInstant.encodeToString(conversation.lorebookIds),
+            modeInjectionIds = LEGACY_ID_SET_JSON,
+            lorebookIds = LEGACY_ID_SET_JSON,
             workspaceCwd = conversation.workspaceCwd ?: "",
             folderId = conversation.folderId?.toString() ?: "",
             config = conversation.config?.let { JsonInstant.encodeToString(it) } ?: "",
@@ -507,8 +510,6 @@ class ConversationRepository(
             chatSuggestions = JsonInstant.decodeFromString(conversationEntity.chatSuggestions),
             isPinned = conversationEntity.isPinned,
             customSystemPrompt = conversationEntity.customSystemPrompt.ifEmpty { null },
-            modeInjectionIds = JsonInstant.decodeFromString(conversationEntity.modeInjectionIds),
-            lorebookIds = JsonInstant.decodeFromString(conversationEntity.lorebookIds),
             workspaceCwd = conversationEntity.workspaceCwd.ifEmpty { null },
             folderId = conversationEntity.folderId.ifEmpty { null }?.let { Uuid.parse(it) },
             config = conversationEntity.config.ifEmpty { null }?.let { JsonInstant.decodeFromString(it) },
@@ -537,14 +538,14 @@ class ConversationRepository(
     }
 
     /**
-     * 只更新会话持有的配置（含注入绑定和工作目录），不重写消息节点。
+     * 只更新会话持有的配置和工作目录，不重写消息节点。
      */
     suspend fun updateConversationConfig(conversation: Conversation) {
         conversationDAO.updateConfig(
             id = conversation.id.toString(),
             config = conversation.config?.let { JsonInstant.encodeToString(it) } ?: "",
-            modeInjectionIds = JsonInstant.encodeToString(conversation.modeInjectionIds),
-            lorebookIds = JsonInstant.encodeToString(conversation.lorebookIds),
+            modeInjectionIds = LEGACY_ID_SET_JSON,
+            lorebookIds = LEGACY_ID_SET_JSON,
             workspaceCwd = conversation.workspaceCwd ?: "",
         )
     }

@@ -701,10 +701,7 @@ function ChatInputInner({
               </DropdownMenu>
               <SearchPickerButton disabled={!canSwitchModel} conversation={conversation} />
               <McpPickerButton disabled={!canSwitchModel} conversation={conversation} />
-              <ExtensionPickerButton
-                conversation={conversation}
-                disabled={!canSwitchModel}
-              />
+              <ExtensionPickerButton disabled={!canSwitchModel} />
               <QuickMessageButton
                 quickMessages={quickMessages}
                 disabled={!canUseQuickMessage}

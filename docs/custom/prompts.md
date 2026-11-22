@@ -14,17 +14,16 @@
 | 上下文压缩 | `DEFAULT_COMPRESS_PROMPT`（`data/ai/prompts/CompressPrompt.kt`） | `compressPrompt` | 同上（C44） |
 | 聊天建议 | `DEFAULT_SUGGESTION_PROMPT`（`data/datastore/Settings.kt`），C6 已移除生成，只为解码旧设置保留 | `suggestionPrompt` | 无（功能已移除） |
 | 记忆整理 | `data/ai/prompts/MemoryPrompts.kt` 现拼 | 无 | 无 |
-| 学习模式 | `data/ai/prompts/LearningMode.kt` | 无 | 无 |
 | 工具说明 | `SkillsTools` 的 `systemPrompt`，其余工具用各自的 `description`（`data/ai/tools/`） | 无 | 无 |
 
 已知缺口：
 
-- 记忆整理、学习模式、工具说明这类写死在代码里，改需要动源码。
+- 记忆整理、工具说明这类写死在代码里，改需要动源码。
 - 标题、翻译、OCR 三份默认值没有统一的验收方式，改完只能靠人看输出。
 
 ## 重写计划
 
-顺序：先压缩（已有可编辑入口，改动只需要换默认值并补测试），再标题、翻译、OCR，之后决定记忆整理、学习模式要不要开放。`suggestionPrompt` 是 C6 移除建议功能后留下的旧字段，只为解码旧设置，不在重写范围内。
+顺序：先压缩（已有可编辑入口，改动只需要换默认值并补测试），再标题、翻译、OCR，之后决定记忆整理、工具说明要不要开放。`suggestionPrompt` 是 C6 移除建议功能后留下的旧字段，只为解码旧设置，不在重写范围内。
 
 每一项的交付物一致：
 
@@ -137,4 +136,4 @@ Rules:
 - 草稿的结构是否再裁并几段。
 - 默认模板是否继续用英文（其他提示词的默认值都是英文）。
 - 代码侧框定语加不加。
-- 记忆整理、学习模式、工具说明这三类要不要开放编辑。
+- 记忆整理、工具说明这两类要不要开放编辑。

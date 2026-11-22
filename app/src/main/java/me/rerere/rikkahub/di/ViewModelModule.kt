@@ -6,7 +6,6 @@ import me.rerere.rikkahub.ui.pages.backup.BackupVM
 import me.rerere.rikkahub.ui.pages.chat.ChatDrawerVM
 import me.rerere.rikkahub.ui.pages.chat.ChatVM
 import me.rerere.rikkahub.ui.pages.debug.DebugVM
-import me.rerere.rikkahub.ui.pages.extensions.PromptVM
 import me.rerere.rikkahub.ui.pages.extensions.QuickMessagesVM
 import me.rerere.rikkahub.ui.pages.extensions.skills.SkillDetailVM
 import me.rerere.rikkahub.ui.pages.extensions.skills.SkillsVM
@@ -67,7 +66,6 @@ val viewModelModule = module {
         )
     }
     viewModelOf(::BackupVM)
-    viewModelOf(::PromptVM)
     viewModelOf(::QuickMessagesVM)
     viewModelOf(::SkillsVM)
     viewModelOf(::SkillDetailVM)
