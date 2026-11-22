@@ -70,12 +70,15 @@ fun createConversationTools(
             listOf(UIMessagePart.Text(JsonInstantPretty.encodeToString(payload)))
         }
     ),
+    // 只搜当前助手的对话：助手 A 不该通过这个工具读到助手 B 的内容（上游 #2372）
     conversationSearchTool { query ->
-        conversationRepo.searchMessagesForModel(query, MessageSearchSort.RELEVANCE)
+        conversationRepo.searchMessagesForModel(query, MessageSearchSort.RELEVANCE, assistantId)
     },
 )
 
-private fun conversationSearchTool(search: suspend (query: String) -> List<MessageSearchResult>) = Tool(
+private fun conversationSearchTool(
+    search: suspend (query: String) -> List<MessageSearchResult>,
+) = Tool(
     name = "conversation_search",
     description = """
         Full-text search across the user's past conversations to recall specific information they mentioned before.

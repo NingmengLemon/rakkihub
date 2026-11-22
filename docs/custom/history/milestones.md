@@ -2,6 +2,11 @@
 
 本文件归档已完成的定制、修复与独立化批次，按时间或主题分组。当前状态以 checklist 索引与明细为准，未来方向见 [roadmap.md](../roadmap.md)。
 
+## 2026-11-22 conversation_search 按助手过滤（C154）
+
+- 上游 `#2372`：`ConversationTools.kt` 构造 `conversation_search` 时没有传 `assistantId`，当前助手能搜到其它助手的对话。现在把当前助手传给 `searchMessagesForModel`，查询路径与结果投影不变，后台记忆用的多助手搜索路径也不受影响。
+- 测试：新增 `ConversationToolsTest`（真机、临时 Room 库）建两个不同助手的会话，执行工具后只返回当前助手的会话；FTS 层过滤由既有 `MessageFtsManagerTest` 覆盖。app 单测 910 条、`spotlessCheck` 通过。
+
 ## 2026-11-22 硬编码文案清理（C153）
 
 - Web 的 Mermaid 渲染五条硬编码英文（空图、渲染失败、加载中、图表 `aria-label`，含 `markdown.tsx` 的 Suspense 兜底）移入 `web-ui/app/locales/{en-US,zh-CN}/markdown.json` 的 `mermaid` 分组，加载态抽成 `mermaid-loading.tsx` 的 `MermaidLoading` 两处共用；空图与渲染失败共用一个判断，渲染失败仍显示原始代码块。

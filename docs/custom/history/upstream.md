@@ -26,7 +26,7 @@
 
 建议跟进，按优先级：
 
-- `#2372` `conversation_search` 未按当前助手过滤。已在本仓库核对：`ConversationTools.kt` 的 `conversationSearchTool` 只调用 `searchMessagesForModel(query, RELEVANCE)`，没有传 `assistantId`，而仓库层早已有该参数；`recent_chats` 与记忆工具都按助手过滤了。属跨助手内容泄露，上游 3.3.1 一样未修。
+- `#2372` `conversation_search` 未按当前助手过滤。核对时 `ConversationTools.kt` 的 `conversationSearchTool` 只调用 `searchMessagesForModel(query, RELEVANCE)`，没有传 `assistantId`，而仓库层早已有该参数；`recent_chats` 与记忆工具都按助手过滤了。属跨助手内容泄露，上游 3.3.1 未修；本分支已修（C154），`ConversationToolsTest` 在设备上钉住搜索只返回当前助手的会话。
 - `#1573` 月之暗面 thinking 参数按 host 一刀切：K3 的档位失效，k2.7-code 在关闭推理时必 400。上游 PR #1585 已 closed 未合并，需要按模型分派而不是按 host。
 - `#2376` 模型页自定义 body 的 `tools` 字段整段覆盖本地工具（`mergeCustomBody` 对数组是替换）。要先定合并策略或加显式开关，否则会改坏「用户想完全覆盖」的用法。
 - `#2327` Gemini 原生搜索与 `memory_read` 混用偶发缺 `thought_signature`：C84 的队列可能没覆盖挂在 ServerTool 上的签名，缺 gemini-search 样本，未验证。

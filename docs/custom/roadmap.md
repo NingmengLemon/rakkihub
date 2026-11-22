@@ -342,7 +342,7 @@
 - 导出备份的多工作区选择（未排期）：勾选“导出工作区文件”后，继续多选具体要导出的工作区，默认全选；要同时处理本地导出、WebDAV、S3 以及导入侧对缺失工作区的提示。
 - Dependabot PR 分批处理（进行中）：安全/patch 批次已完成 okhttp、jsoup、slf4j 与 slf4j-android、sshd、jmdns、pebble、quickjs、bouncycastle、uiautomator；web-ui 批次已完成 react 19.3、streamdown 2.8、ky 2.2、i18next 27、react-i18next 17、file-type 22、react-resizable-panels 4.24 等升级；Gradle 批次已完成 wrapper 9.9.1、AGP 9.5.2、KSP 2.3.14、Ktor 3.6.1、spotless 8.11.0 等升级，并把 haze 2.1.0 的玻璃样式 API 改到 `GlassStyle.material3` 与 `optics { }`。两批都在真机上看过对应界面与 Web Server。material3 `1.5.0-rc01` 与 `androidx.ink` `1.1.0-alpha11` 同一次升级落地并验过界面，对应的 PR 等 Dependabot 自行回收；两项目前都已有更新的版本（material3 1.5.0 正式版、ink alpha12），等新 PR 出来再按同样方式验。仍待处理：等 rehype-katex 支持后再升的 katex 0.19 与单独重排的 oxfmt；PR 不自动合并，合并或关闭前确认。
 - 上游更新挑选与移植（未排期）：`ref` 保持只读，按批次查看上游提交，优先 bugfix、安全修复和会影响现有行为的改动；每批一个主题，手工移植并带设备验收，不做整分支 merge。
-- 上游 issue 跟进（2026-11-22 调研）：候选与排序见 [`history/upstream.md`](history/upstream.md) 的「2026-11-22 issue 调研」。排最前的是 `conversation_search` 未按当前助手过滤（跨助手内容泄露，已核对代码），其次按模型分派 Moonshot 思考参数、定自定义 body 的 `tools` 合并策略。
+- 上游 issue 跟进（2026-11-22 调研）：候选与排序见 [`history/upstream.md`](history/upstream.md) 的「2026-11-22 issue 调研」。`conversation_search` 未按当前助手过滤已修（C154）；接下来按模型分派 Moonshot 思考参数（`#1573`）、定自定义 body 的 `tools` 合并策略（`#2376`）。
 - 跨协议思考签名重放门禁（调研完成，低优先级、未排期）：目前跨协议切模型的需求不多，方案先放末尾，见 [`design/thinking-signature-replay.md`](design/thinking-signature-replay.md)。切模型时只重放目标协议自己产生的 reasoning，其余整块跳过但保留存储与 UI；DeepSeek thinking 需要无签名回放，门禁必须按协议判断；工具轮与 Gemini 的 `skip_thought_signature_validator` 兜底放在第二阶段。Claude、OpenAI Responses、OpenRouter 的签名清除也依赖这项，单项剥离会留下非法块。
 
 上游查看与 issue 调研记录见 [`history/upstream.md`](history/upstream.md)，已完成的落地批次见 [`history/milestones.md`](history/milestones.md)。

@@ -497,3 +497,12 @@
 - 理由：聊天页是停留时间最长的页面，截断与压缩的错误提示会直接影响用户是否敢继续操作；原来的 `Drop`/`floor`/`Attempt 1/3` 更像开发者日志，改成动作和结果明确的句子。
 - 合并注意：`Attempt 1 of 3` 与 Web 的 `Attempt 1 of 3` 保持一致；`Reason not recorded` 不改成 `Unknown error`，避免暗示系统知道原因；截断的 `window` 指当前请求窗口，不是整个会话；`chat_page_compress_prompt_hint` 的设置路径必须跟实际页面标题「Default Model and Prompt」一致，改设置页标题时同步。主题/搜索详情、MCP 的 OAuth 中文硬编码属于上游或后续批次，不在本项。
 - 测试：`:app:processGithubDebugResources`、`:app:testGithubDebugUnitTest` 910 条、`spotlessCheck`、markdownlint 通过；没有在设备上逐页截图核对长文案换行。
+
+<a id="c154"></a>
+
+## C154 conversation_search 按当前助手过滤
+
+- 落点：`ConversationTools.kt` 构造聊天工具时，`conversation_search` 现在把 `assistantId` 传给 `ConversationRepository.searchMessagesForModel`（第三个参数本来就有，默认 null 表示不限）。工具描述、FTS 查询与结果投影都不变。
+- 理由：上游 `#2372`。`recent_chats` 与后台记忆的 `createMemoryConversationTools` 都已按助手过滤，只有聊天侧的 `conversation_search` 漏了；助手 A 能搜到助手 B 的对话内容，属于跨助手内容泄露。修复只改接线，不新增查询路径。
+- 合并注意：`searchMessagesForModel` 的 `assistantId` 默认值保留，别改成必填；后台记忆那条路径用的是 `searchMessagesOfAssistantsForModel`（多助手集合），两者不要合并。搜索范围仍包含当前会话。
+- 测试：新增 `ConversationToolsTest`（`app/src/androidTest`，真机）用临时 Room 库建两个不同助手的会话，执行 `conversation_search` 后断言只返回当前助手的会话；FTS 层过滤由既有 `MessageFtsManagerTest.searchAppliesAssistantFilterAndLimit` 覆盖。app 单测 910 条、`spotlessCheck` 通过。
