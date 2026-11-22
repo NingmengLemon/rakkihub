@@ -1577,4 +1577,11 @@
   <string name="chat_page_clear_search">検索をクリア</string>
   <string name="safe_mode_legacy_mode_injections">モードインジェクション（削除済み）</string>
   <string name="safe_mode_legacy_lorebooks">ロアブック（削除済み）</string>
+  <string name="backup_page_workspaces_to_export">エクスポートするワークスペース</string>
+  <string name="backup_page_workspaces_hint">すべてのワークスペースがデフォルトで含まれています。</string>
+  <string name="backup_page_workspaces_empty">ワークスペースはまだありません。</string>
+  <string name="backup_page_restore_workspaces_missing">このバックアップには次のワークスペースのファイルが含まれていません：%1$s。これらのワークスペースにある既存のローカルファイルは保持されます。</string>
+  <string name="backup_page_workspaces_none_selected">ワークスペースが選択されていません。ワークスペースファイルはエクスポートされません。</string>
+  <string name="backup_page_workspaces_select_all">すべて選択</string>
+  <string name="backup_page_workspaces_export_only_hint">この選択はエクスポートにのみ影響します。復元時はバックアップ内のワークスペースファイルが対象です。</string>
 </resources>

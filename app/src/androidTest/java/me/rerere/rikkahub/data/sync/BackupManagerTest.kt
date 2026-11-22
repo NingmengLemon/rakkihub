@@ -7,6 +7,7 @@ import androidx.core.net.toUri
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
 import kotlinx.coroutines.runBlocking
+import kotlinx.serialization.json.JsonNull
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.int
 import kotlinx.serialization.json.jsonArray
@@ -529,6 +530,69 @@ class BackupManagerTest {
         )
     }
 
+    /** 勾选具体工作区后，只打包这些工作区的文件区。 */
+    @Test fun workspaceBackupOnlyIncludesSelectedWorkspaces() = runBlocking {
+        seedWorkspace("ws1", "notes/a.txt" to "hello")
+        seedWorkspace("ws2", "notes/b.txt" to "world")
+
+        val archive = manager.createBackup(
+            includeFiles = false,
+            includeWorkspaceFiles = true,
+            workspaceIds = listOf("ws1"),
+        )
+        val entries = ZipFile(archive).use { zip -> zip.entries().asSequence().map { it.name }.toSet() }
+
+        assertEquals(
+            "归档里只应有 settings、数据库与勾选工作区的文件",
+            setOf(
+                "settings.json",
+                DatabaseBackup.ARCHIVE_DATABASE,
+                workspaceArchivePath("ws1", "notes/a.txt"),
+            ),
+            entries,
+        )
+    }
+
+    /** 备份里只带一部分工作区文件时，恢复暂存后要告诉界面哪些工作区没有文件。 */
+    @Test fun restoreReportsWorkspacesWithoutFiles() = runBlocking {
+        seedWorkspace("ws1", "notes/a.txt" to "hello")
+        seedWorkspace("ws2", "notes/b.txt" to "world")
+        val archive = manager.createBackup(
+            includeFiles = false,
+            includeWorkspaceFiles = true,
+            workspaceIds = listOf("ws1"),
+        )
+
+        val info = manager.stageRestore(archive, includeFiles = false, includeWorkspaceFiles = true)
+
+        assertEquals(listOf("ws2"), info.missingWorkspaceNames)
+    }
+
+    /** 归档里有工作区条目，但这次导入没勾恢复工作区时，也不提示缺文件。 */
+    @Test fun restoreDoesNotWarnWhenWorkspaceFilesAreNotRestored() = runBlocking {
+        seedWorkspace("ws1", "notes/a.txt" to "hello")
+        seedWorkspace("ws2", "notes/b.txt" to "world")
+        val archive = manager.createBackup(
+            includeFiles = false,
+            includeWorkspaceFiles = true,
+            workspaceIds = listOf("ws1"),
+        )
+
+        val info = manager.stageRestore(archive, includeFiles = false, includeWorkspaceFiles = false)
+
+        assertEquals(emptyList<String>(), info.missingWorkspaceNames)
+    }
+
+    /** 没勾工作区时不提示缺文件，那是用户自己的选择。 */
+    @Test fun restoreDoesNotWarnWhenWorkspaceFilesWereNotSelected() = runBlocking {
+        seedWorkspace("ws1", "notes/a.txt" to "hello")
+        val archive = manager.createBackup(includeFiles = false, includeWorkspaceFiles = false)
+
+        val info = manager.stageRestore(archive, includeFiles = false, includeWorkspaceFiles = false)
+
+        assertEquals(emptyList<String>(), info.missingWorkspaceNames)
+    }
+
     /** 库里有工作区行但磁盘上没有目录（或 root 不合法）时跳过，不该让整次导出失败。 */
     @Test fun workspaceWithoutADirectoryIsSkipped() = runBlocking {
         liveDatabase.workspaceDao().upsert(
@@ -560,12 +624,13 @@ class BackupManagerTest {
         val store = GlobalContext.get().get<SettingsStore>()
         // 这里改的是进程内共享的 SettingsStore，finally 会还原；跑 test 的构建被打断时，
         // 设备上可能留在「全选」状态，只影响这台测试机。
-        val original = store.settingsFlow.value.webDavConfig.items
+        val original = store.settingsFlow.value.webDavConfig
         try {
             store.update { settings ->
                 settings.copy(
                     webDavConfig = settings.webDavConfig.copy(
                         items = WebDavConfig.BackupItem.entries.toList(),
+                        workspaceIds = listOf("workspace"),
                     ),
                 )
             }
@@ -579,12 +644,14 @@ class BackupManagerTest {
                 listOf("DATABASE", "FILES"),
                 backupItems(official),
             )
+            assertEquals("官方出口不该带工作区白名单", null, backupWorkspaceIds(official))
 
             val self = manager.createBackup(includeFiles = false)
             assertTrue("自家的出口应保留用户勾选", backupItems(self).contains("WORKSPACES"))
+            assertEquals(listOf("workspace"), backupWorkspaceIds(self))
         } finally {
             store.update { settings ->
-                settings.copy(webDavConfig = settings.webDavConfig.copy(items = original))
+                settings.copy(webDavConfig = original)
             }
         }
     }
@@ -1112,6 +1179,13 @@ class BackupManagerTest {
         val settings = zip.getInputStream(zip.getEntry("settings.json")).readBytes().decodeToString()
         JsonInstant.parseToJsonElement(settings).jsonObject["webDavConfig"]!!.jsonObject["items"]!!
             .jsonArray.map { it.jsonPrimitive.content }
+    }
+
+    private fun backupWorkspaceIds(archive: File): List<String>? = ZipFile(archive).use { zip ->
+        val settings = zip.getInputStream(zip.getEntry("settings.json")).readBytes().decodeToString()
+        val ids = JsonInstant.parseToJsonElement(settings).jsonObject["webDavConfig"]!!
+            .jsonObject["workspaceIds"]
+        if (ids == null || ids is JsonNull) null else ids.jsonArray.map { it.jsonPrimitive.content }
     }
 
     private fun probe(database: AppDatabase): String = database.openHelper.readableDatabase

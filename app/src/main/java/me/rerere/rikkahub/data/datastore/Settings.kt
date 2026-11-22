@@ -285,6 +285,11 @@ data class WebDavConfig(
     val password: String = "",
     val path: String = "rikkahub_backups",
     val items: List<BackupItem> = BackupItem.DEFAULT_SELECTION,
+    /**
+     * 要导出文件的工作区 id；null 表示全部。只影响工作区文件，数据库与设置始终全量导出；
+     * 备份里没有文件的工作区恢复后仍然存在，本机已有的文件不会被清掉。
+     */
+    val workspaceIds: List<String>? = null,
 ) {
     @Serializable
     enum class BackupItem {

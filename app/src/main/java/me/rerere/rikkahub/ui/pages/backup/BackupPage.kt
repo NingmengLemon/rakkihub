@@ -54,6 +54,7 @@ private enum class BackupTab(
 fun BackupPage(vm: BackupVM = koinViewModel()) {
     val pagerState = rememberPagerState { BackupTab.entries.size }
     var showRestartDialog by remember { mutableStateOf(false) }
+    var missingWorkspaceNames by remember { mutableStateOf(emptyList<String>()) }
     val scrollBehavior = TopAppBarDefaults.exitUntilCollapsedScrollBehavior()
 
     Scaffold(
@@ -95,14 +96,20 @@ fun BackupPage(vm: BackupVM = koinViewModel()) {
                     BackupTab.LOCAL -> {
                         ImportExportTab(
                             vm = vm,
-                            onShowRestartDialog = { showRestartDialog = true }
+                            onShowRestartDialog = { missing ->
+                                missingWorkspaceNames = missing
+                                showRestartDialog = true
+                            }
                         )
                     }
 
                     BackupTab.WEBDAV -> {
                         WebDavTab(
                             vm = vm,
-                            onShowRestartDialog = { showRestartDialog = true }
+                            onShowRestartDialog = { missing ->
+                                missingWorkspaceNames = missing
+                                showRestartDialog = true
+                            }
                         )
                     }
 
@@ -116,6 +123,6 @@ fun BackupPage(vm: BackupVM = koinViewModel()) {
     }
 
     if (showRestartDialog) {
-        BackupDialog()
+        BackupDialog(missingWorkspaceNames)
     }
 }

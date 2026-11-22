@@ -6,14 +6,18 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import me.rerere.rikkahub.data.datastore.Settings
 import me.rerere.rikkahub.data.datastore.SettingsStore
 import me.rerere.rikkahub.data.datastore.WebDavConfig
+import me.rerere.rikkahub.data.datastore.toggleWorkspaceSelection
+import me.rerere.rikkahub.data.repository.WorkspaceRepository
 import me.rerere.rikkahub.data.sync.BackupProgress
 import me.rerere.rikkahub.data.sync.BackupStage
 import me.rerere.rikkahub.data.sync.BackupTarget
+import me.rerere.rikkahub.data.sync.RestoreStagingInfo
 import me.rerere.rikkahub.data.sync.webdav.WebDavBackupItem
 import me.rerere.rikkahub.data.sync.webdav.WebDavSync
 import me.rerere.rikkahub.utils.UiState
@@ -32,6 +36,7 @@ enum class BackupOperation {
 class BackupVM(
     private val settingsStore: SettingsStore,
     private val webDavSync: WebDavSync,
+    workspaceRepository: WorkspaceRepository,
 ) : ViewModel() {
     val settings = settingsStore.settingsFlow.stateIn(
         scope = viewModelScope,
@@ -43,6 +48,18 @@ class BackupVM(
 
     /** 本地导出/导入的选择项。聊天记录始终包含，这里只放用户能关掉的附件与工作区。 */
     val localBackupItems = MutableStateFlow(WebDavConfig.BackupItem.LOCAL_DEFAULT_SELECTION)
+
+    /** 可备份文件的本机工作区；远程工作区没有本地文件区，不出现在多选里。 */
+    val workspaces = workspaceRepository.listFlow()
+        .map { list -> list.filter { it.capabilities().localFiles } }
+        .stateIn(
+            scope = viewModelScope,
+            started = SharingStarted.Eagerly,
+            initialValue = emptyList(),
+        )
+
+    /** 本地导出勾选的工作区 id；null 表示全部。工作区删除后由导出侧按现存 id 过滤。 */
+    val localWorkspaceIds = MutableStateFlow<List<String>?>(null)
 
     private val _exportProgress = MutableStateFlow<BackupProgress?>(null)
 
@@ -88,6 +105,20 @@ class BackupVM(
         localBackupItems.value = WebDavConfig.BackupItem.normalize(items)
     }
 
+    /** 勾选或取消一个工作区；当前是「全部」时先物化成显式 id 列表。 */
+    fun toggleLocalWorkspace(workspaceId: String, checked: Boolean) {
+        localWorkspaceIds.value = toggleWorkspaceSelection(
+            current = localWorkspaceIds.value,
+            allIds = workspaces.value.map { it.id },
+            id = workspaceId,
+            checked = checked,
+        )
+    }
+
+    fun selectAllLocalWorkspaces() {
+        localWorkspaceIds.value = null
+    }
+
     fun loadBackupFileItems() {
         viewModelScope.launch {
             runCatching {
@@ -114,8 +145,8 @@ class BackupVM(
         recordBackupTime()
     }
 
-    suspend fun restore(item: WebDavBackupItem) {
-        webDavSync.restore(config = settings.value.webDavConfig, item = item)
+    suspend fun restore(item: WebDavBackupItem): RestoreStagingInfo {
+        return webDavSync.restore(config = settings.value.webDavConfig, item = item)
     }
 
     suspend fun deleteWebDavBackupFile(item: WebDavBackupItem) {
@@ -134,7 +165,10 @@ class BackupVM(
         _exportProgress.value = BackupProgress(BackupStage.PREPARING)
         try {
             val file = webDavSync.prepareBackupFile(
-                config = settings.value.webDavConfig.copy(items = localBackupItems.value),
+                config = settings.value.webDavConfig.copy(
+                    items = localBackupItems.value,
+                    workspaceIds = localWorkspaceIds.value,
+                ),
                 target = target,
                 onProgress = { _exportProgress.value = it },
             )
@@ -145,9 +179,9 @@ class BackupVM(
         }
     }
 
-    suspend fun restoreFromLocalFile(file: File) {
+    suspend fun restoreFromLocalFile(file: File): RestoreStagingInfo {
         try {
-            webDavSync.restoreFromLocalFile(
+            return webDavSync.restoreFromLocalFile(
                 file,
                 settings.value.webDavConfig.copy(items = localBackupItems.value),
                 onProgress = { _restoreProgress.value = it },

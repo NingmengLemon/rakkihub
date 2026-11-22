@@ -15,6 +15,8 @@ internal fun Settings.forOfficialExport(): Settings {
         // 官方客户端无法运行 stdio MCP，同时清掉 assistant 对这些 id 的引用
         stdioMcpServers = emptyList(),
         stoppedMcpServerIds = emptySet(),
+        // 工作区文件不进官方出口，工作区多选也没有意义
+        webDavConfig = webDavConfig.copy(workspaceIds = null),
         assistants = assistants.map { assistant ->
             assistant.copy(
                 reasoningLevel = assistant.reasoningLevel.forOfficialExport(),

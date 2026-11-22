@@ -10,6 +10,7 @@ import me.rerere.rikkahub.data.sync.BackupManager
 import me.rerere.rikkahub.data.sync.BackupProgress
 import me.rerere.rikkahub.data.sync.BackupTarget
 import me.rerere.rikkahub.data.sync.ImportedBackupArchive
+import me.rerere.rikkahub.data.sync.RestoreStagingInfo
 import me.rerere.rikkahub.utils.fileSizeToString
 import java.io.File
 import java.time.Instant
@@ -74,7 +75,9 @@ class WebDavSync(
             .sortedByDescending { it.lastModified }
     }
 
-    suspend fun restore(config: WebDavConfig, item: WebDavBackupItem) = withContext(Dispatchers.IO) {
+    suspend fun restore(config: WebDavConfig, item: WebDavBackupItem): RestoreStagingInfo = withContext(
+        Dispatchers.IO
+    ) {
         val client = getClient(config)
         val backupFile = File.createTempFile("restore-", ".zip", context.cacheDir)
 
@@ -106,9 +109,7 @@ class WebDavSync(
         file: File,
         config: WebDavConfig,
         onProgress: ((BackupProgress) -> Unit)? = null,
-    ) {
-        restoreFromBackupFile(file, config, onProgress)
-    }
+    ): RestoreStagingInfo = restoreFromBackupFile(file, config, onProgress)
 
     suspend fun prepareBackupFile(
         config: WebDavConfig,
@@ -117,6 +118,7 @@ class WebDavSync(
     ): File = backupManager.createBackup(
         includeFiles = WebDavConfig.BackupItem.FILES in config.items,
         includeWorkspaceFiles = WebDavConfig.BackupItem.WORKSPACES in config.items,
+        workspaceIds = config.workspaceIds,
         backupTarget = target,
         onProgress = onProgress,
     )
@@ -125,8 +127,8 @@ class WebDavSync(
         backupFile: File,
         config: WebDavConfig,
         onProgress: ((BackupProgress) -> Unit)? = null,
-    ) {
-        backupManager.stageRestore(
+    ): RestoreStagingInfo {
+        val staged = backupManager.stageRestore(
             archive = backupFile,
             includeFiles = WebDavConfig.BackupItem.FILES in config.items,
             includeWorkspaceFiles = WebDavConfig.BackupItem.WORKSPACES in config.items,
@@ -139,6 +141,7 @@ class WebDavSync(
             ImportedBackupArchive.store(backupFile, File(context.noBackupFilesDir, "imported-backups"))
                 .onFailure { Log.w(TAG, "Cannot archive imported backup", it) }
         }
+        return staged
     }
 }
 

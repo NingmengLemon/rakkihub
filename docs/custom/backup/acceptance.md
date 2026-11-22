@@ -219,3 +219,11 @@ C142 把 `message_node` 的索引换成复合索引（Room 34 到 35），官方
 - 界面：会话里的测试图片正常显示；两边用同一组查询 `describe` 都能搜到这条消息（同一个命中与时间戳，官方侧恢复后 FTS 已重建）。
 - 回归：同一构建上 `:app:connectedGithubDebugAndroidTest` 的 `data.sync` 包 56 条全部通过（`BackupManagerTest` 28、`DatabaseBackupTest` 3、`OfficialBackupRestoreAcceptanceTest` 2、`RestoreAppliedOutcomeTest` 1、`OfficialDatabaseConverterTest` 2、`OfficialDatabaseReaderTest` 7、`OfficialDatabaseWriterTest` 4、`OfficialForeignAttachmentPathsTest` 4、`OfficialSampleAcceptanceTest` 2、`OfficialSchemaTrimmerTest` 3），设备上的 v32/v31 样本与 124MB 整份归档都实际跑过。
 - 官方客户端原数据是 4 个测试会话（库 87,040 字节），导入前已备份到设备 `/data/local/tmp/official-prev.db`；当前官方客户端保留的是这份恢复结果。
+
+## 2026-11-22 C158 重跑
+
+C158 给 `WebDavConfig` 增加 `workspaceIds`（默认 null，旧设置解码为 null），并按选择导出工作区文件；不改 Room/schema、数据库表、附件命名和官方兼容出口布局，官方出口把该字段归一成 null。按上面的标准重跑设备数据验收：
+
+- `data.sync` 设备包 60 条全部通过：`BackupManagerTest` 32、`DatabaseBackupTest` 3、`OfficialBackupRestoreAcceptanceTest` 2、`RestoreAppliedOutcomeTest` 1、`OfficialDatabaseConverterTest` 2、`OfficialDatabaseReaderTest` 7、`OfficialDatabaseWriterTest` 4、`OfficialForeignAttachmentPathsTest` 4、`OfficialSampleAcceptanceTest` 2、`OfficialSchemaTrimmerTest` 3。v32/v31 样本读取与转换、官方备份恢复、同安装自家恢复、按工作区选择打包与恢复提示都实际跑过。
+- 设备点验：本地导出页勾选 Workspaces 后默认全选，取消到零出现「工作区文件不会导出」的警告，重新勾选或点全选恢复；WebDAV 页勾选 Workspaces 后同样默认全选。
+- 官方 RikkaHub 3.1.1 手动恢复、5GB 与 `.crosscheck` 换包名恢复没有重跑：本项只新增带默认值的设置字段，不涉及 Room schema、附件路径或归档布局；官方客户端对未知设置字段的容忍已由 C75 等覆盖，官方出口又把该字段归一成 null。按 C75 的口径记为按范围跳过。

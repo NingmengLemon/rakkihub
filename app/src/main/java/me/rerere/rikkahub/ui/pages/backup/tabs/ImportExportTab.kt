@@ -44,6 +44,7 @@ import me.rerere.rikkahub.ui.pages.backup.BackupOperation
 import me.rerere.rikkahub.ui.pages.backup.BackupVM
 import me.rerere.rikkahub.ui.pages.backup.components.BackupActionIcon
 import me.rerere.rikkahub.ui.pages.backup.components.backupContentItem
+import me.rerere.rikkahub.ui.pages.backup.components.workspaceSelectionItem
 import me.rerere.rikkahub.ui.pages.backup.components.backupProgressItem
 import me.rerere.rikkahub.ui.pages.backup.components.restoreErrorMessage
 import me.rerere.ui.toast.ToastType
@@ -60,12 +61,14 @@ private fun exportOperation(target: BackupTarget): BackupOperation =
 @Composable
 fun ImportExportTab(
     vm: BackupVM,
-    onShowRestartDialog: () -> Unit
+    onShowRestartDialog: (List<String>) -> Unit
 ) {
     val toaster = LocalToaster.current
     val scope = rememberCoroutineScope()
     val context = LocalContext.current
     val selectedBackupItems by vm.localBackupItems.collectAsStateWithLifecycle()
+    val workspaces by vm.workspaces.collectAsStateWithLifecycle()
+    val localWorkspaceIds by vm.localWorkspaceIds.collectAsStateWithLifecycle()
     val exportProgress by vm.exportProgress.collectAsStateWithLifecycle()
     val restoreProgress by vm.restoreProgress.collectAsStateWithLifecycle()
     val operation by vm.operation.collectAsStateWithLifecycle()
@@ -148,7 +151,7 @@ fun ImportExportTab(
             try {
                 // 本应用备份与官方 RikkaHub 备份是同一个归档格式，恢复流程一致
                 val tempFile = File(context.cacheDir, "temp_restore_${System.currentTimeMillis()}.zip")
-                try {
+                val restoreInfo = try {
                     withContext(Dispatchers.IO) {
                         val inputStream = context.contentResolver.openInputStream(uri)
                             ?: error("Cannot read the selected backup")
@@ -167,7 +170,7 @@ fun ImportExportTab(
                     context.getString(R.string.backup_page_restore_success),
                     type = ToastType.Success
                 )
-                onShowRestartDialog()
+                onShowRestartDialog(restoreInfo.missingWorkspaceNames)
             } catch (e: CancellationException) {
                 throw e
             } catch (e: Exception) {
@@ -229,6 +232,14 @@ fun ImportExportTab(
                     WebDavConfig.BackupItem.FILES -> stringResource(R.string.backup_page_files)
                     WebDavConfig.BackupItem.WORKSPACES -> stringResource(R.string.backup_page_workspaces)
                 }
+            }
+            if (WebDavConfig.BackupItem.WORKSPACES in selectedBackupItems) {
+                workspaceSelectionItem(
+                    workspaces = workspaces,
+                    selectedIds = localWorkspaceIds,
+                    onToggle = { id, checked -> vm.toggleLocalWorkspace(id, checked) },
+                    onSelectAll = { vm.selectAllLocalWorkspaces() },
+                )
             }
         }
 

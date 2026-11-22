@@ -2,6 +2,13 @@
 
 本文件归档已完成的定制、修复与独立化批次，按时间或主题分组。当前状态以 checklist 索引与明细为准，未来方向见 [roadmap.md](../roadmap.md)。
 
+## 2026-11-22 导出备份选择具体工作区（C158）
+
+- 本地导出与 WebDAV 配置都支持多选工作区，默认全部；`WebDavConfig.workspaceIds` 为 null 表示全部，旧设置照旧解码。
+- `BackupManager` 按选择过滤工作区文件；恢复暂存后列出备份里没有文件的本机工作区，显示在重启提示里。
+- S3 备份已在 C9 移除，本项只覆盖本地与 WebDAV；数据库和设置始终全量导出，未选中的工作区恢复后仍在，文件区不一定为空，本机已有文件保留。
+- 测试：新增 11 条单测与 4 条 `BackupManagerTest` 用例，设备用例在 K60 上通过；设备上确认本地与 WebDAV 页默认全选、取消到零时的警告与全选按钮正常。
+
 ## 2026-11-22 移除模式注入与世界书（C157）
 
 - 整体删掉 `PromptInjection`/`ModeInjection`/`RegexInjection`/`Lorebook` 与 `PromptInjectionTransformer`，以及设置字段、助手/会话绑定、扩展页与聊天扩展面板入口、`PromptPage`、单条导出与 SillyTavern 世界书导入；Web 端删掉两个 injections 端点，补了快捷消息专用的 `settings/assistant/quick-messages`。

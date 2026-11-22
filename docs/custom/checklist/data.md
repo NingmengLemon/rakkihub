@@ -1,6 +1,6 @@
 # 明细：数据、备份与附件
 
-本文件是 [checklist.md](../checklist.md) 的明细，收录 C10 至 C11、C17 至 C34、C36、C40 至 C42、C79 至 C80、C87 至 C88、C108 至 C110、C142。
+本文件是 [checklist.md](../checklist.md) 的明细，收录 C10 至 C11、C17 至 C34、C36、C40 至 C42、C79 至 C80、C87 至 C88、C108 至 C110、C142、C158。
 
 <a id="c10"></a>
 
@@ -266,3 +266,12 @@
 - 理由：按会话加载消息时按 `node_index` 排序分页，只有 `conversation_id` 索引时每页都要把整个会话的行取出来排序，几千条消息的会话打开会明显变慢；复合索引仍以 `conversation_id` 开头，外键和按会话查询照常可用。
 - 合并注意：本分支的 schema 33 已被 `usage_record.outcome` 占用，不能直接套上游的 32→33 迁移，所以另起 34→35；这是纯索引迁移，不改表数据，也不能用 AutoMigration（Room 会重建整张 `message_node`）。官方兼容导出只按表/列判断分叉，索引差异不在 `canReadAsV32` 检查里，所以 `OfficialSchemaTrimmer.trim` 会额外把复合索引换回官方单列索引，避免导出库带着自定义索引冒充官方库；官方客户端上的导出验收已在 2026-11-21 复验，见 [`backup/acceptance.md`](../backup/acceptance.md)。
 - 测试：`:app:kspGithubDebugKotlin` 生成 35.json，`:app:compileGithubDebugKotlin`、`:app:compileGithubDebugAndroidTestKotlin` 通过；设备上执行 `:app:connectedGithubDebugAndroidTest` 的 `Migration_34_35_Test` 通过，确认旧索引被替换为复合索引；`OfficialSchemaTrimmerTest` 增加断言，导出后 `message_node` 只有官方单列索引；2026-11-21 在 K60 上走真实导出出口复验：导出库 `user_version` 32、identity 是官方 v32 值、`message_node` 只有 `index_message_node_conversation_id`，官方 RikkaHub 3.1.1 恢复后计数与导出一致，会话里的测试图片正常显示。
+
+<a id="c158"></a>
+
+## C158 导出备份选择具体工作区
+
+- 落点：`WebDavConfig.workspaceIds: List<String>?`，null 表示全部，旧设置解码为 null；`WorkspaceBackupSelection.kt` 的 `toggleWorkspaceSelection`/`effectiveWorkspaceIds` 负责把显式全选归一成 null、把选择与现存 id 求交。本地导出用 `BackupVM.localWorkspaceIds`（null 全部，接 `WorkspaceRepository` 后只列 `localFiles` 的工作区），WebDAV 页把选择写进配置；`BackupManager.createBackup` 新增 `workspaceIds` 参数，`collectWorkspaceFiles` 按 id 过滤。恢复侧 `BackupManager.stageRestore` 返回 `RestoreStagingInfo`：`stageDatabase` 读出本机工作区，和本次计划恢复的工作区条目 root 对比；本次勾选恢复工作区文件且归档至少带了一个条目时，把没有文件的工作区列进 `BackupDialog` 的恢复提示，安全模式导入也接住了这个返回值。官方出口把 `workspaceIds` 置 null。新增 7 条文案（多选标题、全选提示、默认全选、空列表、未选择警告、导出专用说明、恢复缺文件提示）。
+- 理由：工作区可能很大，之前只有全局开关，导出前应该能只挑需要的；备份里没有文件的工作区恢复后仍然存在，本机已有文件不会被清掉。
+- 合并注意：数据库与设置始终全量导出，选择只影响导出；本地页的「Workspaces」总开关仍控制导入是否恢复工作区文件，具体工作区多选只作用于导出。显式选择覆盖全部现存工作区时归一成 null，之后新建的工作区默认包含；只选一部分时，新建工作区要重新勾选。归档里完全没有工作区条目、或本次导入没勾恢复工作区文件时都不提示缺文件。恢复是叠加语义，不会清掉本机已有文件。官方兼容出口仍不打包工作区。S3 备份已在 C9 移除，本项只覆盖本地与 WebDAV。`workspaceIds` 是带默认 null 的新 Settings 字段，旧设置与旧备份解码行为不变，验收记录见 [`backup/acceptance.md`](../backup/acceptance.md) 的「2026-11-22 C158 重跑」。
+- 测试：`BackupWorkspaceSelectionTest` 11 条（全选、显式选择、空选择、全选归一、过期 id、缺文件提示、WebDAV 配置默认与往返）；`BackupManagerTest` 新增 4 条（按选择打包、恢复提示、没勾恢复工作区不提示、归档没有条目不提示）；`:app:testGithubDebugUnitTest`（JBR 21）、`:ai:testDebugUnitTest`、`spotlessCheck`、markdownlint 通过；K60 上跑 `data.sync` 设备包，并点验本地与 WebDAV 页的默认全选、一个都不选的警告和全选按钮。

@@ -24,6 +24,7 @@ import me.rerere.hugeicons.stroke.View
 import me.rerere.hugeicons.stroke.ViewOff
 import me.rerere.rikkahub.R
 import me.rerere.rikkahub.data.datastore.WebDavConfig
+import me.rerere.rikkahub.data.datastore.toggleWorkspaceSelection
 import me.rerere.rikkahub.ui.components.ui.CardGroup
 import me.rerere.rikkahub.ui.context.LocalToaster
 import me.rerere.rikkahub.ui.pages.backup.BackupOperation
@@ -33,17 +34,19 @@ import me.rerere.rikkahub.ui.pages.backup.components.BackupFilesSheet
 import me.rerere.rikkahub.ui.pages.backup.components.RemoteBackupLayout
 import me.rerere.rikkahub.ui.pages.backup.components.RemoteBackupStatus
 import me.rerere.rikkahub.ui.pages.backup.components.backupContentItem
+import me.rerere.rikkahub.ui.pages.backup.components.workspaceSelectionItem
 import me.rerere.rikkahub.ui.pages.backup.components.restoreErrorMessage
 import me.rerere.ui.toast.ToastType
 
 @Composable
 fun WebDavTab(
     vm: BackupVM,
-    onShowRestartDialog: () -> Unit
+    onShowRestartDialog: (List<String>) -> Unit
 ) {
     val settings by vm.settings.collectAsStateWithLifecycle()
     val webDavConfig = settings.webDavConfig
     val backupItemsState by vm.webDavBackupItems.collectAsStateWithLifecycle()
+    val workspaces by vm.workspaces.collectAsStateWithLifecycle()
     val operation by vm.operation.collectAsStateWithLifecycle()
     val toaster = LocalToaster.current
     val context = LocalContext.current
@@ -188,6 +191,25 @@ fun WebDavTab(
                     WebDavConfig.BackupItem.WORKSPACES -> stringResource(R.string.backup_page_workspaces)
                 }
             }
+            if (WebDavConfig.BackupItem.WORKSPACES in WebDavConfig.BackupItem.normalize(webDavConfig.items)) {
+                workspaceSelectionItem(
+                    workspaces = workspaces,
+                    selectedIds = webDavConfig.workspaceIds,
+                    onToggle = { id, checked ->
+                        updateWebDavConfig(
+                            webDavConfig.copy(
+                                workspaceIds = toggleWorkspaceSelection(
+                                    current = webDavConfig.workspaceIds,
+                                    allIds = workspaces.map { it.id },
+                                    id = id,
+                                    checked = checked,
+                                ),
+                            )
+                        )
+                    },
+                    onSelectAll = { updateWebDavConfig(webDavConfig.copy(workspaceIds = null)) },
+                )
+            }
         }
     }
 
@@ -224,13 +246,13 @@ fun WebDavTab(
                     scope.launch {
                         restoringItemId = item.displayName
                         try {
-                            vm.restore(item = item)
+                            val restoreInfo = vm.restore(item = item)
                             toaster.show(
                                 context.getString(R.string.backup_page_restore_success),
                                 type = ToastType.Success
                             )
                             showBackupFiles = false
-                            onShowRestartDialog()
+                            onShowRestartDialog(restoreInfo.missingWorkspaceNames)
                         } catch (e: CancellationException) {
                             throw e
                         } catch (err: Exception) {

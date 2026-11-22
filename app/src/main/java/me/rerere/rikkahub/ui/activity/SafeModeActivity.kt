@@ -103,6 +103,7 @@ class SafeModeActivity : ComponentActivity() {
                 var importing by remember { mutableStateOf(false) }
                 var showImportConfirm by remember { mutableStateOf(false) }
                 var restoreStaged by remember { mutableStateOf(false) }
+                var missingWorkspaceNames by remember { mutableStateOf(emptyList<String>()) }
                 val busy = exporting || importing
                 val scope = rememberCoroutineScope()
                 val context = LocalContext.current
@@ -166,11 +167,12 @@ class SafeModeActivity : ComponentActivity() {
                                     }
                                 }
                             }
-                            try {
+                            val staged = try {
                                 backupManager.stageRestore(archive, includeFiles = true, includeWorkspaceFiles = true)
                             } finally {
                                 archive.delete()
                             }
+                            missingWorkspaceNames = staged.missingWorkspaceNames
                             restoreStaged = true
                         } catch (e: CancellationException) {
                             throw e
@@ -348,7 +350,7 @@ class SafeModeActivity : ComponentActivity() {
                 }
 
                 if (restoreStaged) {
-                    BackupDialog()
+                    BackupDialog(missingWorkspaceNames)
                 }
 
                 pendingClearKey?.let { key ->

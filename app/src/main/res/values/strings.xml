@@ -1577,4 +1577,11 @@
   <string name="chat_page_clear_search">Clear search</string>
   <string name="safe_mode_legacy_mode_injections">Mode injections (removed)</string>
   <string name="safe_mode_legacy_lorebooks">Lorebooks (removed)</string>
+  <string name="backup_page_workspaces_to_export">Workspaces to export</string>
+  <string name="backup_page_workspaces_hint">All workspaces are included by default.</string>
+  <string name="backup_page_workspaces_empty">No workspaces yet.</string>
+  <string name="backup_page_restore_workspaces_missing">This backup has no files for: %1$s. Existing local files in these workspaces are kept.</string>
+  <string name="backup_page_workspaces_none_selected">No workspaces selected; workspace files will not be exported.</string>
+  <string name="backup_page_workspaces_select_all">Select all</string>
+  <string name="backup_page_workspaces_export_only_hint">This selection only affects exports; restore applies the workspace files in the archive.</string>
 </resources>

@@ -26,6 +26,7 @@ import me.rerere.rikkahub.data.datastore.migration.SettingsJsonMigrator
 import me.rerere.rikkahub.data.db.AppDatabase
 import me.rerere.rikkahub.data.db.AppDatabaseFactory
 import me.rerere.rikkahub.data.db.SQLiteConfiguration
+import me.rerere.rikkahub.data.db.entity.WorkspaceEntity
 import me.rerere.rikkahub.data.files.FileFolders
 import me.rerere.rikkahub.data.files.MediaCreationFiles
 import me.rerere.rikkahub.data.sync.official.OFFICIAL_APPLICATION_ID
@@ -52,6 +53,37 @@ import java.util.zip.ZipOutputStream
 
 private const val TAG = "BackupManager"
 
+/** 恢复成功暂存后要给界面的提示。 */
+data class RestoreStagingInfo(
+    /** 备份里没有文件的本机工作区；空表示不需要提示。 */
+    val missingWorkspaceNames: List<String> = emptyList(),
+)
+
+/** 暂存库里读出的本机工作区，只用于和归档里的工作区条目对比。 */
+internal data class StagedWorkspace(val root: String, val name: String)
+
+/** [workspaceIds] 为 null 表示全选；显式列表只保留其中的工作区，空列表表示一个都不导出。 */
+internal fun workspacesToExport(
+    workspaces: List<WorkspaceEntity>,
+    workspaceIds: List<String>?,
+): List<WorkspaceEntity> =
+    if (workspaceIds == null) workspaces else workspaces.filter { it.id in workspaceIds }
+
+/**
+ * 归档里带了一部分工作区文件时，列出库里有、但归档没带文件的本机工作区。
+ * 归档完全没有工作区条目时返回空：那是用户没勾选工作区，不该提示成缺文件。
+ */
+internal fun workspacesMissingFiles(
+    staged: List<StagedWorkspace>,
+    includedRoots: Set<String>,
+): List<String> {
+    if (includedRoots.isEmpty()) return emptyList()
+    return staged
+        .filter { it.root !in includedRoots }
+        .map { it.name }
+        .distinct()
+}
+
 /**
  * Shared archive format and restore lifecycle for local and WebDAV backups.
  *
@@ -73,6 +105,7 @@ class BackupManager(
     suspend fun createBackup(
         includeFiles: Boolean,
         includeWorkspaceFiles: Boolean = false,
+        workspaceIds: List<String>? = null,
         backupTarget: BackupTarget = BackupTarget.SELF,
         onProgress: ((BackupProgress) -> Unit)? = null,
     ): File = withContext(Dispatchers.IO) {
@@ -102,7 +135,7 @@ class BackupManager(
             val attachments = if (includeFiles) collectAttachments() else emptyList()
             // 官方兼容出口按官方那套归档格式产出，官方格式里没有工作区文件，带过去只会是死重量。
             val workspaceFiles = if (includeWorkspaceFiles && backupTarget == BackupTarget.SELF) {
-                collectWorkspaceFiles()
+                collectWorkspaceFiles(workspaceIds)
             } else {
                 emptyList()
             }
@@ -193,10 +226,11 @@ class BackupManager(
      * 归档里的名字与 `filesDir` 下的实际布局一致（`workspaces/<root>/files/<relative>`），
      * 恢复侧因此可以沿用同一条 `files/` 映射，不需要另开一套落盘规则。
      */
-    private suspend fun collectWorkspaceFiles(): List<ArchiveFile> {
+    private suspend fun collectWorkspaceFiles(workspaceIds: List<String>?): List<ArchiveFile> {
         val result = ArrayList<ArchiveFile>()
         val base = File(context.filesDir, WORKSPACE_FOLDER)
-        for (workspace in database.workspaceDao().getAll()) {
+        val allWorkspaces = database.workspaceDao().getAll()
+        for (workspace in workspacesToExport(allWorkspaces, workspaceIds)) {
             currentCoroutineContext().ensureActive()
             val workspaceDir = runCatching { PendingRestore.resolveInside(base, workspace.root) }
                 .onFailure { Log.w(TAG, "Skipping workspace with an unusable root: ${workspace.id}", it) }
@@ -247,7 +281,7 @@ class BackupManager(
         includeFiles: Boolean,
         includeWorkspaceFiles: Boolean = false,
         onProgress: ((BackupProgress) -> Unit)? = null,
-    ) =
+    ): RestoreStagingInfo =
         withContext(Dispatchers.IO) {
             restoreMutex.withLock {
                 val restore = pendingRestore(context)
@@ -257,8 +291,12 @@ class BackupManager(
                     val stagedDatabase = File(payload, "database/${SQLiteConfiguration.DATABASE_NAME}")
                     val stagedWal = File(stagedDatabase.path + "-wal")
                     val renamed = HashMap<String, String>()
+                    val includedWorkspaceRoots = HashSet<String>()
                     ZipFile(archive).use { zip ->
                         val planned = planRestoreEntries(zip, includeFiles, includeWorkspaceFiles)
+                        planned
+                            .filter { it.kind == RestoreEntryKind.WORKSPACE }
+                            .mapTo(includedWorkspaceRoots) { workspaceRootOf(it.entry.name) }
                         onProgress?.invoke(BackupProgress(BackupStage.EXTRACTING, 0, planned.size))
                         for ((index, plannedEntry) in planned.withIndex()) {
                             currentCoroutineContext().ensureActive()
@@ -271,10 +309,16 @@ class BackupManager(
                     // 计划里保证这两个条目都在，解压时写不进去会直接抛，所以这里不再重复判定
                     val settingsFile = File(staging, SETTINGS_ENTRY)
                     onProgress?.invoke(BackupProgress(BackupStage.DATABASE))
-                    stageDatabase(staging, stagedDatabase, renamed)
+                    val stagedWorkspaces = stageDatabase(staging, stagedDatabase, renamed)
                     stageSettings(settingsFile, renamed)
                     currentCoroutineContext().ensureActive()
                     restore.publish(staging)
+                    RestoreStagingInfo(
+                        missingWorkspaceNames = workspacesMissingFiles(
+                            staged = stagedWorkspaces,
+                            includedRoots = includedWorkspaceRoots,
+                        ),
+                    )
                 } finally {
                     staging.deleteRecursively()
                 }
@@ -381,7 +425,11 @@ class BackupManager(
      * 版本/结构不一致的库，以及结构一致但带着外来路径的库。文件名改写在它之后做，因为改写要
      * 作用在已经换成当前安装前缀的文本列上。
      */
-    private suspend fun stageDatabase(staging: File, stagedDatabase: File, renamed: Map<String, String>) {
+    private suspend fun stageDatabase(
+        staging: File,
+        stagedDatabase: File,
+        renamed: Map<String, String>,
+    ): List<StagedWorkspace> {
         // 先把源库的 WAL 合进主文件：转换要读它，而且旧 sidecar 留到替换之后
         // 会被下一次 normalize 的 checkpoint 合进新库，混进去的是旧页。
         DatabaseBackup.normalize(context, stagedDatabase)
@@ -409,6 +457,7 @@ class BackupManager(
         }
         // Reject unsupported schemas before publishing; run supported old migrations on the copy.
         val room = AppDatabaseFactory.create(context, stagedDatabase.absolutePath)
+        val stagedWorkspaces: List<StagedWorkspace>
         try {
             val database = room.openHelper.writableDatabase
             DatabaseBackup.checkpoint(database)
@@ -417,11 +466,15 @@ class BackupManager(
             // 自动 OCR 行可按文件重新生成，恢复后清掉；手改行是用户内容，按现有 managed_files 行保留。
             // 同内容文件合并时 UploadNames 已先把落选手改行挂到保留行，避免丢文本或错配。
             room.fileDerivationDao().clearGenerated()
+            stagedWorkspaces = room.workspaceDao().getAll()
+                .filter { it.capabilities().localFiles }
+                .map { StagedWorkspace(root = it.root, name = it.name) }
             DatabaseBackup.checkpoint(database)
         } finally {
             room.close()
         }
         DatabaseBackup.removeSidecars(stagedDatabase)
+        return stagedWorkspaces
     }
 
     /**
@@ -529,6 +582,9 @@ class BackupManager(
     }
 
     private data class ArchiveFile(val file: File, val archiveName: String)
+
+    /** 只对已经过 [isWorkspaceFile] 校验的工作区条目调用，第二段就是工作区的 root。 */
+    private fun workspaceRootOf(archiveName: String): String = archiveName.split('/')[1]
 
     private enum class RestoreEntryKind { SETTINGS, DATABASE, WAL, SHM, ATTACHMENT, WORKSPACE }
 

@@ -6,6 +6,7 @@ import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.scaleIn
 import androidx.compose.animation.scaleOut
+import androidx.compose.foundation.selection.toggleable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -28,6 +29,7 @@ import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Button
+import androidx.compose.material3.Checkbox
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.CircularWavyProgressIndicator
 import androidx.compose.material3.FilledTonalButton
@@ -53,7 +55,9 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import me.rerere.hugeicons.HugeIcons
 import me.rerere.hugeicons.stroke.ArrowRight01
@@ -64,6 +68,8 @@ import me.rerere.hugeicons.stroke.Connect
 import me.rerere.hugeicons.stroke.FileZip
 import me.rerere.hugeicons.stroke.Tick01
 import me.rerere.rikkahub.R
+import me.rerere.rikkahub.data.datastore.effectiveWorkspaceIds
+import me.rerere.rikkahub.data.db.entity.WorkspaceEntity
 import me.rerere.rikkahub.data.sync.BackupProgress
 import me.rerere.rikkahub.data.sync.BackupRejectedException
 import me.rerere.rikkahub.ui.components.ai.ExtensionEmptyState
@@ -122,6 +128,85 @@ internal fun <T> CardGroupScope.backupContentItem(
         style = MaterialTheme.typography.bodyMedium,
         color = MaterialTheme.colorScheme.onSurfaceVariant,
     )
+}
+
+// 「备份内容」勾选工作区后的多选：默认全选，取消勾选的工作区文件不打包
+internal fun CardGroupScope.workspaceSelectionItem(
+    workspaces: List<WorkspaceEntity>,
+    selectedIds: List<String>?,
+    onToggle: (String, Boolean) -> Unit,
+    onSelectAll: () -> Unit,
+) = formItem {
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.SpaceBetween,
+    ) {
+        Text(
+            text = stringResource(R.string.backup_page_workspaces_to_export),
+            style = MaterialTheme.typography.titleSmall,
+            modifier = Modifier.weight(1f),
+        )
+        if (selectedIds != null) {
+            TextButton(onClick = onSelectAll) {
+                Text(stringResource(R.string.backup_page_workspaces_select_all))
+            }
+        }
+    }
+    if (workspaces.isEmpty()) {
+        Text(
+            text = stringResource(R.string.backup_page_workspaces_empty),
+            style = MaterialTheme.typography.bodyMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+    } else {
+        val allIds = workspaces.map { it.id }
+        workspaces.forEach { workspace ->
+            val checked = selectedIds == null || workspace.id in selectedIds
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .toggleable(
+                        value = checked,
+                        role = Role.Checkbox,
+                        onValueChange = { onToggle(workspace.id, it) },
+                    )
+                    .padding(vertical = 8.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Checkbox(
+                    checked = checked,
+                    onCheckedChange = null,
+                )
+                Spacer(Modifier.width(12.dp))
+                Text(
+                    text = workspace.name,
+                    style = MaterialTheme.typography.bodyLarge,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                )
+            }
+        }
+        Text(
+            text = stringResource(R.string.backup_page_workspaces_export_only_hint),
+            style = MaterialTheme.typography.bodyMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+        if (selectedIds == null) {
+            Text(
+                text = stringResource(R.string.backup_page_workspaces_hint),
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        }
+        if (effectiveWorkspaceIds(selectedIds, allIds).isEmpty()) {
+            Text(
+                text = stringResource(R.string.backup_page_workspaces_none_selected),
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.error,
+            )
+        }
+    }
 }
 
 // 进度行：可数的一段给确定进度，数据库那两段给不确定动画

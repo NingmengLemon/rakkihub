@@ -1577,4 +1577,11 @@
   <string name="chat_page_clear_search">清除搜尋</string>
   <string name="safe_mode_legacy_mode_injections">模式注入（已移除）</string>
   <string name="safe_mode_legacy_lorebooks">世界書（已移除）</string>
+  <string name="backup_page_workspaces_to_export">要匯出的工作區</string>
+  <string name="backup_page_workspaces_hint">預設包含所有工作區</string>
+  <string name="backup_page_workspaces_empty">尚無工作區</string>
+  <string name="backup_page_restore_workspaces_missing">此備份未包含以下工作區的檔案：%1$s。這些工作區裡本機既有的檔案會保留</string>
+  <string name="backup_page_workspaces_none_selected">未選擇任何工作區；將不會匯出工作區檔案</string>
+  <string name="backup_page_workspaces_select_all">全選</string>
+  <string name="backup_page_workspaces_export_only_hint">此選擇只影響匯出；恢復時按備份裡的工作區檔案處理</string>
 </resources>
