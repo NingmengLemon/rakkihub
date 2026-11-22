@@ -226,16 +226,16 @@
 
 ## C150 MCP 与 provider 文案打磨
 
-- 落点：stdio MCP 的 14 条说明与状态文案、Claude prompt cache 策略说明共 15 条英文重写，四份 locale 同步。主要改动：`Stopping keeps the server stopped...` 改成先讲结果再讲保留项；workspace 说明去掉大写 `READY` 与 `Only local...` 的倒装；command/args/env 说明改成「每行一项」并明确不做 shell 解析；startup timeout 明确只限制 initialize；日志说明补成完整句；`Workspace unavailable` 冲突文案改成可直接执行的「Another stdio server already uses this workspace」；prompt cache 的 `usually gives more cache hits` 改成 `usually hits the cache more often`，其他保留 `cache_control` 与 `Found 5` 这两个排障关键词。
+- 落点：stdio MCP 的 14 条说明与状态文案、Claude prompt cache 策略说明共 15 条英文重写，四份 locale 同步。主要改动：`Stopping keeps the server stopped...` 改成先讲结果再讲保留项；workspace 说明去掉大写 `READY` 与 `Only local...` 的倒装；args/env 说明改成「每行一项」并明确不做 shell 解析，command 说明改成可执行名或 rootfs 绝对路径；startup timeout 明确只限制 initialize；日志说明补成完整句；workspace conflict 文案（`setting_mcp_page_stdio_workspace_conflict`）改成可直接执行的「Another stdio server already uses this workspace」；prompt cache 保留 `usually gives more cache hits` 的说法，只把前后句连成更顺的排障说明，`cache_control` 与 `Found 5` 两个关键词保留。
 - 理由：MCP 的 stdio 配置是本分支新增的能力，读者有 agent 工具经验但不一定知道 MCP 生命周期；原文案大量用结果从句与内部状态词，容易让人不知道停掉后会发生什么、参数是否经过 shell。provider 的缓存说明面向排障，保留错误关键词但把语气改成“通常命中更多”。
-- 合并注意：`cache_control`、`Found 5`、`rootfs`、`stdio` 是排障时可直接搜索的词，不要翻成中文或改写；`setting_mcp_page_stdio_startup_timeout_desc` 里的 `SDK's` 在 XML 里保留 `\'` 转义，中文写成「SDK 的」而不是保留英文所有格。MCP 的 OAuth 授权提示仍是上游硬编码中文，不在本批范围；主题、搜索详情、Web 与聊天页也还没过。
+- 合并注意：`cache_control`、`Found 5`、`rootfs`、`stdio` 是排障时可直接搜索的词，不要翻成中文或改写；`setting_mcp_page_stdio_startup_timeout_desc` 里的 `SDK's` 在 XML 里保留 `\'` 转义，中文写成「SDK 的」而不是保留英文所有格。MCP 的 OAuth 授权提示仍是上游硬编码中文，不在本批范围；Web 与聊天页见 C151/C152。
 - 测试：`:app:processGithubDebugResources`、`:app:testGithubDebugUnitTest` 910 条、`spotlessCheck`、markdownlint 通过；`i18n list --missing` 为 0。设备上未逐项打开 MCP 配置页截图核对。
 
 <a id="c151"></a>
 
 ## C151 Web 文案打磨与主题/搜索审计
 
-- 落点：Web 的自定义文案集中在 `message`、`input`、`markdown`、`page` 四个命名空间。本批只改 3 条英文与 1 条简中：重试次数从 `Attempt 1/3` 改成 `Attempt 1 of 3`；等待文案改成句首大写的 `Waited 2s`；未知原因从 `Unknown reason` 改成 `Reason not recorded`，简中对应「未记录原因」。其余新增文案（生成失败/已中断、上下文检查点删除确认、`notset` 推理档、代码预览标题、SVG 过大、Web 标题与描述）逐条看过，保留。
-- 理由：Web 的文案范围比 Android 小，很多是状态标签；`Attempt 1/3` 与 `waited` 小写在卡片里不够像完整句子，`Unknown reason` 也会让人以为系统知道原因但没显示。主题与搜索详情页对上游没有 diff，本分支没有新增用户可见文本，不做改写。
+- 落点：Web 的自定义文案集中在 `message`、`input`、`markdown`、`page` 四个命名空间。本批只改 3 条英文与 2 条简中：重试次数从 `Attempt 1/3` 改成 `Attempt 1 of 3`；等待文案改成句首大写的 `Waited 2s`；未知原因从 `Unknown reason` 改成 `Reason not recorded`，简中对应「未记录原因」。简中的重试次数也补成「第 N 次尝试，共 M 次」。其余新增文案（生成失败/已中断、上下文检查点删除确认、`notset` 推理档、代码预览标题、SVG 过大、Web 标题与描述）逐条看过，保留；Mermaid 组件里的 `Empty mermaid diagram`、`Mermaid Error`、`Mermaid chart` 是硬编码英文，已登进 `locale.md` 的欠账，不在这批 locale 文案里。
+- 理由：Web 的文案范围比 Android 小，很多是状态标签；`Attempt 1/3` 与 `waited` 小写在卡片里不够像完整句子，`Unknown reason` 也会让人以为系统知道原因但没显示。主题与搜索详情页的页面源码对上游没有 diff，本分支没有新增用户可见文本；之前 zh/zh-TW 的搜索详情翻译定制不在本批重写。
 - 合并注意：Web 只有 zh-CN 与 en-US 两份 locale，和 Android 的四份分开维护；不要因为 Android 的 C149/C150 改了术语就把英文键直接搬过来，Web 的 status/attempt 文案在 `message.json`，不在 Android 资源里。主题/搜索页的硬编码字符串属于上游，不在本分支文案打磨范围；如果以后改了这两页，再把新增文本登记进来。
 - 测试：`pnpm typecheck`、`pnpm check:markdown` 通过；没有在浏览器里逐页截图核对，也没有跑 Android 测试（本批不碰 Android 资源）。

@@ -493,7 +493,7 @@
 
 ## C152 聊天页文案打磨
 
-- 落点：聊天上下文管理与截断、重试记录、压缩状态、工具调用导出开关、设置路径提示共 15 条英文重写，四份 locale 同步。主要改动：`Manage Context` 改成句首大写的 `Manage context`；`No chat model` 改成 `No model selected`；截断说明从 `Drop older messages from later requests` 改成「后续请求跳过旧消息」并说明不调用模型；窗口消息数提示补成完整句；「以助手消息开头」改成 `Window starts with...` 并说明要保留首轮用户消息；检查点提示改成删除标记即可移除截断边界；上下文上限边界、最近消息加减的可访问性文案补全；重试记录从 `Attempt 1/3` 改成 `Attempt 1 of 3`，`Unknown error` 改成 `Reason not recorded`；压缩摘要截断提示去掉重复的 summary；工具详情开关说明补上「默认开启」；设置路径提示补句号。
+- 落点：聊天上下文管理与截断、重试记录、压缩状态、工具调用导出开关、设置路径提示共 15 条英文重写，四份 locale 同步。主要改动：`Manage Context` 改成句首大写的 `Manage context`；`No chat model` 改成 `No model selected`；截断说明从 `Drop older messages from later requests` 改成「后续请求跳过旧消息」并说明不调用模型；窗口消息数提示补成完整句；「以助手消息开头」改成 `Window starts with...` 并说明要保留首轮用户消息；检查点提示改成删除标记即可恢复上一个边界；上下文上限边界、最近消息加减的可访问性文案补全；重试记录从 `Attempt 1/3` 改成 `Attempt 1 of 3`，`Unknown error` 改成 `Reason not recorded`；压缩摘要截断提示去掉重复的 compression；工具详情开关说明改成两句并保留默认开启；设置路径提示补句号。
 - 理由：聊天页是停留时间最长的页面，截断与压缩的错误提示会直接影响用户是否敢继续操作；原来的 `Drop`/`floor`/`Attempt 1/3` 更像开发者日志，改成动作和结果明确的句子。
 - 合并注意：`Attempt 1 of 3` 与 Web 的 `Attempt 1 of 3` 保持一致；`Reason not recorded` 不改成 `Unknown error`，避免暗示系统知道原因；截断的 `window` 指当前请求窗口，不是整个会话；`chat_page_compress_prompt_hint` 的设置路径必须跟实际页面标题「Default Model and Prompt」一致，改设置页标题时同步。主题/搜索详情、MCP 的 OAuth 中文硬编码属于上游或后续批次，不在本项。
 - 测试：`:app:processGithubDebugResources`、`:app:testGithubDebugUnitTest` 910 条、`spotlessCheck`、markdownlint 通过；没有在设备上逐页截图核对长文案换行。

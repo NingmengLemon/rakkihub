@@ -277,7 +277,7 @@
   <string name="chat_page_compress_additional_prompt">額外指示（選填）</string>
   <string name="chat_page_compress_additional_prompt_hint">指定要保留或聚焦的內容</string>
   <string name="chat_page_compress_context_desc">將對話壓縮成摘要以節省 token</string>
-  <string name="chat_page_compress_prompt_hint">基礎指示可在「設定」→「預設模型與提示詞」→「提示詞」中編輯。</string>
+  <string name="chat_page_compress_prompt_hint">基礎指示可在「設定」→「預設模型與提示」→「提示詞」中編輯。</string>
   <string name="chat_page_manage_context">管理上下文</string>
   <string name="chat_context_pressure_title">上下文快滿了</string>
   <string name="chat_context_pressure_message">已用約 %1$d%%（%2$s / %3$s tokens）。壓縮對話可以繼續正常回覆。</string>
@@ -293,7 +293,7 @@
   <string name="chat_page_truncate_assistant_title">視窗以助理訊息開頭</string>
   <string name="chat_page_truncate_assistant_desc">部分供應商會拒絕以助理訊息開頭的請求。多保留一則訊息，以便包含第一個使用者回合。</string>
   <string name="chat_page_truncate_checkpoint_title">歷史已截斷</string>
-  <string name="chat_page_truncate_checkpoint_hint">此線以上的訊息將不再傳送給模型。刪除此標記即可移除截斷邊界。</string>
+  <string name="chat_page_truncate_checkpoint_hint">此線以上的訊息將不再傳送給模型。刪除此標記即可恢復上一個邊界。</string>
   <string name="chat_page_truncate_blocked_generating">請先停止生成，再截斷歷史</string>
   <string name="chat_page_truncate_conversation_changed">對話已變更，請再試一次。</string>
   <string name="chat_page_checkpoint_superseded_hint">已被更新的檢查點取代，僅供檢視，不再作為請求的邊界。</string>
@@ -881,7 +881,7 @@
   <string name="setting_provider_page_claude_prompt_cache_strategy">提示快取策略</string>
   <string name="setting_provider_page_claude_prompt_cache_strategy_standard">標準</string>
   <string name="setting_provider_page_claude_prompt_cache_strategy_aggressive">激進</string>
-  <string name="setting_provider_page_claude_prompt_cache_strategy_desc">積極模式會保留原本的四個快取斷點，通常也更常命中快取。若供應商自行加入斷點，而請求因 cache_control 上限錯誤（Found 5）而失敗，請將該供應商切換為標準模式（自動 + 系統；若沒有系統，則使用 tools）。</string>
+  <string name="setting_provider_page_claude_prompt_cache_strategy_desc">激進模式會保留原本的四個快取斷點，通常也能帶來更多快取命中。若供應商自行加入斷點，而請求因 cache_control 上限錯誤（Found 5）而失敗，請將該供應商切換為標準模式（自動 + 系統；若沒有系統，則使用 tools）。</string>
   <string name="setting_provider_page_claude_prompt_cache_strategy_info">說明</string>
   <string name="setting_provider_page_claude_prompt_cache_ttl">提示快取時長</string>
   <string name="setting_provider_page_claude_prompt_cache_ttl_1h">1 小時</string>

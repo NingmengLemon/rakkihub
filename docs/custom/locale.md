@@ -28,4 +28,5 @@ rg -n 'RikkaHub' app/src/main/res integrations/oauth/src/main/res -g '**/values*
 ## 欠账
 
 - 本分支新增的很多文案直接写在 Compose 里、还没进 `strings.xml`，其中附件清理与扫描相关的一组属于欠账；这部分与语言无关。
+- Web 的 `web-ui/app/components/markdown/mermaid-diagram.tsx` 还有 `Empty mermaid diagram`、`Mermaid Error`、`Mermaid chart` 三条硬编码英文，C151 审计发现后留在这里，后续与 Compose 硬编码欠账一起清。
 - 上游自己没翻的三条压缩上下文文案（`chat_page_compress_keep_recent`、它的描述、`chat_page_compress_not_enough_messages`）已补进 `values-ja` 与 `values-zh-rTW`，四份都不缺条目。

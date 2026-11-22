@@ -293,7 +293,7 @@
   <string name="chat_page_truncate_assistant_title">ウィンドウはアシスタントメッセージから開始</string>
   <string name="chat_page_truncate_assistant_desc">一部のプロバイダーは、アシスタントメッセージから始まるリクエストを拒否します。最初のユーザーターンが含まれるように、メッセージを1つ多く残してください。</string>
   <string name="chat_page_truncate_checkpoint_title">履歴を切り捨てました</string>
-  <string name="chat_page_truncate_checkpoint_hint">この行より上のメッセージはモデルに送信されなくなります。切り捨て境界を解除するには、このマーカーを削除してください。</string>
+  <string name="chat_page_truncate_checkpoint_hint">この行より上のメッセージはモデルに送信されなくなります。このマーカーを削除すると、前の境界に戻ります。</string>
   <string name="chat_page_truncate_blocked_generating">履歴を切り捨てる前に生成を停止してください</string>
   <string name="chat_page_truncate_conversation_changed">会話が変更されました。もう一度お試しください。</string>
   <string name="chat_page_checkpoint_superseded_hint">より新しいチェックポイントに置き換えられています。表示用に残るだけで、リクエストの境界ではありません。</string>

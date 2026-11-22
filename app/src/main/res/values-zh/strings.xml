@@ -279,7 +279,7 @@
   <string name="chat_page_compress_additional_prompt">附加说明（可选）</string>
   <string name="chat_page_compress_additional_prompt_hint">指定要保留或关注的内容</string>
   <string name="chat_page_compress_context_desc">将对话压缩为摘要以节省 Token</string>
-  <string name="chat_page_compress_prompt_hint">基础指令可在 设置 → 默认模型和提示词 → 提示词 中编辑。</string>
+  <string name="chat_page_compress_prompt_hint">基础指令可在「设置 → 默认模型和提示词 → 提示词」中编辑。</string>
   <string name="chat_page_manage_context">管理上下文</string>
   <string name="chat_context_pressure_title">上下文快满了</string>
   <string name="chat_context_pressure_message">已用约 %1$d%%（%2$s / %3$s tokens）。压缩对话可以继续正常回复。</string>
@@ -295,7 +295,7 @@
   <string name="chat_page_truncate_assistant_title">窗口以助手消息开头</string>
   <string name="chat_page_truncate_assistant_desc">部分提供商拒绝以助手消息开头的请求。请多保留一条消息，以便包含首轮用户消息。</string>
   <string name="chat_page_truncate_checkpoint_title">历史已截断</string>
-  <string name="chat_page_truncate_checkpoint_hint">此线以上的消息将不再发送给模型。删除此标记即可移除截断边界。</string>
+  <string name="chat_page_truncate_checkpoint_hint">此线以上的消息将不再发送给模型。删除此标记即可恢复上一个边界。</string>
   <string name="chat_page_truncate_blocked_generating">请先停止生成，再截断历史</string>
   <string name="chat_page_truncate_conversation_changed">对话已变更，请再试一次。</string>
   <string name="chat_page_checkpoint_superseded_hint">已被更新的检查点取代，只用于查看，不再作为请求的边界。</string>
@@ -755,7 +755,7 @@
   <string name="setting_mcp_page_stdio_args_desc">每行一个参数。每行会作为单独参数传递，不经过 shell 解析。</string>
   <string name="setting_mcp_page_stdio_args_placeholder">server.js</string>
   <string name="setting_mcp_page_stdio_env">环境变量</string>
-  <string name="setting_mcp_page_stdio_env_desc">每行一个 KEY=VALUE 键值对。值可能包含密钥，绝不会写入日志。</string>
+  <string name="setting_mcp_page_stdio_env_desc">每行一个 KEY=VALUE 键值对。值可能包含敏感信息，绝不会写入日志。</string>
   <string name="setting_mcp_page_stdio_cwd">工作目录</string>
   <string name="setting_mcp_page_stdio_cwd_desc">rootfs 内的绝对路径。默认为 /workspace。</string>
   <string name="setting_mcp_page_stdio_startup_timeout">启动超时（毫秒）</string>

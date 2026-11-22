@@ -37,7 +37,7 @@
     "status_failed": "生成失败",
     "status_interrupted": "已中断",
     "attempts_title": "重试记录",
-    "attempt_row": "第 {{attempt}}/{{maxRetries}} 次尝试",
+    "attempt_row": "第 {{attempt}} 次尝试，共 {{maxRetries}} 次",
     "attempt_waited": "等待 {{seconds}} 秒",
     "attempt_unknown": "未记录原因"
   },

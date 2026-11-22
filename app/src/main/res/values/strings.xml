@@ -295,7 +295,7 @@
   <string name="chat_page_truncate_assistant_title">Window starts with an assistant message</string>
   <string name="chat_page_truncate_assistant_desc">Some providers reject a request that starts with an assistant message. Keep one more message so the first user turn is included.</string>
   <string name="chat_page_truncate_checkpoint_title">History truncated</string>
-  <string name="chat_page_truncate_checkpoint_hint">Messages above this line are no longer sent to the model. Delete this marker to remove the truncation boundary.</string>
+  <string name="chat_page_truncate_checkpoint_hint">Messages above this line are no longer sent to the model. Delete this marker to restore the previous boundary.</string>
   <string name="chat_page_truncate_blocked_generating">Stop generating before truncating history</string>
   <string name="chat_page_truncate_conversation_changed">The conversation changed. Try again.</string>
   <string name="chat_page_checkpoint_superseded_hint">A newer checkpoint supersedes this one. It is kept for viewing and no longer marks the request boundary.</string>
@@ -751,7 +751,7 @@
   <string name="setting_mcp_page_stdio_stop">Stop</string>
   <string name="setting_mcp_page_stdio_workspace">Dedicated workspace</string>
   <string name="setting_mcp_page_stdio_workspace_desc">Lists only local workspaces with an installed rootfs that are ready. Each stdio server uses its own workspace.</string>
-  <string name="setting_mcp_page_stdio_workspace_none">No workspace is available. Open the Workspaces page to install a rootfs.</string>
+  <string name="setting_mcp_page_stdio_workspace_none">No workspace is available. Open the Workspace page to install a rootfs.</string>
   <string name="setting_mcp_page_stdio_workspace_select">Select a dedicated workspace</string>
   <string name="setting_mcp_page_stdio_workspace_unavailable">Workspace unavailable</string>
   <string name="setting_mcp_page_stdio_workspace_conflict">Another stdio server already uses this workspace. Choose a different one.</string>
@@ -956,7 +956,7 @@
   <string name="setting_provider_page_claude_prompt_cache_strategy">Prompt cache strategy</string>
   <string name="setting_provider_page_claude_prompt_cache_strategy_standard">Standard</string>
   <string name="setting_provider_page_claude_prompt_cache_strategy_aggressive">Aggressive</string>
-  <string name="setting_provider_page_claude_prompt_cache_strategy_desc">Aggressive keeps the original four cache breakpoints and usually hits the cache more often. If a provider adds its own breakpoints and requests fail with the cache_control limit error (Found 5), switch that provider to Standard (automatic + system, or tools when there is no system).</string>
+  <string name="setting_provider_page_claude_prompt_cache_strategy_desc">Aggressive keeps the original four cache breakpoints and usually gives more cache hits. If a provider adds its own breakpoints and requests fail with the cache_control limit error (Found 5), switch that provider to Standard (automatic + system, or tools when there is no system).</string>
   <string name="setting_provider_page_claude_prompt_cache_strategy_info">Details</string>
   <string name="setting_provider_page_claude_prompt_cache_ttl">Prompt cache TTL</string>
   <string name="setting_provider_page_claude_prompt_cache_ttl_1h">1 hour</string>
