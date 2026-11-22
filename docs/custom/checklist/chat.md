@@ -1,6 +1,6 @@
 # 明细：聊天、上下文与模型
 
-本文件是 [checklist.md](../checklist.md) 的明细，收录 C35、C43 至 C44、C46 至 C47、C49 至 C53、C57 至 C63、C65 至 C78、C81 至 C86、C97 至 C100、C107、C121、C122、C130、C131、C133、C134、C135、C137、C140、C141、C145、C147。
+本文件是 [checklist.md](../checklist.md) 的明细，收录 C35、C43 至 C44、C46 至 C47、C49 至 C53、C57 至 C63、C65 至 C78、C81 至 C86、C97 至 C100、C107、C121、C122、C130、C131、C133、C134、C135、C137、C140、C141、C145、C147、C152。
 
 <a id="c35"></a>
 
@@ -488,3 +488,12 @@
 - 理由：带工具调用的会话导出成 Markdown 后，完整参数与结果会把正文冲得很散；分享或存档时经常只需要知道调用过哪个工具。默认保持完整输出，避免已有导出结果变化。
 - 合并注意：开关只作用于 Markdown，图片导出仍按原逻辑渲染工具；关闭时连 Call ID、参数、结果和工具输出里的媒体一起省略，不会写出半截结构。Web 的 `convertMessageToMarkdown` 目前完全不输出工具 part，要两端一致需要先补工具名摘要，不能只把开关搬过去。`toolMarkdown` 是 `internal`，只给导出与测试用，不要当通用 Markdown 序列化器。
 - 测试：新增 `ConversationExportToolMarkdownTest` 2 条，分别验证开启时写全、关闭时只剩工具名且不出现 Call ID/Input/结果；`:app:testGithubDebugUnitTest` 908 条、`spotlessCheck` 通过。没有在设备上验证导出对话框与真实导出文件，验证只到单元测试与编译。
+
+<a id="c152"></a>
+
+## C152 聊天页文案打磨
+
+- 落点：聊天上下文管理与截断、重试记录、压缩状态、工具调用导出开关、设置路径提示共 15 条英文重写，四份 locale 同步。主要改动：`Manage Context` 改成句首大写的 `Manage context`；`No chat model` 改成 `No model selected`；截断说明从 `Drop older messages from later requests` 改成「后续请求跳过旧消息」并说明不调用模型；窗口消息数提示补成完整句；「以助手消息开头」改成 `Window starts with...` 并说明要保留首轮用户消息；检查点提示改成删除标记即可移除截断边界；上下文上限边界、最近消息加减的可访问性文案补全；重试记录从 `Attempt 1/3` 改成 `Attempt 1 of 3`，`Unknown error` 改成 `Reason not recorded`；压缩摘要截断提示去掉重复的 summary；工具详情开关说明补上「默认开启」；设置路径提示补句号。
+- 理由：聊天页是停留时间最长的页面，截断与压缩的错误提示会直接影响用户是否敢继续操作；原来的 `Drop`/`floor`/`Attempt 1/3` 更像开发者日志，改成动作和结果明确的句子。
+- 合并注意：`Attempt 1 of 3` 与 Web 的 `Attempt 1 of 3` 保持一致；`Reason not recorded` 不改成 `Unknown error`，避免暗示系统知道原因；截断的 `window` 指当前请求窗口，不是整个会话；`chat_page_compress_prompt_hint` 的设置路径必须跟实际页面标题「Default Model and Prompt」一致，改设置页标题时同步。主题/搜索详情、MCP 的 OAuth 中文硬编码属于上游或后续批次，不在本项。
+- 测试：`:app:processGithubDebugResources`、`:app:testGithubDebugUnitTest` 910 条、`spotlessCheck`、markdownlint 通过；没有在设备上逐页截图核对长文案换行。
