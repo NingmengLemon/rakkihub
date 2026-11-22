@@ -12,6 +12,7 @@ import { getCodePreviewLanguage } from "~/components/workbench/code-preview-lang
 import { useOptionalWorkbench } from "~/components/workbench/workbench-context";
 import { useSettingsStore } from "~/stores";
 import { CodeBlock } from "./code-block";
+import { MermaidLoading } from "./mermaid-loading";
 import { preProcess } from "./preprocess";
 import { rehypeSvgGuard } from "./rehype-svg-guard";
 import { svgSchema } from "./svg-schema";
@@ -33,11 +34,7 @@ const STREAMDOWN_PLUGINS = { cjk };
 const MermaidDiagram = React.lazy(() => import("./mermaid-diagram"));
 
 function MermaidFallback() {
-  return (
-    <div className="my-4 flex min-h-[160px] items-center justify-center text-muted-foreground text-sm">
-      Loading diagram...
-    </div>
-  );
+  return <MermaidLoading />;
 }
 
 function getNodeText(node: React.ReactNode): string {

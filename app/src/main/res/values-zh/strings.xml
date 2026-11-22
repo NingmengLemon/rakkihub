@@ -1633,4 +1633,12 @@ mDNS 地址：使用 .local 主机名，同一网络中的其他设备可通过�
   <string name="chat_page_export_include_tool_details_desc">仅影响 Markdown。默认开启；关闭后仅保留工具名称。</string>
   <string name="setting_display_page_terminal_two_row_keys_title">两行终端功能键</string>
   <string name="setting_display_page_terminal_two_row_keys_desc">使用 Termux 风格的两行功能键栏，按键等宽，而非横向滚动的单行。默认开启。</string>
+  <string name="chat_page_clear_selection">清除选择</string>
+  <string name="chat_page_select_all">全选</string>
+  <string name="chat_page_confirm_selection">确认</string>
+  <string name="setting_mcp_page_oauth_required">需要 OAuth 授权</string>
+  <string name="setting_mcp_page_oauth_authorize">使用 OAuth 授权</string>
+  <string name="setting_mcp_page_oauth_authorizing">正在授权。请在浏览器中完成登录。</string>
+  <string name="setting_mcp_page_oauth_cancel">取消授权</string>
+  <string name="chat_page_clear_search">清除搜索</string>
 </resources>

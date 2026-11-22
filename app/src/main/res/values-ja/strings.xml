@@ -1633,4 +1633,12 @@ mDNSアドレス: .localホスト名を使用し、IPを知らなくても同じ
   <string name="chat_page_export_include_tool_details_desc">Markdown にのみ影響します。デフォルトでオン、オフにするとツール名のみになります。</string>
   <string name="setting_display_page_terminal_two_row_keys_title">ターミナル機能キーを2段表示</string>
   <string name="setting_display_page_terminal_two_row_keys_desc">横スクロールする1行の代わりに、同じ幅のキーを並べたTermuxスタイルの2段キーバーを使用します。デフォルトでオンです。</string>
+  <string name="chat_page_clear_selection">選択を解除</string>
+  <string name="chat_page_select_all">すべて選択</string>
+  <string name="chat_page_confirm_selection">確認</string>
+  <string name="setting_mcp_page_oauth_required">OAuth認可が必要です</string>
+  <string name="setting_mcp_page_oauth_authorize">OAuthで認可</string>
+  <string name="setting_mcp_page_oauth_authorizing">認可中です。ブラウザでサインインを完了してください。</string>
+  <string name="setting_mcp_page_oauth_cancel">認可をキャンセル</string>
+  <string name="chat_page_clear_search">検索をクリア</string>
 </resources>

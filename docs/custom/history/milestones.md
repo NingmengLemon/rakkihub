@@ -2,6 +2,13 @@
 
 本文件归档已完成的定制、修复与独立化批次，按时间或主题分组。当前状态以 checklist 索引与明细为准，未来方向见 [roadmap.md](../roadmap.md)。
 
+## 2026-11-22 硬编码文案清理（C153）
+
+- Web 的 Mermaid 渲染五条硬编码英文（空图、渲染失败、加载中、图表 `aria-label`，含 `markdown.tsx` 的 Suspense 兜底）移入 `web-ui/app/locales/{en-US,zh-CN}/markdown.json` 的 `mermaid` 分组，加载态抽成 `mermaid-loading.tsx` 的 `MermaidLoading` 两处共用；空图与渲染失败共用一个判断，渲染失败仍显示原始代码块。
+- 聊天多选的 Clear selection / Select all / Confirm、搜索框 Clear 与 MCP OAuth 的状态、按钮共 8 条改走 `stringResource`，`values`、`values-zh`、`values-zh-rTW`、`values-ja` 四份用 `i18n add` 生成并逐条核对，日文 OAuth 四条统一用「認可」。
+- `locale.md` 的 Compose 欠账核对后过期：附件清理与扫描自 C149 起已全部走资源。按 `ref..main` 逐文件比对，本分支新增的界面硬编码只剩聊天多选三条、搜索框 Clear 与 Web Mermaid 五条；剩余硬编码在上游文件（工作区文件管理页、WebView 与日志页等）和调试页，按 C151 的口径不在范围。
+- 测试：app 单测 910 条、`spotlessCheck`、`i18n list --missing` 为 0、`pnpm typecheck`、markdownlint 通过；K60（en-US）上截图核对了本批直接改到的可见界面（聊天多选 tooltip、MCP 列表与 stdio 详情），搜索框 Clear 只有无障碍文案，设置与备份等页面只是顺带复核资源没有受影响。MCP OAuth 四条没有可触发的服务器，未截图。
+
 ## 2026-11-22 聊天页文案打磨（第四批）
 
 - 重写上下文管理/截断、重试记录、压缩状态和工具详情开关共 15 条英文文案；截断与压缩提示改成动作和结果明确的句子，重试与 Web 统一成 `Attempt 1 of 3` 和 `Reason not recorded`。

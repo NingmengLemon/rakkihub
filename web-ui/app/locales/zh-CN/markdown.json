@@ -13,5 +13,11 @@
   "markdown": {
     "code_preview_title": "{{language}} 预览",
     "svg_too_large": "这段 SVG 太大，无法在这里显示。可以打开整条消息预览查看。"
+  },
+  "mermaid": {
+    "empty": "Mermaid 图表为空",
+    "error": "无法渲染 Mermaid 图表",
+    "loading": "正在加载图表…",
+    "chart": "Mermaid 图表"
   }
 }

@@ -1631,4 +1631,12 @@
   <string name="chat_page_export_include_tool_details_desc">僅影響 Markdown。預設為開啟；關閉後僅保留工具名稱。</string>
   <string name="setting_display_page_terminal_two_row_keys_title">雙列終端機功能鍵</string>
   <string name="setting_display_page_terminal_two_row_keys_desc">使用 Termux 風格的雙列功能鍵列，按鍵等寬，而非水平捲動的單列。預設為開啟。</string>
+  <string name="chat_page_clear_selection">清除選取</string>
+  <string name="chat_page_select_all">全選</string>
+  <string name="chat_page_confirm_selection">確認</string>
+  <string name="setting_mcp_page_oauth_required">需要 OAuth 授權</string>
+  <string name="setting_mcp_page_oauth_authorize">使用 OAuth 授權</string>
+  <string name="setting_mcp_page_oauth_authorizing">授權中。請在瀏覽器中完成登入。</string>
+  <string name="setting_mcp_page_oauth_cancel">取消授權</string>
+  <string name="chat_page_clear_search">清除搜尋</string>
 </resources>

@@ -13,5 +13,11 @@
   "markdown": {
     "code_preview_title": "{{language}} preview",
     "svg_too_large": "This SVG is too large to display here. Open the message preview to inspect it."
+  },
+  "mermaid": {
+    "empty": "Mermaid diagram is empty",
+    "error": "Mermaid diagram could not be rendered",
+    "loading": "Loading diagram...",
+    "chart": "Mermaid chart"
   }
 }

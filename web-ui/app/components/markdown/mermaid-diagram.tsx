@@ -1,5 +1,7 @@
 import * as React from "react";
 import type { DiagramPlugin } from "@streamdown/mermaid";
+import { useTranslation } from "react-i18next";
+import { MermaidLoading } from "./mermaid-loading";
 
 type MermaidTheme = "dark" | "default";
 
@@ -49,19 +51,20 @@ export function sanitizeMermaidSource(source: string): string {
 }
 
 export default function MermaidDiagram({ code, isDark }: { code: string; isDark: boolean }) {
+  const { t } = useTranslation("markdown");
   const reactId = React.useId();
   const renderCount = React.useRef(0);
+  const source = React.useMemo(() => sanitizeMermaidSource(code), [code]);
+  const empty = source === "";
   const [svg, setSvg] = React.useState("");
-  const [error, setError] = React.useState<string | null>(null);
+  const [failed, setFailed] = React.useState(false);
 
   React.useEffect(() => {
     let cancelled = false;
-    const source = sanitizeMermaidSource(code);
     const id = `mermaid-${reactId.replace(/[^a-zA-Z0-9_-]/g, "")}-${renderCount.current++}`;
     setSvg("");
-    setError(null);
-    if (!source) {
-      setError("Empty mermaid diagram");
+    setFailed(false);
+    if (empty) {
       return () => {
         cancelled = true;
       };
@@ -71,36 +74,32 @@ export default function MermaidDiagram({ code, isDark }: { code: string; isDark:
       .then(({ svg: next }) => {
         if (!cancelled) setSvg(next);
       })
-      .catch((reason: unknown) => {
-        if (!cancelled) setError(reason instanceof Error ? reason.message : String(reason));
+      .catch(() => {
+        if (!cancelled) setFailed(true);
       });
     return () => {
       cancelled = true;
     };
-  }, [code, isDark, reactId]);
+  }, [source, empty, isDark, reactId]);
 
-  if (error) {
+  if (empty || failed) {
     return (
       <div className="my-4 rounded-md border border-border bg-muted/40 p-3">
-        <p className="font-medium text-sm">Mermaid Error</p>
+        <p className="font-medium text-sm">{empty ? t("mermaid.empty") : t("mermaid.error")}</p>
         <pre className="mt-2 overflow-x-auto text-xs">{code}</pre>
       </div>
     );
   }
 
   if (!svg) {
-    return (
-      <div className="my-4 flex min-h-[160px] items-center justify-center text-muted-foreground text-sm">
-        Loading diagram...
-      </div>
-    );
+    return <MermaidLoading />;
   }
 
   return (
     <div
       className="my-4 flex justify-center overflow-x-auto"
       role="img"
-      aria-label="Mermaid chart"
+      aria-label={t("mermaid.chart")}
       dangerouslySetInnerHTML={{ __html: svg }}
     />
   );

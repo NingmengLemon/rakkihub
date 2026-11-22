@@ -27,6 +27,7 @@ rg -n 'RikkaHub' app/src/main/res integrations/oauth/src/main/res -g '**/values*
 
 ## 欠账
 
-- 本分支新增的很多文案直接写在 Compose 里、还没进 `strings.xml`，其中附件清理与扫描相关的一组属于欠账；这部分与语言无关。
-- Web 的 `web-ui/app/components/markdown/mermaid-diagram.tsx` 还有 `Empty mermaid diagram`、`Mermaid Error`、`Mermaid chart` 三条硬编码英文，C151 审计发现后留在这里，后续与 Compose 硬编码欠账一起清。
-- 上游自己没翻的三条压缩上下文文案（`chat_page_compress_keep_recent`、它的描述、`chat_page_compress_not_enough_messages`）已补进 `values-ja` 与 `values-zh-rTW`，四份都不缺条目。
+本文件只列未结清项；已结清的批次见 [`history/milestones.md`](history/milestones.md)。
+
+- 仍硬编码的界面文案集中在上游文件：工作区文件管理页与它的 ViewModel 错误诊断、WebView 与日志页的 `contentDescription`、模型列表的 Clear、聊天气泡的 Prev/Next 等。按 C151 的口径属于上游文案，不在本分支文案打磨范围；改到这些页面时再逐条登记。调试页同样不在范围。
+- `McpOAuthCoordinator` 的异常信息是中文技术诊断（例如「授权服务器缺少 token_endpoint」），会显示在 MCP 错误卡片里；本地化要把 `Context` 传进协调器，尚未处理。

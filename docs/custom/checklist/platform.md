@@ -239,3 +239,12 @@
 - 理由：Web 的文案范围比 Android 小，很多是状态标签；`Attempt 1/3` 与 `waited` 小写在卡片里不够像完整句子，`Unknown reason` 也会让人以为系统知道原因但没显示。主题与搜索详情页的页面源码对上游没有 diff，本分支没有新增用户可见文本；之前 zh/zh-TW 的搜索详情翻译定制不在本批重写。
 - 合并注意：Web 只有 zh-CN 与 en-US 两份 locale，和 Android 的四份分开维护；不要因为 Android 的 C149/C150 改了术语就把英文键直接搬过来，Web 的 status/attempt 文案在 `message.json`，不在 Android 资源里。主题/搜索页的硬编码字符串属于上游，不在本分支文案打磨范围；如果以后改了这两页，再把新增文本登记进来。
 - 测试：`pnpm typecheck`、`pnpm check:markdown` 通过；没有在浏览器里逐页截图核对，也没有跑 Android 测试（本批不碰 Android 资源）。
+
+<a id="c153"></a>
+
+## C153 硬编码文案清理：Web Mermaid、聊天多选与 MCP OAuth
+
+- 落点：Web 正文的 Mermaid 渲染（`mermaid-diagram.tsx`、`markdown.tsx` 的 Suspense 兜底，加载态抽成共用的 `mermaid-loading.tsx`）共五条硬编码英文移入 `web-ui/app/locales/{en-US,zh-CN}/markdown.json` 的 `mermaid` 分组（`empty`、`error`、`loading`、`chart`），中英两份同步；空图与渲染失败共用一个判断，渲染失败仍显示原始代码块。Android 侧补 8 条字符串资源并四份 locale 同步：聊天多选的 Clear selection / Select all / Confirm 与搜索框的 Clear（`chat_page_clear_selection`、`chat_page_select_all`、`chat_page_confirm_selection`、`chat_page_clear_search`），MCP OAuth 的状态与按钮（`setting_mcp_page_oauth_*` 四条）。
+- 理由：`locale.md` 从 2026-11-01 起记着「附件清理与扫描的一组仍硬编码」，核对后这组已经不存在：`SettingFilesPage` 的界面文案全部走 `stringResource`（C149 覆盖了 `setting_files_page_*`），`AttachmentCleaner` 只返回结果对象。实际剩下的本分支新增硬编码是聊天多选三条、搜索框 Clear 与 Web Mermaid 五条（含 Suspense 兜底）。MCP OAuth 的提示原本是上游硬编码中文，在英文与日文界面里显示中文，按 C150 的遗留说明一并收掉。
+- 合并注意：Web 只有 zh-CN 与 en-US，Mermaid 的键在 `markdown` 命名空间，不要只加 Android 一份；`aria-label` 与 Suspense 兜底也走翻译，不要留在组件里。聊天多选的三条 tooltip 用 `chat_page_` 前缀，不要复用带计数的 `setting_provider_page_select_all`。MCP OAuth 的四条 key 用 `setting_mcp_page_oauth_` 前缀，和 stdio 的 `setting_mcp_page_stdio_*` 分开；日文四条统一用「認可」，不要与「認証」混用。
+- 测试：`:app:testGithubDebugUnitTest` 910 条、`spotlessCheck`、`i18n list --missing` 为 0、`pnpm typecheck`、markdownlint 通过。设备（en-US）截图核对了本批直接改到的可见界面：聊天多选的三条 tooltip、MCP 列表与 stdio 详情；搜索框 Clear 只有无障碍文案、没有可见文本可截图；设置、文件管理、备份与上下文管理面板只是顺手复核资源没有受影响，不作为本批验收。MCP OAuth 四条没有可触发的 OAuth 服务器，未做界面截图；Web Mermaid 只过了 typecheck，没有在浏览器里逐项核对。
