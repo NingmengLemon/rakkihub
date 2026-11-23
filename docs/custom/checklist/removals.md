@@ -1,6 +1,6 @@
 # 明细：移除与清理
 
-本文件是 [checklist.md](../checklist.md) 的明细，收录 C1 至 C6、C8 至 C9、C13 至 C16、C54、C64、C95 至 C96、C157。
+本文件是 [checklist.md](../checklist.md) 的明细，收录 C1 至 C6、C8 至 C9、C13 至 C16、C54、C64、C95 至 C96、C157、C159。
 
 <a id="c1"></a>
 
@@ -147,3 +147,12 @@
 - 理由：这套实现与使用方式不匹配：注入靠改写已有消息（拼 system、往历史中间插）破坏前缀缓存；没有 token 预算、触发概率、递归触发与全词/CJK 匹配；会话固定的是 id 而不是内容快照；`scanDepth` 等边界没有防护。本机没有实际使用，整体删除比继续维护便宜。
 - 合并注意：旧备份的 `settings.json` 里仍可能带 `mode_injections`/`lorebooks` 键，`JsonInstant` 的 `ignoreUnknownKeys` 会忽略，不需要迁移；官方兼容导出现在不写这两个键，官方客户端同名字段有默认值，恢复不受影响。`conversation` 两列是官方 v32 schema 的一部分，删列会连带改 Room 迁移、官方导入写库与官方导出补列，本次不动；`ConversationEntity` 里有注释说明。`PreferenceStoreV4Migration` 与它的测试保留，它们只处理历史 JSON。注入/世界书相关的 57 条文案已从四份 locale 删除，`export_*` 里随 PromptPage 一起失去引用的 7 条也删了。`app/src/main/generated/baselineProfiles/` 里还留着 `PromptInjectionTransformer`、`LearningModeKt` 等旧条目，与 C13/C95 同类，ART 会跳过，重新生成快照时才会消失。`Settings` 序列化结构有变化，`docs/custom/backup/acceptance.md` 的官方/自家备份样本本轮没有重跑，解码路径由新增单测覆盖。
 - 测试：`SettingsFieldsTest` 新增旧备份 settings.json 用例（形状校验、迁移、解码，并断言官方出口不再带这两个键），`SettingsStoreTest` 新增 legacy key 列出与清除用例；`:app:testGithubDebugUnitTest`、`:ai:testDebugUnitTest`、`spotlessCheck`、`pnpm typecheck`、markdownlint 通过；设备上确认设置里的扩展页、助手扩展页与聊天扩展面板都不再出现注入/世界书入口，并通过新建、开关、删除一条快捷消息验证了快捷消息链路。
+
+<a id="c159"></a>
+
+## C159 清除赞助商广告文案与 Powered by
+
+- 落点：`DefaultProviders.kt` 去掉硅基流动预置项的 `description`（广告语与带 aff 参数的官网推广链接）与 302.AI 预置项的 `description`（「企业级AI服务, 官网」与 `https://302.ai/` 链接）；`SettingProviderDetailPage` 去掉 baseUrl 含 `siliconflow.cn` 时显示 `SiliconFlowPowerByIcon` 的分支；`AIIcon.kt` 删除这个 composable；删除 `siliconflow_light.png`/`siliconflow_dark.png`；四份 locale 删除 `silicon_flow_description` 与 `silicon_flow_website`。
+- 理由：这些是赞助商投放的文案和推广链接，aff 链接还会把注册算到固定账号；Powered by 是同一套赞助位。预置项本身仍然可用于接入，只去掉广告内容。302.AI 的官网链接同属这类投放。
+- 合并注意：硅基流动与 302.AI 的预置提供商、`api.siliconflow.cn`/`api.302.ai` 的 baseUrl、`AIIconMatcher` 的品牌图标匹配和 `siliconflow.svg` 都保留，只删文案与赞助位；预置项之外没有提供商描述，因此不受影响；上游更新 `DefaultProviders.kt` 时可能重新带回 `description`，移植时按本项重新删除。没有新增字符串，`donate` 页面与作者赞助入口不在本项范围（C4 保留）。
+- 测试：`:app:compileGithubDebugKotlin`、`spotlessCheck`、markdownlint、`i18n list --missing` 通过；aff 参数在代码、资源与文档中不再出现；设备上打开硅基流动详情页确认广告语、官网链接与 Powered by 图标都不在，打开 302.AI 详情页确认官网链接描述不在。

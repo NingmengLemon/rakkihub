@@ -1,17 +1,7 @@
 package me.rerere.rikkahub.data.datastore
 
-import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Text
-import androidx.compose.ui.res.stringResource
-import androidx.compose.ui.text.LinkAnnotation
-import androidx.compose.ui.text.SpanStyle
-import androidx.compose.ui.text.buildAnnotatedString
-import androidx.compose.ui.text.withLink
-import androidx.compose.ui.text.withStyle
 import me.rerere.ai.provider.ProviderSetting
 import me.rerere.ai.provider.QuotaQuery
-import me.rerere.rikkahub.R
-import me.rerere.rikkahub.ui.components.richtext.MarkdownBlock
 import kotlin.uuid.Uuid
 
 /**
@@ -58,14 +48,6 @@ val DEFAULT_PROVIDERS = listOf(
         baseUrl = "https://api.siliconflow.cn/v1",
         apiKey = "",
         builtIn = true,
-        description = {
-            MarkdownBlock(
-                content = """
-                    ${stringResource(R.string.silicon_flow_description)}
-                    ${stringResource(R.string.silicon_flow_website)}
-                """.trimIndent()
-            )
-        },
     ),
     ProviderSetting.OpenAI(
         id = Uuid.parse("f099ad5b-ef03-446d-8e78-7e36787f780b"),
@@ -156,18 +138,6 @@ val DEFAULT_PROVIDERS = listOf(
         apiKey = "",
         enabled = false,
         builtIn = true,
-        description = {
-            Text(
-                text = buildAnnotatedString {
-                    append("企业级AI服务, 官网：")
-                    withLink(LinkAnnotation.Url("https://302.ai/")) {
-                        withStyle(SpanStyle(MaterialTheme.colorScheme.primary)) {
-                            append("https://302.ai/")
-                        }
-                    }
-                }
-            )
-        }
     ),
     ProviderSetting.OpenAI(
         id = Uuid.parse("ef5d149b-8e34-404b-818c-6ec242e5c3c5"),

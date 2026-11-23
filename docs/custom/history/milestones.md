@@ -2,6 +2,12 @@
 
 本文件归档已完成的定制、修复与独立化批次，按时间或主题分组。当前状态以 checklist 索引与明细为准，未来方向见 [roadmap.md](../roadmap.md)。
 
+## 2026-11-23 清除赞助商广告文案与 Powered by（C159）
+
+- 去掉硅基流动预置项的广告语与带 aff 参数的官网链接、302.AI 预置项的官网链接文案，以及提供商详情页的 Powered by SiliconFlow 图标与两张图片资源。
+- 预置提供商本身和品牌图标匹配保留；四份 locale 删除两条文案。
+- 测试：编译、spotless、markdownlint、i18n 缺条目检查通过，aff 参数在仓库中不再出现；设备上确认硅基流动页没有广告语、官网链接和 Powered by，302.AI 页没有官网链接描述。
+
 ## 2026-11-22 导出备份选择具体工作区（C158）
 
 - 本地导出与 WebDAV 配置都支持多选工作区，默认全部；`WebDavConfig.workspaceIds` 为 null 表示全部，旧设置照旧解码。
