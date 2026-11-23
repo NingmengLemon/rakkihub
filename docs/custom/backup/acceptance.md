@@ -123,7 +123,7 @@ v31 的样本推成 `rikkahub-sample-v31.db` 与 `backup-expectations-v31.json`�
 | 高版本库 | `BackupManagerTest` 的拒绝用例 | 验过 |
 | 缺条目拒绝 | `BackupManagerTest` 的缺库、缺设置、附件名带反斜杠三条用例 | 2026-11-04 设备上验过：三条都在解压之前失败，不留暂存，现有库与附件不动 |
 | 导入改名与去重 | `ImportedUploadFilesTest`（JVM）、`BackupManagerTest` 的改名与成链用例、`OfficialBackupRestoreAcceptanceTest`、`RestoreAppliedOutcomeTest` | 2026-11-04 设备上验过：v32 样本的附件按内容命名且集合一致；5GB 样本的 8080 个 upload 条目落成 682 个唯一内容 |
-| 官方兼容出口 | `BackupManagerTest` 的两条路径改写用例，外加一条「官方出口归档再恢复回本应用」 | 绝对与相对路径改写验过；设备上两次交给官方客户端恢复：v32 样本（170 会话 / 676 节点 / 98 个 upload 文件）与 5GB 数据（1664 会话 / 11483 节点 / 682 个内容名附件，图片与头像能显示）；`usage_record.outcome` 的已知裁剪已实现（C80），C142 的复合索引在导出时换回官方单列索引，2026-11-21 已在官方 RikkaHub 3.1.1 上复验（见文末 C142 一节）；其它 schema 分叉仍待实现 |
+| 官方兼容出口 | `BackupManagerTest` 的两条路径改写用例，外加一条「官方出口归档再恢复回本应用」 | 绝对与相对路径改写验过；设备上两次交给官方客户端恢复：v32 样本（170 会话 / 676 节点 / 98 个 upload 文件）与 5GB 数据（1664 会话 / 11483 节点 / 682 个内容名附件，图片与头像能显示）；`usage_record.outcome` 的已知裁剪已实现（C80），C142 的复合索引在导出时换回官方单列索引，2026-11-21 已在官方 RikkaHub 3.1.1 上复验（见文末 C142 一节），2026-11-23 C158 补跑也用它恢复过一次（22 会话 / 59 节点 / 3 个 managed file / 3 个 upload 文件）；其它 schema 分叉仍待实现 |
 | 本应用自己导出、换包名恢复 | 临时 `.crosscheck` 包名的构建 | 170 会话 / 676 节点；2 个节点带相对引用，按新安装解析；64 个节点带官方绝对引用，经 C25 改写；98 个 upload 文件；测试图片显示 |
 
 ## 5GB 样本
@@ -220,10 +220,11 @@ C142 把 `message_node` 的索引换成复合索引（Room 34 到 35），官方
 - 回归：同一构建上 `:app:connectedGithubDebugAndroidTest` 的 `data.sync` 包 56 条全部通过（`BackupManagerTest` 28、`DatabaseBackupTest` 3、`OfficialBackupRestoreAcceptanceTest` 2、`RestoreAppliedOutcomeTest` 1、`OfficialDatabaseConverterTest` 2、`OfficialDatabaseReaderTest` 7、`OfficialDatabaseWriterTest` 4、`OfficialForeignAttachmentPathsTest` 4、`OfficialSampleAcceptanceTest` 2、`OfficialSchemaTrimmerTest` 3），设备上的 v32/v31 样本与 124MB 整份归档都实际跑过。
 - 官方客户端原数据是 4 个测试会话（库 87,040 字节），导入前已备份到设备 `/data/local/tmp/official-prev.db`；当前官方客户端保留的是这份恢复结果。
 
-## 2026-11-22 C158 重跑
+## 2026-11-22 C158 重跑（11-23 补官方手动恢复）
 
 C158 给 `WebDavConfig` 增加 `workspaceIds`（默认 null，旧设置解码为 null），并按选择导出工作区文件；不改 Room/schema、数据库表、附件命名和官方兼容出口布局，官方出口把该字段归一成 null。按上面的标准重跑设备数据验收：
 
 - `data.sync` 设备包 60 条全部通过：`BackupManagerTest` 32、`DatabaseBackupTest` 3、`OfficialBackupRestoreAcceptanceTest` 2、`RestoreAppliedOutcomeTest` 1、`OfficialDatabaseConverterTest` 2、`OfficialDatabaseReaderTest` 7、`OfficialDatabaseWriterTest` 4、`OfficialForeignAttachmentPathsTest` 4、`OfficialSampleAcceptanceTest` 2、`OfficialSchemaTrimmerTest` 3。v32/v31 样本读取与转换、官方备份恢复、同安装自家恢复、按工作区选择打包与恢复提示都实际跑过。
 - 设备点验：本地导出页勾选 Workspaces 后默认全选，取消到零出现「工作区文件不会导出」的警告，重新勾选或点全选恢复；WebDAV 页勾选 Workspaces 后同样默认全选。
-- 官方 RikkaHub 3.1.1 手动恢复、5GB 与 `.crosscheck` 换包名恢复没有重跑：本项只新增带默认值的设置字段，不涉及 Room schema、附件路径或归档布局；官方客户端对未知设置字段的容忍已由 C75 等覆盖，官方出口又把该字段归一成 null。按 C75 的口径记为按范围跳过。
+- 官方 RikkaHub 3.1.1 手动恢复已在 K60 上补跑：从本应用导出官方兼容归档（22 会话、59 节点、3 个 managed file、10 条 `usage_record`、3 个 `upload/` 文件），官方从文件导入并重启后正常打开，会话里的测试图片正常显示；计数从官方客户端再导出的归档读取，没有按验收脚本拉官方库（官方库在私有目录，当前 SELinux 策略拒绝 root 读取），C142 已用拉库方式验过同一基线；官方再导出的归档计数一致（22 会话、59 节点、3 个 managed file、10 条 `usage_record`、3 个 upload 文件）。验收后把官方客户端恢复到导入前的备份（22 会话、59 节点、1 个 managed file、1 个 upload 文件，`usage_record` 10 条；由 `rikkahub_backup_official_20261121_095601.zip` 导入），导入前的整份数据另存在设备 `/data/local/tmp/official-prev.tar`，没有进仓库。
+- 5GB 与 `.crosscheck` 换包名恢复没有重跑：本项只新增带默认值的设置字段，不涉及 Room schema、附件路径或归档布局；官方客户端对未知设置字段的容忍已由这次手动恢复覆盖。按 C75 的口径记为按范围跳过。
