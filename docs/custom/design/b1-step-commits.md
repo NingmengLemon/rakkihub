@@ -184,7 +184,7 @@ val callComplete: Boolean = true
 
 - 投影后 `parts.isEmpty()` 的消息丢弃；检查点与 `parts=[Text("")]` 的截断标记保留。
 - 投影后的消息把 `steps` 清空，请求与摘要都不需要原始范围；原始消息不受影响。
-- `buildStep` 的顺序：普通请求用 `projectForRequest`，摘要分支用 `projectForSummary`；之后统一丢空、`withoutCompressionScratch`、`limitContext`、插入 system 消息、输入变换、`mergeAdjacentUserMessages`。空消息判断不包含 system 消息。
+- `buildStep` 的顺序：普通请求用 `projectForRequest`，摘要分支用 `projectForSummary`；之后统一丢空、`withoutCompressionScratch`、`limitContext`、插入 system 消息、输入变换；相邻 user 由 provider 转换层按协议归一化（C160）。空消息判断不包含 system 消息。
 - `CompressionPlan` 的估算窗口同样先投影、丢空、`withoutCompressionScratch`、`limitContext`，与请求一致。
 - 调用方：`ChatRequestFactory.buildStep` 普通请求、`ContextPressure` 用请求投影；摘要分支、标题的 `recentModelMessages`、`CompressionPlan` 用摘要投影；记忆的 `dialogueMessages`、`conversation_read` 仍整条过滤失败回复。B1 不改 `contextLimitBoundaryIndex`、`conversation_search` 与 Web DTO，它们保持现状。
 - 只有半截 ToolCall、被 `finishStep` 删除后消息为空时，按空消息处理，不把空 assistant 当有效回复。
@@ -234,7 +234,7 @@ val callComplete: Boolean = true
 ## 11. 测试与验收
 
 - 序列化：旧 JSON 默认空 steps 与 `callComplete=true`；新 JSON 往返；StepStatus 序列名；`kotlin.time.Instant`。
-- 投影：成功 step 全保留；失败 step 只留 Tool/ServerTool；纯文本失败投影为空后整条丢弃；媒体与 annotations 在失败/取消/TOOLS 下丢弃；取消 step 保留前缀；旧 FAILED 整条丢弃；多 step FAILED 请求保留前面 SUCCEEDED；摘要对 FAILED 按 step 投影（C122）；相邻 user 在丢空后合并；截断标记保留；TOOLS/RUNNING 投影；只有半截 ToolCall 时为空的处理。
+- 投影：成功 step 全保留；失败 step 只留 Tool/ServerTool；纯文本失败投影为空后整条丢弃；媒体与 annotations 在失败/取消/TOOLS 下丢弃；取消 step 保留前缀；旧 FAILED 整条丢弃；多 step FAILED 请求保留前面 SUCCEEDED；摘要对 FAILED 按 step 投影（C122）；丢空后留下的相邻 user 由 provider 转换层合并（C160）；截断标记保留；TOOLS/RUNNING 投影；只有半截 ToolCall 时为空的处理。
 - 生命周期：无工具成功；空回复重试耗尽；审批暂停与恢复；中间节点需要审批时全部 not_started、step SUCCEEDED、消息 COMPLETE；中间节点只有 Auto 工具时照常执行、不返回 ApprovalUnavailable；审批暂停后进程重启（含 `isGenerating` 清理）；Web 无 job 审批停止（冷会话）；用户取消；首 token 前取消；工具执行一半；生成中进程死亡；跨 step 死亡最后一个 SUCCEEDED 保持；工具轮成功结束后重载会话 step 不是 TOOLS；终态失败时 Auto/Approved/Answered/Denied 工具按状态收口；半截 ToolCall 在四条结算路径都被删除；只有半截 ToolCall 时本轮按空内容结束；`prepareStep` 抛错时 step FAILED 且 modelId 保留；`createContext` 失败时没有 step；旧消息无 steps 但 `isGenerating=true` 的加载恢复；旧 Pending 审批接管时前缀 step 为 TOOLS 并在执行后置 SUCCEEDED；旧 INTERRUPTED 消息接管成功后复位为 COMPLETE；TOOLS 但工具都已执行时取消关闭为 SUCCEEDED；输出变换插入 Reasoning 后范围重算；取消时 preview 变换与 Reasoning 插入同时发生。
 - 重试：只在聊天轮次；压缩与记忆显式 NONE；重试成功不重放前序 step；耗尽后投影正确；C76 卡片内存态重现。
 - 消费方回归：Web、FTS、浮动窗口、Markdown、压缩计划、上下文条数截断。

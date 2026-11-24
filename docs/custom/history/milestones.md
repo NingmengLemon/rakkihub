@@ -2,6 +2,12 @@
 
 本文件归档已完成的定制、修复与独立化批次，按时间或主题分组。当前状态以 checklist 索引与明细为准，未来方向见 [roadmap.md](../roadmap.md)。
 
+## 2026-11-24 相邻 user 合并下沉到协议转换层（C160）
+
+- 删除 `ChatRequestFactory` 的全局相邻 user 合并；Claude 在缓存断点之后合并 wire 消息，Gemini generateContent 保留原有同角色合并，Interactions 新增 `user_input` 合并，OpenAI 兼容端点按 host 能力位决定是否合并。
+- 能力位默认对未知/自定义端点开；官方 OpenAI、`api.x.ai`、ChatGPT、Grok 关闭，保留轮次边界。能力位是计算属性，不改 Settings/DataStore，也不加 UI。
+- 测试：新增 provider 能力位、Claude 相邻 user/tool_result/压缩/检查点/缓存断点、OpenAI 合并与保留、Interactions 合并用例；`MessageScratchTest` 接管原有 scratch 用例。`:ai` 445、app 885、provider-mock 28 条与 `spotlessCheck` 通过；strict 场景用 JVM 集成测试覆盖三条协议，设备上未单独复验。
+
 ## 2026-11-23 清除赞助商广告文案与 Powered by（C159）
 
 - 去掉硅基流动预置项的广告语与带 aff 参数的官网链接、302.AI 预置项的官网链接文案，以及提供商详情页的 Powered by SiliconFlow 图标与两张图片资源。

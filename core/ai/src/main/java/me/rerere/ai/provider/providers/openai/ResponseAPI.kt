@@ -33,11 +33,13 @@ import me.rerere.ai.core.TokenUsage
 import me.rerere.ai.provider.BuiltInTools
 import me.rerere.ai.provider.Model
 import me.rerere.ai.provider.ModelAbility
+import me.rerere.ai.provider.OPENAI_BOUNDARY_HOSTS
 import me.rerere.ai.provider.ProviderSetting
 import me.rerere.ai.provider.TextGenerationParams
 import me.rerere.ai.provider.TextGenerationResult
 import me.rerere.ai.provider.providers.PartGroup
 import me.rerere.ai.provider.providers.groupPartsByToolBoundary
+import me.rerere.ai.provider.providers.mergeAdjacentUserTurns
 import me.rerere.ai.provider.stream.SseEvent
 import me.rerere.ai.registry.ModelRegistry
 import me.rerere.ai.ui.OpenAIReasoningMetadata
@@ -274,7 +276,10 @@ class ResponseAPI(
                         put("content", systemPrompt)
                     })
                 }
-                buildMessages(messages).forEach { add(it) }
+                buildMessages(
+                    messages = messages,
+                    mergeAdjacentUserMessages = capabilities.mergeAdjacentUserMessages,
+                ).forEach { add(it) }
             }
 
             // reasoning
@@ -348,7 +353,10 @@ class ResponseAPI(
         }.mergeCustomBody(params.customBody)
     }
 
-    internal fun buildMessages(messages: List<UIMessage>) = buildJsonArray {
+    internal fun buildMessages(
+        messages: List<UIMessage>,
+        mergeAdjacentUserMessages: Boolean = true,
+    ) = buildJsonArray {
         messages
             .filter { message ->
                 message.role != MessageRole.SYSTEM && (
@@ -365,6 +373,8 @@ class ResponseAPI(
                     addUserItems(message)
                 }
             }
+    }.let { messages ->
+        if (mergeAdjacentUserMessages) messages.mergeAdjacentUserTurns(textContentType = "input_text") else messages
     }
 
     private fun JsonArrayBuilder.addAssistantItems(message: UIMessage) {
@@ -790,6 +800,8 @@ private fun List<UIMessagePart>.isOnlyTextPart(): Boolean {
 internal data class ResponseProviderCapabilities(
     val supportsReasoningSummary: Boolean = true,
     val supportEncryptedContent: Boolean = true,
+    /** 未知/自定义端点默认合并相邻 user；官方 OpenAI/xAI 按假设关闭，待真机验证。 */
+    val mergeAdjacentUserMessages: Boolean = true,
     // 不为 null 时 system 提示以这个角色的消息放在 input 开头，不用 instructions 字段
     val systemMessageRole: String? = null,
     // 是否接受 temperature、top_p 和 max_output_tokens
@@ -810,6 +822,11 @@ internal fun resolveResponseProviderCapabilities(host: String): ResponseProvider
         "ark.cn-beijing.volces.com" -> ResponseProviderCapabilities(
             supportsReasoningSummary = false,
             supportEncryptedContent = false
+        )
+
+        // 官方 OpenAI/xAI 端点按假设能接受连续 user，保留轮次边界
+        in OPENAI_BOUNDARY_HOSTS -> ResponseProviderCapabilities(
+            mergeAdjacentUserMessages = false,
         )
 
         else -> ResponseProviderCapabilities()

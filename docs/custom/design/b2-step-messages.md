@@ -222,7 +222,7 @@ RUNNING 会出现在当前请求里：AgentLoop 把正在生成的 assistant 消
 - 空 steps 加 `FAILED` 的新 turn 只可能是 step 开始前失败，同样整条丢弃；新的失败 turn 只要开始过 step 就有记录。
 - 投影后 `parts.isEmpty()` 的消息直接丢弃；判断用 `parts.isEmpty()`，不能用 `isBlank()` 或 `isEmptyUIMessage()`，因为历史截断标记是 `parts=[Text("")]` 的空文本消息，必须保留为 `limitContext` 的边界。
 - `isContextCheckpoint` 与空文本截断标记不受丢空消息影响，始终保留。
-- 投影顺序之后仍接 `withoutCompressionScratch()`（C68），再 `limitContext`，再输入变换，最后 `mergeAdjacentUserMessages`。
+- 投影顺序之后仍接 `withoutCompressionScratch()`（C68），再 `limitContext`，再输入变换；相邻 user 由 provider 转换层按协议归一化（C160）。
 - 失败步骤的 Tool parts 缺结果时先 `settleToolParts` 再投影，保证配对。
 - 多 step 消息的 FAILED 口径：请求投影按每步状态拼接，前面 SUCCEEDED step 的正文与工具事实保留，失败 step 只留 Tool parts；标题与摘要按 `projectForSummary` 保留成功 step 的内容和失败 step 的工具事实，记忆与 `conversation_search` 仍整条丢弃。
 - `conversation_search` 的工具边界过滤：结果可能跨多个会话与助手，必须先按结果里的 `conversationId` 分组再查状态，不能只按当前会话建映射。`ConversationRepository.filterSearch` 对每个 `conversationId` 只加载一次会话，同一次读取产出 scratch 集合与 `messageId -> status` 映射（`SearchConversationContext`，按会话缓存到本次调用结束），再交给 `filterSearchResults`。工具搜索走 `searchMessagesForModel`/`searchMessagesOfAssistantsForModel`（`dropFailed = true`），snippet 所属消息 `status = FAILED`、node 已删、分支已切走或会话缺失时整条丢弃；UI 与 Web 搜索走 `searchMessages`/`searchMessagesOfAssistants`（`dropFailed = false`），只隐藏 scratch，仍能看到失败正文。工具搜索先取最多 200 条候选，再过滤、最后按调用方 limit 截断；UI 与 Web 搜索仍按原来的 50 条上限。多 step 消息只要最后一步失败就整条不返回。
@@ -244,7 +244,7 @@ RUNNING 会出现在当前请求里：AgentLoop 把正在生成的 assistant 消
 ## 7. 上下文与压缩
 
 - `contextMessageLimit` 按消息条数计数（user 与 assistant 都算），不按 turn 计数；一个 assistant 消息承载一轮的多个 step，消息条数与今天一致。
-- `buildStep` 的顺序：普通请求用 `projectForRequest`，摘要分支用 `projectForSummary`；之后统一丢空、`withoutCompressionScratch`、`limitContext`、插入 system 消息、输入变换、`mergeAdjacentUserMessages`。空消息判断不包含 system 消息。
+- `buildStep` 的顺序：普通请求用 `projectForRequest`，摘要分支用 `projectForSummary`；之后统一丢空、`withoutCompressionScratch`、`limitContext`、插入 system 消息、输入变换；相邻 user 由 provider 转换层按协议归一化（C160）。空消息判断不包含 system 消息。
 - 失败消息在投影后仍保留时，会占用 `contextMessageLimit` 的名额；纯文本失败的 step 投影为空后整条消息丢弃，不占名额。
 - `contextLimitBoundaryIndex` 的判据：limit 为 0、原始 `currentMessages` 里存在压缩提示词、或没有发生截断时返回 null；压缩提示词的检查必须在 `withoutCompressionScratch` 之前做，否则提示词已经被删掉，判据永远不会成立。发生截断的判据是窗口起点严格晚于投影列表的尾部起点（检查点之后的第一条），等价于 `contextLimitStart(limit) > tailStart`；如果前面有被投影丢弃的消息，不能用节点下标和 `contextWindowStart()` 比较；先在消息列表空间判定截断，再按 id 映射回节点空间。顺序是先请求投影与丢空，再 `withoutCompressionScratch`，再执行“最后一条是 assistant 时先去掉它”，再 `contextLimitStart`，再按消息 id 映射回节点下标，映射不到返回 null。
 - `keepRecent`、检查点、`planHistoryTruncation` 仍按 `messageNodes` 计数，不改；一个 turn 仍然只有一条 assistant 消息，压缩不会从 turn 中间切开。
@@ -321,7 +321,7 @@ RUNNING 会出现在当前请求里：AgentLoop 把正在生成的 assistant 消
 ## 13. 测试与验收
 
 - 序列化：旧 JSON 默认空 steps 与 `callComplete=true`；新 JSON 往返；attempts 截断到 20 条；`maxRetries` 与时间字段往返；StepStatus 的小写序列名。
-- 投影：成功 step 全保留；失败 step 只留 Tool；纯文本失败投影为空后整条丢弃；取消 step 保留前缀；旧 FAILED 消息整条丢弃且不套用单 step 规则；空 steps 加 FAILED 的新 turn 整条丢弃；压缩失败留下的空 steps 回复先由 `withoutCompressionScratch` 移除；相邻 user 在空消息丢弃后仍能合并；空文本截断标记不被丢弃；TOOLS step 的请求与摘要投影；RUNNING 出现在当前请求时的投影；多 step FAILED 消息的 `conversation_search` 过滤且 UI 搜索仍可见；跨多个会话的 `conversation_search` 结果都按各自会话状态过滤；`ServerTool` 的 COMPLETED 与 IN_PROGRESS 在每张投影表下的处理。
+- 投影：成功 step 全保留；失败 step 只留 Tool；纯文本失败投影为空后整条丢弃；取消 step 保留前缀；旧 FAILED 消息整条丢弃且不套用单 step 规则；空 steps 加 FAILED 的新 turn 整条丢弃；压缩失败留下的空 steps 回复先由 `withoutCompressionScratch` 移除；空消息丢弃后留下的相邻 user 由 provider 转换层合并（C160）；空文本截断标记不被丢弃；TOOLS step 的请求与摘要投影；RUNNING 出现在当前请求时的投影；多 step FAILED 消息的 `conversation_search` 过滤且 UI 搜索仍可见；跨多个会话的 `conversation_search` 结果都按各自会话状态过滤；`ServerTool` 的 COMPLETED 与 IN_PROGRESS 在每张投影表下的处理。
 - 生命周期：模型成功无工具直接完成；空回复重试耗尽；工具失败继续；审批暂停与恢复；审批恢复不被 runTurn 开头结算破坏；审批暂停后进程重启仍可恢复；重新生成中间 assistant 节点时出现需要审批的调用，turn 结束直接结算为 not_started、不进入 AwaitingApproval；Web（`/api/conversations/{id}/stop`）在审批等待时停止，step 关闭为 CANCELLED、消息 INTERRUPTED、pendingApprovalTurn 清理；前台服务超时在审批等待时不可达；重新生成中间 assistant 节点后停止，结算命中该节点而不是会话末尾；用户取消；工具执行一半；首 token 前取消仍有 step 可结算；生成中进程死亡恢复；跨 step 死亡时最后一个 SUCCEEDED 保持成功；终态失败时 Auto/Approved/Answered 工具收口；半截 ToolCall 被删除；`ToolCallEnd` 按 id 置位、`Tool.merge` 单调合并、`executeTools` 与主循环都过滤未完成调用；`handleToolApproval` 的 Accepted/Conflict/Stale 三种返回；输出变换插入 Reasoning 后 step 范围重算正确；取消时 preview 的视觉变换与 Reasoning 插入同时发生仍正确；最终失败消息保留最后一次 attempt 的 partial parts。
 - 重试：只在聊天轮次生效；压缩与记忆传 NONE；attempt 摘要与 maxRetries；手动重试从失败 step 继续到本轮结束且拿到新 maxSteps；入口为消息快捷按钮与更多菜单，不做错误卡片重试；`stepCount` 继续累计。
 - 上下文：失败消息占用与不占用 `contextMessageLimit` 两种路径；边界下标分三组断言：没有截断时返回 null，有压缩 scratch 时返回 null，窗口前有被丢弃消息但确实发生截断时返回映射后的节点下标；截断时与请求投影一致；最后一条 assistant 去掉与丢空消息的先后顺序；`keepRecent` 不变的压缩计划。

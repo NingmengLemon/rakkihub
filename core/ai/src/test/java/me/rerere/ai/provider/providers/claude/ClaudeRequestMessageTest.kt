@@ -1,6 +1,7 @@
 package me.rerere.ai.provider.providers.claude
 
 import kotlinx.serialization.json.JsonArray
+import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.buildJsonArray
 import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.jsonArray
@@ -8,6 +9,9 @@ import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
 import kotlinx.serialization.json.put
 import me.rerere.ai.core.MessageRole
+import me.rerere.ai.provider.Model
+import me.rerere.ai.provider.ProviderSetting
+import me.rerere.ai.provider.TextGenerationParams
 import me.rerere.ai.ui.ClaudeReasoningMetadata
 import me.rerere.ai.ui.ServerToolMetadata
 import me.rerere.ai.ui.ServerToolProtocol
@@ -48,6 +52,75 @@ class ClaudeRequestMessageTest {
         )
         method.isAccessible = true
         return method.invoke(provider, messages) as JsonArray
+    }
+
+    private fun invokeBuildRequest(messages: List<UIMessage>): JsonObject {
+        val method = ClaudeProvider::class.java.getDeclaredMethod(
+            "buildMessageRequest",
+            ProviderSetting.Claude::class.java,
+            List::class.java,
+            TextGenerationParams::class.java,
+            Boolean::class.javaPrimitiveType,
+        )
+        method.isAccessible = true
+        return method.invoke(
+            provider,
+            ProviderSetting.Claude(),
+            messages,
+            TextGenerationParams(model = Model(modelId = "claude-test")),
+            false,
+        ) as JsonObject
+    }
+
+    @Test
+    fun `adjacent user messages are merged in the request`() {
+        val request = invokeBuildRequest(listOf(UIMessage.user("first"), UIMessage.user("second")))
+
+        val messages = request["messages"]!!.jsonArray
+        assertEquals(1, messages.size)
+        val content = messages.single().jsonObject["content"]!!.jsonArray
+        assertEquals(2, content.size)
+        assertEquals("first", content[0].jsonObject["text"]?.jsonPrimitive?.content)
+        assertEquals("second", content[1].jsonObject["text"]?.jsonPrimitive?.content)
+    }
+
+    @Test
+    fun `tool result user and the next user are merged with tool_result first`() {
+        val assistant = UIMessage(
+            role = MessageRole.ASSISTANT,
+            parts = listOf(createExecutedTool("call_1", "search", "{}", "result")),
+        )
+        val request = invokeBuildRequest(
+            listOf(UIMessage.user("before"), assistant, UIMessage.user("after"))
+        )
+
+        val messages = request["messages"]!!.jsonArray.map { it.jsonObject }
+        assertEquals(listOf("user", "assistant", "user"), messages.map { it["role"]?.jsonPrimitive?.content })
+        val content = messages.last()["content"]!!.jsonArray.map { it.jsonObject }
+        assertEquals("tool_result", content.first()["type"]?.jsonPrimitive?.content)
+        assertEquals("after", content.last()["text"]?.jsonPrimitive?.content)
+    }
+
+    @Test
+    fun `checkpoint summary and the following user are merged`() {
+        val checkpoint = UIMessage.user("summary").copy(isContextCheckpoint = true)
+        val request = invokeBuildRequest(listOf(checkpoint, UIMessage.user("after")))
+
+        val messages = request["messages"]!!.jsonArray
+        assertEquals(1, messages.size)
+        val content = messages.single().jsonObject["content"]!!.jsonArray
+        assertEquals(2, content.size)
+        assertEquals("summary", content[0].jsonObject["text"]?.jsonPrimitive?.content)
+        assertEquals("after", content[1].jsonObject["text"]?.jsonPrimitive?.content)
+    }
+
+    @Test
+    fun `two adjacent user messages are merged at the wire layer`() {
+        val request = invokeBuildRequest(listOf(UIMessage.user("history"), UIMessage.user("compress")))
+
+        val messages = request["messages"]!!.jsonArray
+        assertEquals(1, messages.size)
+        assertEquals(2, messages.single().jsonObject["content"]!!.jsonArray.size)
     }
 
     @Test

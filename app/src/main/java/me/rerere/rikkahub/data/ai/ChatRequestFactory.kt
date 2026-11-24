@@ -20,7 +20,6 @@ import me.rerere.ai.ui.StreamChunk
 import me.rerere.ai.ui.StreamChunkHandler
 import me.rerere.ai.ui.UIMessage
 import me.rerere.ai.ui.limitContext
-import me.rerere.ai.ui.mergeAdjacentUserMessages
 import me.rerere.ai.ui.projectForRequest
 import me.rerere.ai.ui.projectForSummary
 import me.rerere.ai.ui.withoutCompressionScratch
@@ -298,7 +297,7 @@ class ChatRequestFactory(
             processingStatus = processingStatus,
             workspaceCwd = turn.workspaceCwd,
             conversationId = turn.conversationId,
-        ).mergeAdjacentUserMessages()
+        )
         val params = TextGenerationParams(
             model = turn.model,
             temperature = assistant.temperature,

@@ -1,5 +1,15 @@
 package me.rerere.ai.provider.providers
 
+import kotlinx.serialization.json.JsonArray
+import kotlinx.serialization.json.JsonElement
+import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.json.JsonPrimitive
+import kotlinx.serialization.json.buildJsonArray
+import kotlinx.serialization.json.buildJsonObject
+import kotlinx.serialization.json.contentOrNull
+import kotlinx.serialization.json.jsonObject
+import kotlinx.serialization.json.jsonPrimitive
+import kotlinx.serialization.json.put
 import me.rerere.ai.ui.UIMessagePart
 
 /**
@@ -55,4 +65,37 @@ internal fun groupPartsByToolBoundary(parts: List<UIMessagePart>): List<PartGrou
     flushContent()
     flushTools()
     return groups
+}
+
+/** OpenAI 兼容协议 wire 层：合并相邻 user 项，content 统一成数组后按顺序拼接。 */
+internal fun JsonArray.mergeAdjacentUserTurns(textContentType: String = "text"): JsonArray {
+    val merged = mutableListOf<JsonObject>()
+    for (element in this) {
+        val current = element.jsonObject
+        val previous = merged.lastOrNull()
+        if (previous != null &&
+            previous["role"]?.jsonPrimitive?.contentOrNull == "user" &&
+            current["role"]?.jsonPrimitive?.contentOrNull == "user"
+        ) {
+            val content = buildJsonArray {
+                addAll(previous["content"].asContentArray(textContentType))
+                addAll(current["content"].asContentArray(textContentType))
+            }
+            merged[merged.lastIndex] = JsonObject(previous + ("content" to content))
+        } else {
+            merged.add(current)
+        }
+    }
+    return JsonArray(merged)
+}
+
+private fun JsonElement?.asContentArray(textContentType: String): JsonArray = when (this) {
+    is JsonArray -> this
+    is JsonPrimitive -> buildJsonArray {
+        add(buildJsonObject {
+            put("type", textContentType)
+            put("text", content)
+        })
+    }
+    else -> JsonArray(emptyList())
 }

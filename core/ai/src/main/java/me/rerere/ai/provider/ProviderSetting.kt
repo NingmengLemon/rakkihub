@@ -4,6 +4,7 @@ import androidx.compose.runtime.Composable
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.Transient
+import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
 import kotlin.uuid.Uuid
 
 /** 账号登录得到的 OAuth 凭据 */
@@ -60,6 +61,28 @@ val ProviderSetting.supportsBuiltInSearch: Boolean
         is ProviderSetting.Claude -> true
         is ProviderSetting.Account -> true
     }
+
+/** 官方 OpenAI/xAI 端点按假设能接受连续 user，保留轮次边界。 */
+internal val OPENAI_BOUNDARY_HOSTS = setOf("api.openai.com", "api.x.ai")
+
+/**
+ * 相邻 user 是否需要在 wire 层合并。
+ *
+ * Claude 恒为 true；OpenAI 兼容端点由 host 决定，未知/自定义端点默认合并。
+ * Google 的两条转换层各自无条件合并，不读这个能力位；Account 型提供商走
+ * Responses 能力位。
+ */
+internal val ProviderSetting.mergesAdjacentUserMessages: Boolean
+    get() = when (this) {
+        is ProviderSetting.Claude -> true
+        is ProviderSetting.OpenAI -> isUnknownOpenAiEndpoint(baseUrl)
+        else -> false
+    }
+
+private fun isUnknownOpenAiEndpoint(baseUrl: String): Boolean {
+    val host = baseUrl.toHttpUrlOrNull()?.host ?: return true
+    return host !in OPENAI_BOUNDARY_HOSTS
+}
 
 @Serializable
 sealed class ProviderSetting {

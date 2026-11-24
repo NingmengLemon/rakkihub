@@ -47,6 +47,12 @@ enum class MockScenario(val wireName: String) {
      * carries invalid UTF-8 and a decoder replaces it with U+FFFD.
      */
     UTF8_BROKEN("utf8-broken"),
+
+    /**
+     * 请求里出现连续同角色的 user 时返回 400，否则按 [NORMAL] 正常返回。
+     * 用于模拟要求角色严格交替的端点，JVM 集成测试与设备联调都可以用。
+     */
+    STRICT_ALTERNATION("strict-alternation"),
     ;
 
     /** Model id that selects this scenario. */

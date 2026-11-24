@@ -45,6 +45,7 @@ import me.rerere.ai.provider.ProviderQuota
 import me.rerere.ai.provider.ProviderSetting
 import me.rerere.ai.provider.TextGenerationParams
 import me.rerere.ai.provider.TextGenerationResult
+import me.rerere.ai.provider.mergesAdjacentUserMessages
 import me.rerere.ai.provider.providers.PartGroup
 import me.rerere.ai.provider.providers.groupPartsByToolBoundary
 import me.rerere.ai.provider.runQuotaQuery
@@ -457,10 +458,16 @@ class ClaudeProvider(private val client: OkHttpClient, context: Context? = null)
                     // 来自同一次原生响应；直接不回放旧思考。官方域名保持原行为。
                     dropLegacyThinking = shouldDropLegacyThinking(providerSetting.baseUrl),
                 ).let { built ->
-                    if (aggressiveCacheBreakpoints) {
+                    // 先在原始消息数量上插断点，再合并；否则合并会少一条真实 user，断点选择会变
+                    val withCache = if (aggressiveCacheBreakpoints) {
                         insertMessagesCacheControl(built, providerSetting.promptCacheTtl)
                     } else {
                         built
+                    }
+                    if (providerSetting.mergesAdjacentUserMessages) {
+                        withCache.mergeAdjacentClaudeUserRoles()
+                    } else {
+                        withCache
                     }
                 }
             )
@@ -632,6 +639,34 @@ class ClaudeProvider(private val client: OkHttpClient, context: Context? = null)
                 }
         }
         return built
+    }
+
+    /**
+     * Claude 严格端点要求 user/assistant 交替；转换 assistant 的工具时会产生
+     * `assistant(tool_use)` + `user(tool_result)`，再跟一条真实 user 就会连续同角色，
+     * 这个相邻关系在 UIMessage 层看不到，只能在 wire 层合并。
+     *
+     * 只合并 user；tool_result 块保持在 content 开头。必须在缓存断点插入之后调用。
+     */
+    private fun JsonArray.mergeAdjacentClaudeUserRoles(): JsonArray {
+        val merged = mutableListOf<JsonObject>()
+        for (element in this) {
+            val current = element.jsonObject
+            val previous = merged.lastOrNull()
+            if (previous != null &&
+                previous["role"]?.jsonPrimitive?.contentOrNull == "user" &&
+                current["role"]?.jsonPrimitive?.contentOrNull == "user"
+            ) {
+                val content = buildJsonArray {
+                    previous["content"]?.jsonArray?.forEach { add(it) }
+                    current["content"]?.jsonArray?.forEach { add(it) }
+                }
+                merged[merged.lastIndex] = JsonObject(previous + ("content" to content))
+            } else {
+                merged.add(current)
+            }
+        }
+        return JsonArray(merged)
     }
 
     /**

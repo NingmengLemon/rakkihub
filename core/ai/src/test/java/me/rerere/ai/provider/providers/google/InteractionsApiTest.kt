@@ -44,6 +44,14 @@ class InteractionsApiTest {
     private val api = InteractionsAPI(OkHttpClient())
 
     @Test
+    fun `adjacent user inputs are merged`() {
+        val input = api.buildInput(listOf(UIMessage.user("first"), UIMessage.user("second")))
+
+        assertEquals(1, input.size)
+        assertEquals(2, input[0].jsonObject["content"]!!.jsonArray.size)
+    }
+
+    @Test
     fun `request body uses stateless interactions schema`() {
         val body = api.buildRequestBody(
             messages = listOf(

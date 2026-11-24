@@ -37,8 +37,10 @@ import me.rerere.ai.provider.ModelAbility
 import me.rerere.ai.provider.ProviderSetting
 import me.rerere.ai.provider.TextGenerationParams
 import me.rerere.ai.provider.TextGenerationResult
+import me.rerere.ai.provider.mergesAdjacentUserMessages
 import me.rerere.ai.provider.providers.PartGroup
 import me.rerere.ai.provider.providers.groupPartsByToolBoundary
+import me.rerere.ai.provider.providers.mergeAdjacentUserTurns
 import me.rerere.ai.provider.stream.SseEvent
 import me.rerere.ai.registry.ModelRegistry
 import me.rerere.ai.ui.OpenRouterReasoningMetadata
@@ -263,6 +265,7 @@ class ChatCompletionsAPI(
                     includeHistoryReasoning = providerSetting.includeHistoryReasoning,
                     includeOpenRouterReasoningDetails = isOpenRouter,
                     supportInputModalities = params.model.inputModalities,
+                    mergeAdjacentUserMessages = providerSetting.mergesAdjacentUserMessages,
                 )
             )
 
@@ -510,21 +513,24 @@ class ChatCompletionsAPI(
         includeHistoryReasoning: Boolean = true,
         includeOpenRouterReasoningDetails: Boolean = false,
         supportInputModalities: List<Modality> = listOf(Modality.TEXT, Modality.IMAGE),
+        mergeAdjacentUserMessages: Boolean = true,
     ) = buildJsonArray {
-        val filteredMessages = messages.filter { it.isValidToUpload() }
-
-        filteredMessages.forEach { message ->
-            if (message.role == MessageRole.ASSISTANT) {
-                addAssistantMessages(
-                    message = message,
-                    includeReasoning = includeHistoryReasoning,
-                    includeOpenRouterReasoningDetails = includeOpenRouterReasoningDetails,
-                    supportInputModalities = supportInputModalities,
-                )
-            } else {
-                addNonAssistantMessage(message)
+        messages
+            .filter { it.isValidToUpload() }
+            .forEach { message ->
+                if (message.role == MessageRole.ASSISTANT) {
+                    addAssistantMessages(
+                        message = message,
+                        includeReasoning = includeHistoryReasoning,
+                        includeOpenRouterReasoningDetails = includeOpenRouterReasoningDetails,
+                        supportInputModalities = supportInputModalities,
+                    )
+                } else {
+                    addNonAssistantMessage(message)
+                }
             }
-        }
+    }.let { messages ->
+        if (mergeAdjacentUserMessages) messages.mergeAdjacentUserTurns() else messages
     }
 
     private fun JsonArrayBuilder.addAssistantMessages(

@@ -76,6 +76,47 @@ class ResponseApiRequestMessageTest {
     }
 
     @Test
+    fun `response capability follows the host`() {
+        assertFalse(resolveResponseProviderCapabilities("api.openai.com").mergeAdjacentUserMessages)
+        assertFalse(resolveResponseProviderCapabilities("api.x.ai").mergeAdjacentUserMessages)
+        assertTrue(resolveResponseProviderCapabilities("gateway.example.com").mergeAdjacentUserMessages)
+    }
+
+    @Test
+    fun `capability keeps or merges adjacent user messages`() {
+        val messages = listOf(UIMessage.user("first"), UIMessage.user("second"))
+
+        val unmerged = api.buildMessages(messages, mergeAdjacentUserMessages = false)
+        assertEquals(2, unmerged.size)
+        assertEquals("first", unmerged[0].jsonObject["content"]?.jsonPrimitive?.content)
+        assertEquals("second", unmerged[1].jsonObject["content"]?.jsonPrimitive?.content)
+
+        val merged = api.buildMessages(messages, mergeAdjacentUserMessages = true)
+        assertEquals(1, merged.size)
+        val content = merged.single().jsonObject["content"]!!.jsonArray
+        assertEquals(2, content.size)
+        assertEquals("input_text", content[0].jsonObject["type"]?.jsonPrimitive?.content)
+        assertEquals("first", content[0].jsonObject["text"]?.jsonPrimitive?.content)
+        assertEquals("second", content[1].jsonObject["text"]?.jsonPrimitive?.content)
+    }
+
+    @Test
+    fun `official openai response capability keeps two user items`() {
+        val caps = resolveResponseProviderCapabilities("api.openai.com")
+        val body = api.buildRequestBody(
+            capabilities = caps,
+            messages = listOf(UIMessage.user("first"), UIMessage.user("second")),
+            params = TextGenerationParams(model = Model(modelId = "test-model")),
+            stream = false,
+        )
+
+        val users = body["input"]!!.jsonArray.filter {
+            it.jsonObject["role"]?.jsonPrimitive?.content == "user"
+        }
+        assertEquals(2, users.size)
+    }
+
+    @Test
     fun `multi-round tool calls should produce correct function_call and function_call_output pairs`() {
         // Scenario: Multiple tool calls in sequence
         val assistantMessage = UIMessage(

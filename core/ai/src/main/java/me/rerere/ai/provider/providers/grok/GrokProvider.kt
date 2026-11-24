@@ -57,6 +57,7 @@ internal val GROK_CAPABILITIES = ResponseProviderCapabilities(
     supportsReasoningSummary = false,
     systemMessageRole = "system",
     alwaysIncludeEncryptedContent = true,
+    mergeAdjacentUserMessages = false,
     reasoningEffort = ::grokEffort,
 )
 

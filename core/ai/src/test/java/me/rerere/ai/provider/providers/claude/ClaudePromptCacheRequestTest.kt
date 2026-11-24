@@ -19,6 +19,7 @@ import okhttp3.OkHttpClient
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertNull
+import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Test
 
@@ -277,6 +278,29 @@ class ClaudePromptCacheRequestTest {
         assertEquals(2, realUsers.size)
         assertNotNull(realUsers.first()["content"]!!.jsonArray.last().jsonObject["cache_control"])
         assertNull(realUsers.last()["content"]!!.jsonArray.last().jsonObject["cache_control"])
+    }
+
+    @Test
+    fun `merging adjacent users keeps all four breakpoints`() {
+        val providerSetting = ProviderSetting.Claude(promptCaching = true)
+        val messages = listOf(
+            UIMessage.system("system prompt"),
+            UIMessage.user("first"),
+            UIMessage.user("second"),
+            UIMessage.user("third"),
+        )
+        val params = TextGenerationParams(
+            model = Model(modelId = "claude-test", abilities = listOf(ModelAbility.TOOL)),
+            tools = listOf(dummyTool())
+        )
+
+        val request = buildRequest(providerSetting, messages, params)
+
+        assertEquals(4, countCacheControl(request))
+        val mergedContent = request.realUserMessages().single()["content"]!!.jsonArray
+        assertNull(mergedContent[0].jsonObject["cache_control"])
+        assertNotNull(mergedContent[1].jsonObject["cache_control"])
+        assertNull(mergedContent[2].jsonObject["cache_control"])
     }
 
     @Test

@@ -28,6 +28,9 @@ import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.booleanOrNull
 import kotlinx.serialization.json.contentOrNull
+import kotlinx.serialization.json.jsonArray
+import kotlinx.serialization.json.jsonObject
+import kotlinx.serialization.json.jsonPrimitive
 
 /**
  * JVM mock HTTP server for the four streaming protocols the app speaks.
@@ -92,6 +95,11 @@ class ProviderMockServer(
                 record(call, rawBody)
                 val request = MockRequest.parse(rawBody)
                 val scenario = resolveScenario(call, request.model)
+                if (scenario == MockScenario.STRICT_ALTERNATION &&
+                    hasConsecutiveUserRoles(rawBody, MockProtocol.OPENAI)) {
+                    call.respondStrictAlternationFailure(MockProtocol.OPENAI)
+                    return@post
+                }
                 if (scenario.isFailure) {
                     call.respondFailure(scenario, MockProtocol.OPENAI)
                     return@post
@@ -108,6 +116,11 @@ class ProviderMockServer(
                 record(call, rawBody)
                 val request = MockRequest.parse(rawBody)
                 val scenario = resolveScenario(call, request.model)
+                if (scenario == MockScenario.STRICT_ALTERNATION &&
+                    hasConsecutiveUserRoles(rawBody, MockProtocol.OPENAI)) {
+                    call.respondStrictAlternationFailure(MockProtocol.OPENAI)
+                    return@post
+                }
                 if (scenario.isFailure) {
                     call.respondFailure(scenario, MockProtocol.OPENAI)
                     return@post
@@ -124,6 +137,11 @@ class ProviderMockServer(
                 record(call, rawBody)
                 val request = MockRequest.parse(rawBody)
                 val scenario = resolveScenario(call, request.model)
+                if (scenario == MockScenario.STRICT_ALTERNATION &&
+                    hasConsecutiveUserRoles(rawBody, MockProtocol.CLAUDE)) {
+                    call.respondStrictAlternationFailure(MockProtocol.CLAUDE)
+                    return@post
+                }
                 if (scenario.isFailure) {
                     call.respondFailure(scenario, MockProtocol.CLAUDE)
                     return@post
@@ -142,6 +160,11 @@ class ProviderMockServer(
                 val model = modelAction.substringBeforeLast(':', missingDelimiterValue = modelAction)
                 val action = modelAction.substringAfterLast(':', missingDelimiterValue = "")
                 val scenario = resolveScenario(call, model)
+                if (scenario == MockScenario.STRICT_ALTERNATION &&
+                    hasConsecutiveUserRoles(rawBody, MockProtocol.GOOGLE)) {
+                    call.respondStrictAlternationFailure(MockProtocol.GOOGLE)
+                    return@post
+                }
                 if (scenario.isFailure) {
                     call.respondFailure(scenario, MockProtocol.GOOGLE)
                     return@post
@@ -251,6 +274,36 @@ class ProviderMockServer(
         return ByteArray(bytes.size - 1) { index ->
             if (index <= lead) bytes[index] else bytes[index + 1]
         }
+    }
+
+    /** 严格场景的判据：只看消息角色，忽略 function_call/function_result 等动作条目。 */
+    private fun hasConsecutiveUserRoles(rawBody: String, protocol: MockProtocol): Boolean {
+        val body = runCatching { Json.parseToJsonElement(rawBody) as? JsonObject }.getOrNull() ?: return false
+        val roles = when (protocol) {
+            MockProtocol.OPENAI -> {
+                val messages = body["messages"]?.jsonArray
+                    ?: body["input"]?.jsonArray
+                    ?: return false
+                messages.mapNotNull { it.jsonObject["role"]?.jsonPrimitive?.contentOrNull }
+            }
+
+            MockProtocol.CLAUDE -> body["messages"]?.jsonArray
+                ?.mapNotNull { it.jsonObject["role"]?.jsonPrimitive?.contentOrNull }
+                ?: return false
+
+            MockProtocol.GOOGLE -> body["contents"]?.jsonArray
+                ?.mapNotNull { it.jsonObject["role"]?.jsonPrimitive?.contentOrNull }
+                ?: return false
+        }
+        return roles.zipWithNext().any { (previous, current) -> previous == "user" && current == "user" }
+    }
+
+    private suspend fun ApplicationCall.respondStrictAlternationFailure(protocol: MockProtocol) {
+        respondText(
+            text = MockPayloads.errorBody(protocol, HttpStatusCode.BadRequest.value),
+            contentType = ContentType.Application.Json,
+            status = HttpStatusCode.BadRequest,
+        )
     }
 
     private data class MockRequest(val model: String, val stream: Boolean) {

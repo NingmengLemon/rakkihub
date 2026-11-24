@@ -77,6 +77,23 @@ class ProviderMockServerTest {
     }
 
     @Test
+    fun `strict alternation scenario rejects consecutive users`() {
+        val invalid = postJson(
+            "${mock.openAiBaseUrl}/chat/completions",
+            """{"model":"mock-strict-alternation","stream":true,"messages":[{"role":"user","content":"a"},{"role":"user","content":"b"}]}""",
+            headers = mapOf("X-Mock-Scenario" to "strict-alternation"),
+        )
+        assertEquals(400, invalid.statusCode())
+
+        val valid = postJson(
+            "${mock.openAiBaseUrl}/chat/completions",
+            """{"model":"mock-strict-alternation","stream":true,"messages":[{"role":"user","content":"a"},{"role":"assistant","content":"ok"},{"role":"user","content":"b"}]}""",
+            headers = mapOf("X-Mock-Scenario" to "strict-alternation"),
+        )
+        assertEquals(200, valid.statusCode())
+    }
+
+    @Test
     fun `chat completions failure scenarios use status retry-after and html`() {
         val rateLimited = postJson("${mock.openAiBaseUrl}/chat/completions", """{"model":"mock-rate-limit"}""")
         assertEquals(429, rateLimited.statusCode())

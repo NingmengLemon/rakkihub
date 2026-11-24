@@ -3,6 +3,8 @@ package me.rerere.ai.provider
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.test.runTest
 import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.contentOrNull
+import kotlinx.serialization.json.jsonArray
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
 import me.rerere.ai.agent.AgentHooks
@@ -83,6 +85,50 @@ class ProviderMockIntegrationTest {
         assertEquals(MockPayloads.TOOL_NAME, tool.toolName)
         assertEquals("Paris", Json.parseToJsonElement(tool.input).jsonObject["city"]!!.jsonPrimitive.content)
         assertEquals("tool_calls", streamed.finish?.finishReason)
+    }
+
+    @Test
+    fun `strict mock accepts merged adjacent users from openai chat completions`() = runTest {
+        val model = model(MockScenario.STRICT_ALTERNATION)
+        val provider = OpenAIProvider(client)
+        val messages = listOf(UIMessage.user("first"), UIMessage.user("second"))
+
+        val streamed = collectStream(provider.streamText(openAiSetting(), messages, params(model)), model)
+
+        assertEquals(MockPayloads.TEXT, streamed.message.text())
+        val request = mock.recorder.assertHasRequest("POST", "/v1/chat/completions")
+        val roles = requestRoles(request.rawBody, "messages")
+        assertEquals(1, roles.count { it == "user" })
+    }
+
+    @Test
+    fun `strict mock accepts merged adjacent users from claude`() = runTest {
+        val model = model(MockScenario.STRICT_ALTERNATION)
+        val provider = ClaudeProvider(client)
+        val messages = listOf(UIMessage.user("first"), UIMessage.user("second"))
+
+        val streamed = collectStream(provider.streamText(claudeSetting(), messages, params(model)), model)
+
+        assertEquals(MockPayloads.TEXT, streamed.message.text())
+        val request = mock.recorder.assertHasRequest("POST", "/v1/messages")
+        val roles = requestRoles(request.rawBody, "messages")
+        assertEquals(1, roles.count { it == "user" })
+    }
+
+    @Test
+    fun `strict mock accepts merged adjacent users from gemini`() = runTest {
+        val model = model(MockScenario.STRICT_ALTERNATION)
+        val provider = GoogleProvider(client)
+        val messages = listOf(UIMessage.user("first"), UIMessage.user("second"))
+
+        collectStream(provider.streamText(googleSetting(), messages, params(model)), model)
+
+        val request = mock.recorder.assertHasRequest(
+            "POST",
+            "/v1beta/models/mock-strict-alternation:streamGenerateContent"
+        )
+        val roles = requestRoles(request.rawBody, "contents")
+        assertEquals(1, roles.count { it == "user" })
     }
 
     // ---- OpenAI Responses ----
@@ -398,6 +444,11 @@ class ProviderMockIntegrationTest {
     @Suppress("UNCHECKED_CAST")
     private fun <T : ProviderSetting> Provider<T>.erased(): Provider<ProviderSetting> =
         this as Provider<ProviderSetting>
+
+    private fun requestRoles(rawBody: String, arrayName: String): List<String> =
+        Json.parseToJsonElement(rawBody).jsonObject[arrayName]!!.jsonArray.mapNotNull {
+            it.jsonObject["role"]?.jsonPrimitive?.contentOrNull
+        }
 
     private fun UIMessage.text(): String =
         parts.filterIsInstance<UIMessagePart.Text>().joinToString("") { it.text }

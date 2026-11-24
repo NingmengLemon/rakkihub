@@ -17,9 +17,12 @@ import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.booleanOrNull
 import kotlinx.serialization.json.buildJsonArray
 import kotlinx.serialization.json.buildJsonObject
+import kotlinx.serialization.json.contentOrNull
 import kotlinx.serialization.json.encodeToJsonElement
 import kotlinx.serialization.json.intOrNull
+import kotlinx.serialization.json.jsonArray
 import kotlinx.serialization.json.jsonObject
+import kotlinx.serialization.json.jsonPrimitive
 import kotlinx.serialization.json.put
 import kotlinx.serialization.json.putJsonArray
 import me.rerere.ai.core.MessageRole
@@ -288,6 +291,28 @@ internal class InteractionsAPI(
                     addUserStep(message)
                 }
             }
+    }.mergeAdjacentUserInputSteps()
+
+    /** Interactions 的 input 由 step 组成；相邻 user_input 合并成一条，function_result 保持独立。 */
+    private fun JsonArray.mergeAdjacentUserInputSteps(): JsonArray {
+        val merged = mutableListOf<JsonObject>()
+        for (element in this) {
+            val current = element.jsonObject
+            val previous = merged.lastOrNull()
+            if (previous != null &&
+                previous["type"]?.jsonPrimitive?.contentOrNull == "user_input" &&
+                current["type"]?.jsonPrimitive?.contentOrNull == "user_input"
+            ) {
+                val content = buildJsonArray {
+                    previous["content"]?.jsonArray?.forEach { add(it) }
+                    current["content"]?.jsonArray?.forEach { add(it) }
+                }
+                merged[merged.lastIndex] = JsonObject(previous + ("content" to content))
+            } else {
+                merged.add(current)
+            }
+        }
+        return JsonArray(merged)
     }
 
     private fun JsonArrayBuilder.addUserStep(message: UIMessage) {

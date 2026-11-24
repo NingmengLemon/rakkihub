@@ -11,6 +11,9 @@ import kotlinx.serialization.json.jsonPrimitive
 import kotlinx.serialization.json.put
 import me.rerere.ai.core.MessageRole
 import me.rerere.ai.provider.Modality
+import me.rerere.ai.provider.Model
+import me.rerere.ai.provider.ProviderSetting
+import me.rerere.ai.provider.TextGenerationParams
 import me.rerere.ai.ui.OpenRouterReasoningMetadata
 import me.rerere.ai.ui.UIMessage
 import me.rerere.ai.ui.UIMessagePart
@@ -43,13 +46,15 @@ class ChatCompletionsRequestMessageTest {
         messages: List<UIMessage>,
         includeHistoryReasoning: Boolean = true,
         includeOpenRouterReasoningDetails: Boolean = false,
+        mergeAdjacentUserMessages: Boolean = true,
     ): JsonArray {
         val method = ChatCompletionsAPI::class.java.getDeclaredMethod(
             "buildMessages",
             List::class.java,
             Boolean::class.javaPrimitiveType,
             Boolean::class.javaPrimitiveType,
-            List::class.java
+            List::class.java,
+            Boolean::class.javaPrimitiveType,
         )
         method.isAccessible = true
         return method.invoke(
@@ -57,8 +62,30 @@ class ChatCompletionsRequestMessageTest {
             messages,
             includeHistoryReasoning,
             includeOpenRouterReasoningDetails,
-            listOf(Modality.TEXT, Modality.IMAGE)
+            listOf(Modality.TEXT, Modality.IMAGE),
+            mergeAdjacentUserMessages,
         ) as JsonArray
+    }
+
+    private fun invokeBuildChatCompletionRequest(
+        messages: List<UIMessage>,
+        providerSetting: ProviderSetting.OpenAI,
+    ): JsonObject {
+        val method = ChatCompletionsAPI::class.java.getDeclaredMethod(
+            "buildChatCompletionRequest",
+            List::class.java,
+            TextGenerationParams::class.java,
+            ProviderSetting.OpenAI::class.java,
+            Boolean::class.javaPrimitiveType,
+        )
+        method.isAccessible = true
+        return method.invoke(
+            api,
+            messages,
+            TextGenerationParams(model = Model(modelId = "test-model")),
+            providerSetting,
+            false,
+        ) as JsonObject
     }
 
     private fun invokeParseMessage(message: JsonObject): UIMessage {
@@ -68,6 +95,38 @@ class ChatCompletionsRequestMessageTest {
         )
         method.isAccessible = true
         return method.invoke(api, message) as UIMessage
+    }
+
+    @Test
+    fun `capability keeps or merges adjacent user messages`() {
+        val messages = listOf(UIMessage.user("first"), UIMessage.user("second"))
+
+        val unmerged = invokeBuildMessages(messages, mergeAdjacentUserMessages = false)
+        assertEquals(2, unmerged.size)
+        assertEquals("first", unmerged[0].jsonObject["content"]?.jsonPrimitive?.content)
+        assertEquals("second", unmerged[1].jsonObject["content"]?.jsonPrimitive?.content)
+
+        val merged = invokeBuildMessages(messages, mergeAdjacentUserMessages = true)
+        assertEquals(1, merged.size)
+        val content = merged.single().jsonObject["content"]!!.jsonArray
+        assertEquals(2, content.size)
+        assertEquals("text", content[0].jsonObject["type"]?.jsonPrimitive?.content)
+        assertEquals("first", content[0].jsonObject["text"]?.jsonPrimitive?.content)
+        assertEquals("second", content[1].jsonObject["text"]?.jsonPrimitive?.content)
+    }
+
+    @Test
+    fun `official openai host keeps two user messages in the request`() {
+        val messages = listOf(UIMessage.user("first"), UIMessage.user("second"))
+        val body = invokeBuildChatCompletionRequest(
+            messages = messages,
+            providerSetting = ProviderSetting.OpenAI(baseUrl = "https://api.openai.com/v1"),
+        )
+
+        val users = body["messages"]!!.jsonArray.filter {
+            it.jsonObject["role"]?.jsonPrimitive?.content == "user"
+        }
+        assertEquals(2, users.size)
     }
 
     @Test
@@ -369,13 +428,24 @@ class ChatCompletionsRequestMessageTest {
             UIMessage.user("Question 2")
         )
 
-        val result = invokeBuildMessages(messages, includeHistoryReasoning = false)
+        val unmerged = invokeBuildMessages(
+            messages,
+            includeHistoryReasoning = false,
+            mergeAdjacentUserMessages = false,
+        )
+        assertEquals(2, unmerged.size)
+        assertEquals("user", unmerged[0].jsonObject["role"]?.jsonPrimitive?.content)
+        assertEquals("Question 1", unmerged[0].jsonObject["content"]?.jsonPrimitive?.content)
+        assertEquals("user", unmerged[1].jsonObject["role"]?.jsonPrimitive?.content)
+        assertEquals("Question 2", unmerged[1].jsonObject["content"]?.jsonPrimitive?.content)
 
-        assertEquals(2, result.size)
-        assertEquals("user", result[0].jsonObject["role"]?.jsonPrimitive?.content)
-        assertEquals("Question 1", result[0].jsonObject["content"]?.jsonPrimitive?.content)
-        assertEquals("user", result[1].jsonObject["role"]?.jsonPrimitive?.content)
-        assertEquals("Question 2", result[1].jsonObject["content"]?.jsonPrimitive?.content)
+        // assistant 在转换期被丢掉时，wire 层仍要把两条 user 合成一条
+        val merged = invokeBuildMessages(messages, includeHistoryReasoning = false)
+        assertEquals(1, merged.size)
+        val content = merged[0].jsonObject["content"]!!.jsonArray
+        assertEquals(2, content.size)
+        assertEquals("Question 1", content[0].jsonObject["text"]?.jsonPrimitive?.content)
+        assertEquals("Question 2", content[1].jsonObject["text"]?.jsonPrimitive?.content)
     }
 
     @Test
