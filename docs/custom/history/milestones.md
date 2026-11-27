@@ -2,6 +2,11 @@
 
 本文件归档已完成的定制、修复与独立化批次，按时间或主题分组。当前状态以 checklist 索引与明细为准，未来方向见 [roadmap.md](../roadmap.md)。
 
+## 2026-11-27 发送图片像素上限与 OOM 提示（C163）
+
+- C163 补上游 `f37f66b31`：图片总像素上限 16MP → 4MP，保留 10,000 长边上限，预算内的长截图保持原尺寸、超出预算按比例缩小；`runTurn` 捕获 `OutOfMemoryError`，暂停队列并显示本地化错误。
+- 测试：`:ai` 449、app 885 条全过、编译与 spotless/markdownlint 通过；OOM 分支与连接测试 UI 未做设备点验。
+
 ## 2026-11-27 悬浮球阴影缓存 OOM（C162）
 
 - 补上游 `b2b4eca6a`：悬浮球变形阴影不再使用会按 Shape 永久缓存的 `Modifier.dropShadow`，改为每次绘制直接构造 `DropShadowPainter`。

@@ -10,8 +10,8 @@
 
 本轮 11 个提交（11-25 至 11-26）的核验结果：
 
-- 直接移植候选，尚未落地：`f37f66b31`（图片 4MP 上限与 OOM 提示，P1）、`1fb091529`（连接测试使用模型 providerOverwrite，P1，对应 `#2356`）、`55a0631fe`（Shell 工具可选 description，P2）、`eb417de21`（通知页电池优化入口，P2，需要把权限声明落到 `app/src/main/AndroidManifest.xml` 并区分两渠道语义）。
-- 已移植：`b2b4eca6a`（悬浮球变形阴影缓存 OOM，P0）→ C162。
+- 直接移植候选，尚未落地：`1fb091529`（连接测试使用模型 providerOverwrite，P1，对应 `#2356`）、`55a0631fe`（Shell 工具可选 description，P2）、`eb417de21`（通知页电池优化入口，P2，需要把权限声明落到 `app/src/main/AndroidManifest.xml` 并区分两渠道语义）。
+- 已移植：`b2b4eca6a`（悬浮球变形阴影缓存 OOM，P0）→ C162；`f37f66b31`（图片 4MP 上限与 OOM 提示，P1）→ C163。
 - 先评估：`2afc907d2`（发送后用户消息置顶、回复不跟随），和本分支高度定制的 `ChatList` 耦合，单独一轮做。
 - 已覆盖，不移植：`3aade2e59` 由 C50 的周期保存与 C67 的崩溃恢复覆盖，本分支还覆盖纯文本长回复；`7f11a5f15` 由 C51/C81 的可见压缩轮次覆盖。
 - 不适用：`cc8735431`（C5 移除 ASR）、`22b3473db`、`e258d9de2`（C1 移除媒体创作入口；`MediaCreationService` 已无调用方）。

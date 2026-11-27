@@ -1584,4 +1584,5 @@
   <string name="backup_page_workspaces_export_only_hint">This selection only affects exports; restore applies the workspace files in the archive.</string>
   <string name="setting_provider_page_interactions_api">Interactions API (Beta)</string>
   <string name="setting_provider_page_vertex_interactions_supporting">Vertex AI only supports the global, us and eu locations; other locations use generateContent</string>
+  <string name="error_generation_out_of_memory">Out of memory while building the request. The conversation likely contains too many or too large images; remove some of them or start a new conversation.</string>
 </resources>

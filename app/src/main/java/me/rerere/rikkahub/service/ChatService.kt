@@ -952,6 +952,20 @@ class ChatService(
                 conversationId = conversationId,
             )
             return TurnResult.Failed
+        } catch (e: OutOfMemoryError) {
+            // 组装请求体时一次性分配上百 MB（多张大图的 base64）会 OOM。它不是 Exception，
+            // 不接住就只会落到 AppScope 打日志，界面看不到任何错误 (#2365)。
+            // 抛出后那块大分配已随栈展开释放，可以继续运行
+            appEventBus.tryEmit(AppEvent.ChatGenerationEnded(conversationId, senderName, null))
+            session.messageQueue.pause()
+            Log.e(TAG, "runTurn: out of memory", e)
+            Logging.log(TAG, "runTurn: $e")
+            addError(
+                IllegalStateException(context.getString(R.string.error_generation_out_of_memory), e),
+                conversationId,
+                title = context.getString(R.string.error_title_generation),
+            )
+            return TurnResult.Failed
         } catch (e: Exception) {
             // 兜底取消 Live Update 通知（生成开始前失败时上面的 finally 不会执行）
             appEventBus.tryEmit(AppEvent.ChatGenerationEnded(conversationId, senderName, null))
