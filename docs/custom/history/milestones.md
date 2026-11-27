@@ -2,6 +2,12 @@
 
 本文件归档已完成的定制、修复与独立化批次，按时间或主题分组。当前状态以 checklist 索引与明细为准，未来方向见 [roadmap.md](../roadmap.md)。
 
+## 2026-11-27 悬浮球阴影缓存 OOM（C162）
+
+- 补上游 `b2b4eca6a`：悬浮球变形阴影不再使用会按 Shape 永久缓存的 `Modifier.dropShadow`，改为每次绘制直接构造 `DropShadowPainter`。
+- 阴影外观和布局按实现推断不变，未上机验证；只移除窗口级缓存增长，预期解决长时间生成后的缓存 OOM。
+- 测试：编译、`:ai` 448 条、app 单测无新增失败、spotless/markdownlint 通过；设备未启用悬浮球，阴影外观与长时间内存曲线均未验。
+
 ## 2026-11-27 Vertex 服务账号支持 Interactions API（C161）
 
 - 补上游 `90ef90b76`：Vertex 服务账号可走 Interactions API，仅 `global`/`us`/`eu`；其它区域继续 generateContent。

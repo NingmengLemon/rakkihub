@@ -1,6 +1,6 @@
 # 明细：聊天、上下文与模型
 
-本文件是 [checklist.md](../checklist.md) 的明细，收录 C35、C43 至 C44、C46 至 C47、C49 至 C53、C57 至 C63、C65 至 C78、C81 至 C86、C97 至 C100、C107、C121、C122、C130、C131、C133、C134、C135、C137、C140、C141、C145、C147、C152、C154、C156、C160、C161。
+本文件是 [checklist.md](../checklist.md) 的明细，收录 C35、C43 至 C44、C46 至 C47、C49 至 C53、C57 至 C63、C65 至 C78、C81 至 C86、C97 至 C100、C107、C121、C122、C130、C131、C133、C134、C135、C137、C140、C141、C145、C147、C152、C154、C156、C160、C161、C162。
 
 <a id="c35"></a>
 
@@ -534,3 +534,13 @@
 - 理由：上游已支持 Vertex 服务账号使用 Interactions，本分支之前一直是 `useInteractionsApi && !vertexAI`，开了 Vertex 就只能走 generateContent，设置页也看不到开关。
 - 合并注意：C160 的 `buildInput()` 相邻 `user_input` 合并保留；C96 已删掉 `configureReferHeaders`，移植时不要从上游旧版本带回；只有 `global`/`us`/`eu` 走 Interactions，其它 location 仍回退 generateContent；`interactionsUrl()` 对不支持的 location 直接 `require` 抛错，不会产出 `aiplatform.us-central1.rep...` 之类伪域名。没有 Room/Settings 结构变化，`useInteractionsApi` 是已有持久化字段。`InteractionsAPI` 的 `authorize` 默认 identity 让现有测试与 Gemini API key 路径不受影响；服务账号 token 由现有 `ServiceAccountTokenProvider` 提供。
 - 测试：`InteractionsApiTest` 覆盖 Gemini 默认 URL、Vertex `global`/`us`/`eu` URL、服务账号/区域谓词正负例，以及不支持 location 抛错；`:ai:testDebugUnitTest` 448、`:app:testGithubDebugUnitTest` 885、`spotlessCheck`、markdownlint 通过；设备上验了开启 Vertex AI + 使用服务账号后 Interactions 开关和区域说明会出现，未点 Save，没有改持久化配置；没有真实 Vertex 服务账号，真实 Interactions 调用未验。
+
+<a id="c162"></a>
+
+## C162 悬浮球阴影缓存 OOM
+
+- 来源：上游 `b2b4eca6a`（2026-11-26），Fixes #2377。
+- 落点：`ChatFloatingContent.kt` 的悬浮球不再用 `Modifier.dropShadow(logoShape, ...)`，改成 `drawBehind { with(DropShadowPainter(shape, shadow)) { draw(size) } }`；`BubbleShadow` 提成常量。变形动画仍每帧生成新的 `MorphShape`，但阴影不再进入窗口的 `ShadowContext` 缓存。
+- 理由：`Modifier.dropShadow` 按 `Shape` 实例缓存渲染器和模糊位图，且不淘汰；悬浮球生成中每帧换 Shape，长时间运行缓存只增不减，最终 OOM。直接构造 painter 不经过缓存，位图画完即可回收；阴影外观按实现推断不变，未上机验证。
+- 合并注意：保持 `morphingDropShadow` 在 `clip(logoShape)`、`clickable`、`drawAppLogo` 之前，顺序换掉会让阴影被 `clip(logoShape)` 裁掉或盖到内容之上；不引入新状态或资源。上游只改这一个文件，没有数据库/设置变化。
+- 测试：`:app:compileGithubDebugKotlin`、`:ai:testDebugUnitTest` 448 条、`:app:testGithubDebugUnitTest` 885 条没有新增失败（Windows 上 `SettingsStoreTest`/`ProviderAccountManagerTest` 的 DataStore rename 是既有环境失败）、`spotlessCheck`、markdownlint 通过；当前设备没有启用悬浮球，未做阴影外观检查；长时间生成的内存曲线也没有单独跑，留给下一轮真机长跑验证。
