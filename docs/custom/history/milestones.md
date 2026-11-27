@@ -2,6 +2,11 @@
 
 本文件归档已完成的定制、修复与独立化批次，按时间或主题分组。当前状态以 checklist 索引与明细为准，未来方向见 [roadmap.md](../roadmap.md)。
 
+## 2026-11-28 Shell description（C165）
+
+- C165 补上游 `55a0631fe`：`workspace_shell` 增加可选 description，步骤标题用它，命令移到 3 行摘要，审批时仍能看到实际命令。
+- 测试：app 单测、编译、spotless/markdownlint 通过；真实模型 Shell 调用未做设备点验。
+
 ## 2026-11-27 发送图片像素上限与 OOM 提示（C163）、连接测试使用模型重写（C164）
 
 - C163 补上游 `f37f66b31`：图片总像素上限 16MP → 4MP，保留 10,000 长边上限，预算内的长截图保持原尺寸、超出预算按比例缩小；`runTurn` 捕获 `OutOfMemoryError`，暂停队列并显示本地化错误。

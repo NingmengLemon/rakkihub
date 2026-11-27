@@ -345,6 +345,11 @@
 
 上游查看与 issue 调研记录见 [`history/upstream.md`](history/upstream.md)，已完成的落地批次见 [`history/milestones.md`](history/milestones.md)。
 
+### 已知交互缺口
+
+- Termux 式终端功能键栏还不能长按重复：`TerminalExtraKey` 目前只有 `clickable`，按住方向键、PgUp/PgDn、Home/End 不会连发；需要改成按下后延迟触发并循环，Ctrl/Alt/IME 这类切换键不重复。注意与终端自身的触摸滚动、软键盘焦点和可访问性手势冲突，设备上要分别验短按、长按、滑出取消和连续触发。
+- 聊天文本的长按选择/复制覆盖不全：`SelectableContent` 目前只包住 Markdown 正文、推理、代码块、翻译页和记忆文件等部分 surface；工具卡片摘要/预览、部分纯 `Text`、浮动窗口等仍可能没有选区或长按菜单，消息的点击/选择模式也可能先吃掉手势。需要按 surface 审计，统一接 `BetterSelectionContainer`，避免嵌套选择容器和与消息操作冲突；设备上覆盖普通消息、流式回复、工具参数/结果、翻译、代码块、浮动窗口和选择模式。
+
 ### 提示词注入与世界书
 
 模式注入与世界书已经移除（C157）。当前状态：请求装配不再有注入步骤，扩展页与助手/会话绑定入口、SillyTavern 世界书导入、单条注入/世界书导出和 Web 端 injections 端点都已删除；旧备份 `settings.json` 里的 `mode_injections`/`lorebooks` 由 `ignoreUnknownKeys` 忽略。`conversation` 表的 `mode_injection_ids`/`lorebook_ids` 两列保留，仅服务官方库导入与官方兼容导出，仓库层固定写 `"[]"`。

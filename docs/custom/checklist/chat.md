@@ -1,6 +1,6 @@
 # 明细：聊天、上下文与模型
 
-本文件是 [checklist.md](../checklist.md) 的明细，收录 C35、C43 至 C44、C46 至 C47、C49 至 C53、C57 至 C63、C65 至 C78、C81 至 C86、C97 至 C100、C107、C121、C122、C130、C131、C133、C134、C135、C137、C140、C141、C145、C147、C152、C154、C156、C160、C161、C162、C163、C164。
+本文件是 [checklist.md](../checklist.md) 的明细，收录 C35、C43 至 C44、C46 至 C47、C49 至 C53、C57 至 C63、C65 至 C78、C81 至 C86、C97 至 C100、C107、C121、C122、C130、C131、C133、C134、C135、C137、C140、C141、C145、C147、C152、C154、C156、C160、C161、C162、C163、C164、C165。
 
 <a id="c35"></a>
 
@@ -564,3 +564,13 @@
 - 理由：连接测试以前直接拿父提供商配置发请求，忽略模型上的 `providerOverwrite`，重写里的 API Key、Base URL 等不生效；聊天路径已经用 `findProvider`，测试和聊天行为不一致。
 - 合并注意：`findProvider` 已存在于 `data/datastore`，不要再写一套覆盖解析；`model` 为空时仍直接返回；`customHeaders`/`customBody` 继续取模型自己的字段。没有数据/设置结构变化。
 - 测试：既有 `FindProviderTest` 覆盖有/无 `providerOverwrite` 的解析；`:app:testGithubDebugUnitTest` 885 条本轮全过、`:app:compileGithubDebugKotlin`、`spotlessCheck`、markdownlint 通过；连接测试弹窗的三条路径没有自动化 UI 测试，未做设备点验。
+
+<a id="c165"></a>
+
+## C165 Shell 工具 description 作为步骤标题
+
+- 来源：上游 `55a0631fe`（2026-11-26）。
+- 落点：`WorkspaceTools.kt` 的 `workspace_shell` schema 新增可选 `description`（5 到 10 个词、用户语言）；`WorkspaceToolUIs.kt` 的 `ShellToolUI` 用 description 当标题，命令移到摘要（最多 3 行、等宽字体），`hasSummary` 在只有 description 时也为 true，详情头同样用 description。
+- 理由：Shell 命令本身适合当标题，但用户看不懂；让模型给一句动作描述，步骤列表和审批卡片可以直接读。命令仍要在摘要里露出来，等待审批时用户才知道实际执行什么。
+- 合并注意：description 只是可选参数，旧模型不传时保持原行为；命令摘要最多 3 行，避免长命令占满审批卡；标题不再截断 description，命令仍按原逻辑截断。没有新字符串或数据变化。
+- 测试：`:app:compileGithubDebugKotlin`、`:app:testGithubDebugUnitTest`、`spotlessCheck`、markdownlint 通过；没有自动化 UI 测试，真实模型调用和审批卡展示未做设备点验。
