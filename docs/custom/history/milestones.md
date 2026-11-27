@@ -2,10 +2,11 @@
 
 本文件归档已完成的定制、修复与独立化批次，按时间或主题分组。当前状态以 checklist 索引与明细为准，未来方向见 [roadmap.md](../roadmap.md)。
 
-## 2026-11-28 Shell description（C165）
+## 2026-11-28 Shell description（C165）、忽略电池优化入口（C166）
 
 - C165 补上游 `55a0631fe`：`workspace_shell` 增加可选 description，步骤标题用它，命令移到 3 行摘要，审批时仍能看到实际命令。
-- 测试：app 单测、编译、spotless/markdownlint 通过；真实模型 Shell 调用未做设备点验。
+- C166 补上游 `eb417de21`：通知设置增加忽略电池优化入口；GitHub flavor 声明权限并弹系统对话框，Play 只打开系统电池优化列表并逐级回退。
+- 测试：app 单测、编译、spotless/markdownlint 通过；Shell 真实调用未点验，电池优化只验了设置页条目，未点进系统页面。
 
 ## 2026-11-27 发送图片像素上限与 OOM 提示（C163）、连接测试使用模型重写（C164）
 

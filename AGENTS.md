@@ -31,7 +31,7 @@ Material 3 look (cards with dividers, plain forms).
 ```
 
 App 有一个 `distribution` 维度的 product flavor：`github`（默认）和 `play`，共用同一个 applicationId。
-`BuildConfig.IS_PLAY_STORE` 仍在，但本分支移除了更新检查（C15），目前没有代码读这个字段。
+`BuildConfig.IS_PLAY_STORE` 仍在；更新检查移除后曾无人读取，C166 起通知设置用它区分 GitHub/Play 的电池优化跳转。
 
 ## Module Structure
 

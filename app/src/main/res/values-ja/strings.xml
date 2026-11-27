@@ -1585,4 +1585,7 @@
   <string name="setting_provider_page_interactions_api">Interactions API（ベータ）</string>
   <string name="setting_provider_page_vertex_interactions_supporting">Vertex AI は global、us、eu リージョンのみ対応し、それ以外は generateContent を使用します。</string>
   <string name="error_generation_out_of_memory">リクエストの組み立て中にメモリが不足しました。会話内の画像が多すぎるか大きすぎる可能性があります。画像を減らすか、新しい会話を開始してください。</string>
+  <string name="setting_page_preferences_notification_battery_optimization">バッテリー最適化を無視</string>
+  <string name="setting_page_preferences_notification_battery_optimization_on">許可済み。バックグラウンド生成がシステムに停止されにくくなります</string>
+  <string name="setting_page_preferences_notification_battery_optimization_off">未許可。バッテリー節約のためバックグラウンド生成が停止される可能性があります</string>
 </resources>

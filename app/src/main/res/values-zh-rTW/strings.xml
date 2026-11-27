@@ -1585,4 +1585,7 @@
   <string name="setting_provider_page_interactions_api">Interactions API（Beta）</string>
   <string name="setting_provider_page_vertex_interactions_supporting">Vertex AI 僅支援 global、us 和 eu 區域，其他區域使用 generateContent</string>
   <string name="error_generation_out_of_memory">組裝請求時記憶體不足，可能是會話裡的圖片過多或過大。請刪除部分圖片或新建會話</string>
+  <string name="setting_page_preferences_notification_battery_optimization">忽略電池最佳化</string>
+  <string name="setting_page_preferences_notification_battery_optimization_on">已允許。背景生成被系統中斷的可能性較低</string>
+  <string name="setting_page_preferences_notification_battery_optimization_off">未允許。系統可能會為了節省電量而停止背景生成</string>
 </resources>

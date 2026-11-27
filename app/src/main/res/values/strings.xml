@@ -1585,4 +1585,7 @@
   <string name="setting_provider_page_interactions_api">Interactions API (Beta)</string>
   <string name="setting_provider_page_vertex_interactions_supporting">Vertex AI only supports the global, us and eu locations; other locations use generateContent</string>
   <string name="error_generation_out_of_memory">Out of memory while building the request. The conversation likely contains too many or too large images; remove some of them or start a new conversation.</string>
+  <string name="setting_page_preferences_notification_battery_optimization">Ignore battery optimization</string>
+  <string name="setting_page_preferences_notification_battery_optimization_on">Allowed. Background generation is less likely to be stopped by the system</string>
+  <string name="setting_page_preferences_notification_battery_optimization_off">Not allowed. The system may stop background generation to save battery</string>
 </resources>

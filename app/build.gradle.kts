@@ -114,7 +114,7 @@ android {
         }
     }
     // 按分发渠道区分：github 是 GitHub Release / 每日构建的 APK，play 是上架 Google Play 的 AAB
-    // 两个渠道共用同一个 applicationId。本分支移除了更新检查（C15），IS_PLAY_STORE 目前无人读取
+    // 两个渠道共用同一个 applicationId。更新检查已移除（C15）；C166 起通知设置读取 IS_PLAY_STORE 区分渠道
     flavorDimensions += "distribution"
     productFlavors {
         create("github") {

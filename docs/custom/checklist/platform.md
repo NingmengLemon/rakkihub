@@ -1,6 +1,6 @@
 # 明细：平台、构建与品牌
 
-本文件是 [checklist.md](../checklist.md) 的明细，收录 C7、C12、C37 至 C39、C45、C48、C55 至 C56、C90 至 C94、C101、C127 至 C129、C136、C138、C139、C143、C144、C146、C149、C150、C151。
+本文件是 [checklist.md](../checklist.md) 的明细，收录 C7、C12、C37 至 C39、C45、C48、C55 至 C56、C90 至 C94、C101、C127 至 C129、C136、C138、C139、C143、C144、C146、C149、C150、C151、C166。
 
 <a id="c7"></a>
 
@@ -257,3 +257,13 @@
 - 理由：中文界面句末不加句号、省略号用「…」；原有翻译混用 `...` 与「…」、半角与全角标点，繁中同一页还混用「導入」「匯入」，日文有一句误植繁中，地址说明的换行在编译后会被压成空格。
 - 合并注意：日文句末保留「。」，日文「変数: 」的半角冒号加空格也保留；全角化只处理中文之间的标点，URL、代码标识符与英文括注不要动。`setting_provider_page_test_tool_called` 两字段之间是双空格分隔，没改。变量说明的标签冒号已全角，工具卡片这类其余标签冒号仍是半角，已记进 `locale.md` 欠账。
 - 测试：`i18n list --missing` 为 0、`:app:processGithubDebugResources`、markdownlint 通过；只改字符串资源，未跑 JVM 测试。逐 key 比对过四份文件的 key 集合与格式参数（`%1$s` 等）没有变化，英文 `values` 零改动。
+
+<a id="c166"></a>
+
+## C166 通知设置忽略电池优化入口
+
+- 来源：上游 `eb417de21`（2026-11-25），Closes #2363。
+- 落点：`SettingPreferencesNotificationPage.kt` 增加电池优化状态与入口，`isIgnoringBatteryOptimizations()` 读取 `PowerManager`，`openBatteryOptimizationSettings()` 按顺序尝试请求白名单、系统电池优化列表、应用详情页；GitHub 渠道新增 `app/src/github/AndroidManifest.xml` 声明 `REQUEST_IGNORE_BATTERY_OPTIMIZATIONS`，Play 渠道不声明。新增 `setting_page_preferences_notification_battery_optimization` 及 `_on`/`_off` 三条文案 ×4 locale。
+- 理由：后台生成被系统省电策略中断时用户没有入口自己加白名单；GitHub 版可以直接弹系统对话框，Play 政策不允许该权限，所以 Play 只能打开系统的电池优化列表。
+- 合并注意：权限只在 `github` flavor manifest 声明，Play 版不能为了同一入口把权限放进 main；`BuildConfig.IS_PLAY_STORE` 现在被这条逻辑读取。返回页面后用 `LifecycleResumeEffect` 重新读取白名单状态；系统没有对应 Activity 时逐级回退，不能直接崩。
+- 测试：`:app:compileGithubDebugKotlin`、`:app:testGithubDebugUnitTest`、`spotlessCheck`、markdownlint 通过；合并后的 GitHub manifest 已确认含权限、Play 不含（aapt 检查）；设备上验了设置页条目与状态显示，未点进系统对话框/列表。

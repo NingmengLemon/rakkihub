@@ -93,7 +93,7 @@
 
 - 落点：`utils/UpdateChecker.kt` 与 `ui/components/ui/UpdateCard.kt` 整个删除，随前者一起消失的还有只服务于版本比较的 `Version` 类与 `app/src/test/java/me/rerere/rikkahub/utils/VersionTest.kt`（89 行、11 个用例）；`AppModule` 的 `UpdateChecker` 绑定与 import、`ViewModelModule` 的 `updateChecker` 实参、`ChatVM` 的构造参数与 `updateState` 流、`ChatDrawer` 的更新卡片与暂停计时逻辑、`SettingPreferencesNotificationPage` 的更新提醒设置项与暂停对话框；8 个 locale 各删 13 条文案（5 个 `update_card_*`、6 个 `setting_update_reminder_*`、2 个 `setting_display_page_show_updates_*`），`setting_page_preferences_notification_desc` 去掉「更新提醒」那一段
 - 理由：更新源指向官方，下载下来是官方包，装上去只是多出第二个应用；要新版本自己去看
-- 合并注意：保留 `Settings.displaySetting.updateCheckDisabledUntilEpochMillis` 这类已存储字段，DataStore key 不动，只是不再有读写方。`distribution` flavor 与 `BuildConfig.IS_PLAY_STORE` 保留：那是上游的构建结构，删掉会抬高每次合并的成本，现在没有代码读这个字段。这里和 C8 一样删的是实现而不是断入口，理由见 [`README.md`](../README.md) 的「改动尽量小，优先断入口」一节的补充说明。上游若重构 `UpdateChecker` 或恢复正常更新流程，需要重新删除
+- 合并注意：保留 `Settings.displaySetting.updateCheckDisabledUntilEpochMillis` 这类已存储字段，DataStore key 不动，只是不再有读写方。`distribution` flavor 与 `BuildConfig.IS_PLAY_STORE` 保留：那是上游的构建结构，删掉会抬高每次合并的成本，更新检查本身不再读取这个字段；C166 起通知设置读取它区分 GitHub/Play 的电池优化跳转。这里和 C8 一样删的是实现而不是断入口，理由见 [`README.md`](../README.md) 的「改动尽量小，优先断入口」一节的补充说明。上游若重构 `UpdateChecker` 或恢复正常更新流程，需要重新删除
 
 <a id="c16"></a>
 
