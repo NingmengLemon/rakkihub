@@ -1,6 +1,6 @@
 # 明细：聊天、上下文与模型
 
-本文件是 [checklist.md](../checklist.md) 的明细，收录 C35、C43 至 C44、C46 至 C47、C49 至 C53、C57 至 C63、C65 至 C78、C81 至 C86、C97 至 C100、C107、C121、C122、C130、C131、C133、C134、C135、C137、C140、C141、C145、C147、C152、C160。
+本文件是 [checklist.md](../checklist.md) 的明细，收录 C35、C43 至 C44、C46 至 C47、C49 至 C53、C57 至 C63、C65 至 C78、C81 至 C86、C97 至 C100、C107、C121、C122、C130、C131、C133、C134、C135、C137、C140、C141、C145、C147、C152、C154、C156、C160、C161。
 
 <a id="c35"></a>
 
@@ -524,3 +524,13 @@
 - 理由：C58 的全量合并看不到 Claude 在转换 assistant 工具时生成的 `assistant(tool_use)` + `user(tool_result)` 相邻 user，严格中转仍会报角色交替错误；Gemini 的 generateContent 和 Interactions 是两条不同的转换路径；压缩 prompt 在 `buildStep` 之后追加，全局合并覆盖不到。全量合并还会把官方 OpenAI、ChatGPT、Grok 本可保留的轮次边界改掉。合并应当属于协议转换，而不是请求组装。
 - 合并注意：能力位是计算属性，不改 Settings/DataStore，也不加 UI；Claude 恒合并，Google 的两条转换层各自无条件合并；OpenAI 兼容端点默认对未知/自定义 host 合并，官方 OpenAI、`api.x.ai` 关闭，ChatGPT/Grok 走 Responses 能力位关闭。Claude 的合并在缓存断点之后执行，保证 aggressive 策略仍是 4 个断点；tool_result 必须在合并后的 content 开头；有内容的检查点摘要会在 Claude/Gemini 合并进下一条 user，OpenAI 官方保留为独立 user；空截断标记先被 provider 的 `isValidToUpload()` 过滤，不会发到 wire。压缩 prompt 在 Claude/Gemini 会与最后一条 user 合并，官方 Claude 本来也会服务端合并连续同角色，严格中转由报错变成可用；OpenAI 官方与 ChatGPT/Grok 保持 user+user，未知/自定义 OpenAI 兼容端点按能力位合并。`core/ai` 分叉列表与 b1/b2 设计稿的 buildStep 顺序已同步。
 - 测试：`:ai:testDebugUnitTest` 445、`:app:testGithubDebugUnitTest` 885、`:tools:provider-mock:test` 28、`spotlessCheck` 通过。新增 `ProviderSettingCapabilityTest`、Claude 相邻 user/tool_result/压缩/检查点/缓存断点用例、OpenAI Chat Completions 与 Responses 的合并/保留与官方 host 负向用例、Interactions 的 `user_input` 合并用例；`MessageScratchTest` 覆盖原有 scratch 过滤和 `filterModelVisible` 过滤。provider-mock 增加 `strict-alternation` 场景，`ProviderMockIntegrationTest` 让 Claude、OpenAI、Gemini 三条真实 HTTP 路径各发一次连续 user，验证需要合并的路径能通过；官方 host 的保留边界另有 builder 负向用例；设备上没有单独复验这一项。
+
+<a id="c161"></a>
+
+## C161 Vertex 服务账号支持 Interactions API
+
+- 来源：上游 `90ef90b76`（2026-11-15）；3.3.0 查看时漏记，本次补移植。
+- 落点：`InteractionsAPI` 新增 `VERTEX_INTERACTIONS_LOCATIONS`、`ProviderSetting.Google.canUseInteractionsApi()` 与 `interactionsUrl()`；`buildRequest` 改为 suspend，鉴权由构造参数 `authorize` 注入，默认 identity 仅供测试，生产由 `GoogleProvider` 传 `::transformRequest`。`canUseInteractionsApi()` 为 `useInteractionsApi && (!vertexAI || (useServiceAccount && location in VERTEX_INTERACTIONS_LOCATIONS))`，builder 和 `interactionsUrl()` 只在条件成立时使用；Vertex 走 `/v1/projects/{project}/locations/{location}/interactions`，`global` 用 `aiplatform.googleapis.com`，`us`/`eu` 用对应 rep 域名。`ProviderSetting.Google.useInteractionsApi` 注释更新；`ProviderConfigureGoogle` 在服务账号开启时也显示 Interactions 开关并显示区域限制说明；新增 `setting_provider_page_interactions_api`、`setting_provider_page_vertex_interactions_supporting` 两条文案 ×4 locale。
+- 理由：上游已支持 Vertex 服务账号使用 Interactions，本分支之前一直是 `useInteractionsApi && !vertexAI`，开了 Vertex 就只能走 generateContent，设置页也看不到开关。
+- 合并注意：C160 的 `buildInput()` 相邻 `user_input` 合并保留；C96 已删掉 `configureReferHeaders`，移植时不要从上游旧版本带回；只有 `global`/`us`/`eu` 走 Interactions，其它 location 仍回退 generateContent；`interactionsUrl()` 对不支持的 location 直接 `require` 抛错，不会产出 `aiplatform.us-central1.rep...` 之类伪域名。没有 Room/Settings 结构变化，`useInteractionsApi` 是已有持久化字段。`InteractionsAPI` 的 `authorize` 默认 identity 让现有测试与 Gemini API key 路径不受影响；服务账号 token 由现有 `ServiceAccountTokenProvider` 提供。
+- 测试：`InteractionsApiTest` 覆盖 Gemini 默认 URL、Vertex `global`/`us`/`eu` URL、服务账号/区域谓词正负例，以及不支持 location 抛错；`:ai:testDebugUnitTest` 448、`:app:testGithubDebugUnitTest` 885、`spotlessCheck`、markdownlint 通过；设备上验了开启 Vertex AI + 使用服务账号后 Interactions 开关和区域说明会出现，未点 Save，没有改持久化配置；没有真实 Vertex 服务账号，真实 Interactions 调用未验。

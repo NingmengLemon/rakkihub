@@ -63,7 +63,7 @@ git log --oneline <上次查看点>..upstream/master
 
 ### 上次查看点
 
-上游 `upstream/master` 已到 `2435dbdf`（3.3.1），本地 `ref` 仍停在 `358e2931`（3.3.0）；下一次查看从 `2435dbdf` 之后开始。查看点、每轮提交与 issue 调研记录见 [`history/upstream.md`](history/upstream.md)。
+上游 `upstream/master` 已到 `55a0631fe`（2026-11-26），本地 `ref` 停在 `2435dbdf`（3.3.1）；下一次查看从 `55a0631fe` 之后开始。查看点、每轮提交与 issue 调研记录见 [`history/upstream.md`](history/upstream.md)。
 
 ## 定制原则
 

@@ -1582,4 +1582,6 @@
   <string name="backup_page_workspaces_none_selected">No workspaces selected; workspace files will not be exported.</string>
   <string name="backup_page_workspaces_select_all">Select all</string>
   <string name="backup_page_workspaces_export_only_hint">This selection only affects exports; restore applies the workspace files in the archive.</string>
+  <string name="setting_provider_page_interactions_api">Interactions API (Beta)</string>
+  <string name="setting_provider_page_vertex_interactions_supporting">Vertex AI only supports the global, us and eu locations; other locations use generateContent</string>
 </resources>

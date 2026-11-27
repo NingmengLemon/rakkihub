@@ -1582,4 +1582,6 @@
   <string name="backup_page_workspaces_none_selected">ワークスペースが選択されていません。ワークスペースファイルはエクスポートされません。</string>
   <string name="backup_page_workspaces_select_all">すべて選択</string>
   <string name="backup_page_workspaces_export_only_hint">この選択はエクスポートにのみ影響します。復元時はバックアップ内のワークスペースファイルが対象です。</string>
+  <string name="setting_provider_page_interactions_api">Interactions API（ベータ）</string>
+  <string name="setting_provider_page_vertex_interactions_supporting">Vertex AI は global、us、eu リージョンのみ対応し、それ以外は generateContent を使用します。</string>
 </resources>

@@ -1582,4 +1582,6 @@
   <string name="backup_page_workspaces_none_selected">未選擇任何工作區；將不會匯出工作區檔案</string>
   <string name="backup_page_workspaces_select_all">全選</string>
   <string name="backup_page_workspaces_export_only_hint">此選擇只影響匯出；恢復時按備份裡的工作區檔案處理</string>
+  <string name="setting_provider_page_interactions_api">Interactions API（Beta）</string>
+  <string name="setting_provider_page_vertex_interactions_supporting">Vertex AI 僅支援 global、us 和 eu 區域，其他區域使用 generateContent</string>
 </resources>

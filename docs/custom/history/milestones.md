@@ -2,6 +2,12 @@
 
 本文件归档已完成的定制、修复与独立化批次，按时间或主题分组。当前状态以 checklist 索引与明细为准，未来方向见 [roadmap.md](../roadmap.md)。
 
+## 2026-11-27 Vertex 服务账号支持 Interactions API（C161）
+
+- 补上游 `90ef90b76`：Vertex 服务账号可走 Interactions API，仅 `global`/`us`/`eu`；其它区域继续 generateContent。
+- `InteractionsAPI` 改用 `authorize` 回调，`GoogleProvider` 注入服务账号 token；设置页在服务账号开启时显示开关和区域提示。
+- 测试：`InteractionsApiTest` 覆盖 Gemini 与 Vertex 的 URL、区域谓词正负例与不支持 location 抛错；`:ai` 448、app 885 与 spotless/markdownlint 通过；设备上验了开关与区域说明出现，真实 Vertex 调用未验。
+
 ## 2026-11-24 相邻 user 合并下沉到协议转换层（C160）
 
 - 删除 `ChatRequestFactory` 的全局相邻 user 合并；Claude 在缓存断点之后合并 wire 消息，Gemini generateContent 保留原有同角色合并，Interactions 新增 `user_input` 合并，OpenAI 兼容端点按 host 能力位决定是否合并。
