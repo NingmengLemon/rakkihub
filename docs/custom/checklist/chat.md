@@ -1,6 +1,6 @@
 # 明细：聊天、上下文与模型
 
-本文件是 [checklist.md](../checklist.md) 的明细，收录 C35、C43 至 C44、C46 至 C47、C49 至 C53、C57 至 C63、C65 至 C78、C81 至 C86、C97 至 C100、C107、C121、C122、C130、C131、C133、C134、C135、C137、C140、C141、C145、C147、C152、C154、C156、C160、C161、C162、C163。
+本文件是 [checklist.md](../checklist.md) 的明细，收录 C35、C43 至 C44、C46 至 C47、C49 至 C53、C57 至 C63、C65 至 C78、C81 至 C86、C97 至 C100、C107、C121、C122、C130、C131、C133、C134、C135、C137、C140、C141、C145、C147、C152、C154、C156、C160、C161、C162、C163、C164。
 
 <a id="c35"></a>
 
@@ -552,5 +552,15 @@
 - 来源：上游 `f37f66b31`（2026-11-25），Fixes #2365。
 - 落点：`FileEncoder.kt` 的图片总像素上限从 16MP 降到 4MP，长边限制保持 10,000；新增 `calculateImageTargetSize()`，先按 2 的幂次采样解码、再用 `Bitmap.createScaledBitmap` 精确缩放到目标尺寸，`calculateImageInSampleSize()` 改成不采到目标以下。`ChatService.runTurn()` 在 `Exception` 之前新增 `OutOfMemoryError` 分支，暂停 `messageQueue`、记日志、显示 `error_generation_out_of_memory` 错误，并补四 locale 文案。
 - 理由：多张原图一起发送时 base64 JSON 可达上百 MB，序列化 OOM；`OutOfMemoryError` 不是 `Exception`，旧代码只落到 AppScope 日志，界面没有错误，历史图片每轮重发还会让该会话之后的请求继续失败。降低像素上限从源头缩小请求体，精确缩放避免 2 的幂次采样把长截图缩得过小。
-- 合并注意：只按总像素限制、不压长边，长截图保持原宽度；GIF 仍原样发送；EXIF 归一化在缩放之后执行。OOM 分支只暂停队列并报错，不自动删用户图片；`messageQueue` 是本分支的命名，不是上游的 `inbox`。新增字符串走 `tools/i18n`。
-- 测试：`FileEncoderExifTransformTest` 覆盖 4MP 预算、预算内长截图保持原尺寸、超长图按长边缩放、采样不低于目标与 4MP 边界；`:ai:testDebugUnitTest` 449、`:app:testGithubDebugUnitTest` 885 条本轮全过、`:app:compileGithubDebugKotlin`、`spotlessCheck`、markdownlint 通过；OOM 分支没有自动化构造，设备上多图发送未单独验；图片 `encodeBase64` 的 `OutOfMemoryError` 已改为重新抛出，不再被 `runCatching` 吞掉。OCR 与 Markdown 导出也走同一编码器，会同步降到 4MP；`data:`/`http` 图片仍绕过压缩，这两条路径未单独验。
+- 合并注意：保留 10,000 长边上限；4MP 预算内的长截图保持原尺寸，超出预算按比例缩小；GIF 仍原样发送；EXIF 归一化在缩放之后执行。OOM 分支只暂停队列并报错，不自动删用户图片；`messageQueue` 是本分支的命名，不是上游的 `inbox`。新增字符串走 `tools/i18n`。
+- 测试：`FileEncoderExifTransformTest` 覆盖 4MP 预算、预算内长截图保持原尺寸、超长图按长边缩放、采样不低于目标与 4MP 边界；`:ai:testDebugUnitTest` 450、`:app:testGithubDebugUnitTest` 885 条本轮全过、`:app:compileGithubDebugKotlin`、`spotlessCheck`、markdownlint 通过；OOM 分支没有自动化构造，设备上多图发送未单独验；图片解码、缩放、压缩阶段的 `OutOfMemoryError` 已改为重新抛出，不再被外层 `runCatching` 吞掉；EXIF 读取/旋转内部的异常仍回退原图。OCR 与 Markdown 导出也走同一编码器，会同步降到 4MP；导出的点击回调没有专门接住 OOM，`data:`/`http` 图片仍绕过压缩，这些路径未单独验。
+
+<a id="c164"></a>
+
+## C164 连接测试使用模型提供商重写
+
+- 来源：上游 `1fb091529`（2026-11-25），Fixes #2356。
+- 落点：`ProviderConnectionTester.kt` 的 `ProviderConnectionTestDialog` 先用 `testModel.findProvider(listOf(internalProvider))` 解析实际 providerSetting，再用 `providerManager.getProviderByType(providerSetting)` 发请求；非流式、流式、工具三个测试都改用 `testModel` 和解析后的设置。
+- 理由：连接测试以前直接拿父提供商配置发请求，忽略模型上的 `providerOverwrite`，重写里的 API Key、Base URL 等不生效；聊天路径已经用 `findProvider`，测试和聊天行为不一致。
+- 合并注意：`findProvider` 已存在于 `data/datastore`，不要再写一套覆盖解析；`model` 为空时仍直接返回；`customHeaders`/`customBody` 继续取模型自己的字段。没有数据/设置结构变化。
+- 测试：既有 `FindProviderTest` 覆盖有/无 `providerOverwrite` 的解析；`:app:testGithubDebugUnitTest` 885 条本轮全过、`:app:compileGithubDebugKotlin`、`spotlessCheck`、markdownlint 通过；连接测试弹窗的三条路径没有自动化 UI 测试，未做设备点验。
