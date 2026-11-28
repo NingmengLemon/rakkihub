@@ -1,6 +1,6 @@
 # 明细：聊天、上下文与模型
 
-本文件是 [checklist.md](../checklist.md) 的明细，收录 C35、C43 至 C44、C46 至 C47、C49 至 C53、C57 至 C63、C65 至 C78、C81 至 C86、C97 至 C100、C107、C121、C122、C130、C131、C133、C134、C135、C137、C140、C141、C145、C147、C152、C154、C156、C160、C161、C162、C163、C164、C165。
+本文件是 [checklist.md](../checklist.md) 的明细，收录 C35、C43 至 C44、C46 至 C47、C49 至 C53、C57 至 C63、C65 至 C78、C81 至 C86、C97 至 C100、C107、C121、C122、C130、C131、C133、C134、C135、C137、C140、C141、C145、C147、C152、C154、C156、C160、C161、C162、C163、C164、C165、C168。
 
 <a id="c35"></a>
 
@@ -574,3 +574,15 @@
 - 理由：Shell 命令本身适合当标题，但用户看不懂；让模型给一句动作描述，步骤列表和审批卡片可以直接读。命令仍要在摘要里露出来，等待审批时用户才知道实际执行什么。
 - 合并注意：description 只是可选参数，旧模型不传时保持原行为；命令摘要最多 3 行，避免长命令占满审批卡；标题不再截断 description，命令仍按原逻辑截断。没有新字符串或数据变化。
 - 测试：`:app:compileGithubDebugKotlin`、`:app:testGithubDebugUnitTest`、`spotlessCheck`、markdownlint 通过；没有自动化 UI 测试，真实模型调用和审批卡展示未做设备点验。
+
+<a id="c168"></a>
+
+## C168 聊天文本选择覆盖
+
+### C168.1 翻译、检查点、工具详情与浮动预览
+
+- 来源：本分支交互缺口，基于 2026-11-28 的 surface 审计；不是上游提交。
+- 落点：给四类 surface、五处调用点补 `SelectableContent`：`ChatMessageTranslation.kt` 的翻译正文、`ChatMessageContextCheckpoint.kt` 的检查点摘要、`BuiltinToolUIs.kt` 的 search_web answer 与 scrape_web content、`ChatFloatingContent.kt` 的浮动窗口预览。容器都建在叶子内，没有提到消息根或 `ModalBottomSheet` 外层。
+- 理由：这些 surface 的正文此前没有 `SelectableContent`，长按不会出选区；围栏代码块经 `HighlightCodeBlock` 自带容器是例外。审计确认正文由 BetterText 渲染，补容器成本最低；布局、复制按钮和点击行为按实现推断不变，但未上机验证。
+- 合并注意：移植上游对这四个文件的改动时保留叶子上的 `SelectableContent`。`SelectableContent` 只对 BetterText 生效；Compose `Text` 的卡片、工具摘要、DiffView/CodeHighlightText 和浮动窗口代码块不在本批，需要后续换渲染原语或另建 AndroidX 容器。浮动窗口生成中会自动滚到底，长按建立选区后可能被继续滚动打断，这是已知限制，设备点验时确认。不要把容器提到消息根：`ChatMessage.kt` 里每个 Text part/SVG 段各自建容器，提到根会让 `ModalBottomSheet` 继承 `LocalInSelectionContainer`，复用外层 registry，出现跨窗口问题。翻译与检查点的按钮、折叠/编辑入口留在容器外。没有新字符串或数据结构。
+- 测试：`:app:compileGithubDebugKotlin`、`:app:testGithubDebugUnitTest`、`spotlessCheck`、markdownlint 通过；没有 Compose UI 自动化测试，翻译、检查点、工具详情、浮动窗口的长按选区/复制未做设备点验。

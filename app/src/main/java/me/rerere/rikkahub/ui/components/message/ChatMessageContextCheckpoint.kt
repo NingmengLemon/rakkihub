@@ -36,6 +36,7 @@ import me.rerere.hugeicons.stroke.Package01
 import me.rerere.rikkahub.R
 import me.rerere.rikkahub.data.model.isHistoryTruncationMarker
 import me.rerere.rikkahub.ui.components.richtext.MarkdownBlock
+import me.rerere.rikkahub.ui.components.richtext.SelectableContent
 
 /**
  * 压缩检查点：分隔线上方的消息仍可查看，但不再发送给模型，由这里的摘要代替。
@@ -119,7 +120,9 @@ fun ChatMessageContextCheckpoint(
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
                     if (!isTruncation) {
-                        MarkdownBlock(content = message.toText())
+                        SelectableContent {
+                            MarkdownBlock(content = message.toText())
+                        }
                     }
                     Row(
                         modifier = Modifier.fillMaxWidth(),

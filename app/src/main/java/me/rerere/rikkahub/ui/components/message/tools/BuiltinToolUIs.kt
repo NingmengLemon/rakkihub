@@ -68,6 +68,7 @@ import me.rerere.rikkahub.data.ai.tools.MemoryToolNames
 import me.rerere.rikkahub.data.repository.MemoryRepository
 import me.rerere.rikkahub.data.repository.memoryId
 import me.rerere.rikkahub.ui.components.richtext.MarkdownBlock
+import me.rerere.rikkahub.ui.components.richtext.SelectableContent
 import me.rerere.rikkahub.ui.components.ui.Favicon
 import me.rerere.rikkahub.ui.components.ui.FaviconRow
 import me.rerere.rikkahub.ui.context.LocalNavController
@@ -728,13 +729,15 @@ private fun SearchWebPreview(
                         containerColor = MaterialTheme.colorScheme.primaryContainer
                     )
                 ) {
-                    MarkdownBlock(
-                        content = answer,
-                        modifier = Modifier
-                            .padding(16.dp)
-                            .fillMaxWidth(),
-                        style = MaterialTheme.typography.bodySmall
-                    )
+                    SelectableContent {
+                        MarkdownBlock(
+                            content = answer,
+                            modifier = Modifier
+                                .padding(16.dp)
+                                .fillMaxWidth(),
+                            style = MaterialTheme.typography.bodySmall
+                        )
+                    }
                 }
             }
         }
@@ -865,12 +868,14 @@ private fun ScrapeWebPreview(content: JsonElement) {
                     modifier = Modifier.fillMaxWidth()
                 )
                 Card {
-                    MarkdownBlock(
-                        content = urlObject["content"]?.jsonPrimitive?.content ?: "",
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(8.dp)
-                    )
+                    SelectableContent {
+                        MarkdownBlock(
+                            content = urlObject["content"]?.jsonPrimitive?.content ?: "",
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(8.dp)
+                        )
+                    }
                 }
             }
         }

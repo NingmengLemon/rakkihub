@@ -89,6 +89,7 @@ import me.rerere.rikkahub.ui.components.ui.drawAppLogo
 import me.rerere.rikkahub.ui.components.ui.logoMorphShape
 import me.rerere.rikkahub.ui.components.ui.rememberAppLogoLayers
 import me.rerere.rikkahub.ui.components.richtext.MaterialMarkdown
+import me.rerere.rikkahub.ui.components.richtext.SelectableContent
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
@@ -401,16 +402,18 @@ private fun MessagePreview(text: String, isReasoning: Boolean, generating: Boole
             MaterialTheme.colorScheme.onSurface
         },
     ) {
-        MaterialMarkdown(
-            content = text,
-            style = MaterialTheme.typography.bodyMedium,
-            streaming = generating,
-            modifier = Modifier
-                .fillMaxWidth()
-                .heightIn(max = 200.dp)
-                .verticalScroll(scrollState)
-                .padding(12.dp),
-        )
+        SelectableContent {
+            MaterialMarkdown(
+                content = text,
+                style = MaterialTheme.typography.bodyMedium,
+                streaming = generating,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .heightIn(max = 200.dp)
+                    .verticalScroll(scrollState)
+                    .padding(12.dp),
+            )
+        }
     }
 }
 

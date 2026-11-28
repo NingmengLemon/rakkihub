@@ -2,6 +2,12 @@
 
 本文件归档已完成的定制、修复与独立化批次，按时间或主题分组。当前状态以 checklist 索引与明细为准，未来方向见 [roadmap.md](../roadmap.md)。
 
+## 2026-11-28 聊天文本选择覆盖 C168.1
+
+- 补四类叶子 Markdown 的 `SelectableContent`：聊天内翻译正文、上下文检查点摘要、search_web answer、scrape_web content、浮动窗口预览。
+- 容器保持在叶子内，不提升到消息根，避免工具详情 sheet 继承外层 BetterText registry；纯 Text/工具摘要/DiffView/浮动代码块仍待后续。
+- 测试：app 编译/单测/spotless/markdownlint 通过；长按选区与复制未做设备点验。
+
 ## 2026-11-28 终端功能键长按连发（C167）
 
 - `TerminalExtraKey` 改为按下/抬起手势：方向键、PgUp/PgDn、Home/End 按住 350ms 后每 70ms 连发；Ctrl/Alt/IME、ESC/TAB 和符号键保持单次。

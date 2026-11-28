@@ -347,7 +347,7 @@
 
 ### 已知交互缺口
 
-- 聊天文本的长按选择/复制覆盖不全：`SelectableContent` 目前只包住 Markdown 正文、推理、代码块、翻译页和记忆文件等部分 surface；工具卡片摘要/预览、部分纯 `Text`、浮动窗口等仍可能没有选区或长按菜单，消息的点击/选择模式也可能先吃掉手势。需要按 surface 审计，统一接 `BetterSelectionContainer`，避免嵌套选择容器和与消息操作冲突；设备上覆盖普通消息、流式回复、工具参数/结果、翻译、代码块、浮动窗口和选择模式。
+- 聊天文本的长按选择/复制覆盖仍不完整：C168.1 已补翻译正文、上下文检查点、search_web/scrape_web 详情 Markdown 和浮动窗口预览；工具摘要/普通 `Text` 卡片、DiffView/CodeHighlightText、浮动窗口代码块、压缩/错误/引用卡、用户气泡点击取消选区、复制 sheet 只含 Text part 等仍缺。后续按审计分 surface 处理：纯 Text 用 AndroidX `SelectionContainer`，BetterText 叶子继续用 `SelectableContent`，不要提到消息根或跨 sheet 复用 registry；设备上覆盖普通消息、流式、工具参数/结果、翻译、代码块、浮动窗口和选择模式。
 
 ### 提示词注入与世界书
 

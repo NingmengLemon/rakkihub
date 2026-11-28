@@ -53,6 +53,7 @@ import me.rerere.rikkahub.R
 import me.rerere.rikkahub.ui.components.ai.TranslationLanguages
 import me.rerere.rikkahub.ui.components.ai.translationLanguageName
 import me.rerere.rikkahub.ui.components.richtext.MarkdownBlock
+import me.rerere.rikkahub.ui.components.richtext.SelectableContent
 import java.util.Locale
 
 @Composable
@@ -248,13 +249,15 @@ fun CollapsibleTranslationText(
                     }
                 } else {
                     // Show normal translation content
-                    MarkdownBlock(
-                        content = content,
-                        onClickCitation = onClickCitation,
-                        modifier = Modifier
-                            .padding(12.dp)
-                            .animateContentSize()
-                    )
+                    SelectableContent {
+                        MarkdownBlock(
+                            content = content,
+                            onClickCitation = onClickCitation,
+                            modifier = Modifier
+                                .padding(12.dp)
+                                .animateContentSize()
+                        )
+                    }
                 }
             }
         }
