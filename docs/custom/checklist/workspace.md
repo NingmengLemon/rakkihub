@@ -1,6 +1,6 @@
 # 明细：工作区与 MCP
 
-本文件是 [checklist.md](../checklist.md) 的明细，收录 C89、C102 至 C106、C111、C120、C123 至 C126、C132、C148。
+本文件是 [checklist.md](../checklist.md) 的明细，收录 C89、C102 至 C106、C111、C120、C123 至 C126、C132、C148、C167。
 
 <a id="c89"></a>
 
@@ -187,3 +187,13 @@
 - 理由：单行栏在窄屏上要横向滚动，最右边的 PGUP/PGDN 经常要点两下才能看到；Termux 式双排把常用控制键与导航键分成两行，等宽后每个键都有固定的触控面积。默认开启是因为双排不需要滚动；开关保留原来的横向布局。
 - 合并注意：两行的键位是固定分组，不要按数量简单对半分；IME 开关隐藏时第一行是 7 个键加 1 个空槽，两行仍按 8 列对齐。横向分支保留原先的键序（IME 在最前、导航键在最后），不要为了复用把两行顺序直接拼过去。`TerminalExtraKey` 的 `compact` 只用于双排，横向布局仍是原来的内边距与字号。终端的 IME 高度处理没有改动，双排只是多占一行高度。`terminalTwoRowKeys` 是新增的 DisplaySetting 字段，旧构建会忽略它，写回 displaySetting 时按默认值 true 重新编码；关掉开关后降级再回退，会回到开启状态。
 - 测试：`DisplaySettingTest` 增加 2 条，覆盖旧 JSON 默认 `true` 与关闭值的往返；`:app:testGithubDebugUnitTest` 910 条、`spotlessCheck` 通过。K60 上打开 TestWorkspace 的终端并弹出键盘：两行按键等宽、没有横向滚动，终端区域与键盘之间没有遮挡；设置页关闭后的单行横向布局没有在设备上单独切回验证。
+
+<a id="c167"></a>
+
+## C167 终端功能键长按连发
+
+- 来源：本分支交互缺口，不是上游提交。
+- 落点：`WorkspaceTerminalPage.kt` 的 `TerminalExtraKeySpec` 增加 `repeatable`；方向键、PgUp/PgDn、Home/End 标为可重复，Ctrl/Alt/IME 和 ESC/TAB/符号键保持单次。`TerminalExtraKey` 对可重复键改用 `pointerInput` 的按下/抬起手势：按下立即记 Press，350ms 后每 70ms 调用一次，抬手同步取消连发并只在不重复时补一次 click；滑出或触摸取消不补 click。保留 `LocalIndication` ripple，并补 `Role.Button` 语义。
+- 理由：Termux 式功能键栏的预期是按住方向/翻页键连续移动或翻页，之前只有短按，长按没有反馈；不能把连发加在系统 IME 或终端模拟器核心上，否则范围不可控。
+- 合并注意：只改额外功能键栏，不改 `TerminalView`、SoftKeyboard 或终端会话；短按仍是按下后抬起触发一次，Ctrl/Alt/IME 仍只切换状态。单排、双排共用同一按下手势，350ms 首发延迟一致；横向滚动仍由父级滚动处理，取消时连发 goroutine 会停止。没有新增字符串、持久化字段或公开 API；`repeatable` 是私有 UI 元数据，连发间隔和延迟集中在常量，避免输入洪水。
+- 测试：`:app:compileGithubDebugKotlin`、`:app:testGithubDebugUnitTest`、`spotlessCheck`、markdownlint 通过；没有 Compose UI 自动化测试，方向键/翻页键短按与长按、滑出取消、单排/双排、Ctrl/Alt/IME 和 TalkBack 需要设备点验，当前未做终端设备点验。

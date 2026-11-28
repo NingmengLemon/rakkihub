@@ -168,8 +168,9 @@
 | C164 | [连接测试使用模型提供商重写](checklist/chat.md#c164) | 上游移植 |
 | C165 | [Shell 工具 description 作为步骤标题](checklist/chat.md#c165) | 上游移植 |
 | C166 | [通知设置忽略电池优化入口](checklist/platform.md#c166) | 上游移植 |
+| C167 | [终端功能键长按连发](checklist/workspace.md#c167) | 改造 |
 
-C112 至 C119 是 C111 历史阶段的保留段，不再用作顶层编号；下一个新项从 C167 起。
+C112 至 C119 是 C111 历史阶段的保留段，不再用作顶层编号；下一个新项从 C168 起。
 
 ## 明细
 
@@ -181,4 +182,4 @@ C112 至 C119 是 C111 历史阶段的保留段，不再用作顶层编号；下
 | [data.md](checklist/data.md) | 数据、备份与附件 | C10 至 C11、C17 至 C34、C36、C40 至 C42、C79 至 C80、C87 至 C88、C108 至 C110、C142、C158 |
 | [chat.md](checklist/chat.md) | 聊天、上下文与模型 | C35、C43 至 C44、C46 至 C47、C49 至 C53、C57 至 C63、C65 至 C78、C81 至 C86、C97 至 C100、C107、C121、C122、C130、C131、C133、C134、C135、C137、C140、C141、C145、C147、C152、C154、C156、C160、C161、C162、C163、C164、C165 |
 | [platform.md](checklist/platform.md) | 平台、构建与品牌 | C7、C12、C37 至 C39、C45、C48、C55 至 C56、C90 至 C94、C101、C127 至 C129、C136、C138、C139、C143、C144、C146、C149、C150、C151、C153、C155、C166 |
-| [workspace.md](checklist/workspace.md) | 工作区与 MCP | C89、C102 至 C106、C111、C120、C123 至 C126、C132、C148 |
+| [workspace.md](checklist/workspace.md) | 工作区与 MCP | C89、C102 至 C106、C111、C120、C123 至 C126、C132、C148、C167 |

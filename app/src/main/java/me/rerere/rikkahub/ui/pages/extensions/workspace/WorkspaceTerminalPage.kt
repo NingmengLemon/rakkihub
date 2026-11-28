@@ -2,9 +2,16 @@ package me.rerere.rikkahub.ui.pages.extensions.workspace
 
 import android.graphics.Typeface
 import android.view.KeyEvent
+import androidx.compose.foundation.LocalIndication
 import androidx.compose.foundation.background
 import androidx.compose.foundation.basicMarquee
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.gestures.awaitEachGesture
+import androidx.compose.foundation.gestures.awaitFirstDown
+import androidx.compose.foundation.gestures.waitForUpOrCancellation
+import androidx.compose.foundation.indication
+import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.interaction.PressInteraction
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -40,6 +47,8 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -49,7 +58,10 @@ import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.role
 import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.onClick as semanticsOnClick
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
@@ -60,7 +72,10 @@ import androidx.core.content.res.ResourcesCompat
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.termux.terminal.TerminalSession
 import com.termux.view.TerminalView
+import androidx.compose.ui.input.pointer.pointerInput
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.isActive
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.flow.flowOf
 import me.rerere.rikkahub.R
 import me.rerere.rikkahub.data.datastore.SettingsStore
@@ -446,9 +461,13 @@ private fun WorkspaceTerminalTabContent(
     }
 }
 
+private const val KEY_REPEAT_DELAY_MILLIS = 350L
+private const val KEY_REPEAT_INTERVAL_MILLIS = 70L
+
 private data class TerminalExtraKeySpec(
     val label: String,
     val selected: Boolean = false,
+    val repeatable: Boolean = false,
     val onClick: () -> Unit,
 )
 
@@ -465,24 +484,24 @@ private fun TerminalExtraKeysBar(
     onSendText: (String) -> Unit,
 ) {
     val primaryKeys = buildList {
-        if (showImeToggle) add(TerminalExtraKeySpec("IME", imeEnabled, onImeToggle))
+        if (showImeToggle) add(TerminalExtraKeySpec("IME", selected = imeEnabled, onClick = onImeToggle))
         add(TerminalExtraKeySpec("ESC") { onSendText("\u001B") })
         add(TerminalExtraKeySpec("TAB") { onSendText("\t") })
-        add(TerminalExtraKeySpec("CTRL", controlDown, onControlToggle))
-        add(TerminalExtraKeySpec("ALT", altDown, onAltToggle))
+        add(TerminalExtraKeySpec("CTRL", selected = controlDown, onClick = onControlToggle))
+        add(TerminalExtraKeySpec("ALT", selected = altDown, onClick = onAltToggle))
         add(TerminalExtraKeySpec("-") { onSendText("-") })
         add(TerminalExtraKeySpec("/") { onSendText("/") })
         add(TerminalExtraKeySpec("|") { onSendText("|") })
     }
     val navigationKeys = listOf(
-        TerminalExtraKeySpec("←") { onSendText("\u001B[D") },
-        TerminalExtraKeySpec("↓") { onSendText("\u001B[B") },
-        TerminalExtraKeySpec("↑") { onSendText("\u001B[A") },
-        TerminalExtraKeySpec("→") { onSendText("\u001B[C") },
-        TerminalExtraKeySpec("HOME") { onSendText("\u001B[H") },
-        TerminalExtraKeySpec("END") { onSendText("\u001B[F") },
-        TerminalExtraKeySpec("PGUP") { onSendText("\u001B[5~") },
-        TerminalExtraKeySpec("PGDN") { onSendText("\u001B[6~") },
+        TerminalExtraKeySpec("←", repeatable = true) { onSendText("\u001B[D") },
+        TerminalExtraKeySpec("↓", repeatable = true) { onSendText("\u001B[B") },
+        TerminalExtraKeySpec("↑", repeatable = true) { onSendText("\u001B[A") },
+        TerminalExtraKeySpec("→", repeatable = true) { onSendText("\u001B[C") },
+        TerminalExtraKeySpec("HOME", repeatable = true) { onSendText("\u001B[H") },
+        TerminalExtraKeySpec("END", repeatable = true) { onSendText("\u001B[F") },
+        TerminalExtraKeySpec("PGUP", repeatable = true) { onSendText("\u001B[5~") },
+        TerminalExtraKeySpec("PGDN", repeatable = true) { onSendText("\u001B[6~") },
     )
 
     Column(
@@ -511,6 +530,7 @@ private fun TerminalExtraKeysBar(
                     TerminalExtraKey(
                         label = key.label,
                         selected = key.selected,
+                        repeatable = key.repeatable,
                         onClick = key.onClick,
                     )
                 }
@@ -531,6 +551,7 @@ private fun TerminalExtraKeyRow(keys: List<TerminalExtraKeySpec>, slotCount: Int
                 selected = key.selected,
                 modifier = Modifier.weight(1f),
                 compact = true,
+                repeatable = key.repeatable,
                 onClick = key.onClick,
             )
         }
@@ -547,24 +568,77 @@ private fun TerminalExtraKey(
     selected: Boolean = false,
     modifier: Modifier = Modifier,
     compact: Boolean = false,
+    repeatable: Boolean = false,
     onClick: () -> Unit,
 ) {
+    val interactionSource = remember { MutableInteractionSource() }
+    val scope = rememberCoroutineScope()
+    val currentOnClick by rememberUpdatedState(onClick)
+    val keyModifier = modifier
+        .background(
+            color = if (selected) {
+                MaterialTheme.colorScheme.primary
+            } else {
+                MaterialTheme.colorScheme.onSurface.copy(alpha = 0.12f)
+            },
+            shape = RoundedCornerShape(6.dp),
+        )
+        .then(
+            if (repeatable) {
+                Modifier
+                    .indication(interactionSource, LocalIndication.current)
+                    .pointerInput(Unit) {
+                        awaitEachGesture {
+                            val down = awaitFirstDown(requireUnconsumed = false)
+                            val press = PressInteraction.Press(down.position)
+                            interactionSource.tryEmit(press)
+                            var repeated = false
+                            val repeatJob = scope.launch {
+                                delay(KEY_REPEAT_DELAY_MILLIS)
+                                repeated = true
+                                while (isActive) {
+                                    currentOnClick()
+                                    delay(KEY_REPEAT_INTERVAL_MILLIS)
+                                }
+                            }
+                            try {
+                                val up = waitForUpOrCancellation()
+                                // 同步取消连发循环，松手那一帧不再补一拍
+                                repeatJob.cancel()
+                                if (up != null) {
+                                    interactionSource.tryEmit(PressInteraction.Release(press))
+                                    if (!repeated) currentOnClick()
+                                } else {
+                                    interactionSource.tryEmit(PressInteraction.Cancel(press))
+                                }
+                            } finally {
+                                repeatJob.cancel()
+                            }
+                        }
+                    }
+                    .semantics {
+                        role = Role.Button
+                        semanticsOnClick(label = null) {
+                            currentOnClick()
+                            true
+                        }
+                    }
+            } else {
+                Modifier.clickable(
+                    interactionSource = interactionSource,
+                    indication = LocalIndication.current,
+                    onClick = currentOnClick,
+                )
+            },
+        )
+        .padding(
+            horizontal = if (compact) 0.dp else 12.dp,
+            vertical = 8.dp,
+        )
+
     Text(
         text = label,
-        modifier = modifier
-            .background(
-                color = if (selected) {
-                    MaterialTheme.colorScheme.primary
-                } else {
-                    MaterialTheme.colorScheme.onSurface.copy(alpha = 0.12f)
-                },
-                shape = RoundedCornerShape(6.dp),
-            )
-            .clickable(onClick = onClick)
-            .padding(
-                horizontal = if (compact) 0.dp else 12.dp,
-                vertical = 8.dp,
-            ),
+        modifier = keyModifier,
         style = if (compact) {
             MaterialTheme.typography.labelSmall
         } else {

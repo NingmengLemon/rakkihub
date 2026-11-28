@@ -2,6 +2,12 @@
 
 本文件归档已完成的定制、修复与独立化批次，按时间或主题分组。当前状态以 checklist 索引与明细为准，未来方向见 [roadmap.md](../roadmap.md)。
 
+## 2026-11-28 终端功能键长按连发（C167）
+
+- `TerminalExtraKey` 改为按下/抬起手势：方向键、PgUp/PgDn、Home/End 按住 350ms 后每 70ms 连发；Ctrl/Alt/IME、ESC/TAB 和符号键保持单次。
+- 滑出/触摸取消会停止连发，松手不会补发一次 click；没有新字符串或终端核心改动。
+- 测试：app 编译/单测/spotless/markdownlint 通过；设备终端点验未做。
+
 ## 2026-11-28 Shell description（C165）、忽略电池优化入口（C166）
 
 - C165 补上游 `55a0631fe`：`workspace_shell` 增加可选 description，步骤标题用它，命令移到 3 行摘要，审批时仍能看到实际命令。
